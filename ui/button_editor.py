@@ -214,6 +214,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     tip_lbl = tk.Label(top, text=tip_text, bg=C_PM_BG, fg="#777",
                        font=(FF, 9), anchor="w")
     tip_lbl.place(x=PADDING, y=tip_y, width=width - PADDING * 2)
+    tip_lbl.lift()
 
     # ── 内容区起始 Y（tip 下方 40px）──
     content_y = tip_y + 20 + BLOCK_GAP   # ~110
@@ -290,6 +291,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         frame = tk.Frame(top, bg=C_PM_BG)
         block_h = len(block_fields) * ROW_H
         frame.place(x=form_x, y=abs_y, width=form_w, height=block_h)
+        frame.lift()  # 确保在 Canvas 之上
         for i, (key, label_text, is_tag) in enumerate(block_fields):
             _build_row(frame, i * ROW_H, key, label_text, is_tag)
         return block_h
@@ -377,6 +379,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
 
     right_container = tk.Frame(top, bg=C_PM_BG)
     right_container.place(x=right_x, y=right_y, width=right_w, height=right_h)
+    right_container.lift()
 
     right_canvas = tk.Canvas(right_container, bg=C_PM_BG, highlightthickness=0)
     right_scrollbar = tk.Scrollbar(right_container, orient="vertical", command=right_canvas.yview)
