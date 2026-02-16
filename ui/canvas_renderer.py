@@ -168,25 +168,33 @@ def update_button_coords(canvas, btn):
         canvas.coords(btn['id_resize'], rx - rs, ry, rx, ry - rs, rx, ry)
 
 
+# ─── 运行时操作配色 ──────────────────────────────────────────
+
+ACTION_STATE_COLORS = {
+    # state           → (fill,      outline,    text)
+    'hover':           ('#0284C7', '#026AA2', '#000000'),   # 天蓝
+    'active_left':     ('#F59E0B', '#D97706', '#000000'),   # 琥珀
+    'active_right':    ('#10B981', '#059669', '#000000'),   # 翠绿
+    'active_middle':   ('#A855F7', '#9333EA', '#000000'),   # 紫色
+    'active_wheelup':  ('#EC4899', '#DB2777', '#000000'),   # 粉红
+    'active_wheeldown':('#F43F5E', '#E11D48', '#000000'),   # 玫瑰
+}
+
+
 def set_button_visual_state(canvas, btn, state):
     """设置按钮的视觉状态。
 
     state: 'normal' | 'hover' | 'active_left' | 'active_right' | 'active_middle'
+           | 'active_wheelup' | 'active_wheeldown'
     """
-    outline = COLOR_BTN_BORDER
-    width = 2
-    text_fill = COLOR_TEXT
-
-    if state != 'normal':
-        outline = COLOR_HOVER
-        width = 3
-        text_fill = COLOR_HOVER
-        if state in ('active_left', 'active_right', 'active_middle'):
-            outline = COLOR_ACTIVE
-            text_fill = COLOR_ACTIVE
-
-    canvas.itemconfigure(btn['id_poly'], outline=outline, width=width, fill=COLOR_BTN_BG)
-    canvas.itemconfigure(btn['id_text'], fill=text_fill)
+    if state in ACTION_STATE_COLORS:
+        fill, outline, text_fill = ACTION_STATE_COLORS[state]
+        canvas.itemconfigure(btn['id_poly'], fill=fill, outline=outline, width=3)
+        canvas.itemconfigure(btn['id_text'], fill=text_fill)
+    else:
+        # normal
+        canvas.itemconfigure(btn['id_poly'], fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+        canvas.itemconfigure(btn['id_text'], fill=COLOR_TEXT)
 
 
 # ─── 系统按钮 ────────────────────────────────────────────────

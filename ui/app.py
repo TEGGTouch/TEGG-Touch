@@ -407,8 +407,9 @@ class FloatingApp:
                 key = btn.get('wheelup') if direction == 'up' else btn.get('wheeldown')
                 if key:
                     trigger(key, 'c')
-                    # 视觉反馈
-                    set_button_visual_state(self.canvas, btn, 'active_middle')
+                    # 视觉反馈：滚轮方向对应颜色
+                    wheel_state = 'active_wheelup' if direction == 'up' else 'active_wheeldown'
+                    set_button_visual_state(self.canvas, btn, wheel_state)
                     self.root.after(100, lambda b=btn: set_button_visual_state(self.canvas, b, 'normal'))
 
     # ─── 核心循环 (Core Loop) ────────────────────────────────
