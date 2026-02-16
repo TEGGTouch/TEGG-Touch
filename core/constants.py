@@ -12,8 +12,8 @@ DEFAULT_PROFILE_NAME = "默认配置"
 
 # === 清晰高对比配色表 (High Clarity) ===
 COLOR_BG = "#202020"          # 深灰背景，降低干扰
-COLOR_BTN_BG = "#404040"      # 按钮常态：中灰
-COLOR_BTN_BORDER = "#FFFFFF"  # 按钮边框：亮白 (高对比)
+COLOR_BTN_BG = "#000000"      # 按钮常态：黑色
+COLOR_BTN_BORDER = "#666666"  # 按钮边框：灰色
 COLOR_TEXT = "#FFFFFF"        # 文字：纯白
 COLOR_ACTIVE = "#005A9E"      # 激活/按下：深蓝
 COLOR_HOVER = "#0078D7"       # 悬停：亮蓝
@@ -29,14 +29,14 @@ COLOR_BALL_CORE = "#0078D7"   # 核心：亮蓝
 COLOR_BALL_RING = "#FFFFFF"   # 环：亮白
 
 # 调整手柄配色
-COLOR_HANDLE = "#FFD700"      # 亮黄色，非常醒目
+COLOR_HANDLE = "#666666"      # 灰色，与边框统一
 
 # 透明背景色 (用于 wm_attributes transparentcolor)
 COLOR_TRANSPARENT = "#010001"
 COLOR_TOOLBAR_TRANSPARENT = "#010002"  # 工具栏窗口镂空用
 
 # === 工具栏尺寸 ===
-TOOLBAR_WIDTH = 780
+TOOLBAR_WIDTH = 950
 TOOLBAR_HEIGHT = 104
 TOOLBAR_RADIUS = 12
 TOOLBAR_PADDING = 12
@@ -48,9 +48,11 @@ EDIT_ALPHA = 0.6              # 编辑模式半透明度（让用户能看到底
 BALL_SIZE = 80
 MIN_WINDOW_SIZE = 200
 MIN_BTN_SIZE = 100
-RESIZE_HANDLE_SIZE = 20       # 增大调整手柄尺寸 (原12 -> 20)
+RESIZE_HANDLE_SIZE = 30       # 调整手柄尺寸 (直角三角形 30x30)
 CHAMFER_SIZE = 8
 GRID_SIZE = 100               # 网格吸附尺寸 (100px)
+BTN_MARGIN = 5                # 按钮边距
+BTN_RADIUS = 10               # 按钮圆角半径
 
 # 轮询间隔 (ms) — 约 120fps，兼顾流畅与 CPU 占用
 UPDATE_INTERVAL = 8

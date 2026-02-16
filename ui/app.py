@@ -65,6 +65,7 @@ class FloatingApp:
         self.current_mode = 'main'  # 'main' | 'run'
         self.is_hidden = False
         self.is_window_solid = True  # True=不穿透, False=穿透
+        self.edit_passthrough = False  # 编辑模式穿透开关
 
         # 硬件输入状态缓存
         self.left_was_down = False
@@ -172,7 +173,9 @@ class FloatingApp:
             on_quit=self.quit,
             transparency=self.transparency,
             on_alpha_change=self.set_alpha,
-            on_switch_profile=self.switch_profile, # NEW
+            on_switch_profile=self.switch_profile,
+            on_edit_passthrough=self.toggle_edit_passthrough,
+            edit_passthrough=self.edit_passthrough,
         )
         # 确保工具栏在主窗口之上
         if self.toolbar_win:
@@ -244,6 +247,7 @@ class FloatingApp:
         """切换到编辑模式。"""
         self.current_mode = 'main'
         self.is_hidden = False
+        self.edit_passthrough = False  # 重置穿透开关
         # 恢复全屏
         self.root.geometry(self.fullscreen_geo)
         self.redraw_all()
@@ -289,10 +293,11 @@ class FloatingApp:
             draw_grid(self.canvas, self.screen_w, self.screen_h)
 
         # 绘制用户按钮
+        show_resize = (self.current_mode == 'main')
         for idx, btn in enumerate(self.buttons):
             if btn.get('deleted'):
                 continue
-            poly, text, resize = draw_button(self.canvas, btn, idx)
+            poly, text, resize = draw_button(self.canvas, btn, idx, show_resize=show_resize)
             btn['id_poly'] = poly
             btn['id_text'] = text
             btn['id_resize'] = resize
@@ -602,10 +607,26 @@ class FloatingApp:
             del_btn['deleted'] = True
             self.redraw_all()
 
+        def on_copy(src_btn):
+            new_btn = {
+                'x': src_btn['x'], 'y': src_btn['y'],
+                'w': src_btn['w'], 'h': src_btn['h'],
+                'name': src_btn.get('name', '按钮'),
+                'hover': src_btn.get('hover', ''),
+                'lclick': src_btn.get('lclick', ''),
+                'rclick': src_btn.get('rclick', ''),
+                'mclick': src_btn.get('mclick', ''),
+                'wheelup': src_btn.get('wheelup', ''),
+                'wheeldown': src_btn.get('wheeldown', ''),
+            }
+            self.buttons.append(new_btn)
+            self.redraw_all()
+
         open_button_editor(
             self.root, btn,
             on_save=on_save,
             on_delete=on_delete,
+            on_copy=on_copy,
             set_window_style=self.set_window_style
         )
 
@@ -616,6 +637,15 @@ class FloatingApp:
             preview_button_transparency(self.canvas, self.buttons, self.transparency)
         else:
             self.root.attributes("-alpha", self.transparency)
+
+    def toggle_edit_passthrough(self, is_on):
+        """编辑模式穿透开关回调。"""
+        self.edit_passthrough = is_on
+        if self.current_mode == 'main':
+            if is_on:
+                self.set_window_style('click_through')
+            else:
+                self.set_window_style('normal')
 
     def toggle_click_through(self):
         self.click_through = not self.click_through

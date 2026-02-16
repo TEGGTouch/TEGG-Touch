@@ -12,6 +12,7 @@ from core.constants import (
     COLOR_SYS_BG, COLOR_SYS_BORDER, COLOR_SYS_TEXT,
     COLOR_BALL_CORE, COLOR_BALL_RING, COLOR_HANDLE,
     CHAMFER_SIZE, RESIZE_HANDLE_SIZE,
+    BTN_MARGIN, BTN_RADIUS,
 )
 
 
@@ -79,39 +80,47 @@ def draw_grid(canvas, width, height, grid_size=None):
 
 # ─── 几何工具 ────────────────────────────────────────────────
 
-def get_chamfered_points(x, y, w, h, cut=CHAMFER_SIZE):
-    """生成切角矩形的顶点坐标列表。"""
+def get_rounded_rect_points(x, y, w, h, r=BTN_RADIUS):
+    """生成圆角矩形的顶点坐标列表 (配合 smooth=True 使用)。"""
     return [
-        x + cut, y,
-        x + w - cut, y,
-        x + w, y + cut,
-        x + w, y + h - cut,
-        x + w - cut, y + h,
-        x + cut, y + h,
-        x, y + h - cut,
-        x, y + cut,
+        x + r, y,
+        x + w - r, y,
+        x + w, y,
+        x + w, y + r,
+        x + w, y + h - r,
+        x + w, y + h,
+        x + w - r, y + h,
+        x + r, y + h,
+        x, y + h,
+        x, y + h - r,
+        x, y + r,
+        x, y
     ]
 
 
 # ─── 用户按钮 ────────────────────────────────────────────────
 
-def draw_button(canvas, btn_data, index):
+def draw_button(canvas, btn_data, index, show_resize=True):
     """绘制单个用户按钮。
 
     返回 (poly_id, text_id, resize_id) 以便后续引用。
+    show_resize: 是否显示调整手柄（编辑模式True，运行模式False）。
     """
     tags_poly = f"btn_poly_{index}"
     tags_text = f"btn_text_{index}"
     tags_resize = f"btn_resize_{index}"
 
-    points = get_chamfered_points(
-        btn_data['x'], btn_data['y'],
-        btn_data['w'], btn_data['h'],
-    )
+    # 计算视觉区域 (应用内边距)
+    vx = btn_data['x'] + BTN_MARGIN
+    vy = btn_data['y'] + BTN_MARGIN
+    vw = btn_data['w'] - 2 * BTN_MARGIN
+    vh = btn_data['h'] - 2 * BTN_MARGIN
+
+    points = get_rounded_rect_points(vx, vy, vw, vh, BTN_RADIUS)
 
     poly = canvas.create_polygon(
         points, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER,
-        width=2, tags=tags_poly,
+        width=2, smooth=True, tags=tags_poly,
     )
     text = canvas.create_text(
         btn_data['x'] + btn_data['w'] / 2,
@@ -120,39 +129,43 @@ def draw_button(canvas, btn_data, index):
         font=("Consolas", 10, "bold"), fill=COLOR_TEXT, tags=tags_text,
     )
 
-    rx = btn_data['x'] + btn_data['w']
-    ry = btn_data['y'] + btn_data['h']
-    rs = RESIZE_HANDLE_SIZE
-    
-    # 绘制圆形手柄 (圆心在 rx-rs/2, ry-rs/2)
-    # 实际上我们希望手柄依然在右下角，所以圆心应该在 rx - rs/2, ry - rs/2
-    # 为了方便点击，我们画一个实心圆
-    
-    # 圆的外接矩形
-    x1 = rx - rs
-    y1 = ry - rs
-    x2 = rx
-    y2 = ry
-    
-    resize_handle = canvas.create_oval(
-        x1, y1, x2, y2,
-        fill=COLOR_HANDLE, outline=COLOR_BG, width=1, tags=tags_resize,
-    )
+    # 调整手柄 (仅编辑模式显示)
+    resize_handle = None
+    if show_resize:
+        rx = vx + vw
+        ry = vy + vh
+        rs = RESIZE_HANDLE_SIZE
+        
+        # 直角三角形：右下角为直角
+        # 三个顶点：(rx-rs, ry), (rx, ry-rs), (rx, ry)
+        resize_handle = canvas.create_polygon(
+            rx - rs, ry,
+            rx, ry - rs,
+            rx, ry,
+            fill=COLOR_HANDLE, outline="", width=0, tags=tags_resize,
+        )
 
     return poly, text, resize_handle
 
 
 def update_button_coords(canvas, btn):
     """更新单个按钮的视觉坐标（拖拽/缩放后调用）。"""
-    points = get_chamfered_points(btn['x'], btn['y'], btn['w'], btn['h'])
+    # 计算视觉区域 (应用内边距)
+    vx = btn['x'] + BTN_MARGIN
+    vy = btn['y'] + BTN_MARGIN
+    vw = btn['w'] - 2 * BTN_MARGIN
+    vh = btn['h'] - 2 * BTN_MARGIN
+
+    points = get_rounded_rect_points(vx, vy, vw, vh, BTN_RADIUS)
     canvas.coords(btn['id_poly'], *points)
     canvas.coords(btn['id_text'], btn['x'] + btn['w'] / 2, btn['y'] + btn['h'] / 2)
 
-    rs = RESIZE_HANDLE_SIZE
-    rx = btn['x'] + btn['w']
-    ry = btn['y'] + btn['h']
-    # 更新圆形手柄坐标 (x1, y1, x2, y2)
-    canvas.coords(btn['id_resize'], rx - rs, ry - rs, rx, ry)
+    if btn.get('id_resize'):
+        rs = RESIZE_HANDLE_SIZE
+        rx = vx + vw
+        ry = vy + vh
+        # 更新三角形手柄坐标 (3个顶点: 左下, 右上, 右下)
+        canvas.coords(btn['id_resize'], rx - rs, ry, rx, ry - rs, rx, ry)
 
 
 def set_button_visual_state(canvas, btn, state):

@@ -85,6 +85,33 @@ def _rrect(c, x, y, w, h, r, **kw):
 #  Common Styled Dialog Helper
 # -------------------------------------------------------------
 
+def _create_modal_overlay(parent):
+    overlay = tk.Toplevel(parent)
+    overlay.attributes('-alpha', 0.5)
+    overlay.configure(bg='black')
+    overlay.overrideredirect(True)
+    w = parent.winfo_screenwidth()
+    h = parent.winfo_screenheight()
+    overlay.geometry(f"{w}x{h}+0+0")
+    overlay.attributes('-topmost', True)
+
+    # 让遮罩窗口穿透点击（纯视觉，不拦截鼠标事件）
+    try:
+        import ctypes
+        overlay.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(overlay.winfo_id())
+        if hwnd == 0:
+            hwnd = overlay.winfo_id()
+        GWL_EXSTYLE = -20
+        style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        style |= 0x00080000 | 0x00000020  # WS_EX_LAYERED | WS_EX_TRANSPARENT
+        ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+    except Exception:
+        pass
+
+    return overlay
+
+
 def _create_styled_dialog(parent, title, width, height, on_confirm=None, initial_value=None, label_text=None):
     """
     Creates a modal dialog with consistent styling (rounded, dark theme).
@@ -95,6 +122,8 @@ def _create_styled_dialog(parent, title, width, height, on_confirm=None, initial
     x = (sw - width) // 2
     y = (sh - height) // 2
 
+    overlay = _create_modal_overlay(parent)
+
     top = tk.Toplevel(parent)
     top.overrideredirect(True)
     top.geometry(f"{width}x{height}+{x}+{y}")
@@ -103,10 +132,20 @@ def _create_styled_dialog(parent, title, width, height, on_confirm=None, initial
     top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
     top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
     
+    # Ensure overlay closes when top closes
+    def _destroy_all(e):
+        try: overlay.destroy()
+        except: pass
+    top.bind("<Destroy>", _destroy_all, add="+")
+    
     # --- MODAL LOGIC START ---
     top.grab_set()
     top.focus_set()
     # --- MODAL LOGIC END ---
+    
+    overlay.attributes("-topmost", True)
+    top.attributes("-topmost", True) # Ensure dialog is above overlay
+    top.lift()
 
     c = tk.Canvas(top, width=width, height=height,
                   bg=COLOR_TOOLBAR_TRANSPARENT, highlightthickness=0)
@@ -164,7 +203,7 @@ def _create_styled_dialog(parent, title, width, height, on_confirm=None, initial
     # Confirm Button
     btn_y = height - 60 # Increased bottom spacing
     btn_w = 100 # Increased width
-    btn_h = 36  # Increased height
+    btn_h = 40  # Increased height
     bx = (width - btn_w) // 2
     
     # Draw button on canvas
@@ -192,6 +231,8 @@ def _create_styled_yesno_dialog(parent, title, message_text, on_yes):
     """
     Creates a styled Yes/No confirmation dialog.
     """
+    overlay = _create_modal_overlay(parent)
+
     width, height = 360, 200
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
@@ -206,10 +247,19 @@ def _create_styled_yesno_dialog(parent, title, message_text, on_yes):
     top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
     top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
     
+    def _destroy_all(e):
+        try: overlay.destroy()
+        except: pass
+    top.bind("<Destroy>", _destroy_all, add="+")
+
     # --- MODAL LOGIC START ---
     top.grab_set()
     top.focus_set()
     # --- MODAL LOGIC END ---
+
+    overlay.attributes("-topmost", True)
+    top.attributes("-topmost", True)
+    top.lift()
 
     c = tk.Canvas(top, width=width, height=height,
                   bg=COLOR_TOOLBAR_TRANSPARENT, highlightthickness=0)
@@ -253,10 +303,10 @@ def _create_styled_yesno_dialog(parent, title, message_text, on_yes):
     lbl.place(x=20, y=70, width=width-40)
 
     # Buttons
-    btn_w, btn_h = 90, 36
+    btn_w, btn_h = 90, 40
     total_btn_w = btn_w * 2 + 20
     start_x = (width - total_btn_w) // 2
-    btn_y = height - 50
+    btn_y = height - 60
 
     # Yes Button
     _rrect(c, start_x, btn_y, btn_w, btn_h, 6, fill=_C_AMBER, outline="", tags=("yes", "yes_bg"))
@@ -290,6 +340,8 @@ def open_profile_manager(parent, on_switch):
     """
     打开方案管理弹窗
     """
+    overlay = _create_modal_overlay(parent)
+
     width, height = 360, 420
     # Center relative to screen
     sw = parent.winfo_screenwidth()
@@ -305,11 +357,20 @@ def open_profile_manager(parent, on_switch):
     top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
     top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
     
+    def _destroy_all(e):
+        try: overlay.destroy()
+        except: pass
+    top.bind("<Destroy>", _destroy_all, add="+")
+
     # --- MODAL LOGIC START ---
     # Make it modal to prevent underlying clicks
     top.grab_set()
     top.focus_set()
     # --- MODAL LOGIC END ---
+
+    overlay.attributes("-topmost", True)
+    top.attributes("-topmost", True)
+    top.lift()
 
     # Main canvas for rounded background
     c = tk.Canvas(top, width=width, height=height,
@@ -635,7 +696,8 @@ def _show_rename_dialog(parent, old_name, refresh_cb):
 def create_toolbar_window(parent, screen_w, screen_h, *,
                           on_add, on_run, on_export, on_import,
                           on_quit, transparency, on_alpha_change,
-                          on_switch_profile):
+                          on_switch_profile, on_edit_passthrough=None,
+                          edit_passthrough=False):
     tw, th = TOOLBAR_WIDTH, TOOLBAR_HEIGHT
     tx = (screen_w - tw) // 2
     ty = screen_h - th - TOOLBAR_BOTTOM_MARGIN
@@ -792,6 +854,76 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     c.tag_bind(run_tag,"<Enter>",_ren); c.tag_bind(run_tag,"<Leave>",_rlv)
     c.tag_bind(run_tag,"<Button-1>", lambda e: on_run())
 
+    bx += _RUN_W + 20  # 20px gap after Run button
+
+    # --- 7) Passthrough Switch: 穿透 [pill] 关闭/开启 ---
+    pt_tag = "tpt"
+    pt_state = {"on": edit_passthrough}
+
+    pt_label_x = bx
+    pt_cy = by + _BTN_H // 2
+
+    # Label: "穿透模式" (larger font)
+    c.create_text(pt_label_x, pt_cy, text="\u7a7f\u900f\u6a21\u5f0f",
+                  font=(_FF, -16, "bold"), fill="#AAA", anchor="w", tags=(pt_tag,))
+
+    # Pill switch dimensions (larger for better visibility)
+    _SW_W = 48  # pill width
+    _SW_H = 24  # pill height
+    _SW_R = _SW_H // 2  # 12px = perfect half-circle
+    _SW_DOT = 18  # dot diameter
+
+    sw_x = pt_label_x + 80  # after "穿透模式" text
+    sw_y = pt_cy - _SW_H // 2
+
+    # Draw pill using two half-circle ovals + center rectangle (true pill shape)
+    pill_color = _C_AMBER if pt_state["on"] else _C_GRAY
+    # Left cap (half circle)
+    c.create_oval(sw_x, sw_y, sw_x + _SW_H, sw_y + _SW_H,
+                  fill=pill_color, outline="", tags=(pt_tag, "pt_pill_l"))
+    # Right cap (half circle)
+    c.create_oval(sw_x + _SW_W - _SW_H, sw_y, sw_x + _SW_W, sw_y + _SW_H,
+                  fill=pill_color, outline="", tags=(pt_tag, "pt_pill_r"))
+    # Center rect
+    c.create_rectangle(sw_x + _SW_R, sw_y, sw_x + _SW_W - _SW_R, sw_y + _SW_H,
+                       fill=pill_color, outline="", tags=(pt_tag, "pt_pill_c"))
+
+    # Dot (circle)
+    dot_pad = (_SW_H - _SW_DOT) // 2
+    dot_x = (sw_x + _SW_W - dot_pad - _SW_DOT) if pt_state["on"] else (sw_x + dot_pad)
+    dot_y = sw_y + dot_pad
+    c.create_oval(dot_x, dot_y, dot_x + _SW_DOT, dot_y + _SW_DOT,
+                  fill="white", outline="", tags=(pt_tag, "pt_dot"))
+
+    # Status text (larger font)
+    status_x = sw_x + _SW_W + 8
+    status_text = "\u5f00\u542f" if pt_state["on"] else "\u5173\u95ed"
+    status_color = _C_AMBER if pt_state["on"] else "#888"
+    c.create_text(status_x, pt_cy, text=status_text,
+                  font=(_FF, -16), fill=status_color, anchor="w", tags=(pt_tag, "pt_status"))
+
+    def _update_pt_visual():
+        p_color = _C_AMBER if pt_state["on"] else _C_GRAY
+        c.itemconfigure("pt_pill_l", fill=p_color)
+        c.itemconfigure("pt_pill_r", fill=p_color)
+        c.itemconfigure("pt_pill_c", fill=p_color)
+        if pt_state["on"]:
+            dot_on_x = sw_x + _SW_W - dot_pad - _SW_DOT
+            c.coords("pt_dot", dot_on_x, dot_y, dot_on_x + _SW_DOT, dot_y + _SW_DOT)
+            c.itemconfigure("pt_status", text="\u5f00\u542f", fill=_C_AMBER)
+        else:
+            dot_off_x = sw_x + dot_pad
+            c.coords("pt_dot", dot_off_x, dot_y, dot_off_x + _SW_DOT, dot_y + _SW_DOT)
+            c.itemconfigure("pt_status", text="\u5173\u95ed", fill="#888")
+
+    def _toggle_pt(e=None):
+        pt_state["on"] = not pt_state["on"]
+        _update_pt_visual()
+        if on_edit_passthrough:
+            on_edit_passthrough(pt_state["on"])
+
+    c.tag_bind(pt_tag, "<Button-1>", _toggle_pt)
+
     # ========== SECOND ROW: Slider ==========
     sl_x = _DRAG_W + 16
     sl_y = _TOP + _BTN_H + 30
@@ -857,56 +989,174 @@ def setup_edit_toolbar(frame, **kwargs):
 #  Button editor popup
 # =============================================================
 
-def open_button_editor(parent, btn, *, on_save, on_delete, set_window_style):
+def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_style):
+    overlay = _create_modal_overlay(parent)
+
+    width, height = 380, 630
+    sw = parent.winfo_screenwidth()
+    sh = parent.winfo_screenheight()
+    x = (sw - width) // 2
+    y = (sh - height) // 2
+
     top = tk.Toplevel(parent)
-    top.geometry("380x660")
+    top.overrideredirect(True)
+    top.geometry(f"{width}x{height}+{x}+{y}")
     top.attributes("-topmost", True)
-    top.title("\u7f16\u8f91\u6309\u94ae")
-    top.configure(bg="#222")
-    set_window_style('normal', target_window=top)
+    top.attributes("-alpha", 1.0)
+    top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
+    top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
     
+    def _destroy_all(e):
+        try: overlay.destroy()
+        except: pass
+    top.bind("<Destroy>", _destroy_all, add="+")
+
     # --- MODAL LOGIC START ---
     top.grab_set()
     top.focus_set()
     # --- MODAL LOGIC END ---
 
-    def _keep():
-        try:
-            if top.winfo_exists(): top.lift(); top.after(500, _keep)
-        except: pass
-    top.lift(); top.after(200, _keep)
+    overlay.attributes("-topmost", True)
+    top.attributes("-topmost", True)
+    top.lift()
+
+    c = tk.Canvas(top, width=width, height=height,
+                  bg=COLOR_TOOLBAR_TRANSPARENT, highlightthickness=0)
+    c.place(x=0, y=0)
+
+    # Background
+    _rrect(c, 0, 0, width, height, TOOLBAR_RADIUS, fill=_C_PM_BG, outline="#444", width=1, tags="bg")
+
+    # Drag
+    drag = {"sx":0,"sy":0,"wx":0,"wy":0}
+    def _ds(e): drag["sx"],drag["sy"]=e.x_root,e.y_root; drag["wx"],drag["wy"]=top.winfo_x(),top.winfo_y()
+    def _dm(e):
+        nx=drag["wx"]+(e.x_root-drag["sx"]); ny=drag["wy"]+(e.y_root-drag["sy"])
+        top.geometry(f"{width}x{height}+{max(0,min(nx,sw-width))}+{max(0,min(ny,sh-height))}")
+    c.tag_bind("bg", "<Button-1>", _ds)
+    c.tag_bind("bg", "<B1-Motion>", _dm)
+
+    # Title Window
+    c.create_text(20, 25, text="\u7f16\u8f91\u6309\u94ae", font=(_FF, 11, "bold"), fill="white", anchor="w", tags="title")
+    c.tag_bind("title", "<Button-1>", _ds)
+    c.tag_bind("title", "<B1-Motion>", _dm)
+
+    # Inner Title
+    c.create_text(width//2, 60, text="\u6309\u952e\u914d\u7f6e", font=(_FF, 14, "bold"), fill="#E0E0E0", tags="inner_title")
+
+    # Close Button
+    cx0 = width - _CLOSE_M - _CLOSE
+    cy0 = _CLOSE_M
+    _rrect(c, cx0, cy0, _CLOSE, _CLOSE, _BTN_R, fill=_C_CLOSE, outline="", tags=("close","close_bg"))
+    ifont = _icon_font()
+    ccx, ccy = cx0+_CLOSE//2, cy0+_CLOSE//2
+    if ifont:
+        c.create_text(ccx, ccy, text="\uE711", font=(ifont, _IS), fill="#FFF", tags=("close",))
+    else:
+        c.create_text(ccx, ccy, text="\u2715", font=(_FF, _FS, "bold"), fill="#FFF", tags=("close",))
+    
+    def _ce(e): i=c.find_withtag("close_bg"); i and c.itemconfigure(i[0], fill=_C_CLOSE_H)
+    def _cl(e): i=c.find_withtag("close_bg"); i and c.itemconfigure(i[0], fill=_C_CLOSE)
+    c.tag_bind("close","<Enter>",_ce); c.tag_bind("close","<Leave>",_cl)
+    c.tag_bind("close","<Button-1>", lambda e: top.destroy())
+
+    # Form Container
+    form_y = 90
+    form_h = height - form_y - 160 # Space for buttons (copy + delete/save + margins)
+    form_frame = tk.Frame(top, bg=_C_PM_BG)
+    form_frame.place(x=20, y=form_y, width=width-40, height=form_h)
 
     entries = {}
-    tk.Label(top, text="\u56fe\u5f62\u5316\u914d\u7f6e", fg=COLOR_BTN_BORDER, bg="#222",
-             font=(_FF, 13, "bold")).pack(pady=(16, 8))
-
-    for key, label_text, use_vk in EDIT_FIELDS:
+    
+    # Grid layout for form
+    for idx, (key, label_text, use_vk) in enumerate(EDIT_FIELDS):
         if key not in btn: btn[key] = ''
-        frame = tk.Frame(top, bg="#222"); frame.pack(fill="x", padx=24, pady=4)
-        tk.Label(frame, text=label_text, fg="#CCC", bg="#222",
-                 width=10, anchor="w", font=(_FF, 9)).pack(side="left")
-        e = tk.Entry(frame, font=(_FF, 10), bg="#3A3A3A", fg="white",
-                     insertbackground="white", relief="flat", bd=4)
-        e.insert(0, btn[key]); e.pack(side="left", fill="x", expand=True)
+        
+        lbl = tk.Label(form_frame, text=label_text, bg=_C_PM_BG, fg="#CCC", font=(_FF, 10), anchor="w")
+        lbl.grid(row=idx, column=0, sticky="w", pady=5)
+        
+        e_frame = tk.Frame(form_frame, bg=_C_PM_BG)
+        e_frame.grid(row=idx, column=1, sticky="ew", padx=(10, 0), pady=5)
+        
+        e = tk.Entry(e_frame, font=(_FF, 10), bg=_C_GRAY, fg="white", 
+                     insertbackground="white", relief="flat", bd=5)
+        e.pack(side="left", fill="x", expand=True)
+        e.insert(0, btn[key])
         entries[key] = e
+        
         if use_vk:
-            tk.Button(frame, text="+", width=3, bg="#404040", fg="#CCC", relief="flat",
-                      font=(_FF, 9),
-                      command=lambda ent=e: open_virtual_keyboard(top, ent)
-                      ).pack(side="right", padx=(6, 0))
+             vk_btn = tk.Label(e_frame, text="\u2328", bg=_C_GRAY, fg="#AAA", font=(_FF, 12)) # Keyboard icon
+             vk_btn.pack(side="right", padx=(5, 0))
+             vk_btn.bind("<Button-1>", lambda ev, ent=e: open_virtual_keyboard(top, ent))
 
-    def do_save():
-        for k, e in entries.items():
-            v = e.get().replace(" ", "").lower() if k != 'name' else e.get()
+    form_frame.columnconfigure(1, weight=1)
+
+    # === Bottom Buttons ===
+    padding = 20
+    btn_h = 40
+    btn_gap = 10  # gap between button rows
+
+    # Row 2 (bottom): Delete + Save — same Y, equal aligned
+    row2_y = height - padding - btn_h
+    total_w = width - padding * 2  # 340
+    half_w = (total_w - btn_gap) // 2  # each button width
+
+    # Delete (Red) - Left half
+    del_x = padding
+    _rrect(c, del_x, row2_y, half_w, btn_h, _BTN_R, fill="#6E1E1E", outline="", tags=("del", "del_bg"))
+    c.create_text(del_x + half_w // 2, row2_y + btn_h // 2, text="\u5220\u9664",
+                  font=(_FF, _FS), fill="white", tags=("del",))
+
+    def _del_enter(e): c.itemconfigure("del_bg", fill="#8B2020")
+    def _del_leave(e): c.itemconfigure("del_bg", fill="#6E1E1E")
+    c.tag_bind("del", "<Enter>", _del_enter); c.tag_bind("del", "<Leave>", _del_leave)
+
+    def do_delete(e=None):
+        on_delete(btn); top.destroy()
+    c.tag_bind("del", "<Button-1>", do_delete)
+
+    # Save (Teal) - Right half
+    save_x = padding + half_w + btn_gap
+    _rrect(c, save_x, row2_y, half_w, btn_h, _BTN_R, fill="#007A7A", outline="", tags=("save", "save_bg"))
+    c.create_text(save_x + half_w // 2, row2_y + btn_h // 2, text="\u4fdd\u5b58",
+                  font=(_FF, _FS), fill="white", tags=("save",))
+
+    def _save_enter(e): c.itemconfigure("save_bg", fill="#009999")
+    def _save_leave(e): c.itemconfigure("save_bg", fill="#007A7A")
+    c.tag_bind("save", "<Enter>", _save_enter); c.tag_bind("save", "<Leave>", _save_leave)
+
+    def do_save(e=None):
+        for k, e_widget in entries.items():
+            v = e_widget.get().replace(" ", "").lower() if k != 'name' else e_widget.get()
             btn[k] = v
         on_save(btn); top.destroy()
+    c.tag_bind("save", "<Button-1>", do_save)
 
-    def do_delete():
-        on_delete(btn); top.destroy()
+    # Row 1 (above delete/save): Copy Button — full width, gray toolbar style
+    copy_y = row2_y - btn_gap - btn_h
+    copy_w = total_w
+    copy_x = padding
+    _rrect(c, copy_x, copy_y, copy_w, btn_h, _BTN_R, fill=_C_GRAY, outline="", tags=("copy", "copy_bg"))
 
-    tk.Button(top, text="\u4fdd  \u5b58", command=do_save,
-              bg="#007A7A", fg="white", relief="flat", width=20,
-              font=(_FF, 10, "bold"), activebackground="#009999").pack(pady=(20, 8))
-    tk.Button(top, text="\u5220  \u9664", command=do_delete,
-              bg="#6E1E1E", fg="white", relief="flat", width=20,
-              font=(_FF, 10), activebackground="#8B2020").pack(pady=4)
+    copy_cy = copy_y + btn_h // 2
+    if ifont:
+        # icon(~20px) + gap(12px) + text(~72px) ≈ 104px total, centered
+        icon_x = copy_x + copy_w // 2 - 40
+        text_x = icon_x + 20 + 12  # icon width + gap
+        c.create_text(icon_x, copy_cy, text="\uE8C8",
+                      font=(ifont, _IS), fill="#E0E0E0", anchor="center", tags=("copy",))
+        c.create_text(text_x, copy_cy, text="\u590d\u5236\u6309\u94ae",
+                      font=(_FF, _FS), fill="#E0E0E0", anchor="w", tags=("copy",))
+    else:
+        c.create_text(copy_x + copy_w // 2, copy_cy, text="\u590d\u5236\u6309\u94ae",
+                      font=(_FF, _FS, "bold"), fill="#E0E0E0", tags=("copy",))
+
+    def _copy_enter(e): c.itemconfigure("copy_bg", fill=_C_GRAY_H)
+    def _copy_leave(e): c.itemconfigure("copy_bg", fill=_C_GRAY)
+    c.tag_bind("copy", "<Enter>", _copy_enter); c.tag_bind("copy", "<Leave>", _copy_leave)
+
+    def do_copy(e=None):
+        on_copy(btn); top.destroy()
+    c.tag_bind("copy", "<Button-1>", do_copy)
+
+    return top
