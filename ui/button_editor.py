@@ -1,8 +1,7 @@
 """
 FKB - button_editor.py
 按钮编辑弹窗：左右两栏布局。
-左栏4区块：① 名称 ② 悬停 ③ 鼠标按键/滚轮 ④ 说明+操作按钮
-右栏：分类按键面板，点击追加到当前焦点 Tag 容器。
+顶部通栏 tip → 左栏4区块 → 右栏按键面板。
 """
 
 import tkinter as tk
@@ -27,7 +26,6 @@ ACTION_COLORS = {
 }
 
 # ─── 4 区块字段定义 ────────────────────────────────────────────
-# (key, label, is_tag, block)
 BLOCK_1 = [('name', '按钮名称', False)]
 BLOCK_2 = [('hover', '悬停时', True)]
 BLOCK_3 = [
@@ -37,8 +35,14 @@ BLOCK_3 = [
     ('wheelup',   '滚轮向上', True),
     ('wheeldown', '滚轮向下', True),
 ]
-ALL_FIELDS = BLOCK_1 + BLOCK_2 + BLOCK_3
 BLOCK_GAP = 40
+
+# ─── 行布局常量 ────────────────────────────────────────────────
+ROW_H = 40          # 每行固定高度
+DOT_W = 20          # 色块列宽
+LABEL_W = 70        # 标签列宽
+INPUT_PAD = 10      # 标签和输入框间距
+INPUT_H = 36        # TagInput / Entry 固定高度
 
 # ─── 按键分类数据 ──────────────────────────────────────────────
 KEY_CATEGORIES = [
@@ -64,16 +68,16 @@ _C_INPUT_BG = "#3A3A3A"
 
 
 # ═══════════════════════════════════════════════════════════════
-#  TagInput - 自定义 Tag 容器控件
+#  TagInput - 固定高度的 Tag 容器控件
 # ═══════════════════════════════════════════════════════════════
 
 class TagInput(tk.Frame):
-    """Tag 输入控件，点击右侧面板添加 tag，Backspace 删除。"""
+    """Tag 输入控件，固定高度，点击面板添加 tag，Backspace 删除。"""
 
     def __init__(self, master, initial_value="", accent_color="#F59E0B", **kw):
         super().__init__(master, bg=_C_INPUT_BG, highlightthickness=2,
                          highlightbackground=C_GRAY, highlightcolor=C_GRAY,
-                         padx=4, pady=4, cursor="xterm", **kw)
+                         cursor="xterm", **kw)
         self.tags: list[str] = []
         self._tag_widgets: list[tk.Label] = []
         self._accent = accent_color
@@ -84,8 +88,9 @@ class TagInput(tk.Frame):
                 if part:
                     self.tags.append(part)
 
-        self._spacer = tk.Frame(self, bg=_C_INPUT_BG, height=24, width=1)
-        self._spacer.pack(side="left")
+        # 内部容器，居中对齐
+        self._inner = tk.Frame(self, bg=_C_INPUT_BG)
+        self._inner.pack(fill="both", expand=True, padx=4, pady=0)
 
         self.bind("<Button-1>", self._on_click)
         self.bind("<FocusIn>", self._on_focus_in)
@@ -122,49 +127,11 @@ class TagInput(tk.Frame):
             w.destroy()
         self._tag_widgets.clear()
         for tag_name in self.tags:
-            lbl = tk.Label(self, text=tag_name, bg=self._accent, fg="#FFF",
+            lbl = tk.Label(self._inner, text=tag_name, bg=self._accent, fg="#FFF",
                            font=(FF, 9, "bold"), padx=6, pady=2, cursor="xterm")
-            lbl.pack(side="left", padx=(0, 4), pady=1)
+            lbl.pack(side="left", padx=(0, 4), pady=0)
             lbl.bind("<Button-1>", lambda ev: self.focus_set())
             self._tag_widgets.append(lbl)
-
-
-# ═══════════════════════════════════════════════════════════════
-#  辅助：构建带色块标签的表单行
-# ═══════════════════════════════════════════════════════════════
-
-def _build_field_row(parent, row, key, label_text, is_tag, btn_data, fields, set_focus_fn):
-    """在 grid 中构建一行：色块 + 标签 + 输入控件。"""
-    color = ACTION_COLORS.get(key)
-
-    col_offset = 0
-    if color:
-        dot = tk.Frame(parent, bg=color, width=8, height=8)
-        dot.grid(row=row, column=0, padx=(0, 6), pady=6)
-        col_offset = 1
-
-    lbl = tk.Label(parent, text=label_text, bg=C_PM_BG, fg="#CCC",
-                   font=(FF, 10), anchor="w")
-    lbl.grid(row=row, column=col_offset, sticky="w", pady=4)
-
-    if key not in btn_data:
-        btn_data[key] = ''
-
-    if is_tag:
-        ti = TagInput(parent, initial_value=btn_data[key],
-                      accent_color=color or C_AMBER)
-        ti.grid(row=row, column=col_offset + 1, sticky="ew", padx=(10, 0), pady=4)
-        ti.bind("<FocusIn>", lambda ev, w=ti: set_focus_fn(w))
-        fields[key] = ti
-    else:
-        e = tk.Entry(parent, font=(FF, 10), bg=C_GRAY, fg="white",
-                     insertbackground="white", relief="flat", bd=5,
-                     highlightthickness=2, highlightbackground=C_GRAY,
-                     highlightcolor=C_GRAY)
-        e.grid(row=row, column=col_offset + 1, sticky="ew", padx=(10, 0), pady=4)
-        e.insert(0, btn_data[key])
-        e.bind("<FocusIn>", lambda ev, w=e: set_focus_fn(w))
-        fields[key] = e
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -206,7 +173,6 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     c = tk.Canvas(top, width=width, height=height,
                   bg=COLOR_TOOLBAR_TRANSPARENT, highlightthickness=0)
     c.place(x=0, y=0)
-
     rrect(c, 0, 0, width, height, TOOLBAR_RADIUS, fill=C_PM_BG, outline="#444", width=1, tags="bg")
 
     # ── 拖拽 ──
@@ -242,17 +208,27 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     c.tag_bind("close", "<Leave>", lambda e: c.itemconfigure("close_bg", fill=C_CLOSE))
     c.tag_bind("close", "<Button-1>", lambda e: top.destroy())
 
+    # ── 通栏 Tip（标题下方）──
+    tip_y = 50
+    tip_text = "💡 点击右侧按键添加到输入框 ｜ Backspace 删除 ｜ 支持无限组合"
+    tip_lbl = tk.Label(top, text=tip_text, bg=C_PM_BG, fg="#777",
+                       font=(FF, 9), anchor="w")
+    tip_lbl.place(x=PADDING, y=tip_y, width=width - PADDING * 2)
+
+    # ── 内容区起始 Y（tip 下方 40px）──
+    content_y = tip_y + 20 + BLOCK_GAP   # ~110
+
     # ── 分隔线 ──
     div_x = PADDING + LEFT_W
-    header_y = 55
-    c.create_line(div_x, header_y, div_x, height - PADDING, fill="#444", width=1)
+    c.create_line(div_x, content_y - 10, div_x, height - PADDING, fill="#444", width=1)
 
     # =================================================================
-    #  LEFT COLUMN: 4 Blocks
+    #  LEFT COLUMN: 4 Blocks (place-based, fixed row heights)
     # =================================================================
     form_x = PADDING
     form_w = LEFT_W - 10
-    cur_y = header_y + 10
+    input_x = DOT_W + LABEL_W + INPUT_PAD   # 输入框统一起始 X
+    input_w = form_w - input_x               # 输入框统一宽度
 
     focus_state = {"current_widget": None}
     fields = {}
@@ -273,53 +249,74 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
                              highlightcolor=C_AMBER)
         widget.focus_set()
 
-    def _create_block(block_fields, y_start):
-        """创建一个区块 Frame，返回 Frame 和实际高度。"""
+    def _build_row(parent_frame, local_y, key, label_text, is_tag):
+        """在 parent_frame 中用 place 构建一行，返回控件。"""
+        if key not in btn:
+            btn[key] = ''
+
+        color = ACTION_COLORS.get(key)
+
+        # 色块
+        if color:
+            dot = tk.Frame(parent_frame, bg=color, width=8, height=8)
+            dot.place(x=4, y=local_y + (ROW_H - 8) // 2, width=8, height=8)
+
+        # 标签
+        lbl = tk.Label(parent_frame, text=label_text, bg=C_PM_BG, fg="#CCC",
+                       font=(FF, 10), anchor="w")
+        lbl.place(x=DOT_W, y=local_y, height=ROW_H)
+
+        # 输入控件（固定高度 INPUT_H，垂直居中）
+        wy = local_y + (ROW_H - INPUT_H) // 2
+
+        if is_tag:
+            ti = TagInput(parent_frame, initial_value=btn[key],
+                          accent_color=color or C_AMBER)
+            ti.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
+            ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
+            fields[key] = ti
+        else:
+            e = tk.Entry(parent_frame, font=(FF, 10), bg=C_GRAY, fg="white",
+                         insertbackground="white", relief="flat", bd=5,
+                         highlightthickness=2, highlightbackground=C_GRAY,
+                         highlightcolor=C_GRAY)
+            e.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
+            e.insert(0, btn[key])
+            e.bind("<FocusIn>", lambda ev, w=e: _set_focus(w))
+            fields[key] = e
+
+    def _create_block(block_fields, abs_y):
+        """创建一个区块，返回区块总高度。"""
         frame = tk.Frame(top, bg=C_PM_BG)
-        frame.place(x=form_x, y=y_start, width=form_w)
+        block_h = len(block_fields) * ROW_H
+        frame.place(x=form_x, y=abs_y, width=form_w, height=block_h)
+        for i, (key, label_text, is_tag) in enumerate(block_fields):
+            _build_row(frame, i * ROW_H, key, label_text, is_tag)
+        return block_h
 
-        has_color = any(ACTION_COLORS.get(k) for k, _, _ in block_fields)
-        ncols = 3 if has_color else 2
-
-        for row, (key, label_text, is_tag) in enumerate(block_fields):
-            _build_field_row(frame, row, key, label_text, is_tag,
-                             btn, fields, _set_focus)
-
-        frame.columnconfigure(ncols - 1, weight=1)
-        return frame
+    cur_y = content_y
 
     # Block 1: 按钮名称
-    b1 = _create_block(BLOCK_1, cur_y)
-    top.update_idletasks()
-    b1.update_idletasks()
-    cur_y += b1.winfo_reqheight() + BLOCK_GAP
+    h1 = _create_block(BLOCK_1, cur_y)
+    cur_y += h1 + BLOCK_GAP
 
     # Block 2: 悬停
-    b2 = _create_block(BLOCK_2, cur_y)
-    top.update_idletasks()
-    b2.update_idletasks()
-    cur_y += b2.winfo_reqheight() + BLOCK_GAP
+    h2 = _create_block(BLOCK_2, cur_y)
+    cur_y += h2 + BLOCK_GAP
 
     # Block 3: 鼠标按键 + 滚轮
-    b3 = _create_block(BLOCK_3, cur_y)
-    top.update_idletasks()
-    b3.update_idletasks()
+    h3 = _create_block(BLOCK_3, cur_y)
 
     # 默认焦点
     top.after(100, lambda: _set_focus(fields['hover']))
 
-    # ── Block 4: 说明 + 按钮 ──
-    help_text = (
-        "💡 点击右侧按键添加到当前输入框\n"
-        "Backspace 删除最后一个按键\n"
-        "支持无限组合"
-    )
-
+    # =================================================================
+    #  Block 4: 底部按钮（复制 / 删除 / 保存）
+    # =================================================================
     btn_h = 40
     btn_gap = 10
     total_w = form_w
 
-    # 底部按钮定位
     row2_y = height - PADDING - btn_h
     half_w = (total_w - btn_gap) // 2
 
@@ -370,17 +367,11 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     c.tag_bind("copy", "<Leave>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY))
     c.tag_bind("copy", "<Button-1>", lambda e: [on_copy(btn), top.destroy()])
 
-    # 说明文本
-    help_y = copy_y - btn_gap - 60
-    help_lbl = tk.Label(top, text=help_text, bg=C_PM_BG, fg="#999",
-                        font=(FF, 9), anchor="w", justify="left")
-    help_lbl.place(x=form_x, y=help_y, width=form_w)
-
     # =================================================================
     #  RIGHT COLUMN: Key Palette (scrollable)
     # =================================================================
     right_x = PADDING + LEFT_W + DIVIDER + 10
-    right_y = header_y + 5
+    right_y = content_y - 10
     right_w = RIGHT_W - 20
     right_h = height - right_y - PADDING
 
@@ -399,7 +390,6 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         right_canvas.itemconfig(cw_id, width=e.width)
     right_canvas.bind("<Configure>", _on_rc_configure)
     right_canvas.configure(yscrollcommand=right_scrollbar.set)
-
     right_canvas.pack(side="left", fill="both", expand=True)
     right_scrollbar.pack(side="right", fill="y")
 
@@ -450,13 +440,11 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
             if col_x > 0 and col_x + TAG_GAP_X + btn_w > avail_w:
                 row_idx += 1
                 col_x = 0
-
             tag_lbl = tk.Label(flow_frame, text=key_name, bg=_C_TAG_BG, fg=_C_TAG_TEXT,
                                font=TAG_FONT, cursor="hand2", anchor="center", width=0)
             tag_lbl.place(x=col_x, y=row_idx * (TAG_H + TAG_GAP_Y),
                           width=btn_w, height=TAG_H)
             col_x += btn_w + TAG_GAP_X
-
             tag_lbl.bind("<Enter>", lambda ev, w=tag_lbl: w.configure(bg=_C_TAG_HOVER))
             tag_lbl.bind("<Leave>", lambda ev, w=tag_lbl: w.configure(bg=_C_TAG_BG))
             tag_lbl.bind("<Button-1>", lambda ev, k=key_name: _append_key(k))
