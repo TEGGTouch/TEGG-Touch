@@ -6,6 +6,7 @@ FKB - button_editor.py
 """
 
 import tkinter as tk
+import tkinter.font as tkFont
 
 from core.constants import COLOR_TOOLBAR_TRANSPARENT, TOOLBAR_RADIUS
 from ui.widgets import (
@@ -55,8 +56,8 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     RIGHT_W = 560
     PADDING = 20
     DIVIDER = 1
-    width = LEFT_W + DIVIDER + RIGHT_W + PADDING * 2  # ~941
-    height = 680
+    width = LEFT_W + DIVIDER + RIGHT_W + PADDING * 2
+    height = 780
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -133,19 +134,16 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     # =================================================================
     form_x = PADDING
     form_y = header_y + 10
-    form_w = LEFT_W - 10  # slight right margin before divider
+    form_w = LEFT_W - 10
 
     # ── 焦点追踪 ──
     focus_state = {"current_entry": None}
     entries = {}
 
     def _set_focus(entry_widget):
-        """设置焦点输入框，高亮边框。"""
-        # 恢复旧焦点
         old = focus_state["current_entry"]
         if old and old.winfo_exists():
             old.configure(highlightbackground=C_GRAY, highlightcolor=C_GRAY)
-        # 设置新焦点
         focus_state["current_entry"] = entry_widget
         entry_widget.configure(highlightbackground=_C_FOCUS_BORDER, highlightcolor=_C_FOCUS_BORDER)
         entry_widget.focus_set()
@@ -168,18 +166,14 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         e.grid(row=idx, column=1, sticky="ew", padx=(10, 0), pady=4)
         e.insert(0, btn[key])
         entries[key] = e
-
-        # 点击输入框时设置焦点
         e.bind("<FocusIn>", lambda ev, ent=e: _set_focus(ent))
 
     form_frame.columnconfigure(1, weight=1)
 
-    # 默认焦点到第一个可编辑字段
     first_key = EDIT_FIELDS[1][0] if len(EDIT_FIELDS) > 1 else EDIT_FIELDS[0][0]
     top.after(100, lambda: _set_focus(entries[first_key]))
 
-    # ── 使用说明 ──
-    help_y_base = form_y + len(EDIT_FIELDS) * 40 + 40
+    # ── 使用说明（等表单渲染后再定位） ──
     help_text = (
         "💡 点击右侧按键添加到当前输入框\n"
         "多键用 + 连接，如 ctrl+a\n"
@@ -187,14 +181,18 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     )
     help_lbl = tk.Label(top, text=help_text, bg=C_PM_BG, fg="#999",
                         font=(FF, 9), anchor="w", justify="left")
-    help_lbl.place(x=form_x, y=help_y_base, width=form_w)
+
+    def _place_help():
+        form_frame.update_idletasks()
+        real_h = form_frame.winfo_reqheight()
+        help_lbl.place(x=form_x, y=form_y + real_h + 40, width=form_w)
+    top.after(50, _place_help)
 
     # ── 底部按钮 ──
     btn_h = 40
     btn_gap = 10
     total_w = form_w
 
-    # Row 2 (bottom): Delete + Save
     row2_y = height - PADDING - btn_h
     half_w = (total_w - btn_gap) // 2
 
@@ -227,7 +225,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         top.destroy()
     c.tag_bind("save", "<Button-1>", do_save)
 
-    # Row 1: Copy button (full width)
+    # Copy
     copy_y = row2_y - btn_gap - btn_h
     rrect(c, PADDING, copy_y, total_w, btn_h, BTN_R, fill=C_GRAY, outline="", tags=("copy", "copy_bg"))
     copy_cy = copy_y + btn_h // 2
@@ -255,28 +253,25 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     right_w = RIGHT_W - 20
     right_h = height - right_y - PADDING
 
-    # Container frame
     right_container = tk.Frame(top, bg=C_PM_BG)
     right_container.place(x=right_x, y=right_y, width=right_w, height=right_h)
 
-    # Scrollable canvas
     right_canvas = tk.Canvas(right_container, bg=C_PM_BG, highlightthickness=0)
     right_scrollbar = tk.Scrollbar(right_container, orient="vertical", command=right_canvas.yview)
     right_inner = tk.Frame(right_canvas, bg=C_PM_BG)
 
     right_inner.bind("<Configure>",
                      lambda e: right_canvas.configure(scrollregion=right_canvas.bbox("all")))
-    cw = right_canvas.create_window((0, 0), window=right_inner, anchor="nw")
+    cw_id = right_canvas.create_window((0, 0), window=right_inner, anchor="nw")
 
     def _on_rc_configure(e):
-        right_canvas.itemconfig(cw, width=e.width)
+        right_canvas.itemconfig(cw_id, width=e.width)
     right_canvas.bind("<Configure>", _on_rc_configure)
     right_canvas.configure(yscrollcommand=right_scrollbar.set)
 
     right_canvas.pack(side="left", fill="both", expand=True)
     right_scrollbar.pack(side="right", fill="y")
 
-    # Mouse wheel for right panel
     def _on_mw(event):
         if right_canvas.yview() != (0.0, 1.0):
             right_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -285,7 +280,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     right_container.bind('<Enter>', _bind_mw)
     right_container.bind('<Leave>', _unbind_mw)
 
-    # ── 追加按键到焦点输入框 ──
+    # ── 追加按键 ──
     def _append_key(key_name):
         ent = focus_state["current_entry"]
         if ent is None or not ent.winfo_exists():
@@ -295,86 +290,67 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
             ent.insert(tk.END, f"+{key_name}")
         else:
             ent.insert(0, key_name)
-        # 保持焦点
         ent.focus_set()
 
-    # ── 绘制按键面板 ──
-    TAG_MIN_W = 40   # 最低宽度 40px
-    TAG_H = 40       # 高度 40px
-    TAG_PAD_X = 10
-    TAG_PAD_Y = 8
+    # ── 按键面板：手动 flow 布局 ──
+    TAG_MIN_W = 40
+    TAG_H = 40
+    TAG_PAD_X = 12
     TAG_FONT = (FF, 10)
-    TAG_GAP = 6      # 同行按钮间距
-    ROW_GAP = 20     # 同类按键行间距
-    CAT_GAP = 40     # 不同类型间距
+    TAG_GAP_X = 8     # 同行按钮水平间距
+    TAG_GAP_Y = 10    # 同类按键行间距 (上下各10 = 20px总间距)
+    CAT_GAP = 40      # 不同分类间距
+
+    # 用 font 对象精确测量文字宽度
+    measure_font = tkFont.Font(family=FF, size=10)
+    avail_w = right_w - 30  # 减去 scrollbar + padding
 
     is_first_cat = True
     for cat_name, keys in KEY_CATEGORIES:
-        # 分类标题（首个无额外上间距，后续 40px）
         top_pad = 0 if is_first_cat else CAT_GAP
         is_first_cat = False
 
+        # 分类标题
         cat_lbl = tk.Label(right_inner, text=f"── {cat_name} ──", bg=C_PM_BG,
                            fg=_C_CAT_LABEL, font=(FF, 10, "bold"), anchor="w")
         cat_lbl.pack(fill="x", padx=5, pady=(top_pad, 10))
 
-        # 使用 Text widget 实现自动换行的 flow 布局
-        flow_text = tk.Text(right_inner, bg=C_PM_BG, relief="flat", bd=0,
-                            highlightthickness=0, cursor="arrow",
-                            wrap="char", state="normal")
-        flow_text.pack(fill="x", padx=5, pady=(0, 0))
+        # 按键容器 - 手动 flow 布局
+        flow_frame = tk.Frame(right_inner, bg=C_PM_BG)
+        flow_frame.pack(fill="x", padx=5, pady=(0, 0))
 
-        # 禁用文字输入（只做按钮容器）
-        flow_text.configure(state="normal")
+        # 计算每个按键宽度，手动换行放置
+        row_idx = 0
+        col_x = 0  # 当前行已用宽度
 
         for key_name in keys:
-            tag_btn = tk.Frame(flow_text, bg=_C_TAG_BG, cursor="hand2",
-                               height=TAG_H, padx=0, pady=0)
-            tag_btn.pack_propagate(False)
+            text_w = measure_font.measure(key_name)
+            btn_w = max(TAG_MIN_W, text_w + TAG_PAD_X * 2)
 
-            inner_lbl = tk.Label(tag_btn, text=key_name, bg=_C_TAG_BG, fg=_C_TAG_TEXT,
-                                 font=TAG_FONT, cursor="hand2")
-            inner_lbl.pack(expand=True, fill="both", padx=TAG_PAD_X, pady=0)
+            # 检查是否需要换行
+            if col_x > 0 and col_x + TAG_GAP_X + btn_w > avail_w:
+                row_idx += 1
+                col_x = 0
 
-            # 计算宽度：至少 TAG_MIN_W，长文本自适应
-            inner_lbl.update_idletasks()
-            text_w = inner_lbl.winfo_reqwidth() + TAG_PAD_X * 2
-            btn_w = max(TAG_MIN_W, text_w)
-            tag_btn.configure(width=btn_w, height=TAG_H)
+            tag_lbl = tk.Label(flow_frame, text=key_name, bg=_C_TAG_BG, fg=_C_TAG_TEXT,
+                               font=TAG_FONT, cursor="hand2", anchor="center",
+                               width=0)  # width=0 让它自适应
+            tag_lbl.place(x=col_x, y=row_idx * (TAG_H + TAG_GAP_Y),
+                          width=btn_w, height=TAG_H)
 
-            flow_text.window_create("end", window=tag_btn,
-                                    padx=TAG_GAP // 2, pady=ROW_GAP // 2)
+            col_x += btn_w + TAG_GAP_X
 
             # Hover
-            def _enter(ev, f=tag_btn, l=inner_lbl):
-                f.configure(bg=_C_TAG_HOVER)
-                l.configure(bg=_C_TAG_HOVER)
-            def _leave(ev, f=tag_btn, l=inner_lbl):
-                f.configure(bg=_C_TAG_BG)
-                l.configure(bg=_C_TAG_BG)
-
-            tag_btn.bind("<Enter>", _enter)
-            tag_btn.bind("<Leave>", _leave)
-            inner_lbl.bind("<Enter>", _enter)
-            inner_lbl.bind("<Leave>", _leave)
-
+            tag_lbl.bind("<Enter>", lambda ev, w=tag_lbl: w.configure(bg=_C_TAG_HOVER))
+            tag_lbl.bind("<Leave>", lambda ev, w=tag_lbl: w.configure(bg=_C_TAG_BG))
             # Click
-            tag_btn.bind("<Button-1>", lambda ev, k=key_name: _append_key(k))
-            inner_lbl.bind("<Button-1>", lambda ev, k=key_name: _append_key(k))
+            tag_lbl.bind("<Button-1>", lambda ev, k=key_name: _append_key(k))
 
-        # 设置 Text 高度自适应内容
-        flow_text.configure(state="disabled")
-        flow_text.update_idletasks()
-        # 计算需要的行数来设置高度
-        flow_text.configure(height=1)  # 先设最小
-        flow_text.update_idletasks()
-        bbox = flow_text.bbox("end-1c")
-        if bbox:
-            needed_h = bbox[1] + bbox[3] + ROW_GAP
-            flow_text.configure(height=1)
-            # Use pixel height via place/config
-            flow_text.pack_forget()
-            flow_text.pack(fill="x", padx=5, pady=(0, 0))
-            flow_text.configure(height=max(1, needed_h // 20))
+        # 设置 flow_frame 的总高度
+        total_rows = row_idx + 1
+        frame_h = total_rows * TAG_H + (total_rows - 1) * TAG_GAP_Y
+        flow_frame.configure(height=frame_h)
+        # 阻止 frame 被子控件的 pack 收缩（我们用 place 放子控件，所以需要显式高度）
+        flow_frame.pack_propagate(False)
 
     return top
