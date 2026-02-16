@@ -6,11 +6,20 @@ FKB 悬浮触控助手 - 键盘输入模拟引擎
 """
 
 import ctypes
+import ctypes.wintypes as wintypes
 import time
 import random
 import logging
+import threading
+from collections import deque
 
 logger = logging.getLogger(__name__)
+
+# ─── 全局滚轮事件队列 ───────────────────────────────────────
+
+_wheel_queue: deque = deque(maxlen=64)
+_hook_handle = None
+_hook_func_ref = None  # prevent GC
 
 # ─── ctypes 结构体定义 ───────────────────────────────────────
 
@@ -142,3 +151,62 @@ def is_key_pressed(key_name: str) -> bool:
         return _kb.is_pressed(key_name)
     except Exception:
         return False
+
+
+# ─── 低级鼠标钩子：全局滚轮捕获 ─────────────────────────────
+
+WH_MOUSE_LL = 14
+WM_MOUSEWHEEL = 0x020A
+
+class _MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ('pt', wintypes.POINT),
+        ('mouseData', wintypes.DWORD),
+        ('flags', wintypes.DWORD),
+        ('time', wintypes.DWORD),
+        ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong)),
+    ]
+
+_HOOKPROC = ctypes.CFUNCTYPE(ctypes.c_long, ctypes.c_int, ctypes.c_uint, ctypes.POINTER(_MSLLHOOKSTRUCT))
+
+
+def _mouse_hook_proc(nCode, wParam, lParam):
+    """低级鼠标钩子回调。"""
+    if nCode >= 0 and wParam == WM_MOUSEWHEEL:
+        data = lParam.contents
+        # mouseData 高16位是滚轮 delta (signed short)
+        delta = ctypes.c_short(data.mouseData >> 16).value
+        direction = 'up' if delta > 0 else 'down'
+        _wheel_queue.append((direction, data.pt.x, data.pt.y))
+    return ctypes.windll.user32.CallNextHookEx(None, nCode, wParam, lParam)
+
+
+def install_wheel_hook():
+    """安装全局鼠标滚轮钩子。在主线程调用。"""
+    global _hook_handle, _hook_func_ref
+    if _hook_handle is not None:
+        return  # 已安装
+    _hook_func_ref = _HOOKPROC(_mouse_hook_proc)
+    _hook_handle = ctypes.windll.user32.SetWindowsHookExW(
+        WH_MOUSE_LL, _hook_func_ref, None, 0
+    )
+    if _hook_handle == 0:
+        logger.error("安装鼠标钩子失败")
+        _hook_handle = None
+
+
+def uninstall_wheel_hook():
+    """卸载全局鼠标滚轮钩子。"""
+    global _hook_handle, _hook_func_ref
+    if _hook_handle:
+        ctypes.windll.user32.UnhookWindowsHookEx(_hook_handle)
+        _hook_handle = None
+        _hook_func_ref = None
+
+
+def poll_wheel_events():
+    """取出所有待处理的滚轮事件。返回 list of (direction, abs_x, abs_y)。"""
+    events = []
+    while _wheel_queue:
+        events.append(_wheel_queue.popleft())
+    return events

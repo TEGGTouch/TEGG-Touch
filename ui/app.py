@@ -30,7 +30,7 @@ from ui.canvas_renderer import (
     preview_button_transparency, draw_grid,
 )
 from ui.edit_panel import create_toolbar_window, destroy_toolbar_window, open_button_editor
-from core.input_engine import trigger, is_key_pressed
+from core.input_engine import trigger, is_key_pressed, install_wheel_hook, uninstall_wheel_hook, poll_wheel_events
 
 # Windows API
 user32 = ctypes.windll.user32
@@ -93,7 +93,9 @@ class FloatingApp:
         # 主画布
         self.canvas = tk.Canvas(self.root, bg=COLOR_BG, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
-        self.root.bind_all("<MouseWheel>", self.on_mouse_wheel)
+
+        # 安装全局滚轮钩子（硬件级，不依赖窗口焦点）
+        install_wheel_hook()
 
         # 独立工具栏窗口（编辑模式时创建）
         self.toolbar_win = None
@@ -387,31 +389,6 @@ class FloatingApp:
 
         update_button_coords(self.canvas, btn)
 
-    def on_mouse_wheel(self, event):
-        """滚轮触发逻辑。"""
-        if self.current_mode != 'run' or self.is_hidden:
-            return
-
-        # 计算相对坐标
-        rel_x = event.x_root - self.win_x
-        rel_y = event.y_root - self.win_y
-
-        direction = 'up' if event.delta > 0 else 'down'
-
-        for btn in self.buttons:
-            if btn.get('deleted'):
-                continue
-            if (btn['x'] <= rel_x < btn['x'] + btn['w'] and
-                    btn['y'] <= rel_y < btn['y'] + btn['h']):
-
-                key = btn.get('wheelup') if direction == 'up' else btn.get('wheeldown')
-                if key:
-                    trigger(key, 'c')
-                    # 视觉反馈：滚轮方向对应颜色
-                    wheel_state = 'active_wheelup' if direction == 'up' else 'active_wheeldown'
-                    set_button_visual_state(self.canvas, btn, wheel_state)
-                    self.root.after(100, lambda b=btn: set_button_visual_state(self.canvas, b, 'normal'))
-
     # ─── 核心循环 (Core Loop) ────────────────────────────────
 
     def update_loop(self):
@@ -505,6 +482,7 @@ class FloatingApp:
 
     def handle_run_interaction(self, rel_x, rel_y, left_down, right_down, middle_down):
         """处理运行模式下的交互。"""
+        now = time.time()
 
         # 系统按钮检测 (左键点击)
         if left_down and not self.left_was_down:
@@ -518,6 +496,25 @@ class FloatingApp:
                 self.toggle_click_through()
                 return
 
+        # ── 滚轮事件处理（硬件级钩子） ──
+        wheel_events = poll_wheel_events()
+        for direction, wx, wy in wheel_events:
+            w_rel_x = wx - self.win_x
+            w_rel_y = wy - self.win_y
+            for btn in self.buttons:
+                if btn.get('deleted'):
+                    continue
+                if (btn['x'] <= w_rel_x < btn['x'] + btn['w'] and
+                        btn['y'] <= w_rel_y < btn['y'] + btn['h']):
+                    key = btn.get('wheelup') if direction == 'up' else btn.get('wheeldown')
+                    if key:
+                        trigger(key, 'c')
+                        # 视觉反馈 + 闪烁保护时间戳
+                        wheel_state = 'active_wheelup' if direction == 'up' else 'active_wheeldown'
+                        set_button_visual_state(self.canvas, btn, wheel_state)
+                        btn['last_visual_state'] = wheel_state
+                        btn['_wheel_flash_until'] = now + 0.15
+
         # 用户按钮检测
         for idx, btn in enumerate(self.buttons):
             if btn.get('deleted'):
@@ -525,6 +522,28 @@ class FloatingApp:
 
             in_rect = (btn['x'] <= rel_x < btn['x'] + btn['w'] and
                        btn['y'] <= rel_y < btn['y'] + btn['h'])
+
+            # 滚轮闪烁保护：在闪烁期内跳过视觉状态更新
+            if now < btn.get('_wheel_flash_until', 0):
+                # 仍然处理 hover/click 触发逻辑，只是不覆盖颜色
+                if in_rect:
+                    if not btn.get('active_hover'):
+                        btn['active_hover'] = True
+                        trigger(btn['hover'], 'p')
+                    if left_down and not self.left_was_down:
+                        self.holding_btn_left = idx
+                        trigger(btn['lclick'], 'p')
+                    if right_down and not self.right_was_down:
+                        self.holding_btn_right = idx
+                        trigger(btn['rclick'], 'p')
+                    if middle_down and not self.middle_was_down:
+                        self.holding_btn_middle = idx
+                        trigger(btn['mclick'], 'p')
+                else:
+                    if btn.get('active_hover'):
+                        btn['active_hover'] = False
+                        trigger(btn['hover'], 'r')
+                continue
 
             # 状态判定
             target_state = 'normal'
@@ -737,6 +756,7 @@ class FloatingApp:
 
     def quit(self):
         self.save_config()
+        uninstall_wheel_hook()
         self._hide_toolbar()
         self.root.destroy()
         sys.exit()

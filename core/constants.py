@@ -83,6 +83,7 @@ DEFAULT_BUTTONS = [
 RUNTIME_FIELDS = frozenset({
     'id_rect', 'id_text', 'id_resize', 'id_poly',
     'active_hover', 'last_visual_state',
+    '_wheel_flash_until',
 })
 
 # 按钮可选字段及默认值 (兼容旧配置)
