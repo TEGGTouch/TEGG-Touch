@@ -38,11 +38,12 @@ BLOCK_3 = [
 BLOCK_GAP = 40
 
 # ─── 行布局常量 ────────────────────────────────────────────────
-ROW_H = 40          # 每行固定高度
+ROW_H = 50          # 每行固定高度
 DOT_W = 20          # 色块列宽
 LABEL_W = 70        # 标签列宽
 INPUT_PAD = 10      # 标签和输入框间距
-INPUT_H = 36        # TagInput / Entry 固定高度
+INPUT_H = 40        # TagInput / Entry 固定高度
+INPUT_W_SHRINK = 40 # 输入框右侧缩进（右对齐留白）
 
 # ─── 按键分类数据 ──────────────────────────────────────────────
 KEY_CATEGORIES = [
@@ -89,10 +90,11 @@ class TagInput(tk.Frame):
                     self.tags.append(part)
 
         # 内部容器，居中对齐
-        self._inner = tk.Frame(self, bg=_C_INPUT_BG)
+        self._inner = tk.Frame(self, bg=_C_INPUT_BG, cursor="xterm")
         self._inner.pack(fill="both", expand=True, padx=4, pady=0)
 
         self.bind("<Button-1>", self._on_click)
+        self._inner.bind("<Button-1>", self._on_click)
         self.bind("<FocusIn>", self._on_focus_in)
         self.bind("<FocusOut>", self._on_focus_out)
         self.bind("<Key>", self._on_key)
@@ -229,7 +231,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     form_x = PADDING
     form_w = LEFT_W - 10
     input_x = DOT_W + LABEL_W + INPUT_PAD   # 输入框统一起始 X
-    input_w = form_w - input_x               # 输入框统一宽度
+    input_w = form_w - input_x - INPUT_W_SHRINK  # 输入框宽度（右侧留白）
 
     focus_state = {"current_widget": None}
     fields = {}
