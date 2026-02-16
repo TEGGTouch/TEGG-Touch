@@ -1,0 +1,271 @@
+"""
+FKB 悬浮触控助手 - Canvas 绘制工具
+
+纯绘制函数，不持有状态，接收 canvas 实例作为参数。
+"""
+
+import math
+
+from core.constants import (
+    COLOR_BG, COLOR_BTN_BG, COLOR_BTN_BORDER, COLOR_TEXT,
+    COLOR_ACTIVE, COLOR_HOVER,
+    COLOR_SYS_BG, COLOR_SYS_BORDER, COLOR_SYS_TEXT,
+    COLOR_BALL_CORE, COLOR_BALL_RING, COLOR_HANDLE,
+    CHAMFER_SIZE, RESIZE_HANDLE_SIZE,
+)
+
+
+# ─── 颜色混合工具 ────────────────────────────────────────────
+
+def _hex_to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def _rgb_to_hex(r, g, b):
+    return f"#{int(r):02x}{int(g):02x}{int(b):02x}"
+
+def blend_color(color, bg, alpha):
+    """Blend `color` toward `bg` by `alpha` (0.0=invisible, 1.0=full)."""
+    cr, cg, cb = _hex_to_rgb(color)
+    br, bg_, bb = _hex_to_rgb(bg)
+    return _rgb_to_hex(
+        br + (cr - br) * alpha,
+        bg_ + (cg - bg_) * alpha,
+        bb + (cb - bb) * alpha,
+    )
+
+
+def preview_button_transparency(canvas, buttons, alpha):
+    """Update button colors to simulate transparency preview in edit mode.
+    alpha: 0.0~1.0 (the user-set runtime transparency).
+    """
+    bg = COLOR_BG  # edit mode background
+    fill = blend_color(COLOR_BTN_BG, bg, alpha)
+    outline = blend_color(COLOR_BTN_BORDER, bg, alpha)
+    text = blend_color(COLOR_TEXT, bg, alpha)
+    handle = blend_color(COLOR_HANDLE, bg, alpha)
+
+    for idx, btn in enumerate(buttons):
+        if btn.get('deleted'):
+            continue
+        poly_id = btn.get('id_poly')
+        text_id = btn.get('id_text')
+        resize_id = btn.get('id_resize')
+        if poly_id:
+            canvas.itemconfigure(poly_id, fill=fill, outline=outline)
+        if text_id:
+            canvas.itemconfigure(text_id, fill=text)
+        if resize_id:
+            canvas.itemconfigure(resize_id, fill=handle)
+
+
+# ─── 网格绘制 ────────────────────────────────────────────────
+
+COLOR_GRID = "#2A2A2A"  # 网格线颜色（暗灰，不干扰视觉）
+
+def draw_grid(canvas, width, height, grid_size=None):
+    """在编辑模式背景上绘制 100px 网格线。"""
+    from core.constants import GRID_SIZE
+    gs = grid_size or GRID_SIZE
+
+    # 竖线
+    for x in range(0, width + 1, gs):
+        canvas.create_line(x, 0, x, height, fill=COLOR_GRID, width=1, tags="grid")
+
+    # 横线
+    for y in range(0, height + 1, gs):
+        canvas.create_line(0, y, width, y, fill=COLOR_GRID, width=1, tags="grid")
+
+
+# ─── 几何工具 ────────────────────────────────────────────────
+
+def get_chamfered_points(x, y, w, h, cut=CHAMFER_SIZE):
+    """生成切角矩形的顶点坐标列表。"""
+    return [
+        x + cut, y,
+        x + w - cut, y,
+        x + w, y + cut,
+        x + w, y + h - cut,
+        x + w - cut, y + h,
+        x + cut, y + h,
+        x, y + h - cut,
+        x, y + cut,
+    ]
+
+
+# ─── 用户按钮 ────────────────────────────────────────────────
+
+def draw_button(canvas, btn_data, index):
+    """绘制单个用户按钮。
+
+    返回 (poly_id, text_id, resize_id) 以便后续引用。
+    """
+    tags_poly = f"btn_poly_{index}"
+    tags_text = f"btn_text_{index}"
+    tags_resize = f"btn_resize_{index}"
+
+    points = get_chamfered_points(
+        btn_data['x'], btn_data['y'],
+        btn_data['w'], btn_data['h'],
+    )
+
+    poly = canvas.create_polygon(
+        points, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER,
+        width=2, tags=tags_poly,
+    )
+    text = canvas.create_text(
+        btn_data['x'] + btn_data['w'] / 2,
+        btn_data['y'] + btn_data['h'] / 2,
+        text=f"{btn_data['name']}\n[{btn_data['hover']}]",
+        font=("Consolas", 10, "bold"), fill=COLOR_TEXT, tags=tags_text,
+    )
+
+    rx = btn_data['x'] + btn_data['w']
+    ry = btn_data['y'] + btn_data['h']
+    rs = RESIZE_HANDLE_SIZE
+    
+    # 绘制圆形手柄 (圆心在 rx-rs/2, ry-rs/2)
+    # 实际上我们希望手柄依然在右下角，所以圆心应该在 rx - rs/2, ry - rs/2
+    # 为了方便点击，我们画一个实心圆
+    
+    # 圆的外接矩形
+    x1 = rx - rs
+    y1 = ry - rs
+    x2 = rx
+    y2 = ry
+    
+    resize_handle = canvas.create_oval(
+        x1, y1, x2, y2,
+        fill=COLOR_HANDLE, outline=COLOR_BG, width=1, tags=tags_resize,
+    )
+
+    return poly, text, resize_handle
+
+
+def update_button_coords(canvas, btn):
+    """更新单个按钮的视觉坐标（拖拽/缩放后调用）。"""
+    points = get_chamfered_points(btn['x'], btn['y'], btn['w'], btn['h'])
+    canvas.coords(btn['id_poly'], *points)
+    canvas.coords(btn['id_text'], btn['x'] + btn['w'] / 2, btn['y'] + btn['h'] / 2)
+
+    rs = RESIZE_HANDLE_SIZE
+    rx = btn['x'] + btn['w']
+    ry = btn['y'] + btn['h']
+    # 更新圆形手柄坐标 (x1, y1, x2, y2)
+    canvas.coords(btn['id_resize'], rx - rs, ry - rs, rx, ry)
+
+
+def set_button_visual_state(canvas, btn, state):
+    """设置按钮的视觉状态。
+
+    state: 'normal' | 'hover' | 'active_left' | 'active_right' | 'active_middle'
+    """
+    outline = COLOR_BTN_BORDER
+    width = 2
+    text_fill = COLOR_TEXT
+
+    if state != 'normal':
+        outline = COLOR_HOVER
+        width = 3
+        text_fill = COLOR_HOVER
+        if state in ('active_left', 'active_right', 'active_middle'):
+            outline = COLOR_ACTIVE
+            text_fill = COLOR_ACTIVE
+
+    canvas.itemconfigure(btn['id_poly'], outline=outline, width=width, fill=COLOR_BTN_BG)
+    canvas.itemconfigure(btn['id_text'], fill=text_fill)
+
+
+# ─── 系统按钮 ────────────────────────────────────────────────
+
+def draw_system_btn(canvas, x, y, text, tag_name):
+    """绘制系统功能按钮（退出/隐藏/穿透切换等）。"""
+    w, h = 80, 35
+    points = [
+        x + 5, y,
+        x + w, y,
+        x + w, y + h - 5,
+        x + w - 5, y + h,
+        x, y + h,
+        x, y + 5,
+    ]
+    canvas.create_polygon(
+        points, fill=COLOR_SYS_BG, outline=COLOR_SYS_BORDER,
+        width=2, tags=tag_name,
+    )
+    canvas.create_text(
+        x + w / 2, y + h / 2, text=text,
+        fill=COLOR_SYS_TEXT, font=("Arial", 9, "bold"), tags=tag_name,
+    )
+
+
+def draw_control_ui(canvas, click_through=False):
+    """绘制运行模式下的控制按钮组。"""
+    draw_system_btn(canvas, 10, 10, "退出(F12)", "exit_btn_ui")
+    draw_system_btn(canvas, 100, 10, "隐藏[-]", "hide_btn_ui")
+
+    # 穿透模式切换按钮
+    ct_text = "穿透:开" if click_through else "穿透:关"
+    draw_system_btn(canvas, 190, 10, ct_text, "ct_btn_ui")
+
+
+# ─── 悬浮球 ──────────────────────────────────────────────────
+
+def draw_floating_ball(canvas):
+    """绘制悬浮球（隐藏模式）。"""
+    cx, cy = 40, 40
+    r = 25
+    points = []
+    for i in range(6):
+        angle_rad = math.radians(60 * i - 30)
+        points.append(cx + r * math.cos(angle_rad))
+        points.append(cy + r * math.sin(angle_rad))
+
+    canvas.create_polygon(
+        points, fill=COLOR_BG, outline=COLOR_BALL_RING,
+        width=3, tags="float_ball",
+    )
+    canvas.create_oval(
+        cx - 10, cy - 10, cx + 10, cy + 10,
+        fill=COLOR_BALL_CORE, outline="white", width=2, tags="float_ball",
+    )
+    canvas.create_text(
+        cx, cy + 32, text="展开", fill=COLOR_TEXT,
+        font=("Arial", 8, "bold"), tags="float_ball",
+    )
+
+
+# ─── 虚拟光标 ────────────────────────────────────────────────
+
+def init_cursor(canvas):
+    """初始化虚拟光标图形元素。"""
+    canvas.create_polygon(
+        0, 0, 0, 0, fill=COLOR_BG, outline=COLOR_BTN_BORDER,
+        width=3, tags=("v_cursor", "v_cursor_body"), smooth=False,
+    )
+    canvas.create_oval(
+        0, 0, 0, 0, fill=COLOR_ACTIVE, outline=COLOR_TEXT,
+        width=1, tags=("v_cursor", "v_cursor_core"),
+    )
+    canvas.tag_raise("v_cursor")
+
+
+def update_cursor(canvas, x, y):
+    """更新虚拟光标位置。"""
+    arrow_points = [
+        x, y,
+        x + 16, y + 16,
+        x + 12, y + 28,
+        x, y + 20,
+        x - 12, y + 28,
+        x - 16, y + 16,
+    ]
+    canvas.coords("v_cursor_body", *arrow_points)
+    core_y = y + 18
+    canvas.coords("v_cursor_core", x - 3, core_y - 3, x + 3, core_y + 3)
+    canvas.tag_raise("v_cursor")
+
+
+def remove_cursor(canvas):
+    """移除虚拟光标。"""
+    canvas.delete("v_cursor")

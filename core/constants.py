@@ -1,0 +1,91 @@
+"""
+FKB 悬浮触控助手 - 全局常量与默认值
+"""
+
+# === 应用信息 ===
+APP_TITLE = "TEGG Touch"
+APP_VERSION = "0.1"
+CONFIG_FILE = "config.json"
+PROFILES_DIR = "profiles"
+PROFILES_INDEX = "_index.json"
+DEFAULT_PROFILE_NAME = "默认配置"
+
+# === 清晰高对比配色表 (High Clarity) ===
+COLOR_BG = "#202020"          # 深灰背景，降低干扰
+COLOR_BTN_BG = "#404040"      # 按钮常态：中灰
+COLOR_BTN_BORDER = "#FFFFFF"  # 按钮边框：亮白 (高对比)
+COLOR_TEXT = "#FFFFFF"        # 文字：纯白
+COLOR_ACTIVE = "#005A9E"      # 激活/按下：深蓝
+COLOR_HOVER = "#0078D7"       # 悬停：亮蓝
+COLOR_PANEL = "#2D2D2D"       # 底部面板：稍浅的深灰
+
+# 系统功能按钮配色
+COLOR_SYS_BG = "#C42B1C"      # 退出/隐藏：醒目的红
+COLOR_SYS_BORDER = "#FFFFFF"
+COLOR_SYS_TEXT = "#FFFFFF"
+
+# 悬浮球配色
+COLOR_BALL_CORE = "#0078D7"   # 核心：亮蓝
+COLOR_BALL_RING = "#FFFFFF"   # 环：亮白
+
+# 调整手柄配色
+COLOR_HANDLE = "#FFD700"      # 亮黄色，非常醒目
+
+# 透明背景色 (用于 wm_attributes transparentcolor)
+COLOR_TRANSPARENT = "#010001"
+COLOR_TOOLBAR_TRANSPARENT = "#010002"  # 工具栏窗口镂空用
+
+# === 工具栏尺寸 ===
+TOOLBAR_WIDTH = 780
+TOOLBAR_HEIGHT = 104
+TOOLBAR_RADIUS = 12
+TOOLBAR_PADDING = 12
+TOOLBAR_BOTTOM_MARGIN = 100  # 距屏幕底部间距
+
+# === 尺寸与间隔 ===
+DEFAULT_TRANSPARENCY = 0.3
+EDIT_ALPHA = 0.6              # 编辑模式半透明度（让用户能看到底下的画面）
+BALL_SIZE = 80
+MIN_WINDOW_SIZE = 200
+MIN_BTN_SIZE = 100
+RESIZE_HANDLE_SIZE = 20       # 增大调整手柄尺寸 (原12 -> 20)
+CHAMFER_SIZE = 8
+GRID_SIZE = 100               # 网格吸附尺寸 (100px)
+
+# 轮询间隔 (ms) — 约 120fps，兼顾流畅与 CPU 占用
+UPDATE_INTERVAL = 8
+
+# === 默认按钮配置 ===
+DEFAULT_BUTTONS = [
+    {
+        'x': 100, 'y': 100, 'w': 100, 'h': 100,
+        'name': '左上', 'hover': 'w+a',
+        'lclick': 'j', 'rclick': 'k', 'mclick': '',
+        'wheelup': '', 'wheeldown': '',
+    },
+    {
+        'x': 200, 'y': 100, 'w': 100, 'h': 100,
+        'name': '右上', 'hover': 'w+d',
+        'lclick': 'j', 'rclick': 'k', 'mclick': '',
+        'wheelup': '', 'wheeldown': '',
+    },
+    {
+        'x': 100, 'y': 200, 'w': 200, 'h': 100,
+        'name': '后退', 'hover': 's',
+        'lclick': 'j', 'rclick': 'k', 'mclick': '',
+        'wheelup': '', 'wheeldown': '',
+    },
+]
+
+# 按钮运行时字段 (保存时需要剔除)
+RUNTIME_FIELDS = frozenset({
+    'id_rect', 'id_text', 'id_resize', 'id_poly',
+    'active_hover', 'last_visual_state',
+})
+
+# 按钮可选字段及默认值 (兼容旧配置)
+BUTTON_OPTIONAL_DEFAULTS = {
+    'wheelup': '',
+    'wheeldown': '',
+    'mclick': '',
+}
