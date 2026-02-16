@@ -219,7 +219,11 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
 
     def do_save(e=None):
         for k, e_widget in entries.items():
-            v = e_widget.get().replace(" ", "").lower() if k != 'name' else e_widget.get()
+            if k == 'name':
+                v = e_widget.get()
+            else:
+                # 只去掉 + 号两边多余空格，保留按键名中的空格（如 "num 0"）
+                v = "+".join(part.strip() for part in e_widget.get().lower().split("+"))
             btn[k] = v
         on_save(btn)
         top.destroy()
