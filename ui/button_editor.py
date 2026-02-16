@@ -1,8 +1,8 @@
 """
 FKB - button_editor.py
 按钮编辑弹窗：左右两栏布局。
-左栏：按键绑定表单 + 使用说明 + 复制/删除/保存。
-右栏：分类按键面板，点击追加到当前焦点输入框。
+左栏：按键绑定表单（Tag 容器）+ 使用说明 + 复制/删除/保存。
+右栏：分类按键面板，点击追加到当前焦点 Tag 容器。
 """
 
 import tkinter as tk
@@ -18,8 +18,8 @@ from ui.widgets import (
 
 # ─── 编辑字段 ──────────────────────────────────────────────────
 EDIT_FIELDS = [
-    ('name',      '按钮名称', False),
-    ('lclick',    '左键模拟', True),
+    ('name',      '按钮名称', False),   # False = 普通 Entry
+    ('lclick',    '左键模拟', True),    # True  = TagInput
     ('mclick',    '中键模拟', True),
     ('hover',     '悬浮模拟', True),
     ('rclick',    '右键模拟', True),
@@ -35,8 +35,11 @@ KEY_CATEGORIES = [
     ("方向键", ["up", "down", "left", "right"]),
     ("修饰键", ["ctrl", "shift", "alt"]),
     ("功能键", ["space", "enter", "esc", "tab", "backspace"]),
-    ("其他", ["home", "end", "pageup", "pagedown", "insert", "delete"]),
-    ("小键盘", [f"num {i}" for i in range(10)] + ["num lock"]),
+    ("标点符号", [",", ".", "/", ";", "'", "[", "]", "\\", "-", "=", "`"]),
+    ("其他", ["home", "end", "pageup", "pagedown", "insert", "delete",
+              "print screen", "scroll lock", "pause"]),
+    ("小键盘", [f"num {i}" for i in range(10)] + ["num lock",
+               "num *", "num /", "num -"]),
 ]
 
 # ─── 颜色 ──────────────────────────────────────────────────────
@@ -45,7 +48,90 @@ _C_TAG_HOVER = "#555555"
 _C_TAG_TEXT = "#E0E0E0"
 _C_CAT_LABEL = "#888888"
 _C_FOCUS_BORDER = C_AMBER
+_C_INPUT_BG = "#3A3A3A"
+_C_MINI_TAG = "#505050"
+_C_MINI_TAG_TEXT = "#E0E0E0"
 
+
+# ═══════════════════════════════════════════════════════════════
+#  TagInput - 自定义 Tag 容器控件
+# ═══════════════════════════════════════════════════════════════
+
+class TagInput(tk.Frame):
+    """
+    替代 Entry 的 Tag 输入控件。
+    显示按键 tag 标签，不允许手动打字。
+    Backspace 删除最后一个 tag。
+    """
+
+    def __init__(self, master, initial_value="", **kw):
+        super().__init__(master, bg=_C_INPUT_BG, highlightthickness=2,
+                         highlightbackground=C_GRAY, highlightcolor=C_GRAY,
+                         padx=4, pady=4, cursor="xterm", **kw)
+        self.tags: list[str] = []
+        self._tag_widgets: list[tk.Label] = []
+
+        # 解析初始值
+        if initial_value:
+            for part in initial_value.split("+"):
+                part = part.strip()
+                if part:
+                    self.tags.append(part)
+
+        # 使控件可以获取焦点
+        self.bind("<Button-1>", self._on_click)
+        self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<FocusOut>", self._on_focus_out)
+        self.bind("<Key>", self._on_key)
+        self.configure(takefocus=True)
+
+        self._render_tags()
+
+    def _on_click(self, e):
+        self.focus_set()
+
+    def _on_focus_in(self, e):
+        self.configure(highlightbackground=_C_FOCUS_BORDER,
+                       highlightcolor=_C_FOCUS_BORDER)
+
+    def _on_focus_out(self, e):
+        self.configure(highlightbackground=C_GRAY,
+                       highlightcolor=C_GRAY)
+
+    def _on_key(self, e):
+        # Backspace 删除最后一个 tag
+        if e.keysym == "BackSpace" and self.tags:
+            self.tags.pop()
+            self._render_tags()
+        # 阻止其他键输入
+        return "break"
+
+    def add_tag(self, key_name: str):
+        """添加一个 tag。"""
+        self.tags.append(key_name)
+        self._render_tags()
+
+    def get_value(self) -> str:
+        """返回 '+' 连接的按键字符串。"""
+        return "+".join(self.tags)
+
+    def _render_tags(self):
+        """重新渲染所有 tag。"""
+        for w in self._tag_widgets:
+            w.destroy()
+        self._tag_widgets.clear()
+
+        for tag_name in self.tags:
+            lbl = tk.Label(self, text=tag_name, bg=_C_MINI_TAG, fg=_C_MINI_TAG_TEXT,
+                           font=(FF, 9), padx=6, pady=2, cursor="xterm")
+            lbl.pack(side="left", padx=(0, 4), pady=1)
+            lbl.bind("<Button-1>", lambda ev: self.focus_set())
+            self._tag_widgets.append(lbl)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  主函数
+# ═══════════════════════════════════════════════════════════════
 
 def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_style):
     """打开按钮编辑弹窗（左右两栏布局）。"""
@@ -137,22 +223,30 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     form_w = LEFT_W - 10
 
     # ── 焦点追踪 ──
-    focus_state = {"current_entry": None}
-    entries = {}
+    focus_state = {"current_widget": None}  # TagInput or Entry
+    fields = {}  # key -> Entry or TagInput
 
-    def _set_focus(entry_widget):
-        old = focus_state["current_entry"]
-        if old and old.winfo_exists():
-            old.configure(highlightbackground=C_GRAY, highlightcolor=C_GRAY)
-        focus_state["current_entry"] = entry_widget
-        entry_widget.configure(highlightbackground=_C_FOCUS_BORDER, highlightcolor=_C_FOCUS_BORDER)
-        entry_widget.focus_set()
+    def _set_focus(widget):
+        old = focus_state["current_widget"]
+        if old and old != widget and old.winfo_exists():
+            if isinstance(old, TagInput):
+                old.configure(highlightbackground=C_GRAY, highlightcolor=C_GRAY)
+            elif isinstance(old, tk.Entry):
+                old.configure(highlightbackground=C_GRAY, highlightcolor=C_GRAY)
+        focus_state["current_widget"] = widget
+        if isinstance(widget, TagInput):
+            widget.configure(highlightbackground=_C_FOCUS_BORDER,
+                             highlightcolor=_C_FOCUS_BORDER)
+        elif isinstance(widget, tk.Entry):
+            widget.configure(highlightbackground=_C_FOCUS_BORDER,
+                             highlightcolor=_C_FOCUS_BORDER)
+        widget.focus_set()
 
     # ── 表单 ──
     form_frame = tk.Frame(top, bg=C_PM_BG)
     form_frame.place(x=form_x, y=form_y, width=form_w)
 
-    for idx, (key, label_text, _use_vk) in enumerate(EDIT_FIELDS):
+    for idx, (key, label_text, use_tag) in enumerate(EDIT_FIELDS):
         if key not in btn:
             btn[key] = ''
 
@@ -160,23 +254,33 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
                        font=(FF, 10), anchor="w")
         lbl.grid(row=idx, column=0, sticky="w", pady=4)
 
-        e = tk.Entry(form_frame, font=(FF, 10), bg=C_GRAY, fg="white",
-                     insertbackground="white", relief="flat", bd=5,
-                     highlightthickness=2, highlightbackground=C_GRAY, highlightcolor=C_GRAY)
-        e.grid(row=idx, column=1, sticky="ew", padx=(10, 0), pady=4)
-        e.insert(0, btn[key])
-        entries[key] = e
-        e.bind("<FocusIn>", lambda ev, ent=e: _set_focus(ent))
+        if use_tag:
+            # TagInput 控件
+            ti = TagInput(form_frame, initial_value=btn[key])
+            ti.grid(row=idx, column=1, sticky="ew", padx=(10, 0), pady=4)
+            ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
+            fields[key] = ti
+        else:
+            # 普通 Entry（只有 name）
+            e = tk.Entry(form_frame, font=(FF, 10), bg=C_GRAY, fg="white",
+                         insertbackground="white", relief="flat", bd=5,
+                         highlightthickness=2, highlightbackground=C_GRAY,
+                         highlightcolor=C_GRAY)
+            e.grid(row=idx, column=1, sticky="ew", padx=(10, 0), pady=4)
+            e.insert(0, btn[key])
+            e.bind("<FocusIn>", lambda ev, w=e: _set_focus(w))
+            fields[key] = e
 
     form_frame.columnconfigure(1, weight=1)
 
-    first_key = EDIT_FIELDS[1][0] if len(EDIT_FIELDS) > 1 else EDIT_FIELDS[0][0]
-    top.after(100, lambda: _set_focus(entries[first_key]))
+    # 默认焦点到第一个 TagInput
+    first_tag_key = next((k for k, _, t in EDIT_FIELDS if t), EDIT_FIELDS[0][0])
+    top.after(100, lambda: _set_focus(fields[first_tag_key]))
 
-    # ── 使用说明（等表单渲染后再定位） ──
+    # ── 使用说明 ──
     help_text = (
         "💡 点击右侧按键添加到当前输入框\n"
-        "多键用 + 连接，如 ctrl+a\n"
+        "Backspace 删除最后一个按键\n"
         "支持无限组合"
     )
     help_lbl = tk.Label(top, text=help_text, bg=C_PM_BG, fg="#999",
@@ -218,13 +322,11 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     c.tag_bind("save", "<Leave>", _save_leave)
 
     def do_save(e=None):
-        for k, e_widget in entries.items():
-            if k == 'name':
-                v = e_widget.get()
+        for k, widget in fields.items():
+            if isinstance(widget, TagInput):
+                btn[k] = widget.get_value()
             else:
-                # 只去掉 + 号两边多余空格，保留按键名中的空格（如 "num 0"）
-                v = "+".join(part.strip() for part in e_widget.get().lower().split("+"))
-            btn[k] = v
+                btn[k] = widget.get()
         on_save(btn)
         top.destroy()
     c.tag_bind("save", "<Button-1>", do_save)
@@ -284,77 +386,68 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     right_container.bind('<Enter>', _bind_mw)
     right_container.bind('<Leave>', _unbind_mw)
 
-    # ── 追加按键 ──
+    # ── 追加按键到焦点控件 ──
     def _append_key(key_name):
-        ent = focus_state["current_entry"]
-        if ent is None or not ent.winfo_exists():
+        w = focus_state["current_widget"]
+        if w is None or not w.winfo_exists():
             return
-        current = ent.get()
-        if current:
-            ent.insert(tk.END, f"+{key_name}")
-        else:
-            ent.insert(0, key_name)
-        ent.focus_set()
+        if isinstance(w, TagInput):
+            w.add_tag(key_name)
+        elif isinstance(w, tk.Entry):
+            # name 字段不追加 tag
+            pass
+        w.focus_set()
 
     # ── 按键面板：手动 flow 布局 ──
     TAG_MIN_W = 40
     TAG_H = 40
     TAG_PAD_X = 12
     TAG_FONT = (FF, 10)
-    TAG_GAP_X = 8     # 同行按钮水平间距
-    TAG_GAP_Y = 10    # 同类按键行间距 (上下各10 = 20px总间距)
-    CAT_GAP = 40      # 不同分类间距
+    TAG_GAP_X = 8
+    TAG_GAP_Y = 10
+    CAT_GAP = 40
 
-    # 用 font 对象精确测量文字宽度
     measure_font = tkFont.Font(family=FF, size=10)
-    avail_w = right_w - 30  # 减去 scrollbar + padding
+    avail_w = right_w - 30
 
     is_first_cat = True
     for cat_name, keys in KEY_CATEGORIES:
         top_pad = 0 if is_first_cat else CAT_GAP
         is_first_cat = False
 
-        # 分类标题
         cat_lbl = tk.Label(right_inner, text=f"── {cat_name} ──", bg=C_PM_BG,
                            fg=_C_CAT_LABEL, font=(FF, 10, "bold"), anchor="w")
         cat_lbl.pack(fill="x", padx=5, pady=(top_pad, 10))
 
-        # 按键容器 - 手动 flow 布局
         flow_frame = tk.Frame(right_inner, bg=C_PM_BG)
         flow_frame.pack(fill="x", padx=5, pady=(0, 0))
 
-        # 计算每个按键宽度，手动换行放置
         row_idx = 0
-        col_x = 0  # 当前行已用宽度
+        col_x = 0
 
         for key_name in keys:
             text_w = measure_font.measure(key_name)
             btn_w = max(TAG_MIN_W, text_w + TAG_PAD_X * 2)
 
-            # 检查是否需要换行
             if col_x > 0 and col_x + TAG_GAP_X + btn_w > avail_w:
                 row_idx += 1
                 col_x = 0
 
             tag_lbl = tk.Label(flow_frame, text=key_name, bg=_C_TAG_BG, fg=_C_TAG_TEXT,
                                font=TAG_FONT, cursor="hand2", anchor="center",
-                               width=0)  # width=0 让它自适应
+                               width=0)
             tag_lbl.place(x=col_x, y=row_idx * (TAG_H + TAG_GAP_Y),
                           width=btn_w, height=TAG_H)
 
             col_x += btn_w + TAG_GAP_X
 
-            # Hover
             tag_lbl.bind("<Enter>", lambda ev, w=tag_lbl: w.configure(bg=_C_TAG_HOVER))
             tag_lbl.bind("<Leave>", lambda ev, w=tag_lbl: w.configure(bg=_C_TAG_BG))
-            # Click
             tag_lbl.bind("<Button-1>", lambda ev, k=key_name: _append_key(k))
 
-        # 设置 flow_frame 的总高度
         total_rows = row_idx + 1
         frame_h = total_rows * TAG_H + (total_rows - 1) * TAG_GAP_Y
         flow_frame.configure(height=frame_h)
-        # 阻止 frame 被子控件的 pack 收缩（我们用 place 放子控件，所以需要显式高度）
         flow_frame.pack_propagate(False)
 
     return top
