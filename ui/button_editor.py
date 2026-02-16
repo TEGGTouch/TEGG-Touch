@@ -78,6 +78,10 @@ class TagInput(tk.Frame):
                 if part:
                     self.tags.append(part)
 
+        # 隐形 spacer 确保空状态有最小高度
+        self._spacer = tk.Frame(self, bg=_C_INPUT_BG, height=24, width=1)
+        self._spacer.pack(side="left")
+
         # 使控件可以获取焦点
         self.bind("<Button-1>", self._on_click)
         self.bind("<FocusIn>", self._on_focus_in)
