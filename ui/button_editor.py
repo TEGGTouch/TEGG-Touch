@@ -1,7 +1,7 @@
 """
 FKB - button_editor.py
 按钮编辑弹窗：左右两栏布局。
-左栏：按键绑定表单（Tag 容器）+ 使用说明 + 复制/删除/保存。
+左栏4区块：① 名称 ② 悬停 ③ 鼠标按键/滚轮 ④ 说明+操作按钮
 右栏：分类按键面板，点击追加到当前焦点 Tag 容器。
 """
 
@@ -16,16 +16,29 @@ from ui.widgets import (
     icon_font, rrect, create_modal_overlay,
 )
 
-# ─── 编辑字段 ──────────────────────────────────────────────────
-EDIT_FIELDS = [
-    ('name',      '按钮名称', False),   # False = 普通 Entry
-    ('lclick',    '左键模拟', True),    # True  = TagInput
-    ('mclick',    '中键模拟', True),
-    ('hover',     '悬浮模拟', True),
-    ('rclick',    '右键模拟', True),
-    ('wheelup',   '滚轮上滚', True),
-    ('wheeldown', '滚轮下滚', True),
+# ─── 操作颜色 ──────────────────────────────────────────────────
+ACTION_COLORS = {
+    'hover':     '#0284C7',   # 天蓝
+    'lclick':    '#F59E0B',   # 琥珀
+    'rclick':    '#10B981',   # 翠绿
+    'mclick':    '#A855F7',   # 紫色
+    'wheelup':   '#EC4899',   # 粉红
+    'wheeldown': '#F43F5E',   # 玫瑰
+}
+
+# ─── 4 区块字段定义 ────────────────────────────────────────────
+# (key, label, is_tag, block)
+BLOCK_1 = [('name', '按钮名称', False)]
+BLOCK_2 = [('hover', '悬停时', True)]
+BLOCK_3 = [
+    ('lclick',    '左键', True),
+    ('rclick',    '右键', True),
+    ('mclick',    '中键', True),
+    ('wheelup',   '滚轮向上', True),
+    ('wheeldown', '滚轮向下', True),
 ]
+ALL_FIELDS = BLOCK_1 + BLOCK_2 + BLOCK_3
+BLOCK_GAP = 40
 
 # ─── 按键分类数据 ──────────────────────────────────────────────
 KEY_CATEGORIES = [
@@ -47,10 +60,7 @@ _C_TAG_BG = "#404040"
 _C_TAG_HOVER = "#555555"
 _C_TAG_TEXT = "#E0E0E0"
 _C_CAT_LABEL = "#888888"
-_C_FOCUS_BORDER = C_AMBER
 _C_INPUT_BG = "#3A3A3A"
-_C_MINI_TAG = "#505050"
-_C_MINI_TAG_TEXT = "#E0E0E0"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -58,79 +68,103 @@ _C_MINI_TAG_TEXT = "#E0E0E0"
 # ═══════════════════════════════════════════════════════════════
 
 class TagInput(tk.Frame):
-    """
-    替代 Entry 的 Tag 输入控件。
-    显示按键 tag 标签，不允许手动打字。
-    Backspace 删除最后一个 tag。
-    """
+    """Tag 输入控件，点击右侧面板添加 tag，Backspace 删除。"""
 
-    def __init__(self, master, initial_value="", **kw):
+    def __init__(self, master, initial_value="", accent_color="#F59E0B", **kw):
         super().__init__(master, bg=_C_INPUT_BG, highlightthickness=2,
                          highlightbackground=C_GRAY, highlightcolor=C_GRAY,
                          padx=4, pady=4, cursor="xterm", **kw)
         self.tags: list[str] = []
         self._tag_widgets: list[tk.Label] = []
+        self._accent = accent_color
 
-        # 解析初始值
         if initial_value:
             for part in initial_value.split("+"):
                 part = part.strip()
                 if part:
                     self.tags.append(part)
 
-        # 隐形 spacer 确保空状态有最小高度
         self._spacer = tk.Frame(self, bg=_C_INPUT_BG, height=24, width=1)
         self._spacer.pack(side="left")
 
-        # 使控件可以获取焦点
         self.bind("<Button-1>", self._on_click)
         self.bind("<FocusIn>", self._on_focus_in)
         self.bind("<FocusOut>", self._on_focus_out)
         self.bind("<Key>", self._on_key)
         self.configure(takefocus=True)
-
         self._render_tags()
 
     def _on_click(self, e):
         self.focus_set()
 
     def _on_focus_in(self, e):
-        self.configure(highlightbackground=_C_FOCUS_BORDER,
-                       highlightcolor=_C_FOCUS_BORDER)
+        self.configure(highlightbackground=self._accent,
+                       highlightcolor=self._accent)
 
     def _on_focus_out(self, e):
-        self.configure(highlightbackground=C_GRAY,
-                       highlightcolor=C_GRAY)
+        self.configure(highlightbackground=C_GRAY, highlightcolor=C_GRAY)
 
     def _on_key(self, e):
-        # Backspace 删除最后一个 tag
         if e.keysym == "BackSpace" and self.tags:
             self.tags.pop()
             self._render_tags()
-        # 阻止其他键输入
         return "break"
 
     def add_tag(self, key_name: str):
-        """添加一个 tag。"""
         self.tags.append(key_name)
         self._render_tags()
 
     def get_value(self) -> str:
-        """返回 '+' 连接的按键字符串。"""
         return "+".join(self.tags)
 
     def _render_tags(self):
-        """重新渲染所有 tag。"""
         for w in self._tag_widgets:
             w.destroy()
         self._tag_widgets.clear()
-
         for tag_name in self.tags:
-            lbl = tk.Label(self, text=tag_name, bg=_C_MINI_TAG, fg=_C_MINI_TAG_TEXT,
-                           font=(FF, 9), padx=6, pady=2, cursor="xterm")
+            lbl = tk.Label(self, text=tag_name, bg=self._accent, fg="#FFF",
+                           font=(FF, 9, "bold"), padx=6, pady=2, cursor="xterm")
             lbl.pack(side="left", padx=(0, 4), pady=1)
             lbl.bind("<Button-1>", lambda ev: self.focus_set())
             self._tag_widgets.append(lbl)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  辅助：构建带色块标签的表单行
+# ═══════════════════════════════════════════════════════════════
+
+def _build_field_row(parent, row, key, label_text, is_tag, btn_data, fields, set_focus_fn):
+    """在 grid 中构建一行：色块 + 标签 + 输入控件。"""
+    color = ACTION_COLORS.get(key)
+
+    col_offset = 0
+    if color:
+        dot = tk.Frame(parent, bg=color, width=8, height=8)
+        dot.grid(row=row, column=0, padx=(0, 6), pady=6)
+        col_offset = 1
+
+    lbl = tk.Label(parent, text=label_text, bg=C_PM_BG, fg="#CCC",
+                   font=(FF, 10), anchor="w")
+    lbl.grid(row=row, column=col_offset, sticky="w", pady=4)
+
+    if key not in btn_data:
+        btn_data[key] = ''
+
+    if is_tag:
+        ti = TagInput(parent, initial_value=btn_data[key],
+                      accent_color=color or C_AMBER)
+        ti.grid(row=row, column=col_offset + 1, sticky="ew", padx=(10, 0), pady=4)
+        ti.bind("<FocusIn>", lambda ev, w=ti: set_focus_fn(w))
+        fields[key] = ti
+    else:
+        e = tk.Entry(parent, font=(FF, 10), bg=C_GRAY, fg="white",
+                     insertbackground="white", relief="flat", bd=5,
+                     highlightthickness=2, highlightbackground=C_GRAY,
+                     highlightcolor=C_GRAY)
+        e.grid(row=row, column=col_offset + 1, sticky="ew", padx=(10, 0), pady=4)
+        e.insert(0, btn_data[key])
+        e.bind("<FocusIn>", lambda ev, w=e: set_focus_fn(w))
+        fields[key] = e
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -138,10 +172,9 @@ class TagInput(tk.Frame):
 # ═══════════════════════════════════════════════════════════════
 
 def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_style):
-    """打开按钮编辑弹窗（左右两栏布局）。"""
+    """打开按钮编辑弹窗。"""
     overlay = create_modal_overlay(parent)
 
-    # ── 尺寸 ──
     LEFT_W = 340
     RIGHT_W = 560
     PADDING = 20
@@ -157,7 +190,6 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     top.overrideredirect(True)
     top.geometry(f"{width}x{height}+{x}+{y}")
     top.attributes("-topmost", True)
-    top.attributes("-alpha", 1.0)
     top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
     top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
 
@@ -165,7 +197,6 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         try: overlay.destroy()
         except: pass
     top.bind("<Destroy>", _destroy_all, add="+")
-
     top.grab_set()
     top.focus_set()
     overlay.attributes("-topmost", True)
@@ -176,7 +207,6 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
                   bg=COLOR_TOOLBAR_TRANSPARENT, highlightthickness=0)
     c.place(x=0, y=0)
 
-    # ── 背景 ──
     rrect(c, 0, 0, width, height, TOOLBAR_RADIUS, fill=C_PM_BG, outline="#444", width=1, tags="bg")
 
     # ── 拖拽 ──
@@ -208,10 +238,8 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         c.create_text(ccx, ccy, text="\uE711", font=(ifont, IS), fill="#FFF", tags=("close",))
     else:
         c.create_text(ccx, ccy, text="\u2715", font=(FF, FS, "bold"), fill="#FFF", tags=("close",))
-    def _ce(e): i = c.find_withtag("close_bg"); i and c.itemconfigure(i[0], fill=C_CLOSE_H)
-    def _cl(e): i = c.find_withtag("close_bg"); i and c.itemconfigure(i[0], fill=C_CLOSE)
-    c.tag_bind("close", "<Enter>", _ce)
-    c.tag_bind("close", "<Leave>", _cl)
+    c.tag_bind("close", "<Enter>", lambda e: c.itemconfigure("close_bg", fill=C_CLOSE_H))
+    c.tag_bind("close", "<Leave>", lambda e: c.itemconfigure("close_bg", fill=C_CLOSE))
     c.tag_bind("close", "<Button-1>", lambda e: top.destroy())
 
     # ── 分隔线 ──
@@ -220,15 +248,14 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     c.create_line(div_x, header_y, div_x, height - PADDING, fill="#444", width=1)
 
     # =================================================================
-    #  LEFT COLUMN: Form + Help + Buttons
+    #  LEFT COLUMN: 4 Blocks
     # =================================================================
     form_x = PADDING
-    form_y = header_y + 10
     form_w = LEFT_W - 10
+    cur_y = header_y + 10
 
-    # ── 焦点追踪 ──
-    focus_state = {"current_widget": None}  # TagInput or Entry
-    fields = {}  # key -> Entry or TagInput
+    focus_state = {"current_widget": None}
+    fields = {}
 
     def _set_focus(widget):
         old = focus_state["current_widget"]
@@ -239,91 +266,80 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
                 old.configure(highlightbackground=C_GRAY, highlightcolor=C_GRAY)
         focus_state["current_widget"] = widget
         if isinstance(widget, TagInput):
-            widget.configure(highlightbackground=_C_FOCUS_BORDER,
-                             highlightcolor=_C_FOCUS_BORDER)
+            widget.configure(highlightbackground=widget._accent,
+                             highlightcolor=widget._accent)
         elif isinstance(widget, tk.Entry):
-            widget.configure(highlightbackground=_C_FOCUS_BORDER,
-                             highlightcolor=_C_FOCUS_BORDER)
+            widget.configure(highlightbackground=C_AMBER,
+                             highlightcolor=C_AMBER)
         widget.focus_set()
 
-    # ── 表单 ──
-    form_frame = tk.Frame(top, bg=C_PM_BG)
-    form_frame.place(x=form_x, y=form_y, width=form_w)
+    def _create_block(block_fields, y_start):
+        """创建一个区块 Frame，返回 Frame 和实际高度。"""
+        frame = tk.Frame(top, bg=C_PM_BG)
+        frame.place(x=form_x, y=y_start, width=form_w)
 
-    for idx, (key, label_text, use_tag) in enumerate(EDIT_FIELDS):
-        if key not in btn:
-            btn[key] = ''
+        has_color = any(ACTION_COLORS.get(k) for k, _, _ in block_fields)
+        ncols = 3 if has_color else 2
 
-        lbl = tk.Label(form_frame, text=label_text, bg=C_PM_BG, fg="#CCC",
-                       font=(FF, 10), anchor="w")
-        lbl.grid(row=idx, column=0, sticky="w", pady=4)
+        for row, (key, label_text, is_tag) in enumerate(block_fields):
+            _build_field_row(frame, row, key, label_text, is_tag,
+                             btn, fields, _set_focus)
 
-        if use_tag:
-            # TagInput 控件
-            ti = TagInput(form_frame, initial_value=btn[key])
-            ti.grid(row=idx, column=1, sticky="ew", padx=(10, 0), pady=4)
-            ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
-            fields[key] = ti
-        else:
-            # 普通 Entry（只有 name）
-            e = tk.Entry(form_frame, font=(FF, 10), bg=C_GRAY, fg="white",
-                         insertbackground="white", relief="flat", bd=5,
-                         highlightthickness=2, highlightbackground=C_GRAY,
-                         highlightcolor=C_GRAY)
-            e.grid(row=idx, column=1, sticky="ew", padx=(10, 0), pady=4)
-            e.insert(0, btn[key])
-            e.bind("<FocusIn>", lambda ev, w=e: _set_focus(w))
-            fields[key] = e
+        frame.columnconfigure(ncols - 1, weight=1)
+        return frame
 
-    form_frame.columnconfigure(1, weight=1)
+    # Block 1: 按钮名称
+    b1 = _create_block(BLOCK_1, cur_y)
+    top.update_idletasks()
+    b1.update_idletasks()
+    cur_y += b1.winfo_reqheight() + BLOCK_GAP
 
-    # 默认焦点到第一个 TagInput
-    first_tag_key = next((k for k, _, t in EDIT_FIELDS if t), EDIT_FIELDS[0][0])
-    top.after(100, lambda: _set_focus(fields[first_tag_key]))
+    # Block 2: 悬停
+    b2 = _create_block(BLOCK_2, cur_y)
+    top.update_idletasks()
+    b2.update_idletasks()
+    cur_y += b2.winfo_reqheight() + BLOCK_GAP
 
-    # ── 使用说明 ──
+    # Block 3: 鼠标按键 + 滚轮
+    b3 = _create_block(BLOCK_3, cur_y)
+    top.update_idletasks()
+    b3.update_idletasks()
+
+    # 默认焦点
+    top.after(100, lambda: _set_focus(fields['hover']))
+
+    # ── Block 4: 说明 + 按钮 ──
     help_text = (
         "💡 点击右侧按键添加到当前输入框\n"
         "Backspace 删除最后一个按键\n"
         "支持无限组合"
     )
-    help_lbl = tk.Label(top, text=help_text, bg=C_PM_BG, fg="#999",
-                        font=(FF, 9), anchor="w", justify="left")
 
-    def _place_help():
-        form_frame.update_idletasks()
-        real_h = form_frame.winfo_reqheight()
-        help_lbl.place(x=form_x, y=form_y + real_h + 40, width=form_w)
-    top.after(50, _place_help)
-
-    # ── 底部按钮 ──
     btn_h = 40
     btn_gap = 10
     total_w = form_w
 
+    # 底部按钮定位
     row2_y = height - PADDING - btn_h
     half_w = (total_w - btn_gap) // 2
 
-    # Delete
-    del_x = PADDING
-    rrect(c, del_x, row2_y, half_w, btn_h, BTN_R, fill="#6E1E1E", outline="", tags=("del", "del_bg"))
-    c.create_text(del_x + half_w // 2, row2_y + btn_h // 2, text="删除",
+    # 删除
+    rrect(c, PADDING, row2_y, half_w, btn_h, BTN_R,
+          fill="#6E1E1E", outline="", tags=("del", "del_bg"))
+    c.create_text(PADDING + half_w // 2, row2_y + btn_h // 2, text="删除",
                   font=(FF, FS), fill="white", tags=("del",))
-    def _del_enter(e): c.itemconfigure("del_bg", fill="#8B2020")
-    def _del_leave(e): c.itemconfigure("del_bg", fill="#6E1E1E")
-    c.tag_bind("del", "<Enter>", _del_enter)
-    c.tag_bind("del", "<Leave>", _del_leave)
+    c.tag_bind("del", "<Enter>", lambda e: c.itemconfigure("del_bg", fill="#8B2020"))
+    c.tag_bind("del", "<Leave>", lambda e: c.itemconfigure("del_bg", fill="#6E1E1E"))
     c.tag_bind("del", "<Button-1>", lambda e: [on_delete(btn), top.destroy()])
 
-    # Save
+    # 保存
     save_x = PADDING + half_w + btn_gap
-    rrect(c, save_x, row2_y, half_w, btn_h, BTN_R, fill="#007A7A", outline="", tags=("save", "save_bg"))
+    rrect(c, save_x, row2_y, half_w, btn_h, BTN_R,
+          fill="#007A7A", outline="", tags=("save", "save_bg"))
     c.create_text(save_x + half_w // 2, row2_y + btn_h // 2, text="保存",
                   font=(FF, FS), fill="white", tags=("save",))
-    def _save_enter(e): c.itemconfigure("save_bg", fill="#009999")
-    def _save_leave(e): c.itemconfigure("save_bg", fill="#007A7A")
-    c.tag_bind("save", "<Enter>", _save_enter)
-    c.tag_bind("save", "<Leave>", _save_leave)
+    c.tag_bind("save", "<Enter>", lambda e: c.itemconfigure("save_bg", fill="#009999"))
+    c.tag_bind("save", "<Leave>", lambda e: c.itemconfigure("save_bg", fill="#007A7A"))
 
     def do_save(e=None):
         for k, widget in fields.items():
@@ -335,9 +351,10 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         top.destroy()
     c.tag_bind("save", "<Button-1>", do_save)
 
-    # Copy
+    # 复制
     copy_y = row2_y - btn_gap - btn_h
-    rrect(c, PADDING, copy_y, total_w, btn_h, BTN_R, fill=C_GRAY, outline="", tags=("copy", "copy_bg"))
+    rrect(c, PADDING, copy_y, total_w, btn_h, BTN_R,
+          fill=C_GRAY, outline="", tags=("copy", "copy_bg"))
     copy_cy = copy_y + btn_h // 2
     if ifont:
         icon_x = PADDING + total_w // 2 - 40
@@ -349,11 +366,15 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     else:
         c.create_text(PADDING + total_w // 2, copy_cy, text="复制按钮",
                       font=(FF, FS, "bold"), fill="#E0E0E0", tags=("copy",))
-    def _copy_enter(e): c.itemconfigure("copy_bg", fill=C_GRAY_H)
-    def _copy_leave(e): c.itemconfigure("copy_bg", fill=C_GRAY)
-    c.tag_bind("copy", "<Enter>", _copy_enter)
-    c.tag_bind("copy", "<Leave>", _copy_leave)
+    c.tag_bind("copy", "<Enter>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY_H))
+    c.tag_bind("copy", "<Leave>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY))
     c.tag_bind("copy", "<Button-1>", lambda e: [on_copy(btn), top.destroy()])
+
+    # 说明文本
+    help_y = copy_y - btn_gap - 60
+    help_lbl = tk.Label(top, text=help_text, bg=C_PM_BG, fg="#999",
+                        font=(FF, 9), anchor="w", justify="left")
+    help_lbl.place(x=form_x, y=help_y, width=form_w)
 
     # =================================================================
     #  RIGHT COLUMN: Key Palette (scrollable)
@@ -385,24 +406,19 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     def _on_mw(event):
         if right_canvas.yview() != (0.0, 1.0):
             right_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-    def _bind_mw(event): right_canvas.bind_all("<MouseWheel>", _on_mw)
-    def _unbind_mw(event): right_canvas.unbind_all("<MouseWheel>")
-    right_container.bind('<Enter>', _bind_mw)
-    right_container.bind('<Leave>', _unbind_mw)
+    right_container.bind('<Enter>', lambda e: right_canvas.bind_all("<MouseWheel>", _on_mw))
+    right_container.bind('<Leave>', lambda e: right_canvas.unbind_all("<MouseWheel>"))
 
-    # ── 追加按键到焦点控件 ──
+    # ── 追加按键 ──
     def _append_key(key_name):
         w = focus_state["current_widget"]
         if w is None or not w.winfo_exists():
             return
         if isinstance(w, TagInput):
             w.add_tag(key_name)
-        elif isinstance(w, tk.Entry):
-            # name 字段不追加 tag
-            pass
         w.focus_set()
 
-    # ── 按键面板：手动 flow 布局 ──
+    # ── 按键面板 ──
     TAG_MIN_W = 40
     TAG_H = 40
     TAG_PAD_X = 12
@@ -424,25 +440,21 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         cat_lbl.pack(fill="x", padx=5, pady=(top_pad, 10))
 
         flow_frame = tk.Frame(right_inner, bg=C_PM_BG)
-        flow_frame.pack(fill="x", padx=5, pady=(0, 0))
+        flow_frame.pack(fill="x", padx=5)
 
         row_idx = 0
         col_x = 0
-
         for key_name in keys:
             text_w = measure_font.measure(key_name)
             btn_w = max(TAG_MIN_W, text_w + TAG_PAD_X * 2)
-
             if col_x > 0 and col_x + TAG_GAP_X + btn_w > avail_w:
                 row_idx += 1
                 col_x = 0
 
             tag_lbl = tk.Label(flow_frame, text=key_name, bg=_C_TAG_BG, fg=_C_TAG_TEXT,
-                               font=TAG_FONT, cursor="hand2", anchor="center",
-                               width=0)
+                               font=TAG_FONT, cursor="hand2", anchor="center", width=0)
             tag_lbl.place(x=col_x, y=row_idx * (TAG_H + TAG_GAP_Y),
                           width=btn_w, height=TAG_H)
-
             col_x += btn_w + TAG_GAP_X
 
             tag_lbl.bind("<Enter>", lambda ev, w=tag_lbl: w.configure(bg=_C_TAG_HOVER))
