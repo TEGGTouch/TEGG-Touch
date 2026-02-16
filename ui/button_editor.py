@@ -41,9 +41,9 @@ BLOCK_GAP = 40
 ROW_H = 50          # 每行固定高度
 DOT_W = 20          # 色块列宽
 LABEL_W = 70        # 标签列宽
-INPUT_PAD = 10      # 标签和输入框间距
-INPUT_H = 40        # TagInput / Entry 固定高度
-INPUT_W_SHRINK = 40 # 输入框右侧缩进（右对齐留白）
+INPUT_PAD = 20      # 标签和输入框间距
+INPUT_H = 42        # TagInput / Entry 固定高度
+INPUT_W_SHRINK = 0  # 输入框右侧缩进
 
 # ─── 按键分类数据 ──────────────────────────────────────────────
 KEY_CATEGORIES = [
