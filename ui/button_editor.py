@@ -52,11 +52,11 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
 
     # ── 尺寸 ──
     LEFT_W = 340
-    RIGHT_W = 380
+    RIGHT_W = 560
     PADDING = 20
     DIVIDER = 1
-    width = LEFT_W + DIVIDER + RIGHT_W + PADDING * 2  # ~761
-    height = 630
+    width = LEFT_W + DIVIDER + RIGHT_W + PADDING * 2  # ~941
+    height = 680
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -179,7 +179,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     top.after(100, lambda: _set_focus(entries[first_key]))
 
     # ── 使用说明 ──
-    help_y_base = form_y + len(EDIT_FIELDS) * 40 + 15
+    help_y_base = form_y + len(EDIT_FIELDS) * 40 + 40
     help_text = (
         "💡 点击右侧按键添加到当前输入框\n"
         "多键用 + 连接，如 ctrl+a\n"
@@ -299,32 +299,82 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         ent.focus_set()
 
     # ── 绘制按键面板 ──
-    TAG_H = 30
-    TAG_PAD_X = 6
-    TAG_PAD_Y = 4
-    TAG_FONT = (FF, 9)
+    TAG_MIN_W = 40   # 最低宽度 40px
+    TAG_H = 40       # 高度 40px
+    TAG_PAD_X = 10
+    TAG_PAD_Y = 8
+    TAG_FONT = (FF, 10)
+    TAG_GAP = 6      # 同行按钮间距
+    ROW_GAP = 20     # 同类按键行间距
+    CAT_GAP = 40     # 不同类型间距
 
+    is_first_cat = True
     for cat_name, keys in KEY_CATEGORIES:
-        # 分类标题
-        cat_lbl = tk.Label(right_inner, text=f"── {cat_name} ──", bg=C_PM_BG,
-                           fg=_C_CAT_LABEL, font=(FF, 9, "bold"), anchor="w")
-        cat_lbl.pack(fill="x", padx=5, pady=(8, 4))
+        # 分类标题（首个无额外上间距，后续 40px）
+        top_pad = 0 if is_first_cat else CAT_GAP
+        is_first_cat = False
 
-        # 按键 flow 容器
-        flow = tk.Frame(right_inner, bg=C_PM_BG)
-        flow.pack(fill="x", padx=5, pady=(0, 4))
+        cat_lbl = tk.Label(right_inner, text=f"── {cat_name} ──", bg=C_PM_BG,
+                           fg=_C_CAT_LABEL, font=(FF, 10, "bold"), anchor="w")
+        cat_lbl.pack(fill="x", padx=5, pady=(top_pad, 10))
+
+        # 使用 Text widget 实现自动换行的 flow 布局
+        flow_text = tk.Text(right_inner, bg=C_PM_BG, relief="flat", bd=0,
+                            highlightthickness=0, cursor="arrow",
+                            wrap="char", state="normal")
+        flow_text.pack(fill="x", padx=5, pady=(0, 0))
+
+        # 禁用文字输入（只做按钮容器）
+        flow_text.configure(state="normal")
 
         for key_name in keys:
-            tag_btn = tk.Label(flow, text=key_name, bg=_C_TAG_BG, fg=_C_TAG_TEXT,
-                               font=TAG_FONT, padx=TAG_PAD_X, pady=TAG_PAD_Y,
-                               relief="flat", cursor="hand2")
-            tag_btn.pack(side="left", padx=2, pady=2)
+            tag_btn = tk.Frame(flow_text, bg=_C_TAG_BG, cursor="hand2",
+                               height=TAG_H, padx=0, pady=0)
+            tag_btn.pack_propagate(False)
 
-            # Hover effects
-            tag_btn.bind("<Enter>", lambda ev, w=tag_btn: w.configure(bg=_C_TAG_HOVER))
-            tag_btn.bind("<Leave>", lambda ev, w=tag_btn: w.configure(bg=_C_TAG_BG))
+            inner_lbl = tk.Label(tag_btn, text=key_name, bg=_C_TAG_BG, fg=_C_TAG_TEXT,
+                                 font=TAG_FONT, cursor="hand2")
+            inner_lbl.pack(expand=True, fill="both", padx=TAG_PAD_X, pady=0)
 
-            # Click → append key
+            # 计算宽度：至少 TAG_MIN_W，长文本自适应
+            inner_lbl.update_idletasks()
+            text_w = inner_lbl.winfo_reqwidth() + TAG_PAD_X * 2
+            btn_w = max(TAG_MIN_W, text_w)
+            tag_btn.configure(width=btn_w, height=TAG_H)
+
+            flow_text.window_create("end", window=tag_btn,
+                                    padx=TAG_GAP // 2, pady=ROW_GAP // 2)
+
+            # Hover
+            def _enter(ev, f=tag_btn, l=inner_lbl):
+                f.configure(bg=_C_TAG_HOVER)
+                l.configure(bg=_C_TAG_HOVER)
+            def _leave(ev, f=tag_btn, l=inner_lbl):
+                f.configure(bg=_C_TAG_BG)
+                l.configure(bg=_C_TAG_BG)
+
+            tag_btn.bind("<Enter>", _enter)
+            tag_btn.bind("<Leave>", _leave)
+            inner_lbl.bind("<Enter>", _enter)
+            inner_lbl.bind("<Leave>", _leave)
+
+            # Click
             tag_btn.bind("<Button-1>", lambda ev, k=key_name: _append_key(k))
+            inner_lbl.bind("<Button-1>", lambda ev, k=key_name: _append_key(k))
+
+        # 设置 Text 高度自适应内容
+        flow_text.configure(state="disabled")
+        flow_text.update_idletasks()
+        # 计算需要的行数来设置高度
+        flow_text.configure(height=1)  # 先设最小
+        flow_text.update_idletasks()
+        bbox = flow_text.bbox("end-1c")
+        if bbox:
+            needed_h = bbox[1] + bbox[3] + ROW_GAP
+            flow_text.configure(height=1)
+            # Use pixel height via place/config
+            flow_text.pack_forget()
+            flow_text.pack(fill="x", padx=5, pady=(0, 0))
+            flow_text.configure(height=max(1, needed_h // 20))
 
     return top
