@@ -1,5 +1,5 @@
 """
-FKB - profile_manager.py
+TEGG Touch - profile_manager.py
 方案管理弹窗：列表、新建、复制、重命名、删除。
 """
 

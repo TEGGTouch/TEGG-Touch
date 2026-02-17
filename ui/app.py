@@ -1,5 +1,5 @@
 """
-FKB 悬浮触控助手 - 主应用类
+TEGG Touch 辅助软件 - 主应用类
 
 负责窗口管理、模式切换、事件分发。
 编辑模式和运行模式均为全屏覆盖。
@@ -28,6 +28,7 @@ from ui.canvas_renderer import (
     draw_control_ui, draw_floating_ball,
     init_cursor, update_cursor, remove_cursor,
     preview_button_transparency, draw_grid,
+    draw_charge_bar, remove_charge_bar,
 )
 from ui.edit_panel import create_toolbar_window, destroy_toolbar_window, open_button_editor
 from core.input_engine import trigger, is_key_pressed, install_wheel_hook, uninstall_wheel_hook, poll_wheel_events
@@ -196,7 +197,7 @@ class FloatingApp:
             self._hide_toolbar()  # 先清理
             self.root.overrideredirect(True)
             self.root.geometry(self.fullscreen_geo)
-            self.root.attributes("-alpha", 1.0)
+            self.root.attributes("-alpha", self.transparency)
             self.root.configure(bg=COLOR_TRANSPARENT)
             self.canvas.configure(bg=COLOR_TRANSPARENT)
             self.root.wm_attributes("-transparentcolor", COLOR_TRANSPARENT)
@@ -526,13 +527,29 @@ class FloatingApp:
             in_rect = (btn['x'] <= rel_x < btn['x'] + btn['w'] and
                        btn['y'] <= rel_y < btn['y'] + btn['h'])
 
+            # 获取悬停延迟配置 (ms)
+            hover_delay = btn.get('hover_delay', 0)
+
             # 滚轮闪烁保护：在闪烁期内跳过视觉状态更新
             if now < btn.get('_wheel_flash_until', 0):
                 # 仍然处理 hover/click 触发逻辑，只是不覆盖颜色
                 if in_rect:
+                    # 悬停延迟逻辑（滚轮闪烁期间也需要）
                     if not btn.get('active_hover'):
-                        btn['active_hover'] = True
-                        trigger(btn['hover'], 'p')
+                        if hover_delay <= 0:
+                            btn['active_hover'] = True
+                            trigger(btn['hover'], 'p')
+                        else:
+                            if btn.get('_hover_enter_time') is None:
+                                btn['_hover_enter_time'] = now
+                                btn['_hover_charged'] = False
+                            if not btn.get('_hover_charged'):
+                                elapsed_ms = (now - btn['_hover_enter_time']) * 1000
+                                if elapsed_ms >= hover_delay:
+                                    btn['_hover_charged'] = True
+                                    btn['active_hover'] = True
+                                    remove_charge_bar(self.canvas, btn)
+                                    trigger(btn['hover'], 'p')
                     if left_down and not self.left_was_down:
                         self.holding_btn_left = idx
                         trigger(btn['lclick'], 'p')
@@ -544,14 +561,33 @@ class FloatingApp:
                         trigger(btn['mclick'], 'p')
                 else:
                     if btn.get('active_hover'):
-                        btn['active_hover'] = False
-                        trigger(btn['hover'], 'r')
+                        _rd = btn.get('hover_release_delay', 0)
+                        if _rd <= 0:
+                            btn['active_hover'] = False
+                            btn['_hover_release_time'] = None
+                            trigger(btn['hover'], 'r')
+                        else:
+                            if btn.get('_hover_release_time') is None:
+                                btn['_hover_release_time'] = now
+                            _el = (now - btn['_hover_release_time']) * 1000
+                            if _el >= _rd:
+                                btn['active_hover'] = False
+                                btn['_hover_release_time'] = None
+                                trigger(btn['hover'], 'r')
+                    # 清除充能状态
+                    if btn.get('_hover_enter_time') is not None:
+                        btn['_hover_enter_time'] = None
+                        btn['_hover_charged'] = False
+                        if not btn.get('_hover_release_time'):
+                            remove_charge_bar(self.canvas, btn)
                 continue
 
-            # 状态判定
+            # 状态判定：hover 仅在 active_hover 为 True 时显示
+            # 充能期间保持 normal，由 charge bar 提供视觉反馈
             target_state = 'normal'
             if in_rect:
-                target_state = 'hover'
+                if btn.get('active_hover'):
+                    target_state = 'hover'
                 if left_down:
                     target_state = 'active_left'
                 elif right_down:
@@ -565,11 +601,45 @@ class FloatingApp:
                 btn['last_visual_state'] = target_state
 
             # 触发逻辑
-            if in_rect:
-                if not btn.get('active_hover'):
-                    btn['active_hover'] = True
-                    trigger(btn['hover'], 'p')
+            release_delay = btn.get('hover_release_delay', 0)
 
+            if in_rect:
+                # ── 如果正在释放倒计时，鼠标重新进入：取消释放 ──
+                if btn.get('_hover_release_time') is not None:
+                    btn['_hover_release_time'] = None
+                    remove_charge_bar(self.canvas, btn)
+                    # active_hover 仍然为 True，恢复 hover 视觉
+                    set_button_visual_state(self.canvas, btn, 'hover')
+                    btn['last_visual_state'] = 'hover'
+
+                # ── 悬停延迟触发 ──
+                if not btn.get('active_hover'):
+                    if hover_delay <= 0:
+                        # 无延迟：立即触发
+                        btn['active_hover'] = True
+                        trigger(btn['hover'], 'p')
+                    else:
+                        # 有延迟：充能模式
+                        if btn.get('_hover_enter_time') is None:
+                            btn['_hover_enter_time'] = now
+                            btn['_hover_charged'] = False
+
+                        if not btn.get('_hover_charged'):
+                            elapsed_ms = (now - btn['_hover_enter_time']) * 1000
+                            progress = min(1.0, elapsed_ms / hover_delay)
+                            draw_charge_bar(self.canvas, btn, progress)
+
+                            if progress >= 1.0:
+                                # 充能完成！触发 press
+                                btn['_hover_charged'] = True
+                                btn['active_hover'] = True
+                                remove_charge_bar(self.canvas, btn)
+                                trigger(btn['hover'], 'p')
+                                # 立刻更新为 hover 视觉
+                                set_button_visual_state(self.canvas, btn, 'hover')
+                                btn['last_visual_state'] = 'hover'
+
+                # ── 鼠标按键触发 ──
                 if left_down and not self.left_was_down:
                     self.holding_btn_left = idx
                     trigger(btn['lclick'], 'p')
@@ -580,9 +650,39 @@ class FloatingApp:
                     self.holding_btn_middle = idx
                     trigger(btn['mclick'], 'p')
             else:
+                # 鼠标离开按钮
                 if btn.get('active_hover'):
-                    btn['active_hover'] = False
-                    trigger(btn['hover'], 'r')
+                    if release_delay <= 0:
+                        # 无释放延迟：立即释放
+                        btn['active_hover'] = False
+                        btn['_hover_release_time'] = None
+                        trigger(btn['hover'], 'r')
+                    else:
+                        # 有释放延迟：开始/继续释放倒计时
+                        if btn.get('_hover_release_time') is None:
+                            btn['_hover_release_time'] = now
+
+                        elapsed_ms = (now - btn['_hover_release_time']) * 1000
+                        progress = max(0.0, 1.0 - elapsed_ms / release_delay)
+
+                        if progress <= 0:
+                            # 释放倒计时完成
+                            btn['active_hover'] = False
+                            btn['_hover_release_time'] = None
+                            remove_charge_bar(self.canvas, btn)
+                            trigger(btn['hover'], 'r')
+                            set_button_visual_state(self.canvas, btn, 'normal')
+                            btn['last_visual_state'] = 'normal'
+                        else:
+                            # 仍在释放中：绘制反向充能条（100%→0%）
+                            draw_charge_bar(self.canvas, btn, progress)
+
+                # 清除触发充能状态（不清除释放状态）
+                if btn.get('_hover_enter_time') is not None:
+                    btn['_hover_enter_time'] = None
+                    btn['_hover_charged'] = False
+                    if not btn.get('_hover_release_time'):
+                        remove_charge_bar(self.canvas, btn)
 
         # 释放逻辑
         if not left_down and self.left_was_down and self.holding_btn_left is not None:
@@ -666,7 +766,7 @@ class FloatingApp:
         new_btn = {
             'x': cx, 'y': cy,
             'w': w, 'h': h,
-            'name': '按钮',
+            'name': '按钮', 'hover_delay': 200, 'hover_release_delay': 0,
             'hover': '', 'lclick': '', 'rclick': '', 'mclick': '',
             'wheelup': '', 'wheeldown': '',
         }
@@ -698,6 +798,8 @@ class FloatingApp:
                 'w': w, 'h': h,
                 'name': src_btn.get('name', '按钮'),
                 'hover': src_btn.get('hover', ''),
+                'hover_delay': src_btn.get('hover_delay', 200),
+                'hover_release_delay': src_btn.get('hover_release_delay', 0),
                 'lclick': src_btn.get('lclick', ''),
                 'rclick': src_btn.get('rclick', ''),
                 'mclick': src_btn.get('mclick', ''),
@@ -718,11 +820,8 @@ class FloatingApp:
 
     def set_alpha(self, v):
         self.transparency = int(v) / 100.0
-        # 编辑模式: 不改窗口alpha, 用颜色混合模拟按钮透明度预览
-        if self.current_mode == 'main':
-            preview_button_transparency(self.canvas, self.buttons, self.transparency)
-        else:
-            self.root.attributes("-alpha", self.transparency)
+        # 编辑/运行模式统一：直接设置窗口级透明度
+        self.root.attributes("-alpha", self.transparency)
 
     def toggle_edit_passthrough(self, is_on):
         """编辑模式穿透开关回调。"""

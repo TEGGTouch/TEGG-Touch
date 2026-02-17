@@ -1,5 +1,5 @@
 """
-FKB 悬浮触控助手 - 全局常量与默认值
+TEGG Touch 辅助软件 - 全局常量与默认值
 """
 
 # === 应用信息 ===
@@ -61,19 +61,19 @@ UPDATE_INTERVAL = 8
 DEFAULT_BUTTONS = [
     {
         'x': 100, 'y': 100, 'w': 100, 'h': 100,
-        'name': '左上', 'hover': 'w+a',
+        'name': '左上', 'hover': 'w+a', 'hover_delay': 200,
         'lclick': 'j', 'rclick': 'k', 'mclick': '',
         'wheelup': '', 'wheeldown': '',
     },
     {
         'x': 200, 'y': 100, 'w': 100, 'h': 100,
-        'name': '右上', 'hover': 'w+d',
+        'name': '右上', 'hover': 'w+d', 'hover_delay': 200,
         'lclick': 'j', 'rclick': 'k', 'mclick': '',
         'wheelup': '', 'wheeldown': '',
     },
     {
         'x': 100, 'y': 200, 'w': 200, 'h': 100,
-        'name': '后退', 'hover': 's',
+        'name': '后退', 'hover': 's', 'hover_delay': 200,
         'lclick': 'j', 'rclick': 'k', 'mclick': '',
         'wheelup': '', 'wheeldown': '',
     },
@@ -84,6 +84,8 @@ RUNTIME_FIELDS = frozenset({
     'id_rect', 'id_text', 'id_resize', 'id_poly',
     'active_hover', 'last_visual_state',
     '_wheel_flash_until',
+    '_hover_enter_time', '_hover_charged', 'id_charge',
+    '_hover_release_time',
 })
 
 # 按钮可选字段及默认值 (兼容旧配置)
@@ -91,4 +93,6 @@ BUTTON_OPTIONAL_DEFAULTS = {
     'wheelup': '',
     'wheeldown': '',
     'mclick': '',
+    'hover_delay': 200,  # 悬停触发延迟(ms)，0=立即触发，默认200ms防误触
+    'hover_release_delay': 0,  # 悬停释放延迟(ms)，0=立即释放，默认0ms
 }

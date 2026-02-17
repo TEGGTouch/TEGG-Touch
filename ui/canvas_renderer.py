@@ -1,5 +1,5 @@
 """
-FKB 悬浮触控助手 - Canvas 绘制工具
+TEGG Touch 辅助软件 - Canvas 绘制工具
 
 纯绘制函数，不持有状态，接收 canvas 实例作为参数。
 """
@@ -177,6 +177,73 @@ def update_button_coords(canvas, btn):
         ry = vy + vh
         # 更新三角形手柄坐标 (3个顶点: 左下, 右上, 右下)
         canvas.coords(btn['id_resize'], rx - rs, ry, rx, ry - rs, rx, ry)
+
+
+# ─── 悬停充能条 ──────────────────────────────────────────────
+
+COLOR_CHARGE = '#0284C7'       # 充能条蓝色
+COLOR_CHARGE_BORDER = '#0284C7'  # 充能时边框蓝色
+
+
+def draw_charge_bar(canvas, btn, progress):
+    """绘制/更新悬停充能进度条。
+
+    progress: 0.0 ~ 1.0，从左到右填充蓝色。
+    充能条绘制在按钮 polygon 之上、文字之下。
+    同时将边框设为蓝色。
+    """
+    progress = max(0.0, min(1.0, progress))
+
+    vx = btn['x'] + BTN_MARGIN
+    vy = btn['y'] + BTN_MARGIN
+    vw = btn['w'] - 2 * BTN_MARGIN
+    vh = btn['h'] - 2 * BTN_MARGIN
+
+    # 充能条矩形：从左边缘到 progress 位置
+    bar_w = int(vw * progress)
+    if bar_w < 1:
+        bar_w = 1
+
+    charge_tag = f"charge_{id(btn)}"
+
+    # 删除旧的充能条
+    canvas.delete(charge_tag)
+
+    if bar_w > 0:
+        # 绘制充能条矩形（在 polygon 之上）
+        bar_id = canvas.create_rectangle(
+            vx + 2, vy + 2, vx + bar_w - 2, vy + vh - 2,
+            fill=COLOR_CHARGE, outline="", tags=charge_tag,
+        )
+        btn['id_charge'] = bar_id
+
+        # 确保充能条在 polygon 之上，文字之下
+        poly_id = btn.get('id_poly')
+        text_id = btn.get('id_text')
+        if poly_id:
+            canvas.tag_raise(charge_tag, poly_id)
+        if text_id:
+            canvas.tag_raise(text_id, charge_tag)
+
+    # 边框变蓝
+    poly_id = btn.get('id_poly')
+    if poly_id:
+        canvas.itemconfigure(poly_id, outline=COLOR_CHARGE_BORDER, width=3)
+
+
+def remove_charge_bar(canvas, btn):
+    """移除充能条并恢复默认边框。"""
+    charge_tag = f"charge_{id(btn)}"
+    canvas.delete(charge_tag)
+    btn['id_charge'] = None
+
+    # 恢复默认外观
+    poly_id = btn.get('id_poly')
+    if poly_id:
+        canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+    text_id = btn.get('id_text')
+    if text_id:
+        canvas.itemconfigure(text_id, fill=COLOR_TEXT)
 
 
 # ─── 运行时操作配色 ──────────────────────────────────────────

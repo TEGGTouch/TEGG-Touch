@@ -1,6 +1,6 @@
 @echo off
 echo ==========================================
-echo       正在准备打包 FKB (重构版)...
+echo       正在准备打包 TEGG Touch...
 echo ==========================================
 echo.
 
@@ -20,7 +20,7 @@ echo 正在生成独立EXE文件...
 echo -------------------------------------------------------
 
 :: 打包命令
-pyinstaller --onefile --noconsole --uac-admin --clean --name "FKB" main.py
+pyinstaller --onefile --noconsole --uac-admin --clean --name "TEGG Touch" main.py
 
 echo.
 echo ==========================================

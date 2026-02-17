@@ -1,5 +1,5 @@
 """
-FKB 悬浮触控助手 - 键盘输入模拟引擎
+TEGG Touch 辅助软件 - 键盘输入模拟引擎
 
 使用 Windows SendInput API 发送硬件级扫描码按键事件。
 与 UI 完全解耦，可独立测试。

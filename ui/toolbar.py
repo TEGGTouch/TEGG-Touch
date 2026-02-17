@@ -1,5 +1,5 @@
 """
-FKB - toolbar.py
+TEGG Touch - toolbar.py
 底部编辑工具栏：方案选择、新建/导入/导出、启动、穿透开关、透明度滑块。
 """
 
