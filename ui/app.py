@@ -202,7 +202,8 @@ class FloatingApp:
             self.root.wm_attributes("-transparentcolor", "")
             self.set_window_style('normal')
 
-            # 创建独立不透明工具栏
+            # 恢复系统光标 + 创建独立不透明工具栏
+            self.root.config(cursor="")
             self._show_toolbar()
             remove_cursor(self.canvas)
 
@@ -230,6 +231,8 @@ class FloatingApp:
             else:
                 self.set_window_style('no_focus')
 
+            # 隐藏系统光标（避免与虚拟光标重叠）
+            self.root.config(cursor="none")
             init_cursor(self.canvas)
 
             # 更新缓存
