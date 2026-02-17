@@ -602,18 +602,76 @@ class FloatingApp:
 
     # ─── 辅助功能 ────────────────────────────────────────────
 
+    def _find_empty_slot(self, w, h, start_x=0, start_y=0, scan='lr_tb'):
+        """在网格上查找不与现有按钮重叠的空位。
+        scan: 'lr_tb' = 左→右 再 上→下 (新建用)
+              'tb_lr' = 上→下 再 左→右 (复制用, 从源位置开始)
+        返回 (x, y) 或 None。
+        """
+        gs = GRID_SIZE
+        max_x = self.screen_w - w
+        max_y = self.screen_h - h
+        occupied = [(b['x'], b['y'], b['w'], b['h'])
+                    for b in self.buttons if not b.get('deleted')]
+
+        def overlaps(nx, ny):
+            for bx, by, bw, bh in occupied:
+                if not (nx + w <= bx or nx >= bx + bw or ny + h <= by or ny >= by + bh):
+                    return True
+            return False
+
+        if scan == 'lr_tb':
+            for y in range(0, max_y + 1, gs):
+                for x in range(0, max_x + 1, gs):
+                    if not overlaps(x, y):
+                        return (x, y)
+        else:  # tb_lr — 从 start 位置开始向下再向右扫描
+            # 先扫从 start_y 往下、start_x 往右
+            for x in range(start_x, max_x + 1, gs):
+                for y in range(start_y, max_y + 1, gs):
+                    if not overlaps(x, y):
+                        return (x, y)
+            # 再扫 start_x 之前的列
+            for x in range(0, start_x, gs):
+                for y in range(0, max_y + 1, gs):
+                    if not overlaps(x, y):
+                        return (x, y)
+        return None
+
+    def show_toast(self, text, duration=1500):
+        """在屏幕中央显示 toast 提示，duration 毫秒后消失。"""
+        tag = "_toast"
+        self.canvas.delete(tag)
+        cx = self.screen_w // 2
+        cy = self.screen_h // 2
+        # 背景
+        pw, ph = 200, 40
+        self.canvas.create_rectangle(
+            cx - pw, cy - ph, cx + pw, cy + ph,
+            fill="#000000", outline="", stipple="gray50", tags=tag)
+        self.canvas.create_text(
+            cx, cy, text=text, fill="#FFFFFF",
+            font=("Microsoft YaHei", 16, "bold"), tags=tag)
+        self.canvas.tag_raise(tag)
+        self.root.after(duration, lambda: self.canvas.delete(tag))
+
     def add_btn(self):
-        cx = (self.screen_w // 2 // GRID_SIZE) * GRID_SIZE
-        cy = (self.screen_h // 2 // GRID_SIZE) * GRID_SIZE
+        w, h = GRID_SIZE, GRID_SIZE
+        pos = self._find_empty_slot(w, h, scan='lr_tb')
+        if pos:
+            cx, cy = pos
+        else:
+            cx, cy = 0, 0  # 没有空位，在原点覆盖
         new_btn = {
             'x': cx, 'y': cy,
-            'w': GRID_SIZE, 'h': GRID_SIZE,
+            'w': w, 'h': h,
             'name': '按钮',
             'hover': '', 'lclick': '', 'rclick': '', 'mclick': '',
             'wheelup': '', 'wheeldown': '',
         }
         self.buttons.append(new_btn)
         self.redraw_all()
+        self.show_toast("✓ 创建成功")
 
     def edit_btn(self, idx):
         if self.current_mode != 'main':
@@ -628,9 +686,15 @@ class FloatingApp:
             self.redraw_all()
 
         def on_copy(src_btn):
+            w, h = src_btn['w'], src_btn['h']
+            pos = self._find_empty_slot(w, h, start_x=src_btn['x'], start_y=src_btn['y'], scan='tb_lr')
+            if pos:
+                nx, ny = pos
+            else:
+                nx, ny = src_btn['x'], src_btn['y']  # 没有空位，在原位覆盖
             new_btn = {
-                'x': src_btn['x'], 'y': src_btn['y'],
-                'w': src_btn['w'], 'h': src_btn['h'],
+                'x': nx, 'y': ny,
+                'w': w, 'h': h,
                 'name': src_btn.get('name', '按钮'),
                 'hover': src_btn.get('hover', ''),
                 'lclick': src_btn.get('lclick', ''),
@@ -641,6 +705,7 @@ class FloatingApp:
             }
             self.buttons.append(new_btn)
             self.redraw_all()
+            self.show_toast("✓ 复制成功")
 
         open_button_editor(
             self.root, btn,
