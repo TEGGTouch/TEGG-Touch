@@ -15,7 +15,7 @@ import ctypes
 from core.constants import (
     APP_TITLE, APP_VERSION,
     COLOR_BG, COLOR_PANEL, COLOR_TRANSPARENT,
-    UPDATE_INTERVAL, GRID_SIZE, EDIT_ALPHA,
+    UPDATE_INTERVAL, GRID_SIZE,
     DEFAULT_PROFILE_NAME,
 )
 # Update import to include profile functions
@@ -192,14 +192,14 @@ class FloatingApp:
     def setup_ui_mode(self):
         """根据 current_mode 设置界面。"""
         if self.current_mode == 'main':
-            # === 编辑模式：全屏半透明遮罩 ===
+            # === 编辑模式：全屏透明背景（只显示按钮+网格） ===
             self._hide_toolbar()  # 先清理
             self.root.overrideredirect(True)
             self.root.geometry(self.fullscreen_geo)
-            self.root.attributes("-alpha", EDIT_ALPHA)
-            self.root.configure(bg=COLOR_BG)
-            self.canvas.configure(bg=COLOR_BG)
-            self.root.wm_attributes("-transparentcolor", "")
+            self.root.attributes("-alpha", 1.0)
+            self.root.configure(bg=COLOR_TRANSPARENT)
+            self.canvas.configure(bg=COLOR_TRANSPARENT)
+            self.root.wm_attributes("-transparentcolor", COLOR_TRANSPARENT)
             self.set_window_style('normal')
 
             # 恢复系统光标 + 创建独立不透明工具栏

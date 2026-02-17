@@ -7,7 +7,7 @@ FKB 悬浮触控助手 - Canvas 绘制工具
 import math
 
 from core.constants import (
-    COLOR_BG, COLOR_BTN_BG, COLOR_BTN_BORDER, COLOR_TEXT,
+    COLOR_BG, COLOR_TRANSPARENT, COLOR_BTN_BG, COLOR_BTN_BORDER, COLOR_TEXT,
     COLOR_ACTIVE, COLOR_HOVER,
     COLOR_SYS_BG, COLOR_SYS_BORDER, COLOR_SYS_TEXT,
     COLOR_BALL_CORE, COLOR_BALL_RING, COLOR_HANDLE,
@@ -39,12 +39,17 @@ def blend_color(color, bg, alpha):
 def preview_button_transparency(canvas, buttons, alpha):
     """Update button colors to simulate transparency preview in edit mode.
     alpha: 0.0~1.0 (the user-set runtime transparency).
+    背景已透明，混合目标为 COLOR_TRANSPARENT（穿透色）。
+    当 alpha≈0 时直接设为穿透色使按钮完全消失。
     """
-    bg = COLOR_BG  # edit mode background
-    fill = blend_color(COLOR_BTN_BG, bg, alpha)
-    outline = blend_color(COLOR_BTN_BORDER, bg, alpha)
-    text = blend_color(COLOR_TEXT, bg, alpha)
-    handle = blend_color(COLOR_HANDLE, bg, alpha)
+    if alpha <= 0.01:
+        # 完全透明：按钮变为穿透色（不可见）
+        fill = outline = text_color = handle_color = COLOR_TRANSPARENT
+    else:
+        fill = blend_color(COLOR_BTN_BG, COLOR_TRANSPARENT, alpha)
+        outline = blend_color(COLOR_BTN_BORDER, COLOR_TRANSPARENT, alpha)
+        text_color = blend_color(COLOR_TEXT, COLOR_TRANSPARENT, alpha)
+        handle_color = blend_color(COLOR_HANDLE, COLOR_TRANSPARENT, alpha)
 
     for idx, btn in enumerate(buttons):
         if btn.get('deleted'):
@@ -55,9 +60,9 @@ def preview_button_transparency(canvas, buttons, alpha):
         if poly_id:
             canvas.itemconfigure(poly_id, fill=fill, outline=outline)
         if text_id:
-            canvas.itemconfigure(text_id, fill=text)
+            canvas.itemconfigure(text_id, fill=text_color)
         if resize_id:
-            canvas.itemconfigure(resize_id, fill=handle)
+            canvas.itemconfigure(resize_id, fill=handle_color)
 
 
 # ─── 网格绘制 ────────────────────────────────────────────────
@@ -65,9 +70,15 @@ def preview_button_transparency(canvas, buttons, alpha):
 COLOR_GRID = "#2A2A2A"  # 网格线颜色（暗灰，不干扰视觉）
 
 def draw_grid(canvas, width, height, grid_size=None):
-    """在编辑模式背景上绘制 100px 网格线。"""
+    """在编辑模式背景上绘制 20% 半透明遮罩 + 100px 网格线。"""
     from core.constants import GRID_SIZE
     gs = grid_size or GRID_SIZE
+
+    # 20% 半透明黑色遮罩（stipple 模拟半透明，未填充像素穿透为透明色）
+    canvas.create_rectangle(
+        0, 0, width, height,
+        fill="#000000", outline="", stipple="gray25", tags="grid",
+    )
 
     # 竖线
     for x in range(0, width + 1, gs):
