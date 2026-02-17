@@ -258,28 +258,35 @@ def draw_floating_ball(canvas):
 
 # ─── 虚拟光标 ────────────────────────────────────────────────
 
-# 光标配色
-COLOR_CURSOR_FILL = "#5B7FE8"     # 亮蓝填充
-COLOR_CURSOR_OUTLINE = "#AAAAAA"  # 半透明白描边（灰白模拟）
+import os
+from PIL import Image, ImageTk
+
+# 全局引用，防止 GC 回收
+_cursor_photo = None
+
+def _get_cursor_image():
+    """加载光标 PNG 图片，返回 ImageTk.PhotoImage。"""
+    global _cursor_photo
+    if _cursor_photo is None:
+        # 兼容打包和开发环境的路径查找
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(base, "assets", "cursor.png")
+        img = Image.open(path).convert("RGBA")
+        _cursor_photo = ImageTk.PhotoImage(img)
+    return _cursor_photo
 
 def init_cursor(canvas):
-    """初始化虚拟光标（经典箭头，沿45°对角线对称，底部V形内凹）。"""
-    canvas.create_polygon(
-        0, 0, 0, 0, fill=COLOR_CURSOR_FILL, outline=COLOR_CURSOR_OUTLINE,
-        width=2, tags=("v_cursor", "v_cursor_body"), smooth=False,
+    """初始化虚拟光标（使用自定义 PNG 图片）。"""
+    photo = _get_cursor_image()
+    canvas.create_image(
+        -100, -100, image=photo, anchor="nw", tags="v_cursor",
     )
     canvas.tag_raise("v_cursor")
 
 
 def update_cursor(canvas, x, y):
-    """更新虚拟光标位置。"""
-    arrow_points = [
-        x, y,              # 尖端
-        x, y + 26,         # 左翼底
-        x + 11, y + 19,    # 凹点（对称轴上）
-        x + 26, y,         # 右翼顶
-    ]
-    canvas.coords("v_cursor_body", *arrow_points)
+    """更新虚拟光标位置（图片左上角对齐鼠标尖端）。"""
+    canvas.coords("v_cursor", x, y)
     canvas.tag_raise("v_cursor")
 
 
