@@ -625,17 +625,15 @@ class FloatingApp:
                 for x in range(0, max_x + 1, gs):
                     if not overlaps(x, y):
                         return (x, y)
-        else:  # tb_lr — 从 start 位置开始向下再向右扫描
-            # 先扫从 start_y 往下、start_x 往右
-            for x in range(start_x, max_x + 1, gs):
-                for y in range(start_y, max_y + 1, gs):
-                    if not overlaps(x, y):
-                        return (x, y)
-            # 再扫 start_x 之前的列
-            for x in range(0, start_x, gs):
-                for y in range(0, max_y + 1, gs):
-                    if not overlaps(x, y):
-                        return (x, y)
+        else:  # copy — 先右侧再下侧
+            # 1. 同行右侧：y=start_y, x 从 start_x+w 向右
+            for x in range(start_x + w, max_x + 1, gs):
+                if not overlaps(x, start_y):
+                    return (x, start_y)
+            # 2. 同列下侧：x=start_x, y 从 start_y+h 向下
+            for y in range(start_y + h, max_y + 1, gs):
+                if not overlaps(start_x, y):
+                    return (start_x, y)
         return None
 
     def show_toast(self, text, duration=1500):
