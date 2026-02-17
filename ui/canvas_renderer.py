@@ -258,15 +258,15 @@ def draw_floating_ball(canvas):
 
 # ─── 虚拟光标 ────────────────────────────────────────────────
 
+# 光标配色
+COLOR_CURSOR_FILL = "#5B7FE8"     # 亮蓝填充
+COLOR_CURSOR_OUTLINE = "#AAAAAA"  # 半透明白描边（灰白模拟）
+
 def init_cursor(canvas):
-    """初始化虚拟光标图形元素。"""
+    """初始化虚拟光标（经典箭头，沿45°对角线对称，底部V形内凹）。"""
     canvas.create_polygon(
-        0, 0, 0, 0, fill=COLOR_BG, outline=COLOR_BTN_BORDER,
-        width=3, tags=("v_cursor", "v_cursor_body"), smooth=False,
-    )
-    canvas.create_oval(
-        0, 0, 0, 0, fill=COLOR_ACTIVE, outline=COLOR_TEXT,
-        width=1, tags=("v_cursor", "v_cursor_core"),
+        0, 0, 0, 0, fill=COLOR_CURSOR_FILL, outline=COLOR_CURSOR_OUTLINE,
+        width=2, tags=("v_cursor", "v_cursor_body"), smooth=False,
     )
     canvas.tag_raise("v_cursor")
 
@@ -274,16 +274,12 @@ def init_cursor(canvas):
 def update_cursor(canvas, x, y):
     """更新虚拟光标位置。"""
     arrow_points = [
-        x, y,
-        x + 16, y + 16,
-        x + 12, y + 28,
-        x, y + 20,
-        x - 12, y + 28,
-        x - 16, y + 16,
+        x, y,              # 尖端
+        x, y + 26,         # 左翼底
+        x + 11, y + 19,    # 凹点（对称轴上）
+        x + 26, y,         # 右翼顶
     ]
     canvas.coords("v_cursor_body", *arrow_points)
-    core_y = y + 18
-    canvas.coords("v_cursor_core", x - 3, core_y - 3, x + 3, core_y + 3)
     canvas.tag_raise("v_cursor")
 
 
