@@ -21,6 +21,13 @@ _wheel_queue: deque = deque(maxlen=64)
 _hook_handle = None
 _hook_func_ref = None  # prevent GC
 
+# ─── 光标冻结模式 ────────────────────────────────────────────
+
+_mouse_freeze_active = False       # 冻结开关
+_mouse_delta_queue: deque = deque(maxlen=256)  # (dx, dy) 增量队列
+_last_mouse_pos = None             # 上一帧鼠标绝对坐标 (x, y)
+_freeze_anchor_pos = None          # 冻结时 OS 光标锁定位置 (x, y)
+
 # ─── ctypes 结构体定义 ───────────────────────────────────────
 
 PUL = ctypes.POINTER(ctypes.c_ulong)
@@ -157,6 +164,15 @@ def is_key_pressed(key_name: str) -> bool:
 
 WH_MOUSE_LL = 14
 WM_MOUSEWHEEL = 0x020A
+WM_MOUSEMOVE = 0x0200
+WM_LBUTTONDOWN = 0x0201
+WM_LBUTTONUP = 0x0202
+WM_RBUTTONDOWN = 0x0204
+WM_RBUTTONUP = 0x0205
+WM_MBUTTONDOWN = 0x0207
+WM_MBUTTONUP = 0x0208
+LLMHF_INJECTED = 0x01
+_FROZEN_CLICK_EVENTS = {WM_LBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP}
 
 class _MSLLHOOKSTRUCT(ctypes.Structure):
     _fields_ = [
@@ -170,14 +186,55 @@ class _MSLLHOOKSTRUCT(ctypes.Structure):
 _HOOKPROC = ctypes.CFUNCTYPE(ctypes.c_long, ctypes.c_int, ctypes.c_uint, ctypes.POINTER(_MSLLHOOKSTRUCT))
 
 
+# mouse_event 比 SendInput 快得多（无需创建 ctypes 结构体）
+_mouse_event = ctypes.windll.user32.mouse_event
+MOUSEEVENTF_MOVE = 0x0001
+
+
 def _mouse_hook_proc(nCode, wParam, lParam):
-    """低级鼠标钩子回调。"""
-    if nCode >= 0 and wParam == WM_MOUSEWHEEL:
+    """低级鼠标钩子回调。处理滚轮 + 冻结模式下的鼠标移动/点击拦截。"""
+    global _last_mouse_pos
+
+    if nCode >= 0:
         data = lParam.contents
-        # mouseData 高16位是滚轮 delta (signed short)
-        delta = ctypes.c_short(data.mouseData >> 16).value
-        direction = 'up' if delta > 0 else 'down'
-        _wheel_queue.append((direction, data.pt.x, data.pt.y))
+
+        if wParam == WM_MOUSEWHEEL:
+            # mouseData 高16位是滚轮 delta (signed short)
+            delta = ctypes.c_short(data.mouseData >> 16).value
+            direction = 'up' if delta > 0 else 'down'
+            _wheel_queue.append((direction, data.pt.x, data.pt.y))
+
+        elif _mouse_freeze_active:
+            # ── 冻结模式：拦截所有鼠标事件 ──
+
+            if wParam == WM_MOUSEMOVE:
+                # 跳过我们自己注入的事件（LLMHF_INJECTED）
+                if data.flags & LLMHF_INJECTED:
+                    return ctypes.windll.user32.CallNextHookEx(None, nCode, wParam, lParam)
+
+                # 真实鼠标移动：计算 delta → 虚拟光标队列
+                cur_x, cur_y = data.pt.x, data.pt.y
+                if _last_mouse_pos is not None:
+                    dx = cur_x - _last_mouse_pos[0]
+                    dy = cur_y - _last_mouse_pos[1]
+                    if dx != 0 or dy != 0:
+                        _mouse_delta_queue.append((dx, dy))
+                        # 不需要反向注入：return 1 已成功阻止原始事件到达游戏
+
+                # _last 设为锚点（防止反弹产生假 delta）
+                _last_mouse_pos = (_freeze_anchor_pos[0], _freeze_anchor_pos[1])
+
+                # 锁定 OS 光标到锚点
+                if _freeze_anchor_pos is not None:
+                    ctypes.windll.user32.SetCursorPos(
+                        _freeze_anchor_pos[0], _freeze_anchor_pos[1])
+
+                return 1  # 吞掉原始事件
+
+            elif wParam in _FROZEN_CLICK_EVENTS:
+                # 冻结模式下拦截鼠标点击（不传递给游戏）
+                return 1
+
     return ctypes.windll.user32.CallNextHookEx(None, nCode, wParam, lParam)
 
 
@@ -210,3 +267,50 @@ def poll_wheel_events():
     while _wheel_queue:
         events.append(_wheel_queue.popleft())
     return events
+
+
+# ─── 光标冻结 API ────────────────────────────────────────────
+
+def set_mouse_freeze(active: bool):
+    """开启/关闭光标冻结模式。
+
+    开启时：记录当前 OS 光标位置为锚点，后续移动被拦截。
+    关闭时：清空 delta 队列，释放光标。
+    """
+    global _mouse_freeze_active, _freeze_anchor_pos, _last_mouse_pos
+
+    if active and not _mouse_freeze_active:
+        # 开启冻结：记录锚点
+        pt = wintypes.POINT()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+        _freeze_anchor_pos = (pt.x, pt.y)
+        _last_mouse_pos = (pt.x, pt.y)
+        _mouse_delta_queue.clear()
+        _mouse_freeze_active = True
+        logger.info(f"光标冻结开启，锚点=({pt.x}, {pt.y})")
+
+    elif not active and _mouse_freeze_active:
+        # 关闭冻结
+        _mouse_freeze_active = False
+        _freeze_anchor_pos = None
+        _last_mouse_pos = None
+        _mouse_delta_queue.clear()
+        logger.info("光标冻结关闭")
+
+
+def is_mouse_frozen() -> bool:
+    """返回冻结模式是否激活。"""
+    return _mouse_freeze_active
+
+
+def get_freeze_anchor():
+    """返回冻结锚点坐标 (x, y)，未冻结时返回 None。"""
+    return _freeze_anchor_pos
+
+
+def poll_mouse_deltas():
+    """取出所有累积的鼠标增量。返回 list of (dx, dy)。"""
+    deltas = []
+    while _mouse_delta_queue:
+        deltas.append(_mouse_delta_queue.popleft())
+    return deltas

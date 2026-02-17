@@ -26,7 +26,8 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
                           on_add, on_run, on_export, on_import,
                           on_quit, transparency, on_alpha_change,
                           on_switch_profile, on_edit_passthrough=None,
-                          edit_passthrough=False):
+                          edit_passthrough=False,
+                          freeze_hotkey='f10', on_freeze_hotkey_change=None):
     """创建底部编辑工具栏窗口。"""
     tw, th = TOOLBAR_WIDTH, TOOLBAR_HEIGHT
     tx = (screen_w - tw) // 2
@@ -235,9 +236,51 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
 
     c.tag_bind(pt_tag, "<Button-1>", _toggle_pt)
 
-    # ========== SECOND ROW: Slider ==========
-    sl_x = DRAG_W + 16
-    sl_y = TOP + BTN_H + 30
+    # ========== SECOND ROW: Freeze Hotkey + Slider ==========
+    row2_y = TOP + BTN_H + 30
+
+    # --- 冻结快捷键 ---
+    fk_x = DRAG_W + 16
+    fk_tag = "tfk"
+    fk_state = {"key": freeze_hotkey or ""}
+
+    c.create_text(fk_x, row2_y, text="冻结键",
+                  font=(FF, 9, "bold"), fill="#AAA", anchor="w")
+
+    _FK_BTN_W = 90
+    _FK_BTN_H = 26
+    fk_btn_x = fk_x + 52
+    fk_btn_y = row2_y - _FK_BTN_H // 2
+
+    rrect(c, fk_btn_x, fk_btn_y, _FK_BTN_W, _FK_BTN_H, 6,
+          fill=C_CYBER, outline="", tags=(fk_tag, fk_tag + "_bg"))
+    display_key = fk_state["key"].upper() if fk_state["key"] else "未设置"
+    c.create_text(fk_btn_x + _FK_BTN_W // 2, row2_y, text=display_key,
+                  font=(FF, -14, "bold"), fill="#E0E0E0", tags=(fk_tag, "fk_text"))
+
+    def _fk_en(e): i = c.find_withtag(fk_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_CYBER_H)
+    def _fk_lv(e): i = c.find_withtag(fk_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_CYBER)
+    c.tag_bind(fk_tag, "<Enter>", _fk_en)
+    c.tag_bind(fk_tag, "<Leave>", _fk_lv)
+
+    def _on_fk_click():
+        from ui.virtual_keyboard import open_key_picker
+        def _on_pick(new_key):
+            fk_state["key"] = new_key
+            c.itemconfigure("fk_text", text=new_key.upper() if new_key else "未设置")
+            if on_freeze_hotkey_change:
+                on_freeze_hotkey_change(new_key)
+        open_key_picker(top, _on_pick, current=fk_state["key"])
+
+    c.tag_bind(fk_tag, "<Button-1>", lambda e: _on_fk_click())
+
+    # --- Separator ---
+    fk_sep_x = fk_btn_x + _FK_BTN_W + 14
+    c.create_line(fk_sep_x, row2_y - 10, fk_sep_x, row2_y + 10, fill="#444", width=1)
+
+    # --- 透明度滑块 ---
+    sl_x = fk_sep_x + 14
+    sl_y = row2_y
     c.create_text(sl_x, sl_y, text="\u900f\u660e\u5ea6",
                   font=(FF, 9, "bold"), fill="#AAA", anchor="w")
 

@@ -26,12 +26,18 @@ from core.config_manager import (
 from ui.canvas_renderer import (
     draw_button, update_button_coords, set_button_visual_state,
     draw_control_ui, draw_floating_ball,
-    init_cursor, update_cursor, remove_cursor,
+    init_cursor, update_cursor, remove_cursor, switch_cursor_mode,
     preview_button_transparency, draw_grid,
     draw_charge_bar, remove_charge_bar,
 )
 from ui.edit_panel import create_toolbar_window, destroy_toolbar_window, open_button_editor
-from core.input_engine import trigger, is_key_pressed, install_wheel_hook, uninstall_wheel_hook, poll_wheel_events
+from core.input_engine import (
+    trigger, is_key_pressed,
+    install_wheel_hook, uninstall_wheel_hook, poll_wheel_events,
+    set_mouse_freeze, is_mouse_frozen, poll_mouse_deltas,
+    get_freeze_anchor,
+)
+from core.constants import DEFAULT_FREEZE_HOTKEY
 
 # Windows API
 user32 = ctypes.windll.user32
@@ -61,6 +67,7 @@ class FloatingApp:
         self.ball_x = config['ball_x']
         self.ball_y = config['ball_y']
         self.click_through = config['click_through']
+        self.freeze_hotkey = config.get('freeze_hotkey', DEFAULT_FREEZE_HOTKEY)
 
         # 运行时状态
         self.current_mode = 'main'  # 'main' | 'run'
@@ -83,6 +90,12 @@ class FloatingApp:
         self.ball_win_start_y = 0
         self.ball_click_time = 0
         self.dragging_ball = False
+
+        # 光标冻结模式状态
+        self.mouse_freeze = False
+        self.virtual_cursor_x = self.screen_w // 2
+        self.virtual_cursor_y = self.screen_h // 2
+        self._freeze_toggle_cooldown = 0  # 防抖时间戳
 
         # 窗口初始化 — 全屏无边框
         self.root.overrideredirect(True)
@@ -179,6 +192,8 @@ class FloatingApp:
             on_switch_profile=self.switch_profile,
             on_edit_passthrough=self.toggle_edit_passthrough,
             edit_passthrough=self.edit_passthrough,
+            freeze_hotkey=self.freeze_hotkey,
+            on_freeze_hotkey_change=self.set_freeze_hotkey,
         )
         # 确保工具栏在主窗口之上
         if self.toolbar_win:
@@ -251,6 +266,11 @@ class FloatingApp:
 
     def to_edit(self):
         """切换到编辑模式。"""
+        # 自动关闭冻结模式
+        if self.mouse_freeze:
+            self.mouse_freeze = False
+            set_mouse_freeze(False)
+            switch_cursor_mode(self.canvas, False)
         self.current_mode = 'main'
         self.is_hidden = False
         self.edit_passthrough = False  # 重置穿透开关
@@ -401,22 +421,65 @@ class FloatingApp:
             if self.current_mode == 'run':
                 # 0. 全局快捷键检测 (F12)
                 if is_key_pressed('f12'):
+                    # 退出冻结模式（如果开着的话）
+                    if self.mouse_freeze:
+                        self.mouse_freeze = False
+                        set_mouse_freeze(False)
+                        switch_cursor_mode(self.canvas, False)
                     self.to_edit()
-                    # 避免按键重复触发，稍微延迟
                     time.sleep(0.3)
                     self.root.after(1, self.update_loop)
                     return
 
+                # 0b. 冻结快捷键检测 (toggle)
+                now_ts = time.time()
+                if self.freeze_hotkey and is_key_pressed(self.freeze_hotkey):
+                    if now_ts - self._freeze_toggle_cooldown > 0.3:
+                        self._freeze_toggle_cooldown = now_ts
+                        self.mouse_freeze = not self.mouse_freeze
+                        set_mouse_freeze(self.mouse_freeze)
+                        if self.mouse_freeze:
+                            # 冻结 ON：TeggTouch 变为前台拦截层
+                            ax, ay = self.root.winfo_pointerxy()
+                            self.virtual_cursor_x = ax - self.win_x
+                            self.virtual_cursor_y = ay - self.win_y
+                            self.set_window_style('no_focus')  # 拦截点击，不传给游戏
+                        else:
+                            # 冻结 OFF：恢复用户原有穿透设置
+                            if self.click_through:
+                                self.set_window_style('click_through')
+                            else:
+                                self.set_window_style('no_focus')
+                        switch_cursor_mode(self.canvas, self.mouse_freeze)
+
                 # 1. 窗口置顶保活
                 self.root.lift()
 
-                # 2. 获取鼠标绝对/相对位置 (全屏下 rel = abs)
-                abs_x, abs_y = self.root.winfo_pointerxy()
-                rel_x = abs_x - self.win_x
-                rel_y = abs_y - self.win_y
+                # 2. 获取鼠标位置（冻结模式用虚拟光标，否则用 OS 光标）
+                if self.mouse_freeze:
+                    # 累加增量到虚拟光标
+                    for dx, dy in poll_mouse_deltas():
+                        self.virtual_cursor_x += dx
+                        self.virtual_cursor_y += dy
+                    # 钳位
+                    self.virtual_cursor_x = max(0, min(self.screen_w - 1, self.virtual_cursor_x))
+                    self.virtual_cursor_y = max(0, min(self.screen_h - 1, self.virtual_cursor_y))
+                    rel_x = self.virtual_cursor_x
+                    rel_y = self.virtual_cursor_y
+                    abs_x = rel_x + self.win_x
+                    abs_y = rel_y + self.win_y
 
-                # 3. 智能穿透判定 (仅当开启穿透模式时)
-                if self.click_through and not self.is_hidden:
+                    # 低频修正 OS 光标漂移（从钩子移到这里，避免阻塞钩子回调）
+                    anchor = get_freeze_anchor()
+                    if anchor:
+                        user32.SetCursorPos(anchor[0], anchor[1])
+                else:
+                    abs_x, abs_y = self.root.winfo_pointerxy()
+                    rel_x = abs_x - self.win_x
+                    rel_y = abs_y - self.win_y
+
+                # 3. 智能穿透判定 (仅当开启穿透模式时，冻结模式下跳过)
+                if self.click_through and not self.is_hidden and not self.mouse_freeze:
                     is_on_ui = False
 
                     # 检查系统按钮区域
@@ -818,6 +881,11 @@ class FloatingApp:
             set_window_style=self.set_window_style
         )
 
+    def set_freeze_hotkey(self, new_key):
+        """更新冻结快捷键。"""
+        self.freeze_hotkey = new_key
+        logger.info(f"冻结快捷键更新为: {new_key}")
+
     def set_alpha(self, v):
         self.transparency = int(v) / 100.0
         # 编辑/运行模式统一：直接设置窗口级透明度
@@ -857,6 +925,7 @@ class FloatingApp:
         self.ball_x = config['ball_x']
         self.ball_y = config['ball_y']
         self.click_through = config['click_through']
+        self.freeze_hotkey = config.get('freeze_hotkey', DEFAULT_FREEZE_HOTKEY)
         
         # 4. 刷新界面
         self.redraw_all()
@@ -876,6 +945,7 @@ class FloatingApp:
             ball_x=self.ball_x,
             ball_y=self.ball_y,
             click_through=self.click_through,
+            freeze_hotkey=self.freeze_hotkey,
             is_hidden=self.is_hidden,
             saved_geometry=self.fullscreen_geo,
             root=self.root

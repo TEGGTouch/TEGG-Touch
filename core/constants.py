@@ -57,6 +57,9 @@ BTN_RADIUS = 10               # 按钮圆角半径
 # 轮询间隔 (ms) — 约 120fps，兼顾流畅与 CPU 占用
 UPDATE_INTERVAL = 8
 
+# === 光标冻结模式 ===
+DEFAULT_FREEZE_HOTKEY = 'f10'  # 默认冻结快捷键
+
 # === 默认按钮配置 ===
 DEFAULT_BUTTONS = [
     {

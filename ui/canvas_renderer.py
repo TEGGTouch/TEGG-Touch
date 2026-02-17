@@ -341,24 +341,49 @@ from PIL import Image, ImageTk
 
 # 全局引用，防止 GC 回收
 _cursor_photo = None
+_cursor_freeze_photo = None
+_current_cursor_mode = 'normal'  # 'normal' | 'freeze'
 
 def _get_cursor_image():
-    """加载光标 PNG 图片，返回 ImageTk.PhotoImage。"""
+    """加载普通光标 PNG 图片，返回 ImageTk.PhotoImage。"""
     global _cursor_photo
     if _cursor_photo is None:
-        # 兼容打包和开发环境的路径查找
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         path = os.path.join(base, "assets", "cursor.png")
         img = Image.open(path).convert("RGBA")
         _cursor_photo = ImageTk.PhotoImage(img)
     return _cursor_photo
 
+def _get_freeze_cursor_image():
+    """加载冻结模式光标 PNG 图片，返回 ImageTk.PhotoImage。"""
+    global _cursor_freeze_photo
+    if _cursor_freeze_photo is None:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(base, "assets", "cursor_freeze.png")
+        img = Image.open(path).convert("RGBA")
+        _cursor_freeze_photo = ImageTk.PhotoImage(img)
+    return _cursor_freeze_photo
+
 def init_cursor(canvas):
     """初始化虚拟光标（使用自定义 PNG 图片）。"""
+    global _current_cursor_mode
+    _current_cursor_mode = 'normal'
     photo = _get_cursor_image()
     canvas.create_image(
         -100, -100, image=photo, anchor="nw", tags="v_cursor",
     )
+    canvas.tag_raise("v_cursor")
+
+
+def switch_cursor_mode(canvas, freeze: bool):
+    """切换虚拟光标图片：freeze=True 用冻结图标，False 用普通图标。"""
+    global _current_cursor_mode
+    new_mode = 'freeze' if freeze else 'normal'
+    if new_mode == _current_cursor_mode:
+        return
+    _current_cursor_mode = new_mode
+    photo = _get_freeze_cursor_image() if freeze else _get_cursor_image()
+    canvas.itemconfigure("v_cursor", image=photo)
     canvas.tag_raise("v_cursor")
 
 
@@ -370,4 +395,6 @@ def update_cursor(canvas, x, y):
 
 def remove_cursor(canvas):
     """移除虚拟光标。"""
+    global _current_cursor_mode
+    _current_cursor_mode = 'normal'
     canvas.delete("v_cursor")

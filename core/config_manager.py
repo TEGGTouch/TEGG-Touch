@@ -15,6 +15,7 @@ from .constants import (
     DEFAULT_BUTTONS, MIN_WINDOW_SIZE, RUNTIME_FIELDS,
     BUTTON_OPTIONAL_DEFAULTS,
     PROFILES_DIR, PROFILES_INDEX, DEFAULT_PROFILE_NAME,
+    DEFAULT_FREEZE_HOTKEY,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,7 @@ def load_config_from_file(filepath: str) -> dict:
         'ball_x': None,
         'ball_y': None,
         'click_through': False,
+        'freeze_hotkey': DEFAULT_FREEZE_HOTKEY,
     }
     if not os.path.exists(filepath):
         return result
@@ -133,6 +135,7 @@ def load_config_from_file(filepath: str) -> dict:
         result['ball_x'] = data.get('ball_x', None)
         result['ball_y'] = data.get('ball_y', None)
         result['click_through'] = data.get('click_through', False)
+        result['freeze_hotkey'] = data.get('freeze_hotkey', DEFAULT_FREEZE_HOTKEY)
         buttons = data.get('buttons', None)
         if buttons is not None:
             result['buttons'] = [_ensure_button_fields(b) for b in buttons]
@@ -144,6 +147,7 @@ def load_config_from_file(filepath: str) -> dict:
 
 def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                         ball_x=None, ball_y=None, click_through=False,
+                        freeze_hotkey=None,
                         is_hidden=False, saved_geometry=None, root=None) -> bool:
     """保存配置到指定文件。"""
     geo_to_save = saved_geometry or geometry
@@ -171,6 +175,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         'ball_x': ball_x,
         'ball_y': ball_y,
         'click_through': click_through,
+        'freeze_hotkey': freeze_hotkey or DEFAULT_FREEZE_HOTKEY,
     }
 
     try:
