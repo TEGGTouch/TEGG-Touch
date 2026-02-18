@@ -1,6 +1,6 @@
 {
-  "geometry": "2560x1600+0+0",
-  "transparency": 0.55,
+  "geometry": "2560x1440+0+0",
+  "transparency": 0.9,
   "buttons": [
     {
       "x": 1300,
@@ -18,8 +18,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1400,
-      "y": 900,
+      "x": 600,
+      "y": 1100,
       "w": 100,
       "h": 100,
       "name": "↘️",
@@ -352,11 +352,11 @@
       "y": 900,
       "w": 100,
       "h": 100,
-      "name": "按钮",
+      "name": "无职",
       "hover": "",
       "lclick": "",
       "rclick": "",
-      "mclick": "",
+      "mclick": "a",
       "wheelup": "",
       "wheeldown": "",
       "hover_delay": 200,
@@ -573,8 +573,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 600,
-      "y": 1000,
+      "x": 1000,
+      "y": 1100,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -635,6 +635,6 @@
   ],
   "ball_x": 531,
   "ball_y": 328,
-  "click_through": true,
+  "click_through": false,
   "freeze_hotkey": "f10"
 }

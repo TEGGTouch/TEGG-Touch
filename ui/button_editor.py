@@ -211,7 +211,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         c.create_text(ccx, ccy, text="\u2715", font=(FF, FS, "bold"), fill="#FFF", tags=("close",))
     c.tag_bind("close", "<Enter>", lambda e: c.itemconfigure("close_bg", fill=C_CLOSE_H))
     c.tag_bind("close", "<Leave>", lambda e: c.itemconfigure("close_bg", fill=C_CLOSE))
-    c.tag_bind("close", "<Button-1>", lambda e: top.destroy())
+    c.tag_bind("close", "<ButtonRelease-1>", lambda e: top.destroy())
 
     # ── 通栏 Tip（标题下方）──
     tip_y = 50
@@ -420,6 +420,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
 
         def _on_slider_click(e):
             v = int((e.x - track_x) / track_w * 1000)
+            v = round(v / 10) * 10  # 10ms 步长
             v = max(0, min(v, 1000))
             _update_slider_visual(v)
             if not _syncing[0]:
@@ -494,7 +495,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
                   font=(FF, FS), fill="white", tags=("del",))
     c.tag_bind("del", "<Enter>", lambda e: c.itemconfigure("del_bg", fill="#8B2020"))
     c.tag_bind("del", "<Leave>", lambda e: c.itemconfigure("del_bg", fill="#6E1E1E"))
-    c.tag_bind("del", "<Button-1>", lambda e: [on_delete(btn), top.destroy()])
+    c.tag_bind("del", "<ButtonRelease-1>", lambda e: [on_delete(btn), top.destroy()])
 
     # 保存（蓝色，与工具栏方案选择按钮同色）
     save_x = PADDING + half_w + btn_gap
@@ -522,7 +523,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
                 btn[k] = widget.get()
         on_save(btn)
         top.destroy()
-    c.tag_bind("save", "<Button-1>", do_save)
+    c.tag_bind("save", "<ButtonRelease-1>", do_save)
 
     # 复制
     copy_y = row2_y - btn_gap - btn_h
@@ -541,7 +542,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
                       font=(FF, FS, "bold"), fill="#E0E0E0", tags=("copy",))
     c.tag_bind("copy", "<Enter>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY_H))
     c.tag_bind("copy", "<Leave>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY))
-    c.tag_bind("copy", "<Button-1>", lambda e: [on_copy(btn), top.destroy()])
+    c.tag_bind("copy", "<ButtonRelease-1>", lambda e: [on_copy(btn), top.destroy()])
 
     # =================================================================
     #  RIGHT COLUMN: Key Palette (scrollable)
@@ -556,7 +557,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     right_container.lift()
 
     right_canvas = tk.Canvas(right_container, bg=C_PM_BG, highlightthickness=0)
-    right_scrollbar = tk.Scrollbar(right_container, orient="vertical", command=right_canvas.yview)
+    # right_scrollbar = tk.Scrollbar(right_container, orient="vertical", command=right_canvas.yview)
     right_inner = tk.Frame(right_canvas, bg=C_PM_BG)
 
     right_inner.bind("<Configure>",
@@ -566,9 +567,9 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     def _on_rc_configure(e):
         right_canvas.itemconfig(cw_id, width=e.width)
     right_canvas.bind("<Configure>", _on_rc_configure)
-    right_canvas.configure(yscrollcommand=right_scrollbar.set)
+    # right_canvas.configure(yscrollcommand=right_scrollbar.set)
     right_canvas.pack(side="left", fill="both", expand=True)
-    right_scrollbar.pack(side="right", fill="y")
+    # right_scrollbar.pack(side="right", fill="y")
 
     def _on_mw(event):
         if right_canvas.yview() != (0.0, 1.0):

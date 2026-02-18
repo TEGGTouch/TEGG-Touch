@@ -1,7 +1,7 @@
 """
 TEGG Touch 辅助软件 - 主应用类
 
-负责窗口管理、模式切换、事件分发。
+负责88、模式切换、事件分发。
 编辑模式和运行模式均为全屏覆盖。
 """
 
@@ -25,6 +25,7 @@ from core.config_manager import (
 )
 from ui.canvas_renderer import (
     draw_button, update_button_coords, set_button_visual_state,
+<<<<<<< Updated upstream
     draw_control_ui, draw_floating_ball,
     init_cursor, update_cursor, remove_cursor, switch_cursor_mode,
     preview_button_transparency, draw_grid,
@@ -38,6 +39,16 @@ from core.input_engine import (
     get_freeze_anchor,
 )
 from core.constants import DEFAULT_FREEZE_HOTKEY
+=======
+    draw_floating_ball,
+    init_cursor, update_cursor, remove_cursor,
+    preview_button_transparency, draw_grid,
+    draw_charge_bar, remove_charge_bar,
+)
+from ui.toolbar import create_toolbar_window, destroy_toolbar_window, create_run_toolbar
+from ui.button_editor import open_button_editor
+from core.input_engine import trigger, is_key_pressed, install_wheel_hook, uninstall_wheel_hook, poll_wheel_events
+>>>>>>> Stashed changes
 
 # Windows API
 user32 = ctypes.windll.user32
@@ -111,8 +122,9 @@ class FloatingApp:
         # 安装全局滚轮钩子（硬件级，不依赖窗口焦点）
         install_wheel_hook()
 
-        # 独立工具栏窗口（编辑模式时创建）
-        self.toolbar_win = None
+        # 独立工具栏窗口
+        self.toolbar_win = None       # 编辑模式工具栏
+        self.run_toolbar_win = None   # 运行模式工具栏
 
         # 窗口位置缓存 (全屏模式下固定)
         self.win_x = 0
@@ -178,7 +190,7 @@ class FloatingApp:
     # ─── 模式切换 ────────────────────────────────────────────
 
     def _show_toolbar(self):
-        """创建独立工具栏窗口。"""
+        """创建编辑工具栏窗口。"""
         destroy_toolbar_window(self.toolbar_win)
         self.toolbar_win = create_toolbar_window(
             self.root, self.screen_w, self.screen_h,
@@ -195,21 +207,40 @@ class FloatingApp:
             freeze_hotkey=self.freeze_hotkey,
             on_freeze_hotkey_change=self.set_freeze_hotkey,
         )
-        # 确保工具栏在主窗口之上
         if self.toolbar_win:
             self.toolbar_win.lift()
             self.toolbar_win.after(100, self.toolbar_win.lift)
 
     def _hide_toolbar(self):
-        """销毁独立工具栏窗口。"""
+        """销毁编辑工具栏窗口。"""
         destroy_toolbar_window(self.toolbar_win)
         self.toolbar_win = None
+
+    def _show_run_toolbar(self):
+        """创建运行工具栏窗口。"""
+        destroy_toolbar_window(self.run_toolbar_win)
+        self.run_toolbar_win = create_run_toolbar(
+            self.root, self.screen_w, self.screen_h,
+            on_edit=self.to_edit,
+            on_passthrough=self.toggle_click_through_sync, # 同步状态
+            click_through=self.click_through,
+            set_window_style=self.set_window_style
+        )
+        if self.run_toolbar_win:
+            self.run_toolbar_win.lift()
+            self.run_toolbar_win.after(100, self.run_toolbar_win.lift)
+
+    def _hide_run_toolbar(self):
+        """销毁运行工具栏窗口。"""
+        destroy_toolbar_window(self.run_toolbar_win)
+        self.run_toolbar_win = None
 
     def setup_ui_mode(self):
         """根据 current_mode 设置界面。"""
         if self.current_mode == 'main':
-            # === 编辑模式：全屏透明背景（只显示按钮+网格） ===
-            self._hide_toolbar()  # 先清理
+            # === 编辑模式 ===
+            self._hide_run_toolbar() # 隐藏运行工具栏
+            
             self.root.overrideredirect(True)
             self.root.geometry(self.fullscreen_geo)
             self.root.attributes("-alpha", self.transparency)
@@ -218,21 +249,19 @@ class FloatingApp:
             self.root.wm_attributes("-transparentcolor", COLOR_TRANSPARENT)
             self.set_window_style('normal')
 
-            # 恢复系统光标 + 创建独立不透明工具栏
             self.root.config(cursor="")
-            self._show_toolbar()
+            self._show_toolbar() # 显示编辑工具栏
             remove_cursor(self.canvas)
 
-            # 更新缓存
             self.win_x = 0
             self.win_y = 0
             self.win_w = self.screen_w
             self.win_h = self.screen_h
 
         elif self.current_mode == 'run':
-            # === 运行模式：全屏透明穿透 ===
-            self.save_config()  # 自动保存
-            self._hide_toolbar()
+            # === 运行模式 ===
+            self.save_config()
+            self._hide_toolbar() # 隐藏编辑工具栏
 
             self.root.overrideredirect(True)
             self.root.geometry(self.fullscreen_geo)
@@ -241,17 +270,15 @@ class FloatingApp:
             self.canvas.configure(bg=COLOR_TRANSPARENT)
             self.root.wm_attributes("-transparentcolor", COLOR_TRANSPARENT)
 
-            # 根据配置决定初始穿透状态
-            if self.click_through:
-                self.set_window_style('click_through')
-            else:
-                self.set_window_style('no_focus')
+            # 无论配置中是否开启穿透，初始化时都先设为 no_focus (拦截点击)
+            # 这样保证按钮能点击、光标能显示。
+            # 如果开启了穿透，update_loop 会在下一帧根据鼠标位置自动切为穿透。
+            self.set_window_style('no_focus')
 
-            # 隐藏系统光标（避免与虚拟光标重叠）
             self.root.config(cursor="none")
+            self._show_run_toolbar() # 显示运行工具栏
             init_cursor(self.canvas)
 
-            # 更新缓存
             self.win_x = 0
             self.win_y = 0
             self.win_w = self.screen_w
@@ -273,8 +300,7 @@ class FloatingApp:
             switch_cursor_mode(self.canvas, False)
         self.current_mode = 'main'
         self.is_hidden = False
-        self.edit_passthrough = False  # 重置穿透开关
-        # 恢复全屏
+        self.edit_passthrough = False
         self.root.geometry(self.fullscreen_geo)
         self.redraw_all()
         self.setup_ui_mode()
@@ -282,8 +308,8 @@ class FloatingApp:
     def to_hide(self):
         """切换到隐藏(悬浮球)模式。"""
         self.is_hidden = True
+        self._hide_run_toolbar() # 隐藏运行工具栏
 
-        # 计算悬浮球位置
         tx = self.screen_w // 2 - 40
         ty = self.screen_h // 2 - 40
         if self.ball_x is not None and self.ball_y is not None:
@@ -291,18 +317,17 @@ class FloatingApp:
 
         self.root.geometry(f"80x80+{tx}+{ty}")
         self.redraw_all()
-        self.set_window_style('no_focus')  # 悬浮球必须能点
+        self.set_window_style('no_focus')
 
     def to_show(self):
         """从悬浮球展开。"""
-        # 记录球的位置
         self.ball_x = self.root.winfo_x()
         self.ball_y = self.root.winfo_y()
 
         self.is_hidden = False
         self.root.geometry(self.fullscreen_geo)
         self.redraw_all()
-        self.setup_ui_mode()  # 恢复原来的模式(通常是run)
+        self.setup_ui_mode()
 
     # ─── 绘制逻辑 ────────────────────────────────────────────
 
@@ -331,13 +356,8 @@ class FloatingApp:
             if self.current_mode == 'main':
                 self.bind_edit_events(idx)
 
-        # 绘制系统UI
+        # 运行模式不再绘制 Control UI (已移至独立工具栏)
         if self.current_mode == 'run':
-            draw_control_ui(self.canvas, self.click_through)
-            self.canvas.tag_bind("exit_btn_ui", "<Button-1>", lambda e: self.to_edit())
-            self.canvas.tag_bind("hide_btn_ui", "<Button-1>", lambda e: self.to_hide())
-            self.canvas.tag_bind("ct_btn_ui", "<Button-1>", lambda e: self.toggle_click_through())
-
             init_cursor(self.canvas)
 
     def bind_ball_events(self):
@@ -377,7 +397,6 @@ class FloatingApp:
         if self.dragging_ball:
             new_x = self.ball_win_start_x + dx
             new_y = self.ball_win_start_y + dy
-            # 边界检查
             new_x = max(0, min(new_x, self.screen_w - 80))
             new_y = max(0, min(new_y, self.screen_h - 80))
             self.root.geometry(f"80x80+{new_x}+{new_y}")
@@ -391,33 +410,24 @@ class FloatingApp:
 
     def on_btn_drag(self, e, idx):
         btn = self.buttons[idx]
-        # 原始计算坐标
         raw_x = max(0, min(self.win_w - btn['w'], e.x - btn['w'] / 2))
         raw_y = max(0, min(self.win_h - btn['h'], e.y - btn['h'] / 2))
-
-        # 网格吸附
         btn['x'] = round(raw_x / GRID_SIZE) * GRID_SIZE
         btn['y'] = round(raw_y / GRID_SIZE) * GRID_SIZE
-
         update_button_coords(self.canvas, btn)
 
     def on_btn_resize(self, e, idx):
         btn = self.buttons[idx]
-        # 原始计算宽高
         raw_w = max(GRID_SIZE, e.x - btn['x'])
         raw_h = max(GRID_SIZE, e.y - btn['y'])
-
-        # 网格吸附
         btn['w'] = round(raw_w / GRID_SIZE) * GRID_SIZE
         btn['h'] = round(raw_h / GRID_SIZE) * GRID_SIZE
-
         update_button_coords(self.canvas, btn)
 
     # ─── 核心循环 (Core Loop) ────────────────────────────────
 
     def update_loop(self):
         try:
-            # 运行模式下的硬件检测
             if self.current_mode == 'run':
                 # 0. 全局快捷键检测 (F12)
                 if is_key_pressed('f12'):
@@ -431,6 +441,7 @@ class FloatingApp:
                     self.root.after(1, self.update_loop)
                     return
 
+<<<<<<< Updated upstream
                 # 0b. 冻结快捷键检测 (toggle)
                 now_ts = time.time()
                 if self.freeze_hotkey and is_key_pressed(self.freeze_hotkey):
@@ -485,7 +496,29 @@ class FloatingApp:
                     # 检查系统按钮区域
                     if 10 <= rel_x <= 280 and 10 <= rel_y <= 50:
                         is_on_ui = True
+=======
+                # 1. 窗口置顶
+                self.root.lift()
+
+                # 2. 获取鼠标
+                abs_x, abs_y = self.root.winfo_pointerxy()
+                rel_x = abs_x - self.win_x
+                rel_y = abs_y - self.win_y
+
+                # 3. 智能穿透判定
+                # 注意：独立工具栏窗口是单独的 Toplevel，其属性在创建时已设为 normal (阻拦点击)，
+                # 不受此处主窗口样式控制，因此工具栏永远可交互。
+                if not self.is_hidden:
+                    if self.click_through:
+                        # 开启穿透模式：主窗口(含按钮)全穿透，不可点击，让用户操作游戏
+                        # 但为了能显示虚拟光标，我们必须保持 WS_EX_TRANSPARENT + WS_EX_LAYERED
+                        # 这里的 'click_through' 样式已经包含了 WS_EX_TRANSPARENT
+                        if self.is_window_solid:
+                            self.set_window_style('click_through')
+>>>>>>> Stashed changes
                     else:
+                        # 关闭穿透模式：按钮阻拦点击，空白穿透
+                        is_on_ui = False
                         # 检查用户按钮
                         for btn in self.buttons:
                             if btn.get('deleted'):
@@ -494,31 +527,63 @@ class FloatingApp:
                                     btn['y'] <= rel_y < btn['y'] + btn['h']):
                                 is_on_ui = True
                                 break
+                        
+                        # 检查是否在工具栏区域 (虽然工具栏是独立窗口，但为了保险起见，
+                        # 如果主窗口有遮挡，也需要考虑。不过主窗口全屏覆盖，工具栏在TopMost层级更高)
+                        # 这里只关心主窗口的按钮交互
 
-                    # 状态切换
-                    if is_on_ui and not self.is_window_solid:
-                        self.set_window_style('no_focus')
-                    elif not is_on_ui and self.is_window_solid:
-                        self.set_window_style('click_through')
+                        if is_on_ui and not self.is_window_solid:
+                            self.set_window_style('no_focus')
+                        elif not is_on_ui and self.is_window_solid:
+                            self.set_window_style('click_through')
 
                 # 4. 更新虚拟光标
-                if not self.is_hidden and 0 <= rel_x <= self.win_w and 0 <= rel_y <= self.win_h:
-                    update_cursor(self.canvas, rel_x, rel_y)
+                # 策略：如果鼠标在工具栏上方，则隐藏主窗口光标（因为工具栏自己会画光标）
+                # 否则，显示主窗口光标
+                hide_cursor = False
+                if self.run_toolbar_win and self.run_toolbar_win.winfo_exists():
+                    # 获取工具栏位置和大小
+                    tb_x = self.run_toolbar_win.winfo_rootx()
+                    tb_y = self.run_toolbar_win.winfo_rooty()
+                    tb_w = self.run_toolbar_win.winfo_width()
+                    tb_h = self.run_toolbar_win.winfo_height()
+                    
+                    # 检查鼠标是否在工具栏范围内
+                    if (tb_x <= abs_x < tb_x + tb_w) and (tb_y <= abs_y < tb_y + tb_h):
+                        hide_cursor = True
+
+                # 无论是否开启穿透，只要不在工具栏上，就应该在主窗口绘制光标
+                # 注意：如果开启了 click_through (全穿透)，主窗口实际上接收不到鼠标事件，
+                # 但这里的 update_loop 是基于全局鼠标位置 (winfo_pointerxy) 运行的，
+                # 所以只要窗口还在顶层（即使穿透），我们仍然可以通过 Canvas 绘制光标。
+                # 唯一的问题是：如果窗口完全穿透 (WS_EX_TRANSPARENT)，Canvas 还能显示内容吗？
+                # 答案是：WS_EX_TRANSPARENT 让鼠标事件穿透，但绘制内容仍然可见。
+                
+                # 修正逻辑：
+                # 1. 如果在工具栏上，主窗口不画光标 (hide_cursor=True)
+                # 2. 如果不在工具栏上，且未隐藏(悬浮球)，则始终更新光标位置
+                
+                if not self.is_hidden and not hide_cursor:
+                    # 确保光标在屏幕范围内
+                    if 0 <= rel_x <= self.win_w and 0 <= rel_y <= self.win_h:
+                        update_cursor(self.canvas, rel_x, rel_y)
+                    else:
+                        remove_cursor(self.canvas)
                 else:
                     remove_cursor(self.canvas)
 
-                # 5. 硬件按键状态检测
+                # 5. 硬件按键
                 left_down = (user32.GetAsyncKeyState(0x01) & 0x8000) != 0
                 right_down = (user32.GetAsyncKeyState(0x02) & 0x8000) != 0
                 middle_down = (user32.GetAsyncKeyState(0x04) & 0x8000) != 0
 
-                # 6. 处理点击/悬浮逻辑
+                # 6. 处理点击/悬浮
                 if self.is_hidden:
                     self.handle_hidden_interaction(abs_x, abs_y, rel_x, rel_y, left_down)
                 else:
                     self.handle_run_interaction(rel_x, rel_y, left_down, right_down, middle_down)
 
-                # 7. 更新历史状态
+                # 7. 更新状态
                 self.left_was_down = left_down
                 self.right_was_down = right_down
                 self.middle_was_down = middle_down
@@ -551,18 +616,8 @@ class FloatingApp:
         """处理运行模式下的交互。"""
         now = time.time()
 
-        # 系统按钮检测 (左键点击)
-        if left_down and not self.left_was_down:
-            if 10 <= rel_x <= 90 and 10 <= rel_y <= 45:
-                self.to_edit()
-                return
-            if 100 <= rel_x <= 180 and 10 <= rel_y <= 45:
-                self.to_hide()
-                return
-            if 190 <= rel_x <= 270 and 10 <= rel_y <= 45:
-                self.toggle_click_through()
-                return
-
+        # 系统按钮检测已移除 (交由独立工具栏处理)
+        
         # ── 滚轮事件处理（硬件级钩子） ──
         wheel_events = poll_wheel_events()
         for direction, wx, wy in wheel_events:
@@ -576,7 +631,6 @@ class FloatingApp:
                     key = btn.get('wheelup') if direction == 'up' else btn.get('wheeldown')
                     if key:
                         trigger(key, 'c')
-                        # 视觉反馈 + 闪烁保护时间戳
                         wheel_state = 'active_wheelup' if direction == 'up' else 'active_wheeldown'
                         set_button_visual_state(self.canvas, btn, wheel_state)
                         btn['last_visual_state'] = wheel_state
@@ -589,16 +643,11 @@ class FloatingApp:
 
             in_rect = (btn['x'] <= rel_x < btn['x'] + btn['w'] and
                        btn['y'] <= rel_y < btn['y'] + btn['h'])
-
-            # 获取悬停延迟配置 (ms)
             hover_delay = btn.get('hover_delay', 0)
 
-            # 滚轮闪烁保护：在闪烁期内跳过视觉状态更新
             if now < btn.get('_wheel_flash_until', 0):
-                # 仍然处理 hover/click 触发逻辑，只是不覆盖颜色
                 if in_rect:
-                    # 悬停延迟逻辑（滚轮闪烁期间也需要）
-                    if not btn.get('active_hover'):
+                    if not btn.get('active_hover') and btn.get('hover'):
                         if hover_delay <= 0:
                             btn['active_hover'] = True
                             trigger(btn['hover'], 'p')
@@ -637,7 +686,6 @@ class FloatingApp:
                                 btn['active_hover'] = False
                                 btn['_hover_release_time'] = None
                                 trigger(btn['hover'], 'r')
-                    # 清除充能状态
                     if btn.get('_hover_enter_time') is not None:
                         btn['_hover_enter_time'] = None
                         btn['_hover_charged'] = False
@@ -645,8 +693,6 @@ class FloatingApp:
                             remove_charge_bar(self.canvas, btn)
                 continue
 
-            # 状态判定：hover 仅在 active_hover 为 True 时显示
-            # 充能期间保持 normal，由 charge bar 提供视觉反馈
             target_state = 'normal'
             if in_rect:
                 if btn.get('active_hover'):
@@ -658,31 +704,24 @@ class FloatingApp:
                 elif middle_down:
                     target_state = 'active_middle'
 
-            # 视觉更新 (仅当状态改变时)
             if btn.get('last_visual_state') != target_state:
                 set_button_visual_state(self.canvas, btn, target_state)
                 btn['last_visual_state'] = target_state
 
-            # 触发逻辑
             release_delay = btn.get('hover_release_delay', 0)
 
             if in_rect:
-                # ── 如果正在释放倒计时，鼠标重新进入：取消释放 ──
                 if btn.get('_hover_release_time') is not None:
                     btn['_hover_release_time'] = None
                     remove_charge_bar(self.canvas, btn)
-                    # active_hover 仍然为 True，恢复 hover 视觉
                     set_button_visual_state(self.canvas, btn, 'hover')
                     btn['last_visual_state'] = 'hover'
 
-                # ── 悬停延迟触发 ──
-                if not btn.get('active_hover'):
+                if not btn.get('active_hover') and btn.get('hover'):
                     if hover_delay <= 0:
-                        # 无延迟：立即触发
                         btn['active_hover'] = True
                         trigger(btn['hover'], 'p')
                     else:
-                        # 有延迟：充能模式
                         if btn.get('_hover_enter_time') is None:
                             btn['_hover_enter_time'] = now
                             btn['_hover_charged'] = False
@@ -693,16 +732,13 @@ class FloatingApp:
                             draw_charge_bar(self.canvas, btn, progress)
 
                             if progress >= 1.0:
-                                # 充能完成！触发 press
                                 btn['_hover_charged'] = True
                                 btn['active_hover'] = True
                                 remove_charge_bar(self.canvas, btn)
                                 trigger(btn['hover'], 'p')
-                                # 立刻更新为 hover 视觉
                                 set_button_visual_state(self.canvas, btn, 'hover')
                                 btn['last_visual_state'] = 'hover'
 
-                # ── 鼠标按键触发 ──
                 if left_down and not self.left_was_down:
                     self.holding_btn_left = idx
                     trigger(btn['lclick'], 'p')
@@ -713,15 +749,12 @@ class FloatingApp:
                     self.holding_btn_middle = idx
                     trigger(btn['mclick'], 'p')
             else:
-                # 鼠标离开按钮
                 if btn.get('active_hover'):
                     if release_delay <= 0:
-                        # 无释放延迟：立即释放
                         btn['active_hover'] = False
                         btn['_hover_release_time'] = None
                         trigger(btn['hover'], 'r')
                     else:
-                        # 有释放延迟：开始/继续释放倒计时
                         if btn.get('_hover_release_time') is None:
                             btn['_hover_release_time'] = now
 
@@ -729,7 +762,6 @@ class FloatingApp:
                         progress = max(0.0, 1.0 - elapsed_ms / release_delay)
 
                         if progress <= 0:
-                            # 释放倒计时完成
                             btn['active_hover'] = False
                             btn['_hover_release_time'] = None
                             remove_charge_bar(self.canvas, btn)
@@ -737,17 +769,14 @@ class FloatingApp:
                             set_button_visual_state(self.canvas, btn, 'normal')
                             btn['last_visual_state'] = 'normal'
                         else:
-                            # 仍在释放中：绘制反向充能条（100%→0%）
                             draw_charge_bar(self.canvas, btn, progress)
 
-                # 清除触发充能状态（不清除释放状态）
                 if btn.get('_hover_enter_time') is not None:
                     btn['_hover_enter_time'] = None
                     btn['_hover_charged'] = False
                     if not btn.get('_hover_release_time'):
                         remove_charge_bar(self.canvas, btn)
 
-        # 释放逻辑
         if not left_down and self.left_was_down and self.holding_btn_left is not None:
             btn = self.buttons[self.holding_btn_left]
             if not btn.get('deleted'):
@@ -904,7 +933,19 @@ class FloatingApp:
         self.click_through = not self.click_through
         self.redraw_all()
         if self.click_through:
-            self.set_window_style('click_through')
+            # 开启穿透时，先设为 no_focus (不获取焦点但拦截点击)
+            # 具体的穿透逻辑交给 update_loop 中的智能判定去动态切换
+            self.set_window_style('no_focus')
+        else:
+            self.set_window_style('no_focus')
+    
+    def toggle_click_through_sync(self, is_on):
+        """同步设置穿透状态（由运行工具栏调用）。"""
+        self.click_through = is_on
+        self.redraw_all()
+        if self.click_through:
+            # 同上，不要直接设为 click_through (全穿透)，否则按钮也会无法点击
+            self.set_window_style('no_focus')
         else:
             self.set_window_style('no_focus')
 
@@ -993,5 +1034,6 @@ class FloatingApp:
         self.save_config()
         uninstall_wheel_hook()
         self._hide_toolbar()
+        self._hide_run_toolbar()
         self.root.destroy()
         sys.exit()

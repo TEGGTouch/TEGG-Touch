@@ -1,5 +1,5 @@
 {
-  "geometry": "2560x1600+0+0",
+  "geometry": "2560x1440+0+0",
   "transparency": 0.9,
   "buttons": [
     {
@@ -13,7 +13,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1140,
@@ -26,7 +28,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 218.0,
@@ -39,7 +43,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 142.0,
@@ -52,7 +58,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1060,
@@ -65,7 +73,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 980,
@@ -78,7 +88,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 63.75,
@@ -91,7 +103,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 63.0,
@@ -104,7 +118,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 380,
@@ -117,7 +133,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 600,
@@ -130,7 +148,9 @@
       "rclick": "9",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 434.0,
@@ -143,7 +163,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 800,
@@ -156,7 +178,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1000,
@@ -169,7 +193,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 900,
@@ -182,7 +208,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 604.0,
@@ -195,7 +223,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 460,
@@ -208,7 +238,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1140,
@@ -221,7 +253,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 726.0,
@@ -234,7 +268,9 @@
       "rclick": "e",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 346.0,
@@ -247,7 +283,9 @@
       "rclick": "n",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 300,
@@ -260,7 +298,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 255.0,
@@ -273,7 +313,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 700,
@@ -286,7 +328,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 460,
@@ -299,7 +343,9 @@
       "rclick": "k",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 380,
@@ -312,7 +358,9 @@
       "rclick": "",
       "wheelup": "",
       "wheeldown": "",
-      "mclick": ""
+      "mclick": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1060,
@@ -325,7 +373,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 460,
@@ -338,7 +388,9 @@
       "rclick": "4",
       "mclick": "2",
       "wheelup": "5",
-      "wheeldown": "6"
+      "wheeldown": "6",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 800,
@@ -351,7 +403,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 380,
@@ -364,7 +418,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1500,
@@ -377,7 +433,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1220,
@@ -390,7 +448,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1800,
@@ -403,7 +463,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1540,
@@ -416,7 +478,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1000,
@@ -429,7 +493,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 760,
@@ -442,7 +508,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 2200,
@@ -455,7 +523,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 900,
@@ -468,7 +538,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 900,
@@ -481,7 +553,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1300,
@@ -494,7 +568,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 600,
@@ -507,7 +583,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 900,
@@ -520,7 +598,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 900,
@@ -533,7 +613,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 800,
@@ -546,7 +628,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1100,
@@ -559,7 +643,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1100,
@@ -572,7 +658,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1400,
@@ -585,7 +673,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1400,
@@ -598,7 +688,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 900,
@@ -611,7 +703,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1200,
@@ -624,7 +718,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1200,
@@ -637,7 +733,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     },
     {
       "x": 1300,
@@ -650,7 +748,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "hover_delay": 200,
+      "hover_release_delay": 0
     }
   ],
   "ball_x": 531,

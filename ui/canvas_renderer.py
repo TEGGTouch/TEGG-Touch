@@ -15,6 +15,10 @@ from core.constants import (
     BTN_MARGIN, BTN_RADIUS,
 )
 
+# ─── 字体配置 ────────────────────────────────────────────────
+FONT_NAME = ("Microsoft YaHei UI", 10, "bold")
+FONT_KEY  = ("Microsoft YaHei UI", 16, "bold")
+
 
 # ─── 颜色混合工具 ────────────────────────────────────────────
 
@@ -109,6 +113,19 @@ def get_rounded_rect_points(x, y, w, h, r=BTN_RADIUS):
     ]
 
 
+def _format_btn_name(name):
+    """格式化按钮名称：最多2行，过长截断。"""
+    # 简单策略：如果超过8个字换行，超过16个字截断
+    # 这只是一个粗略的估算，因为没有 font measure
+    limit_per_line = 8
+    if len(name) > limit_per_line * 2:
+        return name[:limit_per_line * 2 - 1] + "…"
+    if len(name) > limit_per_line:
+        # 尝试在中间空格处换行，或者直接切分
+        return name[:limit_per_line] + "\n" + name[limit_per_line:]
+    return name
+
+
 # ─── 用户按钮 ────────────────────────────────────────────────
 
 def draw_button(canvas, btn_data, index, show_resize=True):
@@ -133,11 +150,16 @@ def draw_button(canvas, btn_data, index, show_resize=True):
         points, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER,
         width=2, smooth=True, tags=tags_poly,
     )
+    
+    # 默认只显示名称，使用 YaHei 字体
+    display_text = _format_btn_name(btn_data.get('name', ''))
+    
     text = canvas.create_text(
         btn_data['x'] + btn_data['w'] / 2,
         btn_data['y'] + btn_data['h'] / 2,
-        text=f"{btn_data['name']}\n[{btn_data['hover']}]",
-        font=("Consolas", 10, "bold"), fill=COLOR_TEXT, tags=tags_text,
+        text=display_text,
+        font=FONT_NAME, fill=COLOR_TEXT, tags=tags_text,
+        justify="center", width=vw  # 辅助换行
     )
 
     # 调整手柄 (仅编辑模式显示)
@@ -148,7 +170,6 @@ def draw_button(canvas, btn_data, index, show_resize=True):
         rs = RESIZE_HANDLE_SIZE
         
         # 直角三角形：右下角为直角
-        # 三个顶点：(rx-rs, ry), (rx, ry-rs), (rx, ry)
         resize_handle = canvas.create_polygon(
             rx - rs, ry,
             rx, ry - rs,
@@ -169,7 +190,10 @@ def update_button_coords(canvas, btn):
 
     points = get_rounded_rect_points(vx, vy, vw, vh, BTN_RADIUS)
     canvas.coords(btn['id_poly'], *points)
+    # 文字保持居中
     canvas.coords(btn['id_text'], btn['x'] + btn['w'] / 2, btn['y'] + btn['h'] / 2)
+    # 更新文字换行宽度
+    canvas.itemconfigure(btn['id_text'], width=vw)
 
     if btn.get('id_resize'):
         rs = RESIZE_HANDLE_SIZE
@@ -224,6 +248,13 @@ def draw_charge_bar(canvas, btn, progress):
             canvas.tag_raise(charge_tag, poly_id)
         if text_id:
             canvas.tag_raise(text_id, charge_tag)
+    
+    # 充能时：显示 Hover 键值（居中，大字体）
+    hover_key = btn.get('hover', '')
+    if hover_key and text_id:
+        # 截断过长的键值显示
+        disp = hover_key if len(hover_key) <= 3 else hover_key[:2] + '..'
+        canvas.itemconfigure(text_id, text=disp, font=FONT_KEY, fill=COLOR_TEXT)
 
     # 边框变蓝
     poly_id = btn.get('id_poly')
@@ -241,9 +272,12 @@ def remove_charge_bar(canvas, btn):
     poly_id = btn.get('id_poly')
     if poly_id:
         canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+    
+    # 恢复显示名称
     text_id = btn.get('id_text')
     if text_id:
-        canvas.itemconfigure(text_id, fill=COLOR_TEXT)
+        display_text = _format_btn_name(btn.get('name', ''))
+        canvas.itemconfigure(text_id, text=display_text, font=FONT_NAME, fill=COLOR_TEXT)
 
 
 # ─── 运行时操作配色 ──────────────────────────────────────────
@@ -258,54 +292,57 @@ ACTION_STATE_COLORS = {
     'active_wheeldown':('#F43F5E', '#E11D48', '#000000'),   # 玫瑰
 }
 
+# 状态对应的动作键名
+STATE_TO_KEY = {
+    'hover': 'hover',
+    'active_left': 'lclick',
+    'active_right': 'rclick',
+    'active_middle': 'mclick',
+    'active_wheelup': 'wheelup',
+    'active_wheeldown': 'wheeldown',
+}
 
 def set_button_visual_state(canvas, btn, state):
     """设置按钮的视觉状态。
 
-    state: 'normal' | 'hover' | 'active_left' | 'active_right' | 'active_middle'
-           | 'active_wheelup' | 'active_wheeldown'
+    state: 'normal' | 'hover' | 'active_left' ...
     """
+    text_id = btn.get('id_text')
+    poly_id = btn.get('id_poly')
+
+    if state == 'normal':
+        # 恢复默认
+        canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+        display_text = _format_btn_name(btn.get('name', ''))
+        canvas.itemconfigure(text_id, text=display_text, font=FONT_NAME, fill=COLOR_TEXT)
+        return
+
+    # 检查该状态是否有配置键值
+    key_field = STATE_TO_KEY.get(state)
+    key_val = btn.get(key_field, '')
+
+    if not key_val:
+        # 如果没有配置键值，保持原样（即 normal 样式，不变色不显字）
+        # 这里直接返回，不做任何视觉变更
+        # 但为了保证一致性，可能需要强制设回 normal？
+        # 用户需求：没有配置 -> 不会变色 也不会出键值字符
+        # 如果上一个状态是 active，现在变成了另一种 active 但没键值，应该回退到 normal
+        # 但 app.py 逻辑通常是 normal -> active -> normal
+        # 这里简单起见，如果无键值，则执行 normal 逻辑覆盖回去
+        set_button_visual_state(canvas, btn, 'normal')
+        return
+
     if state in ACTION_STATE_COLORS:
         fill, outline, text_fill = ACTION_STATE_COLORS[state]
-        canvas.itemconfigure(btn['id_poly'], fill=fill, outline=outline, width=3)
-        canvas.itemconfigure(btn['id_text'], fill=text_fill)
-    else:
-        # normal
-        canvas.itemconfigure(btn['id_poly'], fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
-        canvas.itemconfigure(btn['id_text'], fill=COLOR_TEXT)
+        canvas.itemconfigure(poly_id, fill=fill, outline=outline, width=3)
+        
+        # 显示键值 (大字体，居中)
+        disp = key_val if len(key_val) <= 3 else key_val[:2] + '..'
+        canvas.itemconfigure(text_id, text=disp, font=FONT_KEY, fill=text_fill)
 
 
 # ─── 系统按钮 ────────────────────────────────────────────────
-
-def draw_system_btn(canvas, x, y, text, tag_name):
-    """绘制系统功能按钮（退出/隐藏/穿透切换等）。"""
-    w, h = 80, 35
-    points = [
-        x + 5, y,
-        x + w, y,
-        x + w, y + h - 5,
-        x + w - 5, y + h,
-        x, y + h,
-        x, y + 5,
-    ]
-    canvas.create_polygon(
-        points, fill=COLOR_SYS_BG, outline=COLOR_SYS_BORDER,
-        width=2, tags=tag_name,
-    )
-    canvas.create_text(
-        x + w / 2, y + h / 2, text=text,
-        fill=COLOR_SYS_TEXT, font=("Arial", 9, "bold"), tags=tag_name,
-    )
-
-
-def draw_control_ui(canvas, click_through=False):
-    """绘制运行模式下的控制按钮组。"""
-    draw_system_btn(canvas, 10, 10, "退出(F12)", "exit_btn_ui")
-    draw_system_btn(canvas, 100, 10, "隐藏[-]", "hide_btn_ui")
-
-    # 穿透模式切换按钮
-    ct_text = "穿透:开" if click_through else "穿透:关"
-    draw_system_btn(canvas, 190, 10, ct_text, "ct_btn_ui")
+# (系统按钮逻辑已移至 ui/toolbar.py 的独立工具栏中)
 
 
 # ─── 悬浮球 ──────────────────────────────────────────────────
@@ -330,7 +367,7 @@ def draw_floating_ball(canvas):
     )
     canvas.create_text(
         cx, cy + 32, text="展开", fill=COLOR_TEXT,
-        font=("Arial", 8, "bold"), tags="float_ball",
+        font=("Microsoft YaHei UI", 8, "bold"), tags="float_ball",
     )
 
 
@@ -350,8 +387,11 @@ def _get_cursor_image():
     if _cursor_photo is None:
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         path = os.path.join(base, "assets", "cursor.png")
-        img = Image.open(path).convert("RGBA")
-        _cursor_photo = ImageTk.PhotoImage(img)
+        try:
+            img = Image.open(path).convert("RGBA")
+            _cursor_photo = ImageTk.PhotoImage(img)
+        except Exception:
+            pass # ignore missing cursor
     return _cursor_photo
 
 def _get_freeze_cursor_image():
@@ -369,10 +409,12 @@ def init_cursor(canvas):
     global _current_cursor_mode
     _current_cursor_mode = 'normal'
     photo = _get_cursor_image()
-    canvas.create_image(
-        -100, -100, image=photo, anchor="nw", tags="v_cursor",
-    )
-    canvas.tag_raise("v_cursor")
+    if photo:
+        # state='disabled' 确保光标图片不拦截鼠标事件，允许点击穿透到下方的按钮
+        canvas.create_image(
+            -100, -100, image=photo, anchor="nw", tags="v_cursor", state="disabled"
+        )
+        canvas.tag_raise("v_cursor")
 
 
 def switch_cursor_mode(canvas, freeze: bool):
@@ -389,6 +431,8 @@ def switch_cursor_mode(canvas, freeze: bool):
 
 def update_cursor(canvas, x, y):
     """更新虚拟光标位置（图片左上角对齐鼠标尖端）。"""
+    if not canvas.find_withtag("v_cursor"):
+        init_cursor(canvas)
     canvas.coords("v_cursor", x, y)
     canvas.tag_raise("v_cursor")
 
