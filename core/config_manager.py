@@ -21,6 +21,43 @@ from .constants import (
 logger = logging.getLogger(__name__)
 
 
+# ─── 坐标系迁移 ──────────────────────────────────────────────
+
+def _migrate_to_center_coords(data: dict) -> bool:
+    """将旧版左上角原点坐标迁移为中心原点坐标。
+    
+    旧坐标: screen_x, screen_y (左上角原点, ≥0)
+    新坐标: logical_x = old_x - screen_w//2, logical_y = old_y - screen_h//2
+    
+    Returns True if migration was performed.
+    """
+    if data.get('coord_system') == 'center':
+        return False  # 已迁移
+
+    # 从 geometry 字段推断屏幕尺寸
+    geo = data.get('geometry', '')
+    sw, sh = 1920, 1080  # 默认值
+    try:
+        wh = geo.split('+')[0].split('x')
+        sw, sh = int(wh[0]), int(wh[1])
+    except Exception:
+        pass
+
+    offset_x = sw // 2
+    offset_y = sh // 2
+
+    buttons = data.get('buttons', [])
+    for btn in buttons:
+        if 'x' in btn:
+            btn['x'] = btn['x'] - offset_x
+        if 'y' in btn:
+            btn['y'] = btn['y'] - offset_y
+
+    data['coord_system'] = 'center'
+    logger.info(f"坐标系迁移完成: {len(buttons)} 个按钮, 偏移 ({offset_x}, {offset_y})")
+    return True
+
+
 # ─── 内部工具 ────────────────────────────────────────────────
 
 def _validate_geometry(geo: str) -> str:
@@ -122,7 +159,7 @@ def load_config_from_file(filepath: str) -> dict:
         'buttons': copy.deepcopy(DEFAULT_BUTTONS),
         'ball_x': None,
         'ball_y': None,
-        'click_through': False,
+        'click_through': True,
         'freeze_hotkey': DEFAULT_FREEZE_HOTKEY,
     }
     if not os.path.exists(filepath):
@@ -130,11 +167,22 @@ def load_config_from_file(filepath: str) -> dict:
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        
+        # 自动迁移旧坐标系（左上角原点 → 中心原点）
+        if _migrate_to_center_coords(data):
+            # 迁移后立即回写文件，避免重复迁移
+            try:
+                with open(filepath, 'w', encoding='utf-8') as fw:
+                    json.dump(data, fw, ensure_ascii=False, indent=2)
+                logger.info(f"坐标系迁移已回写: {filepath}")
+            except Exception as we:
+                logger.warning(f"坐标系迁移回写失败: {we}")
+        
         result['geometry'] = _validate_geometry(data.get('geometry', ''))
         result['transparency'] = data.get('transparency', DEFAULT_TRANSPARENCY)
         result['ball_x'] = data.get('ball_x', None)
         result['ball_y'] = data.get('ball_y', None)
-        result['click_through'] = data.get('click_through', False)
+        result['click_through'] = data.get('click_through', True)
         result['freeze_hotkey'] = data.get('freeze_hotkey', DEFAULT_FREEZE_HOTKEY)
         buttons = data.get('buttons', None)
         if buttons is not None:
@@ -169,6 +217,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
     clean_btns = [_clean_button_for_save(b) for b in buttons if not b.get('deleted')]
 
     data = {
+        'coord_system': 'center',
         'geometry': geo_to_save,
         'transparency': transparency,
         'buttons': clean_btns,
@@ -249,7 +298,7 @@ def create_profile(name: str, from_template: bool = False) -> bool:
         'buttons': copy.deepcopy(DEFAULT_BUTTONS) if not from_template else copy.deepcopy(DEFAULT_BUTTONS),
         'ball_x': None,
         'ball_y': None,
-        'click_through': False,
+        'click_through': True,
     }
 
     # 写入文件

@@ -184,59 +184,60 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     bx += _RUN_W + 20
 
     # 7) Passthrough Switch
-    pt_tag = "tpt"
-    pt_state = {"on": edit_passthrough}
-    pt_label_x = bx
-    pt_cy = by + BTN_H // 2
+    # [Modify] 编辑模式暂时屏蔽穿透切换，强制使用智能穿透
+    # pt_tag = "tpt"
+    # pt_state = {"on": edit_passthrough}
+    # pt_label_x = bx
+    # pt_cy = by + BTN_H // 2
 
-    c.create_text(pt_label_x, pt_cy, text="\u7a7f\u900f\u6a21\u5f0f",
-                  font=(FF, -16, "bold"), fill="#AAA", anchor="w", tags=(pt_tag,))
+    # c.create_text(pt_label_x, pt_cy, text="\u7a7f\u900f\u6a21\u5f0f",
+    #               font=(FF, -16, "bold"), fill="#AAA", anchor="w", tags=(pt_tag,))
 
-    _SW_W = 48; _SW_H = 24; _SW_R = _SW_H // 2; _SW_DOT = 18
-    sw_x = pt_label_x + 80
-    sw_y = pt_cy - _SW_H // 2
+    # _SW_W = 48; _SW_H = 24; _SW_R = _SW_H // 2; _SW_DOT = 18
+    # sw_x = pt_label_x + 80
+    # sw_y = pt_cy - _SW_H // 2
 
-    pill_color = C_AMBER if pt_state["on"] else C_GRAY
-    c.create_oval(sw_x, sw_y, sw_x + _SW_H, sw_y + _SW_H,
-                  fill=pill_color, outline="", tags=(pt_tag, "pt_pill_l"))
-    c.create_oval(sw_x + _SW_W - _SW_H, sw_y, sw_x + _SW_W, sw_y + _SW_H,
-                  fill=pill_color, outline="", tags=(pt_tag, "pt_pill_r"))
-    c.create_rectangle(sw_x + _SW_R, sw_y, sw_x + _SW_W - _SW_R, sw_y + _SW_H,
-                       fill=pill_color, outline="", tags=(pt_tag, "pt_pill_c"))
+    # pill_color = C_AMBER if pt_state["on"] else C_GRAY
+    # c.create_oval(sw_x, sw_y, sw_x + _SW_H, sw_y + _SW_H,
+    #               fill=pill_color, outline="", tags=(pt_tag, "pt_pill_l"))
+    # c.create_oval(sw_x + _SW_W - _SW_H, sw_y, sw_x + _SW_W, sw_y + _SW_H,
+    #               fill=pill_color, outline="", tags=(pt_tag, "pt_pill_r"))
+    # c.create_rectangle(sw_x + _SW_R, sw_y, sw_x + _SW_W - _SW_R, sw_y + _SW_H,
+    #                    fill=pill_color, outline="", tags=(pt_tag, "pt_pill_c"))
 
-    dot_pad = (_SW_H - _SW_DOT) // 2
-    dot_x = (sw_x + _SW_W - dot_pad - _SW_DOT) if pt_state["on"] else (sw_x + dot_pad)
-    dot_y = sw_y + dot_pad
-    c.create_oval(dot_x, dot_y, dot_x + _SW_DOT, dot_y + _SW_DOT,
-                  fill="white", outline="", tags=(pt_tag, "pt_dot"))
+    # dot_pad = (_SW_H - _SW_DOT) // 2
+    # dot_x = (sw_x + _SW_W - dot_pad - _SW_DOT) if pt_state["on"] else (sw_x + dot_pad)
+    # dot_y = sw_y + dot_pad
+    # c.create_oval(dot_x, dot_y, dot_x + _SW_DOT, dot_y + _SW_DOT,
+    #               fill="white", outline="", tags=(pt_tag, "pt_dot"))
 
-    status_x = sw_x + _SW_W + 8
-    status_text = "\u5f00\u542f" if pt_state["on"] else "\u5173\u95ed"
-    status_color = C_AMBER if pt_state["on"] else "#888"
-    c.create_text(status_x, pt_cy, text=status_text,
-                  font=(FF, -16), fill=status_color, anchor="w", tags=(pt_tag, "pt_status"))
+    # status_x = sw_x + _SW_W + 8
+    # status_text = "\u5f00\u542f" if pt_state["on"] else "\u5173\u95ed"
+    # status_color = C_AMBER if pt_state["on"] else "#888"
+    # c.create_text(status_x, pt_cy, text=status_text,
+    #               font=(FF, -16), fill=status_color, anchor="w", tags=(pt_tag, "pt_status"))
 
-    def _update_pt_visual():
-        p_color = C_AMBER if pt_state["on"] else C_GRAY
-        c.itemconfigure("pt_pill_l", fill=p_color)
-        c.itemconfigure("pt_pill_r", fill=p_color)
-        c.itemconfigure("pt_pill_c", fill=p_color)
-        if pt_state["on"]:
-            dot_on_x = sw_x + _SW_W - dot_pad - _SW_DOT
-            c.coords("pt_dot", dot_on_x, dot_y, dot_on_x + _SW_DOT, dot_y + _SW_DOT)
-            c.itemconfigure("pt_status", text="\u5f00\u542f", fill=C_AMBER)
-        else:
-            dot_off_x = sw_x + dot_pad
-            c.coords("pt_dot", dot_off_x, dot_y, dot_off_x + _SW_DOT, dot_y + _SW_DOT)
-            c.itemconfigure("pt_status", text="\u5173\u95ed", fill="#888")
+    # def _update_pt_visual():
+    #     p_color = C_AMBER if pt_state["on"] else C_GRAY
+    #     c.itemconfigure("pt_pill_l", fill=p_color)
+    #     c.itemconfigure("pt_pill_r", fill=p_color)
+    #     c.itemconfigure("pt_pill_c", fill=p_color)
+    #     if pt_state["on"]:
+    #         dot_on_x = sw_x + _SW_W - dot_pad - _SW_DOT
+    #         c.coords("pt_dot", dot_on_x, dot_y, dot_on_x + _SW_DOT, dot_y + _SW_DOT)
+    #         c.itemconfigure("pt_status", text="\u5f00\u542f", fill=C_AMBER)
+    #     else:
+    #         dot_off_x = sw_x + dot_pad
+    #         c.coords("pt_dot", dot_off_x, dot_y, dot_off_x + _SW_DOT, dot_y + _SW_DOT)
+    #         c.itemconfigure("pt_status", text="\u5173\u95ed", fill="#888")
 
-    def _toggle_pt(e=None):
-        pt_state["on"] = not pt_state["on"]
-        _update_pt_visual()
-        if on_edit_passthrough:
-            on_edit_passthrough(pt_state["on"])
+    # def _toggle_pt(e=None):
+    #     pt_state["on"] = not pt_state["on"]
+    #     _update_pt_visual()
+    #     if on_edit_passthrough:
+    #         on_edit_passthrough(pt_state["on"])
 
-    c.tag_bind(pt_tag, "<ButtonRelease-1>", _toggle_pt)
+    # c.tag_bind(pt_tag, "<ButtonRelease-1>", _toggle_pt)
 
     # ========== SECOND ROW: Freeze Hotkey + Slider ==========
     row2_y = TOP + BTN_H + 30
@@ -487,9 +488,17 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             pt_state = {"on": state["click_through"]}
             
             # Label
-            c.create_text(bx, h//2, text="穿透模式", font=("Microsoft YaHei UI", 10, "bold"),
+            c.create_text(bx, h//2, text="穿透模式", font=("Microsoft YaHei UI", 9),
                           fill="#AAA", anchor="w", tags=(pt_tag,))
             bx += 70 # Label width + gap
+            
+            # Status Text (Left of Switch)
+            status_text = "开启" if pt_state["on"] else "关闭"
+            status_color = C_AMBER if pt_state["on"] else "#888"
+            c.create_text(bx, h//2, text=status_text, font=("Microsoft YaHei UI", 9),
+                          fill=status_color, anchor="w", tags=(pt_tag, "pt_status"))
+            
+            bx += 40 # Status width + gap
 
             # Switch
             _SW_W = 48; _SW_H = 24; _SW_R = _SW_H // 2; _SW_DOT = 18
@@ -510,14 +519,8 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             c.create_oval(dot_x, dot_y, dot_x + _SW_DOT, dot_y + _SW_DOT,
                           fill="white", outline="", tags=(pt_tag, "pt_dot"))
             
-            bx += _SW_W + 10
+            bx += _SW_W + 30 # Switch Width + Gap to next button
 
-            # Status Text
-            status_text = "开启" if pt_state["on"] else "关闭"
-            status_color = C_AMBER if pt_state["on"] else "#888"
-            c.create_text(bx, h//2, text=status_text, font=("Microsoft YaHei UI", 9),
-                          fill=status_color, anchor="w", tags=(pt_tag, "pt_status"))
-            
             # 绑定点击
             def _toggle_pt_wrapper(e=None):
                 state["click_through"] = not state["click_through"]
@@ -525,28 +528,14 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                 redraw() # 重绘以更新颜色
                 
             c.tag_bind(pt_tag, "<ButtonRelease-1>", lambda e: _toggle_pt_wrapper())
-            
-            bx += 50 # Status width + gap
 
             # --- 4. 退出/编辑 ---
-            # Position 10px after "Through Mode" (穿透模式) close text.
-            # "Through Mode" ends at `bx`.
-            bx += 10 # Set margin to 10px.
             
             _EXIT_W = 190 
             # 使用关闭按钮的红色风格
             # Change text size to 18px (same as toolbar).
             _run_btn(bx, _EXIT_W, "退出/编辑[F12]", "\uE711", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=-18, bold=False)
             bx += _EXIT_W + 10 # 右边距 10px
-            
-            # 动态更新窗口宽度以适应内容
-            if bx != state["width"]:
-                state["width"] = bx
-                # 使用保存的坐标，强制转为 int 避免浮点数导致格式错误
-                top.geometry(f"{int(state['width'])}x{int(state['height'])}+{int(state['x'])}+{int(state['y'])}")
-                # 重新绘制背景以适应新宽度
-                rrect(c, 0, 0, state["width"], state["height"], RADIUS, fill=COLOR_PANEL, outline="#444", width=1, tags="bg")
-                c.tag_lower("bg") # 确保背景在最底层
             
             # 动态更新窗口宽度以适应内容
             if bx != state["width"]:

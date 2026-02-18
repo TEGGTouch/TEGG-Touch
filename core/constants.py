@@ -61,21 +61,22 @@ UPDATE_INTERVAL = 8
 DEFAULT_FREEZE_HOTKEY = 'f10'  # 默认冻结快捷键
 
 # === 默认按钮配置 ===
+# 坐标系：中心原点（x,y 可为负数，绘制时 screen_x = x + screen_w//2）
 DEFAULT_BUTTONS = [
     {
-        'x': 100, 'y': 100, 'w': 100, 'h': 100,
+        'x': -100, 'y': -100, 'w': 100, 'h': 100,
         'name': '左上', 'hover': 'w+a', 'hover_delay': 200,
         'lclick': 'j', 'rclick': 'k', 'mclick': '',
         'wheelup': '', 'wheeldown': '',
     },
     {
-        'x': 200, 'y': 100, 'w': 100, 'h': 100,
+        'x': 0, 'y': -100, 'w': 100, 'h': 100,
         'name': '右上', 'hover': 'w+d', 'hover_delay': 200,
         'lclick': 'j', 'rclick': 'k', 'mclick': '',
         'wheelup': '', 'wheeldown': '',
     },
     {
-        'x': 100, 'y': 200, 'w': 200, 'h': 100,
+        'x': -100, 'y': 0, 'w': 200, 'h': 100,
         'name': '后退', 'hover': 's', 'hover_delay': 200,
         'lclick': 'j', 'rclick': 'k', 'mclick': '',
         'wheelup': '', 'wheeldown': '',
@@ -89,6 +90,7 @@ RUNTIME_FIELDS = frozenset({
     '_wheel_flash_until',
     '_hover_enter_time', '_hover_charged', 'id_charge',
     '_hover_release_time',
+    '_sx', '_sy',  # 缓存的屏幕坐标（逻辑坐标+偏移）
 })
 
 # 按钮可选字段及默认值 (兼容旧配置)

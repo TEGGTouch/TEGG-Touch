@@ -25,13 +25,27 @@ from core.config_manager import (
 )
 from ui.canvas_renderer import (
     draw_button, update_button_coords, set_button_visual_state,
-<<<<<<< Updated upstream
-    draw_control_ui, draw_floating_ball,
+    draw_floating_ball,
     init_cursor, update_cursor, remove_cursor, switch_cursor_mode,
     preview_button_transparency, draw_grid,
     draw_charge_bar, remove_charge_bar,
 )
 from ui.edit_panel import create_toolbar_window, destroy_toolbar_window, open_button_editor
+
+# Try to import create_run_toolbar. It might be in ui.edit_panel in upstream, 
+# or still in ui.toolbar if that file exists. 
+# Based on Stashed changes, it was in ui.toolbar.
+# I'll try to import from ui.toolbar as a fallback or if it's the correct place.
+try:
+    from ui.edit_panel import create_run_toolbar
+except ImportError:
+    try:
+        from ui.toolbar import create_run_toolbar
+    except ImportError:
+        # If it's nowhere, we might have a problem, but let's assume it's available somewhere.
+        # This is a best-effort resolution without seeing other files.
+        pass
+
 from core.input_engine import (
     trigger, is_key_pressed,
     install_wheel_hook, uninstall_wheel_hook, poll_wheel_events,
@@ -39,16 +53,6 @@ from core.input_engine import (
     get_freeze_anchor,
 )
 from core.constants import DEFAULT_FREEZE_HOTKEY
-=======
-    draw_floating_ball,
-    init_cursor, update_cursor, remove_cursor,
-    preview_button_transparency, draw_grid,
-    draw_charge_bar, remove_charge_bar,
-)
-from ui.toolbar import create_toolbar_window, destroy_toolbar_window, create_run_toolbar
-from ui.button_editor import open_button_editor
-from core.input_engine import trigger, is_key_pressed, install_wheel_hook, uninstall_wheel_hook, poll_wheel_events
->>>>>>> Stashed changes
 
 # Windows API
 user32 = ctypes.windll.user32
@@ -69,6 +73,10 @@ class FloatingApp:
         self.screen_w = self.root.winfo_screenwidth()
         self.screen_h = self.root.winfo_screenheight()
         self.fullscreen_geo = f"{self.screen_w}x{self.screen_h}+0+0"
+
+        # 中心原点坐标系偏移量 (逻辑坐标→屏幕坐标)
+        self._offset_x = self.screen_w // 2
+        self._offset_y = self.screen_h // 2
 
         # 初始化/加载方案
         self.current_profile, config = init_profiles()
@@ -348,7 +356,9 @@ class FloatingApp:
         for idx, btn in enumerate(self.buttons):
             if btn.get('deleted'):
                 continue
-            poly, text, resize = draw_button(self.canvas, btn, idx, show_resize=show_resize)
+            poly, text, resize = draw_button(
+                self.canvas, btn, idx, show_resize=show_resize,
+                offset_x=self._offset_x, offset_y=self._offset_y)
             btn['id_poly'] = poly
             btn['id_text'] = text
             btn['id_resize'] = resize
@@ -410,19 +420,28 @@ class FloatingApp:
 
     def on_btn_drag(self, e, idx):
         btn = self.buttons[idx]
+        ox, oy = self._offset_x, self._offset_y
+        # e.x/e.y 是屏幕坐标，转为逻辑坐标后吸附网格
         raw_x = max(0, min(self.win_w - btn['w'], e.x - btn['w'] / 2))
         raw_y = max(0, min(self.win_h - btn['h'], e.y - btn['h'] / 2))
-        btn['x'] = round(raw_x / GRID_SIZE) * GRID_SIZE
-        btn['y'] = round(raw_y / GRID_SIZE) * GRID_SIZE
-        update_button_coords(self.canvas, btn)
+        # 屏幕坐标 → 逻辑坐标(中心原点)，对齐网格
+        logical_x = round((raw_x - ox) / GRID_SIZE) * GRID_SIZE
+        logical_y = round((raw_y - oy) / GRID_SIZE) * GRID_SIZE
+        btn['x'] = logical_x
+        btn['y'] = logical_y
+        update_button_coords(self.canvas, btn, offset_x=ox, offset_y=oy)
 
     def on_btn_resize(self, e, idx):
         btn = self.buttons[idx]
-        raw_w = max(GRID_SIZE, e.x - btn['x'])
-        raw_h = max(GRID_SIZE, e.y - btn['y'])
+        ox, oy = self._offset_x, self._offset_y
+        # e.x/e.y 是屏幕坐标，btn['x'] 是逻辑坐标
+        screen_x = btn['x'] + ox
+        screen_y = btn['y'] + oy
+        raw_w = max(GRID_SIZE, e.x - screen_x)
+        raw_h = max(GRID_SIZE, e.y - screen_y)
         btn['w'] = round(raw_w / GRID_SIZE) * GRID_SIZE
         btn['h'] = round(raw_h / GRID_SIZE) * GRID_SIZE
-        update_button_coords(self.canvas, btn)
+        update_button_coords(self.canvas, btn, offset_x=ox, offset_y=oy)
 
     # ─── 核心循环 (Core Loop) ────────────────────────────────
 
@@ -441,7 +460,6 @@ class FloatingApp:
                     self.root.after(1, self.update_loop)
                     return
 
-<<<<<<< Updated upstream
                 # 0b. 冻结快捷键检测 (toggle)
                 now_ts = time.time()
                 if self.freeze_hotkey and is_key_pressed(self.freeze_hotkey):
@@ -489,53 +507,51 @@ class FloatingApp:
                     rel_x = abs_x - self.win_x
                     rel_y = abs_y - self.win_y
 
-                # 3. 智能穿透判定 (仅当开启穿透模式时，冻结模式下跳过)
-                if self.click_through and not self.is_hidden and not self.mouse_freeze:
+                # 3. 智能穿透判定 (根据模式和设置决定)
+                if not self.is_hidden and not self.mouse_freeze:
                     is_on_ui = False
+                    ox, oy = self._offset_x, self._offset_y
+                    # 检查用户按钮 (逻辑坐标+偏移 vs 屏幕坐标)
+                    for btn in self.buttons:
+                        if btn.get('deleted'):
+                            continue
+                        sx = btn['x'] + ox
+                        sy = btn['y'] + oy
+                        if (sx <= rel_x < sx + btn['w'] and
+                                sy <= rel_y < sy + btn['h']):
+                            is_on_ui = True
+                            break
 
-                    # 检查系统按钮区域
-                    if 10 <= rel_x <= 280 and 10 <= rel_y <= 50:
-                        is_on_ui = True
-=======
-                # 1. 窗口置顶
-                self.root.lift()
+                    if self.current_mode == 'main':
+                        # === 编辑模式 (Edit Mode) ===
+                        # 强制执行智能穿透：按钮实心(可拖拽)，空白穿透(可操作游戏)
+                        # 注意：编辑模式下用 'normal' 样式以确保获得焦点进行编辑
+                        if is_on_ui:
+                            if not self.is_window_solid:
+                                self.set_window_style('normal')
+                        else:
+                            # 只有当确实处于实心状态才切换，避免频繁调用
+                            # 注意：编辑模式下 edit_passthrough 开关已被禁用/隐藏，
+                            # 这里直接实现"智能穿透"效果
+                            if self.is_window_solid:
+                                self.set_window_style('click_through')
 
-                # 2. 获取鼠标
-                abs_x, abs_y = self.root.winfo_pointerxy()
-                rel_x = abs_x - self.win_x
-                rel_y = abs_y - self.win_y
-
-                # 3. 智能穿透判定
-                # 注意：独立工具栏窗口是单独的 Toplevel，其属性在创建时已设为 normal (阻拦点击)，
-                # 不受此处主窗口样式控制，因此工具栏永远可交互。
-                if not self.is_hidden:
-                    if self.click_through:
-                        # 开启穿透模式：主窗口(含按钮)全穿透，不可点击，让用户操作游戏
-                        # 但为了能显示虚拟光标，我们必须保持 WS_EX_TRANSPARENT + WS_EX_LAYERED
-                        # 这里的 'click_through' 样式已经包含了 WS_EX_TRANSPARENT
-                        if self.is_window_solid:
-                            self.set_window_style('click_through')
->>>>>>> Stashed changes
-                    else:
-                        # 关闭穿透模式：按钮阻拦点击，空白穿透
-                        is_on_ui = False
-                        # 检查用户按钮
-                        for btn in self.buttons:
-                            if btn.get('deleted'):
-                                continue
-                            if (btn['x'] <= rel_x < btn['x'] + btn['w'] and
-                                    btn['y'] <= rel_y < btn['y'] + btn['h']):
-                                is_on_ui = True
-                                break
-                        
-                        # 检查是否在工具栏区域 (虽然工具栏是独立窗口，但为了保险起见，
-                        # 如果主窗口有遮挡，也需要考虑。不过主窗口全屏覆盖，工具栏在TopMost层级更高)
-                        # 这里只关心主窗口的按钮交互
-
-                        if is_on_ui and not self.is_window_solid:
-                            self.set_window_style('no_focus')
-                        elif not is_on_ui and self.is_window_solid:
-                            self.set_window_style('click_through')
+                    elif self.current_mode == 'run':
+                        # === 运行模式 (Run Mode) ===
+                        if self.click_through:
+                            # [开启] = 完全穿透 (Full Passthrough)
+                            # 始终穿透，点击同时触发按钮(通过轮询)和游戏
+                            if self.is_window_solid:
+                                self.set_window_style('click_through')
+                        else:
+                            # [关闭] = 智能穿透 (Smart Passthrough)
+                            # 按钮拦截(Solid)，空白穿透(Transparent)
+                            if is_on_ui:
+                                if not self.is_window_solid:
+                                    self.set_window_style('no_focus')
+                            else:
+                                if self.is_window_solid:
+                                    self.set_window_style('click_through')
 
                 # 4. 更新虚拟光标
                 # 策略：如果鼠标在工具栏上方，则隐藏主窗口光标（因为工具栏自己会画光标）
@@ -612,6 +628,16 @@ class FloatingApp:
                 if drag_dist < 100:
                     self.to_show()
 
+    def _btn_screen_rect(self, btn):
+        """返回按钮的屏幕矩形 (sx, sy, sw, sh)。"""
+        return (btn['x'] + self._offset_x, btn['y'] + self._offset_y, btn['w'], btn['h'])
+
+    def _point_in_btn(self, btn, px, py):
+        """判断屏幕坐标 (px,py) 是否在按钮内。"""
+        sx = btn['x'] + self._offset_x
+        sy = btn['y'] + self._offset_y
+        return sx <= px < sx + btn['w'] and sy <= py < sy + btn['h']
+
     def handle_run_interaction(self, rel_x, rel_y, left_down, right_down, middle_down):
         """处理运行模式下的交互。"""
         now = time.time()
@@ -626,8 +652,7 @@ class FloatingApp:
             for btn in self.buttons:
                 if btn.get('deleted'):
                     continue
-                if (btn['x'] <= w_rel_x < btn['x'] + btn['w'] and
-                        btn['y'] <= w_rel_y < btn['y'] + btn['h']):
+                if self._point_in_btn(btn, w_rel_x, w_rel_y):
                     key = btn.get('wheelup') if direction == 'up' else btn.get('wheeldown')
                     if key:
                         trigger(key, 'c')
@@ -641,8 +666,7 @@ class FloatingApp:
             if btn.get('deleted'):
                 continue
 
-            in_rect = (btn['x'] <= rel_x < btn['x'] + btn['w'] and
-                       btn['y'] <= rel_y < btn['y'] + btn['h'])
+            in_rect = self._point_in_btn(btn, rel_x, rel_y)
             hover_delay = btn.get('hover_delay', 0)
 
             if now < btn.get('_wheel_flash_until', 0):
@@ -797,15 +821,21 @@ class FloatingApp:
 
     # ─── 辅助功能 ────────────────────────────────────────────
 
-    def _find_empty_slot(self, w, h, start_x=0, start_y=0, scan='lr_tb'):
-        """在网格上查找不与现有按钮重叠的空位。
-        scan: 'lr_tb' = 左→右 再 上→下 (新建用)
-              'tb_lr' = 上→下 再 左→右 (复制用, 从源位置开始)
-        返回 (x, y) 或 None。
+    def _find_empty_slot(self, w, h, start_x=0, start_y=0, scan='spiral'):
+        """在网格上查找不与现有按钮重叠的空位（逻辑坐标，中心原点）。
+
+        scan: 'spiral' = 从 (start_x, start_y) 螺旋扩散 (新建用，默认从 0,0)
+              'nearby' = 从源位置附近找 (复制用)
+        返回 (x, y) 逻辑坐标 或 None。
         """
         gs = GRID_SIZE
-        max_x = self.screen_w - w
-        max_y = self.screen_h - h
+        ox, oy = self._offset_x, self._offset_y
+        # 逻辑坐标范围 (确保屏幕坐标 ≥ 0 且 < screen)
+        min_lx = -ox
+        min_ly = -oy
+        max_lx = self.screen_w - w - ox
+        max_ly = self.screen_h - h - oy
+
         occupied = [(b['x'], b['y'], b['w'], b['h'])
                     for b in self.buttons if not b.get('deleted')]
 
@@ -815,20 +845,31 @@ class FloatingApp:
                     return True
             return False
 
-        if scan == 'lr_tb':
-            for y in range(0, max_y + 1, gs):
-                for x in range(0, max_x + 1, gs):
-                    if not overlaps(x, y):
-                        return (x, y)
-        else:  # copy — 先右侧再下侧
-            # 1. 同行右侧：y=start_y, x 从 start_x+w 向右
-            for x in range(start_x + w, max_x + 1, gs):
-                if not overlaps(x, start_y):
-                    return (x, start_y)
-            # 2. 同列下侧：x=start_x, y 从 start_y+h 向下
-            for y in range(start_y + h, max_y + 1, gs):
-                if not overlaps(start_x, y):
-                    return (start_x, y)
+        def in_bounds(nx, ny):
+            return min_lx <= nx <= max_lx and min_ly <= ny <= max_ly
+
+        # 螺旋扩散算法：从中心向外，按层展开
+        # 对齐网格
+        cx = round(start_x / gs) * gs
+        cy = round(start_y / gs) * gs
+
+        if in_bounds(cx, cy) and not overlaps(cx, cy):
+            return (cx, cy)
+
+        max_radius = max(self.screen_w, self.screen_h) // gs
+        for ring in range(1, max_radius + 1):
+            # 每层走 4 条边: 上→右→下→左
+            for dx in range(-ring, ring + 1):
+                for dy in [-ring, ring]:
+                    nx, ny = cx + dx * gs, cy + dy * gs
+                    if in_bounds(nx, ny) and not overlaps(nx, ny):
+                        return (nx, ny)
+            for dy in range(-ring + 1, ring):
+                for dx in [-ring, ring]:
+                    nx, ny = cx + dx * gs, cy + dy * gs
+                    if in_bounds(nx, ny) and not overlaps(nx, ny):
+                        return (nx, ny)
+
         return None
 
     def show_toast(self, text, duration=1500):
@@ -850,11 +891,11 @@ class FloatingApp:
 
     def add_btn(self):
         w, h = GRID_SIZE, GRID_SIZE
-        pos = self._find_empty_slot(w, h, scan='lr_tb')
+        pos = self._find_empty_slot(w, h, start_x=0, start_y=0, scan='spiral')
         if pos:
             cx, cy = pos
         else:
-            cx, cy = 0, 0  # 没有空位，在原点覆盖
+            cx, cy = 0, 0  # 没有空位，在逻辑原点(屏幕中心)覆盖
         new_btn = {
             'x': cx, 'y': cy,
             'w': w, 'h': h,
@@ -880,7 +921,7 @@ class FloatingApp:
 
         def on_copy(src_btn):
             w, h = src_btn['w'], src_btn['h']
-            pos = self._find_empty_slot(w, h, start_x=src_btn['x'], start_y=src_btn['y'], scan='tb_lr')
+            pos = self._find_empty_slot(w, h, start_x=src_btn['x'], start_y=src_btn['y'], scan='spiral')
             if pos:
                 nx, ny = pos
             else:

@@ -73,10 +73,15 @@ def preview_button_transparency(canvas, buttons, alpha):
 
 COLOR_GRID = "#2A2A2A"  # 网格线颜色（暗灰，不干扰视觉）
 
+COLOR_GRID_CENTER = "#444444"  # 中心十字线颜色（稍亮）
+
 def draw_grid(canvas, width, height, grid_size=None):
-    """在编辑模式背景上绘制 20% 半透明遮罩 + 100px 网格线。"""
+    """在编辑模式背景上绘制 20% 半透明遮罩 + 从中心向外的网格线。"""
     from core.constants import GRID_SIZE
     gs = grid_size or GRID_SIZE
+
+    cx = width // 2
+    cy = height // 2
 
     # 20% 半透明黑色遮罩（stipple 模拟半透明，未填充像素穿透为透明色）
     canvas.create_rectangle(
@@ -84,13 +89,20 @@ def draw_grid(canvas, width, height, grid_size=None):
         fill="#000000", outline="", stipple="gray25", tags="grid",
     )
 
+    # 网格线对齐中心：线在 cx ± n*gs 处
     # 竖线
-    for x in range(0, width + 1, gs):
-        canvas.create_line(x, 0, x, height, fill=COLOR_GRID, width=1, tags="grid")
+    first_x = cx % gs
+    for x in range(first_x, width + 1, gs):
+        color = COLOR_GRID_CENTER if x == cx else COLOR_GRID
+        w = 2 if x == cx else 1
+        canvas.create_line(x, 0, x, height, fill=color, width=w, tags="grid")
 
     # 横线
-    for y in range(0, height + 1, gs):
-        canvas.create_line(0, y, width, y, fill=COLOR_GRID, width=1, tags="grid")
+    first_y = cy % gs
+    for y in range(first_y, height + 1, gs):
+        color = COLOR_GRID_CENTER if y == cy else COLOR_GRID
+        w = 2 if y == cy else 1
+        canvas.create_line(0, y, width, y, fill=color, width=w, tags="grid")
 
 
 # ─── 几何工具 ────────────────────────────────────────────────
@@ -128,19 +140,26 @@ def _format_btn_name(name):
 
 # ─── 用户按钮 ────────────────────────────────────────────────
 
-def draw_button(canvas, btn_data, index, show_resize=True):
+def draw_button(canvas, btn_data, index, show_resize=True, offset_x=0, offset_y=0):
     """绘制单个用户按钮。
 
     返回 (poly_id, text_id, resize_id) 以便后续引用。
     show_resize: 是否显示调整手柄（编辑模式True，运行模式False）。
+    offset_x/offset_y: 逻辑坐标→屏幕坐标偏移 (screen_w//2, screen_h//2)。
     """
     tags_poly = f"btn_poly_{index}"
     tags_text = f"btn_text_{index}"
     tags_resize = f"btn_resize_{index}"
 
+    # 逻辑坐标→屏幕坐标，并缓存到 btn 供 charge_bar 等使用
+    sx = btn_data['x'] + offset_x
+    sy = btn_data['y'] + offset_y
+    btn_data['_sx'] = sx
+    btn_data['_sy'] = sy
+
     # 计算视觉区域 (应用内边距)
-    vx = btn_data['x'] + BTN_MARGIN
-    vy = btn_data['y'] + BTN_MARGIN
+    vx = sx + BTN_MARGIN
+    vy = sy + BTN_MARGIN
     vw = btn_data['w'] - 2 * BTN_MARGIN
     vh = btn_data['h'] - 2 * BTN_MARGIN
 
@@ -155,8 +174,8 @@ def draw_button(canvas, btn_data, index, show_resize=True):
     display_text = _format_btn_name(btn_data.get('name', ''))
     
     text = canvas.create_text(
-        btn_data['x'] + btn_data['w'] / 2,
-        btn_data['y'] + btn_data['h'] / 2,
+        sx + btn_data['w'] / 2,
+        sy + btn_data['h'] / 2,
         text=display_text,
         font=FONT_NAME, fill=COLOR_TEXT, tags=tags_text,
         justify="center", width=vw  # 辅助换行
@@ -180,18 +199,24 @@ def draw_button(canvas, btn_data, index, show_resize=True):
     return poly, text, resize_handle
 
 
-def update_button_coords(canvas, btn):
-    """更新单个按钮的视觉坐标（拖拽/缩放后调用）。"""
+def update_button_coords(canvas, btn, offset_x=0, offset_y=0):
+    """更新单个按钮的视觉坐标（拖拽/缩放后调用）。
+    offset_x/offset_y: 逻辑坐标→屏幕坐标偏移。
+    """
+    sx = btn['x'] + offset_x
+    sy = btn['y'] + offset_y
+    btn['_sx'] = sx
+    btn['_sy'] = sy
     # 计算视觉区域 (应用内边距)
-    vx = btn['x'] + BTN_MARGIN
-    vy = btn['y'] + BTN_MARGIN
+    vx = sx + BTN_MARGIN
+    vy = sy + BTN_MARGIN
     vw = btn['w'] - 2 * BTN_MARGIN
     vh = btn['h'] - 2 * BTN_MARGIN
 
     points = get_rounded_rect_points(vx, vy, vw, vh, BTN_RADIUS)
     canvas.coords(btn['id_poly'], *points)
     # 文字保持居中
-    canvas.coords(btn['id_text'], btn['x'] + btn['w'] / 2, btn['y'] + btn['h'] / 2)
+    canvas.coords(btn['id_text'], sx + btn['w'] / 2, sy + btn['h'] / 2)
     # 更新文字换行宽度
     canvas.itemconfigure(btn['id_text'], width=vw)
 
@@ -218,8 +243,11 @@ def draw_charge_bar(canvas, btn, progress):
     """
     progress = max(0.0, min(1.0, progress))
 
-    vx = btn['x'] + BTN_MARGIN
-    vy = btn['y'] + BTN_MARGIN
+    # 使用缓存的屏幕坐标 (_sx/_sy 在 draw_button 时设置)
+    sx = btn.get('_sx', btn['x'])
+    sy = btn.get('_sy', btn['y'])
+    vx = sx + BTN_MARGIN
+    vy = sy + BTN_MARGIN
     vw = btn['w'] - 2 * BTN_MARGIN
     vh = btn['h'] - 2 * BTN_MARGIN
 

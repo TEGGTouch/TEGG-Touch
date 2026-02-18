@@ -1,11 +1,12 @@
 {
+  "coord_system": "center",
   "geometry": "2560x1440+0+0",
   "transparency": 0.9,
   "buttons": [
     {
-      "x": 1300,
-      "y": 900,
-      "w": 100,
+      "x": -100,
+      "y": 100,
+      "w": 200,
       "h": 100,
       "name": "下",
       "hover": "s",
@@ -18,8 +19,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 600,
-      "y": 1100,
+      "x": 100,
+      "y": 100,
       "w": 100,
       "h": 100,
       "name": "↘️",
@@ -33,8 +34,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1600,
-      "y": 700,
+      "x": 300,
+      "y": 0,
       "w": 100,
       "h": 200,
       "name": "新按钮",
@@ -48,8 +49,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1300,
-      "y": 200,
+      "x": 0,
+      "y": -500,
       "w": 100,
       "h": 100,
       "name": "新按钮",
@@ -63,8 +64,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 900,
-      "y": 900,
+      "x": -400,
+      "y": 200,
       "w": 100,
       "h": 100,
       "name": "新按钮",
@@ -78,8 +79,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1200,
-      "y": 700,
+      "x": -200,
+      "y": -200,
       "w": 100,
       "h": 100,
       "name": "↖️",
@@ -93,8 +94,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 2000,
-      "y": 700,
+      "x": 700,
+      "y": 0,
       "w": 100,
       "h": 100,
       "name": "新按钮",
@@ -108,8 +109,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1700,
-      "y": 700,
+      "x": 400,
+      "y": 0,
       "w": 100,
       "h": 100,
       "name": "新按钮",
@@ -123,8 +124,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1800,
-      "y": 700,
+      "x": 500,
+      "y": 0,
       "w": 100,
       "h": 100,
       "name": "新按钮",
@@ -138,10 +139,10 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1200,
-      "y": 800,
+      "x": -200,
+      "y": -100,
       "w": 100,
-      "h": 100,
+      "h": 200,
       "name": "左",
       "hover": "a",
       "lclick": "",
@@ -153,8 +154,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1500,
-      "y": 200,
+      "x": 200,
+      "y": -500,
       "w": 300,
       "h": 100,
       "name": "新按钮",
@@ -168,8 +169,8 @@
       "hover_release_delay": 200
     },
     {
-      "x": 1200,
-      "y": 900,
+      "x": -200,
+      "y": 100,
       "w": 100,
       "h": 100,
       "name": "↙️",
@@ -183,8 +184,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1400,
-      "y": 200,
+      "x": 100,
+      "y": -500,
       "w": 100,
       "h": 100,
       "name": "新按钮",
@@ -198,8 +199,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1700,
-      "y": 1100,
+      "x": 400,
+      "y": 400,
       "w": 100,
       "h": 100,
       "name": "↑",
@@ -213,8 +214,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1900,
-      "y": 700,
+      "x": 600,
+      "y": 0,
       "w": 100,
       "h": 100,
       "name": "←",
@@ -228,8 +229,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1800,
-      "y": 200,
+      "x": 500,
+      "y": -500,
       "w": 300,
       "h": 100,
       "name": "→",
@@ -243,8 +244,8 @@
       "hover_release_delay": 190
     },
     {
-      "x": 2100,
-      "y": 200,
+      "x": 800,
+      "y": -500,
       "w": 300,
       "h": 100,
       "name": "茶叶蛋",
@@ -258,8 +259,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 600,
-      "y": 900,
+      "x": 500,
+      "y": 100,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -273,8 +274,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1800,
-      "y": 800,
+      "x": 500,
+      "y": 300,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -289,7 +290,7 @@
     },
     {
       "x": 400,
-      "y": 1000,
+      "y": 100,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -303,53 +304,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1800,
-      "y": 1000,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "",
-      "lclick": "",
-      "rclick": "",
-      "mclick": "",
-      "wheelup": "",
-      "wheeldown": "",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 1700,
-      "y": 800,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "",
-      "lclick": "",
-      "rclick": "",
-      "mclick": "",
-      "wheelup": "",
-      "wheeldown": "",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 300,
-      "y": 900,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "u",
-      "lclick": "a",
-      "rclick": "l",
-      "mclick": "0",
-      "wheelup": "2",
-      "wheeldown": "1",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 800,
-      "y": 900,
+      "x": -500,
+      "y": 200,
       "w": 100,
       "h": 100,
       "name": "无职",
@@ -363,8 +319,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1800,
-      "y": 1100,
+      "x": 500,
+      "y": 400,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -378,8 +334,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 200,
-      "y": 900,
+      "x": 700,
+      "y": 100,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -393,24 +349,9 @@
       "hover_release_delay": 0
     },
     {
-      "x": 2000,
-      "y": 800,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "",
-      "lclick": "",
-      "rclick": "",
-      "mclick": "",
-      "wheelup": "",
-      "wheeldown": "",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 1300,
-      "y": 700,
-      "w": 100,
+      "x": -100,
+      "y": -200,
+      "w": 200,
       "h": 100,
       "name": "上",
       "hover": "w",
@@ -423,23 +364,8 @@
       "hover_release_delay": 250
     },
     {
-      "x": 300,
-      "y": 1000,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "",
-      "lclick": "",
-      "rclick": "",
-      "mclick": "",
-      "wheelup": "",
-      "wheeldown": "",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 1900,
-      "y": 1100,
+      "x": 600,
+      "y": 400,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -453,23 +379,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 200,
-      "y": 1000,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "",
-      "lclick": "",
-      "rclick": "",
-      "mclick": "",
-      "wheelup": "",
-      "wheeldown": "",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 1700,
-      "y": 1000,
+      "x": 400,
+      "y": 300,
       "w": 100,
       "h": 100,
       "name": "测试",
@@ -483,8 +394,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1900,
-      "y": 800,
+      "x": 600,
+      "y": 100,
       "w": 100,
       "h": 100,
       "name": "数字键",
@@ -498,8 +409,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 900,
-      "y": 1000,
+      "x": -400,
+      "y": 300,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -513,8 +424,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 800,
-      "y": 1000,
+      "x": -500,
+      "y": 300,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -528,53 +439,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 500,
-      "y": 1000,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "",
-      "lclick": "ddddd",
-      "rclick": "",
-      "mclick": "",
-      "wheelup": "",
-      "wheeldown": "",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 400,
-      "y": 900,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "",
-      "lclick": "",
-      "rclick": "",
-      "mclick": "",
-      "wheelup": "",
-      "wheeldown": "",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 500,
-      "y": 900,
-      "w": 100,
-      "h": 100,
-      "name": "按钮",
-      "hover": "",
-      "lclick": "1",
-      "rclick": "",
-      "mclick": "",
-      "wheelup": "",
-      "wheeldown": "",
-      "hover_delay": 200,
-      "hover_release_delay": 0
-    },
-    {
-      "x": 1000,
-      "y": 1100,
+      "x": -300,
+      "y": 300,
       "w": 100,
       "h": 100,
       "name": "按钮",
@@ -588,8 +454,8 @@
       "hover_release_delay": 10000
     },
     {
-      "x": 1900,
-      "y": 1000,
+      "x": 600,
+      "y": 300,
       "w": 200,
       "h": 100,
       "name": "按钮",
@@ -603,8 +469,8 @@
       "hover_release_delay": 0
     },
     {
-      "x": 1400,
-      "y": 700,
+      "x": 100,
+      "y": -200,
       "w": 100,
       "h": 100,
       "name": "↗️",
@@ -618,10 +484,10 @@
       "hover_release_delay": 180
     },
     {
-      "x": 1400,
-      "y": 800,
+      "x": 100,
+      "y": -100,
       "w": 100,
-      "h": 100,
+      "h": 200,
       "name": "右",
       "hover": "d",
       "lclick": "",
@@ -635,6 +501,6 @@
   ],
   "ball_x": 531,
   "ball_y": 328,
-  "click_through": false,
+  "click_through": true,
   "freeze_hotkey": "f10"
 }
