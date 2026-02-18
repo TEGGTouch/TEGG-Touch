@@ -186,7 +186,7 @@ def open_profile_manager(parent, on_switch):
     bx += btn_w + btn_gap
     _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE8C8", "\u590d\u5236", "pm_btn_copy", _copy_profile)
     bx += btn_w + btn_gap
-    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE896", "\u5bfc\u5165", "pm_btn_imp", _import_profile)
+    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE898", "\u5bfc\u5165", "pm_btn_imp", _import_profile)
 
     refresh_list()
 
@@ -293,7 +293,7 @@ def _draw_profile_row(parent, name, is_active, refresh_cb, switch_cb, top_win):
         else:
             messagebox.showerror("错误", "导出失败", parent=top_win)
 
-    btn_exp = tk.Label(row_frame, text="\uE898" if ifont else "↑",
+    btn_exp = tk.Label(row_frame, text="\uE896" if ifont else "↓",
                        bg=bg_color, fg=fg_color,
                        font=(ifont, 12) if ifont else ("Arial", 10),
                        cursor="hand2")
