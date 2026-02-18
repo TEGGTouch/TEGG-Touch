@@ -363,6 +363,72 @@ def rename_profile(old_name: str, new_name: str) -> bool:
     return True
 
 
+# ─── 导入导出 ─────────────────────────────────────────────────
+
+def export_profile(name: str, dest_path: str) -> bool:
+    """导出指定方案的 JSON 文件到目标路径。"""
+    src = _profile_path(name)
+    if not os.path.exists(src):
+        logger.error(f"导出失败: 方案文件不存在 {src}")
+        return False
+    try:
+        import shutil
+        shutil.copy2(src, dest_path)
+        logger.info(f"方案导出成功: {name} -> {dest_path}")
+        return True
+    except Exception as e:
+        logger.error(f"方案导出失败: {e}")
+        return False
+
+
+def import_profile(src_path: str) -> str | None:
+    """从外部 JSON 文件导入方案。
+
+    自动以文件名（去扩展名）作为方案名，若重名则添加后缀。
+    Returns: 新方案名，失败返回 None。
+    """
+    if not os.path.exists(src_path):
+        logger.error(f"导入失败: 文件不存在 {src_path}")
+        return None
+
+    # 读取并验证 JSON
+    try:
+        with open(src_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if not isinstance(data, dict) or 'buttons' not in data:
+            logger.error("导入失败: JSON 格式无效（缺少 buttons 字段）")
+            return None
+    except Exception as e:
+        logger.error(f"导入失败: {e}")
+        return None
+
+    # 确定方案名
+    base_name = os.path.splitext(os.path.basename(src_path))[0]
+    name = base_name
+    index = _load_index()
+    profiles = index.get("profiles", [])
+    counter = 1
+    while name in profiles:
+        name = f"{base_name}_{counter}"
+        counter += 1
+
+    # 写入 profiles 目录
+    dest = _profile_path(name)
+    try:
+        import shutil
+        shutil.copy2(src_path, dest)
+    except Exception as e:
+        logger.error(f"导入复制文件失败: {e}")
+        return None
+
+    # 更新索引
+    profiles.append(name)
+    index["profiles"] = profiles
+    _save_index(index)
+    logger.info(f"方案导入成功: {src_path} -> {name}")
+    return name
+
+
 # ─── 兼容接口 (旧 API) ───────────────────────────────────────
 
 def load_config(filepath: str = None) -> dict:

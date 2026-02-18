@@ -204,8 +204,6 @@ class FloatingApp:
             self.root, self.screen_w, self.screen_h,
             on_add=self.add_btn,
             on_run=self.to_run,
-            on_export=self.export_config,
-            on_import=self.import_config,
             on_quit=self.quit,
             transparency=self.transparency,
             on_alpha_change=self.set_alpha,

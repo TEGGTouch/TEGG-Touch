@@ -1,15 +1,18 @@
 """
 TEGG Touch - profile_manager.py
-方案管理弹窗：列表、新建、复制、重命名、删除。
+方案管理弹窗：列表、新建、复制、重命名、删除、导入、导出。
 """
 
 import tkinter as tk
 import tkinter.messagebox as messagebox
+import tkinter.filedialog as filedialog
 
 from core.constants import COLOR_TOOLBAR_TRANSPARENT, TOOLBAR_RADIUS
 from core.config_manager import (
     list_profiles, get_active_profile_name,
-    create_profile, delete_profile, rename_profile
+    create_profile, delete_profile, rename_profile,
+    export_profile, import_profile,
+    load_profile, save_profile,
 )
 from ui.widgets import (
     FF, FS, IS, BTN_H, BTN_R, CLOSE_SIZE, CLOSE_M,
@@ -24,7 +27,7 @@ def open_profile_manager(parent, on_switch):
     """打开方案管理弹窗。"""
     overlay = create_modal_overlay(parent)
 
-    width, height = 360, 420
+    width, height = 480, 540
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -128,12 +131,13 @@ def open_profile_manager(parent, on_switch):
         profiles = list_profiles()
         active = get_active_profile_name()
         for name in profiles:
-            _draw_profile_row(scrollable_frame, name, name == active, refresh_list, on_switch)
+            _draw_profile_row(scrollable_frame, name, name == active, refresh_list, on_switch, top)
 
-    # Bottom buttons
+    # Bottom buttons: 新建 | 复制 | 导入
     btn_h = 40
     btn_y = height - padding - btn_h
-    btn_w = (list_w - 10) // 2
+    btn_gap = 10
+    btn_w = (list_w - btn_gap * 2) // 3
 
     def _draw_pm_btn(x, y, w, h, icon_ch, label, tag, cb):
         rrect(c, x, y, w, h, BTN_R, fill=C_GRAY, outline="", tags=(tag, tag + "_bg"))
@@ -162,8 +166,27 @@ def open_profile_manager(parent, on_switch):
     def _copy_profile():
         _show_copy_profile_dialog(top, refresh_list, on_switch)
 
-    _draw_pm_btn(padding, btn_y, btn_w, btn_h, "\uE710", "\u65b0\u5efa", "pm_btn_new", _new_profile)
-    _draw_pm_btn(padding + btn_w + 10, btn_y, btn_w, btn_h, "\uE8C8", "\u590d\u5236", "pm_btn_copy", _copy_profile)
+    def _import_profile():
+        path = filedialog.askopenfilename(
+            title="导入方案",
+            filetypes=[("JSON", "*.json"), ("All", "*.*")],
+            parent=top,
+        )
+        if not path:
+            return
+        new_name = import_profile(path)
+        if new_name:
+            on_switch(new_name)
+            refresh_list()
+        else:
+            messagebox.showerror("错误", "导入失败，JSON 格式无效", parent=top)
+
+    bx = padding
+    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE710", "\u65b0\u5efa", "pm_btn_new", _new_profile)
+    bx += btn_w + btn_gap
+    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE8C8", "\u590d\u5236", "pm_btn_copy", _copy_profile)
+    bx += btn_w + btn_gap
+    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE896", "\u5bfc\u5165", "pm_btn_imp", _import_profile)
 
     refresh_list()
 
@@ -182,8 +205,8 @@ def open_profile_manager(parent, on_switch):
     list_frame_container.bind('<Leave>', _unbind_mousewheel)
 
 
-def _draw_profile_row(parent, name, is_active, refresh_cb, switch_cb):
-    """绘制方案列表中的一行。"""
+def _draw_profile_row(parent, name, is_active, refresh_cb, switch_cb, top_win):
+    """绘制方案列表中的一行。包含 编辑、删除、导出 三个按钮。"""
     h = 40
     row_frame = tk.Frame(parent, bg=C_PM_BG, height=h + 10)
     row_frame.pack(fill="x", pady=0)
@@ -222,13 +245,16 @@ def _draw_profile_row(parent, name, is_active, refresh_cb, switch_cb):
 
     c.create_text(left_x, cy, text=name, font=(FF, 10), fill=fg_color, anchor="w", tags="content")
 
-    # Edit
+    # --- 3 action buttons: Edit, Delete, Export ---
+
+    # Edit (rename)
     def _rename():
         _show_rename_dialog(parent, name, refresh_cb)
 
     btn_edit = tk.Label(row_frame, text="\uE70F" if ifont else "\u270e",
-                        bg=bg_color, fg=fg_color, font=(ifont, 12) if ifont else ("Arial", 11))
-    c.create_window(300, cy, window=btn_edit, anchor="e", tags="btn_edit")
+                        bg=bg_color, fg=fg_color, font=(ifont, 12) if ifont else ("Arial", 11),
+                        cursor="hand2")
+    c.create_window(0, cy, window=btn_edit, anchor="e", tags="btn_edit")
     btn_edit.bind("<Button-1>", lambda e: _rename())
 
     # Delete
@@ -243,18 +269,42 @@ def _draw_profile_row(parent, name, is_active, refresh_cb, switch_cb):
 
     btn_del = tk.Label(row_frame, text="\uE74D" if ifont else "✕",
                        bg=bg_color, fg="#888" if is_active else fg_color,
-                       font=(ifont, 12) if ifont else ("Arial", 10))
+                       font=(ifont, 12) if ifont else ("Arial", 10),
+                       cursor="hand2")
     if is_active:
-        btn_del.configure(state="disabled")
+        btn_del.configure(state="disabled", cursor="arrow")
     else:
         btn_del.bind("<Button-1>", lambda e: _delete())
+    c.create_window(0, cy, window=btn_del, anchor="e", tags="btn_del")
 
-    c.create_window(330, cy, window=btn_del, anchor="e", tags="btn_del")
+    # Export
+    def _export():
+        path = filedialog.asksaveasfilename(
+            title=f"导出方案 '{name}'",
+            initialfile=f"{name}.json",
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json"), ("All", "*.*")],
+            parent=top_win,
+        )
+        if not path:
+            return
+        if export_profile(name, path):
+            messagebox.showinfo("成功", f"方案 '{name}' 已导出", parent=top_win)
+        else:
+            messagebox.showerror("错误", "导出失败", parent=top_win)
+
+    btn_exp = tk.Label(row_frame, text="\uE898" if ifont else "↑",
+                       bg=bg_color, fg=fg_color,
+                       font=(ifont, 12) if ifont else ("Arial", 10),
+                       cursor="hand2")
+    btn_exp.bind("<Button-1>", lambda e: _export())
+    c.create_window(0, cy, window=btn_exp, anchor="e", tags="btn_exp")
 
     def _update_pos(e):
         w = c.winfo_width()
-        c.coords("btn_del", w - 10, cy)
-        c.coords("btn_edit", w - 40, cy)
+        c.coords("btn_exp", w - 10, cy)
+        c.coords("btn_del", w - 40, cy)
+        c.coords("btn_edit", w - 70, cy)
         _draw_bg(e)
 
     c.bind("<Configure>", _update_pos)

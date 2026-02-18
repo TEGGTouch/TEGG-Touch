@@ -25,7 +25,7 @@ from ui.canvas_renderer import init_cursor, update_cursor, remove_cursor
 
 
 def create_toolbar_window(parent, screen_w, screen_h, *,
-                          on_add, on_run, on_export, on_import,
+                          on_add, on_run,
                           on_quit, transparency, on_alpha_change,
                           on_switch_profile, on_edit_passthrough=None,
                           edit_passthrough=False,
@@ -123,13 +123,17 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
           fill=C_CYBER, outline="", tags=(cfg_tag, cfg_tag + "_bg"))
     cfg_cy = by + BTN_H // 2
     if ifont:
-        c.create_text(bx + 14, cfg_cy, text="\uE7FC", font=(ifont, IS),
+        c.create_text(bx + 14, cfg_cy, text="\uE765", font=(ifont, IS),
                       fill="#E0E0E0", anchor="w", tags=(cfg_tag,))
     active_profile = get_active_profile_name()
     c.create_text(bx + 40, cfg_cy, text=active_profile,
                   font=(FF, FS), fill="#E0E0E0", anchor="w", tags=(cfg_tag, "cfg_name"))
-    c.create_text(bx + _CFG_W - 16, cfg_cy, text="\u25be",
-                  font=(FF, -14), fill="#AAA", anchor="e", tags=(cfg_tag,))
+    if ifont:
+        c.create_text(bx + _CFG_W - 14, cfg_cy, text="\uE700",
+                      font=(ifont, IS - 2), fill="#AAA", anchor="e", tags=(cfg_tag,))
+    else:
+        c.create_text(bx + _CFG_W - 14, cfg_cy, text="\u2630",
+                      font=(FF, -14), fill="#AAA", anchor="e", tags=(cfg_tag,))
 
     def _cfg_en(e): i = c.find_withtag(cfg_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_CYBER_H)
     def _cfg_lv(e): i = c.find_withtag(cfg_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_CYBER)
@@ -149,15 +153,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     _txt_btn(bx, by, "\uE710", "\uff0b", "\u65b0\u5efa", "tadd", C_GRAY, C_GRAY_H, on_add)
     bx += _TBTN_W + GAP
 
-    # 3) Import
-    _txt_btn(bx, by, "\uE896", "\u2193", "\u5bfc\u5165", "timp", C_GRAY, C_GRAY_H, on_import)
-    bx += _TBTN_W + GAP
-
-    # 4) Export
-    _txt_btn(bx, by, "\uE898", "\u2191", "\u5bfc\u51fa", "texp", C_GRAY, C_GRAY_H, on_export)
-    bx += _TBTN_W + GAP
-
-    # 5) Separator
+    # 3) Separator
     sep_x = bx + 4
     c.create_line(sep_x, by + 4, sep_x, by + BTN_H - 4, fill="#555", width=1)
     bx += 12

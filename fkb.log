@@ -1,0 +1,6 @@
+2026-02-19 04:20:43,406 - core.config_manager - INFO - 坐标系迁移完成: 33 个按钮, 偏移 (1280, 720)
+2026-02-19 04:20:43,408 - core.config_manager - INFO - 坐标系迁移已回写: profiles\茶叶蛋.json
+2026-02-19 04:20:43,409 - core.config_manager - INFO - 配置加载成功: profiles\茶叶蛋.json
+2026-02-19 04:23:08,007 - core.config_manager - INFO - 配置保存成功: profiles\茶叶蛋.json
+2026-02-19 04:24:20,009 - core.config_manager - INFO - 配置保存成功: profiles\茶叶蛋.json
+2026-02-19 04:29:29,200 - core.config_manager - INFO - 配置保存成功: profiles\茶叶蛋.json
