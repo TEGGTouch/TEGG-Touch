@@ -153,12 +153,21 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     _txt_btn(bx, by, "\uE710", "\uff0b", "\u65b0\u5efa", "tadd", C_GRAY, C_GRAY_H, on_add)
     bx += _TBTN_W + GAP
 
-    # 3) Separator
+    # 3) Keyboard button
+    def _toggle_kb():
+        from ui.virtual_keyboard import toggle_soft_keyboard
+        toggle_soft_keyboard(top, mode="input")
+
+    _txt_btn(bx, by, "\uE765", "\u2328", "\u952e\u76d8", "tkb", C_GRAY, C_GRAY_H,
+             _toggle_kb)
+    bx += _TBTN_W + GAP
+
+    # 4) Separator
     sep_x = bx + 4
     c.create_line(sep_x, by + 4, sep_x, by + BTN_H - 4, fill="#555", width=1)
     bx += 12
 
-    # 6) Run button
+    # 5) Run button
     _RUN_W = 90
     run_tag = "trun"
     rrect(c, bx, by, _RUN_W, BTN_H, BTN_R,
