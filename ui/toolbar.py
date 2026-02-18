@@ -46,7 +46,18 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
 
     def _keep():
         try:
-            if top.winfo_exists(): top.lift(); top.after(300, _keep)
+            if top.winfo_exists():
+                top.lift()
+                # 同步 lift 软键盘 (同层级)
+                from ui.virtual_keyboard import get_kb_instance
+                kb = get_kb_instance()
+                if kb:
+                    try:
+                        if kb.winfo_exists():
+                            kb.lift()
+                    except Exception:
+                        pass
+                top.after(300, _keep)
         except: pass
     top.lift(); top.after(100, _keep)
 
@@ -74,7 +85,18 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     def _dm(e):
         nx = drag["wx"] + (e.x_root - drag["sx"])
         ny = drag["wy"] + (e.y_root - drag["sy"])
-        top.geometry(f"{tw}x{th}+{max(0, min(nx, screen_w - tw))}+{max(0, min(ny, screen_h - th))}")
+        nx = max(0, min(nx, screen_w - tw))
+        ny = max(0, min(ny, screen_h - th))
+        top.geometry(f"{tw}x{th}+{nx}+{ny}")
+        # 同步移动软键盘
+        from ui.virtual_keyboard import get_kb_instance, _position_above_toolbar
+        kb = get_kb_instance()
+        if kb:
+            try:
+                if kb.winfo_exists():
+                    _position_above_toolbar(kb, top)
+            except Exception:
+                pass
     for t in ("drag_zone", "toolbar_bg"):
         c.tag_bind(t, "<Button-1>", _ds)
         c.tag_bind(t, "<B1-Motion>", _dm)
@@ -618,6 +640,14 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
 
 
 def destroy_toolbar_window(toolbar_win):
-    """销毁工具栏窗口。"""
+    """销毁工具栏窗口（同时关闭软键盘）。"""
+    from ui.virtual_keyboard import get_kb_instance
+    kb = get_kb_instance()
+    if kb:
+        try:
+            if kb.winfo_exists():
+                kb.destroy()
+        except Exception:
+            pass
     if toolbar_win and toolbar_win.winfo_exists():
         toolbar_win.destroy()
