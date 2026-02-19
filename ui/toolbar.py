@@ -29,8 +29,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
                           on_add, on_run,
                           on_quit, transparency, on_alpha_change,
                           on_switch_profile, on_edit_passthrough=None,
-                          edit_passthrough=False,
-                          freeze_hotkey='f10', on_freeze_hotkey_change=None):
+                          edit_passthrough=False):
     """创建底部编辑工具栏窗口（居中显示）。"""
     tw, th = TOOLBAR_WIDTH, TOOLBAR_HEIGHT
     tx = (screen_w - tw) // 2
@@ -548,7 +547,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             _RUN_FS = -18
 
             # --- 2. 穿透模式 (三态循环按钮: PT_ON→PT_OFF→PT_BLOCK) ---
-            _PT_W = 140
+            _PT_W = 180
             pt_tag = "run_pt"
             _ct = state["click_through"]
 
@@ -559,9 +558,9 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             C_BLOCK_H = "#D32F2F"
 
             _PT_MAP = {
-                PT_ON:    {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE73E", "text": "\u7a7f\u900f ON",  "fg": "#FFF"},
-                PT_OFF:   {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE739", "text": "\u7a7f\u900f OFF", "fg": "#FFF"},
-                PT_BLOCK: {"bg": C_BLOCK,   "bg_h": C_BLOCK_H, "icon": "\uE72E", "text": "\u4e0d\u7a7f\u900f",   "fg": "#FFF"},
+                PT_ON:    {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE73E", "text": "\u7a7f\u900fON [F9]",   "fg": "#FFF"},
+                PT_OFF:   {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE739", "text": "\u7a7f\u900fOFF [F10]", "fg": "#FFF"},
+                PT_BLOCK: {"bg": C_BLOCK,   "bg_h": C_BLOCK_H, "icon": "\uE72E", "text": "\u4e0d\u7a7f\u900f [F11]",  "fg": "#FFF"},
             }
             _pm = _PT_MAP.get(_ct, _PT_MAP[PT_ON])
 

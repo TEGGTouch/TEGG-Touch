@@ -1,1 +1,9 @@
-2026-02-19 05:08:34,091 - core.config_manager - INFO - 配置加载成功: profiles\茶叶蛋.json
+2026-02-19 15:27:40,322 - core.config_manager - INFO - 配置加载成功: profiles\茶叶蛋.json
+2026-02-19 15:27:43,338 - core.config_manager - INFO - 配置保存成功: profiles\茶叶蛋.json
+2026-02-19 15:27:54,034 - core.input_engine - INFO - 光标冻结开启，锚点=(1395, 797)
+2026-02-19 15:29:32,655 - core.input_engine - INFO - 光标冻结关闭
+2026-02-19 15:31:06,996 - core.input_engine - INFO - 光标冻结开启，锚点=(1232, 1228)
+2026-02-19 15:31:11,404 - core.input_engine - INFO - 光标冻结关闭
+2026-02-19 15:31:23,262 - core.input_engine - INFO - 光标冻结开启，锚点=(807, 782)
+2026-02-19 15:31:41,450 - core.input_engine - INFO - 光标冻结关闭
+2026-02-19 15:31:46,078 - core.config_manager - INFO - 配置保存成功: profiles\茶叶蛋.json
