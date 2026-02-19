@@ -45,8 +45,20 @@ _HK_COLORS = {
 _HK_KEYS = ["auto_center", "toggle_buttons", "soft_keyboard",
             "pt_on", "pt_off", "pt_block", "stop"]
 
+# 每个快捷键的说明文本
+_HK_DESCS = {
+    "auto_center":    "没有触发按键后鼠标自动归位到中心",
+    "toggle_buttons": "运行时切换屏幕按钮的显示/隐藏",
+    "soft_keyboard":  "打开/关闭屏幕软键盘输入面板",
+    "pt_on":          "可以操作被按钮覆盖的游戏画面",
+    "pt_off":         "按钮覆盖的游戏画面不可被操作，空余区域可以",
+    "pt_block":       "视角几乎不会随鼠标移动，但按键操作有效",
+    "stop":           "退出运行模式，返回编辑界面",
+}
+
 # ─── 行布局常量 ────────────────────────────────────────────────
-ROW_H = 50
+ROW_H = 66
+DESC_H = 16        # 说明文本行高
 DOT_W = 20
 LABEL_W = 120
 INPUT_PAD = 10
@@ -62,7 +74,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
     PADDING = 20
     DIVIDER = 1
     width = LEFT_W + DIVIDER + RIGHT_W + PADDING * 2
-    height = 760
+    height = 880
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -188,6 +200,12 @@ def open_hotkey_settings(parent, on_save_callback=None):
     ti.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
     ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
     fields[key] = ti
+    # 说明文本
+    desc_text = _HK_DESCS.get("auto_center", "")
+    if desc_text:
+        desc_lbl = tk.Label(hk_frame_1, text=desc_text, bg=C_PM_BG, fg="#666",
+                            font=(FF, 8), anchor="w")
+        desc_lbl.place(x=input_x, y=wy + INPUT_H + 1, width=input_w, height=DESC_H)
 
     # ── 回中延迟滑块 (紧跟 auto_center 下方) ──
     delay_y = content_y + hk1_h + 4
@@ -218,6 +236,12 @@ def open_hotkey_settings(parent, on_save_callback=None):
         ti.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
         ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
         fields[key] = ti
+        # 说明文本
+        desc_text = _HK_DESCS.get(key, "")
+        if desc_text:
+            desc_lbl = tk.Label(hk_frame_2, text=desc_text, bg=C_PM_BG, fg="#666",
+                                font=(FF, 8), anchor="w")
+            desc_lbl.place(x=input_x, y=wy + INPUT_H + 1, width=input_w, height=DESC_H)
 
     delay_frame = tk.Frame(top, bg=C_PM_BG)
     delay_frame.place(x=form_x, y=delay_y, width=form_w, height=delay_total_h)
