@@ -27,12 +27,13 @@ from ui.about_dialog import open_about_dialog
 from ui.canvas_renderer import init_cursor, update_cursor, remove_cursor
 
 
-# ─── 工具栏 Tooltip 工具函数 ────────────────────────────────
-_TIP_TAG = "toolbar_tip"
+# ─── 工具栏 Tooltip 工具函数 (Toplevel 浮窗, 不被裁剪) ──────
+_tip_win = None
 
 def _show_tip(canvas, tag, text):
-    """在按钮上方显示黑色 tooltip。"""
-    canvas.delete(_TIP_TAG)
+    """在按钮上方显示独立浮窗 tooltip (不受工具栏边界裁剪)。"""
+    global _tip_win
+    _hide_tip(canvas)
     bbox = canvas.bbox(tag + "_bg")
     if not bbox:
         bbox = canvas.bbox(tag)
@@ -40,21 +41,37 @@ def _show_tip(canvas, tag, text):
         return
     x1, y1, x2, y2 = bbox
     cx = (x1 + x2) // 2
-    ty = y1 - 6
-    tid = canvas.create_text(cx, ty, text=text, anchor="s",
-                             font=("Microsoft YaHei UI", -12), fill="#E0E0E0",
-                             tags=_TIP_TAG)
-    tb = canvas.bbox(tid)
-    if tb:
-        pad = 4
-        bg_id = canvas.create_rectangle(
-            tb[0] - pad, tb[1] - pad, tb[2] + pad, tb[3] + pad,
-            fill="#1A1A1A", outline="#333", width=1, tags=_TIP_TAG)
-        canvas.tag_raise(tid)
+    # 屏幕绝对坐标
+    sx = canvas.winfo_rootx() + cx
+    sy = canvas.winfo_rooty() + y1
+    # 创建独立 Toplevel 浮窗
+    _tip_win = tk.Toplevel(canvas)
+    _tip_win.overrideredirect(True)
+    _tip_win.attributes("-topmost", True)
+    _tip_win.configure(bg="#1A1A1A")
+    lbl = tk.Label(_tip_win, text=text,
+                   font=("Microsoft YaHei UI", 9),
+                   fg="#E0E0E0", bg="#1A1A1A",
+                   padx=6, pady=3,
+                   highlightbackground="#333", highlightthickness=1)
+    lbl.pack()
+    _tip_win.update_idletasks()
+    tw = _tip_win.winfo_reqwidth()
+    th = _tip_win.winfo_reqheight()
+    # 居中于按钮上方
+    tx = sx - tw // 2
+    ty = sy - th - 4
+    _tip_win.geometry(f"+{tx}+{ty}")
 
-def _hide_tip(canvas):
-    """移除 tooltip。"""
-    canvas.delete(_TIP_TAG)
+def _hide_tip(canvas=None):
+    """销毁 tooltip 浮窗。"""
+    global _tip_win
+    if _tip_win:
+        try:
+            _tip_win.destroy()
+        except Exception:
+            pass
+        _tip_win = None
 
 
 def create_toolbar_window(parent, screen_w, screen_h, *,
