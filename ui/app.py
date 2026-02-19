@@ -696,13 +696,13 @@ class FloatingApp:
                                     btn['active_hover'] = True
                                     remove_charge_bar(self.canvas, btn)
                                     trigger(btn['hover'], 'p')
-                    if left_down and not self.left_was_down:
+                    if left_down and not self.left_was_down and btn.get('lclick'):
                         self.holding_btn_left = idx
                         trigger(btn['lclick'], 'p')
-                    if right_down and not self.right_was_down:
+                    if right_down and not self.right_was_down and btn.get('rclick'):
                         self.holding_btn_right = idx
                         trigger(btn['rclick'], 'p')
-                    if middle_down and not self.middle_was_down:
+                    if middle_down and not self.middle_was_down and btn.get('mclick'):
                         self.holding_btn_middle = idx
                         trigger(btn['mclick'], 'p')
                 else:
@@ -731,11 +731,11 @@ class FloatingApp:
             if in_rect:
                 if btn.get('active_hover'):
                     target_state = 'hover'
-                if left_down:
+                if left_down and btn.get('lclick'):
                     target_state = 'active_left'
-                elif right_down:
+                elif right_down and btn.get('rclick'):
                     target_state = 'active_right'
-                elif middle_down:
+                elif middle_down and btn.get('mclick'):
                     target_state = 'active_middle'
 
             if btn.get('last_visual_state') != target_state:
@@ -773,13 +773,13 @@ class FloatingApp:
                                 set_button_visual_state(self.canvas, btn, 'hover')
                                 btn['last_visual_state'] = 'hover'
 
-                if left_down and not self.left_was_down:
+                if left_down and not self.left_was_down and btn.get('lclick'):
                     self.holding_btn_left = idx
                     trigger(btn['lclick'], 'p')
-                if right_down and not self.right_was_down:
+                if right_down and not self.right_was_down and btn.get('rclick'):
                     self.holding_btn_right = idx
                     trigger(btn['rclick'], 'p')
-                if middle_down and not self.middle_was_down:
+                if middle_down and not self.middle_was_down and btn.get('mclick'):
                     self.holding_btn_middle = idx
                     trigger(btn['mclick'], 'p')
             else:
