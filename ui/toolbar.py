@@ -569,6 +569,50 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             # --- 统一按钮字号 = -18 (与退出/编辑一致) ---
             _RUN_FS = -18
 
+            # --- 1.5 自动回中 [F6] (toggle 按钮, 绿/灰两态) ---
+            _AC_W = 150
+            ac_tag = "run_ac"
+            ac_on = state["auto_center"]
+            C_GREEN = "#176F2C"
+            C_GREEN_H = "#1E8E38"
+
+            ac_bg = C_GREEN if ac_on else C_GRAY
+            ac_bg_h = C_GREEN_H if ac_on else C_GRAY_H
+            ac_icon = "\uE7C9" if ac_on else "\uEA3A"
+            ac_text = "\u56de\u4e2dON [F6]" if ac_on else "\u56de\u4e2dOFF [F6]"
+            ac_fg = "#FFF" if ac_on else "#E0E0E0"
+
+            rrect(c, bx, by, _AC_W, BTN_H_RUN, BTN_R, fill=ac_bg, outline="", tags=(ac_tag, ac_tag+"_bg"))
+            ac_cy = by + BTN_H_RUN // 2
+            if ifont:
+                c.create_text(bx + 10, ac_cy, text=ac_icon, font=(ifont, IS),
+                              fill=ac_fg, anchor="w", tags=(ac_tag,))
+                c.create_text(bx + 34, ac_cy, text=ac_text,
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill=ac_fg, anchor="w", tags=(ac_tag,))
+            else:
+                c.create_text(bx + _AC_W//2, ac_cy, text=ac_text,
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill=ac_fg, tags=(ac_tag,))
+
+            def _ac_enter(e):
+                _bh = C_GREEN_H if state["auto_center"] else C_GRAY_H
+                c.itemconfigure(ac_tag+"_bg", fill=_bh)
+            def _ac_leave(e):
+                _bg = C_GREEN if state["auto_center"] else C_GRAY
+                c.itemconfigure(ac_tag+"_bg", fill=_bg)
+            c.tag_bind(ac_tag, "<Enter>", _ac_enter)
+            c.tag_bind(ac_tag, "<Leave>", _ac_leave)
+
+            def _toggle_ac(e=None):
+                state["auto_center"] = not state["auto_center"]
+                if on_toggle_auto_center:
+                    on_toggle_auto_center(state["auto_center"])
+                redraw()
+
+            c.tag_bind(ac_tag, "<ButtonRelease-1>", lambda e: _toggle_ac())
+            bx += _AC_W + GAP
+
             # --- 2. 显示/隐藏按键 [F7] (toggle 按钮, 灰色风格) ---
             _VIS_W = 160
             vis_tag = "run_vis"
@@ -660,50 +704,6 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
 
             c.tag_bind(pt_tag, "<ButtonRelease-1>", lambda e: _toggle_pt_wrapper())
             bx += _PT_W + GAP
-
-            # --- 5. 自动回中 [F6] (toggle 按钮, 蓝/灰两态) ---
-            _AC_W = 150
-            ac_tag = "run_ac"
-            ac_on = state["auto_center"]
-            C_GREEN = "#176F2C"
-            C_GREEN_H = "#1E8E38"
-
-            ac_bg = C_GREEN if ac_on else C_GRAY
-            ac_bg_h = C_GREEN_H if ac_on else C_GRAY_H
-            ac_icon = "\uE7C9" if ac_on else "\uEA3A"
-            ac_text = "\u56de\u4e2dON [F6]" if ac_on else "\u56de\u4e2dOFF [F6]"
-            ac_fg = "#FFF" if ac_on else "#E0E0E0"
-
-            rrect(c, bx, by, _AC_W, BTN_H_RUN, BTN_R, fill=ac_bg, outline="", tags=(ac_tag, ac_tag+"_bg"))
-            ac_cy = by + BTN_H_RUN // 2
-            if ifont:
-                c.create_text(bx + 10, ac_cy, text=ac_icon, font=(ifont, IS),
-                              fill=ac_fg, anchor="w", tags=(ac_tag,))
-                c.create_text(bx + 34, ac_cy, text=ac_text,
-                              font=("Microsoft YaHei UI", _RUN_FS),
-                              fill=ac_fg, anchor="w", tags=(ac_tag,))
-            else:
-                c.create_text(bx + _AC_W//2, ac_cy, text=ac_text,
-                              font=("Microsoft YaHei UI", _RUN_FS),
-                              fill=ac_fg, tags=(ac_tag,))
-
-            def _ac_enter(e):
-                _bh = C_GREEN_H if state["auto_center"] else C_GRAY_H
-                c.itemconfigure(ac_tag+"_bg", fill=_bh)
-            def _ac_leave(e):
-                _bg = C_GREEN if state["auto_center"] else C_GRAY
-                c.itemconfigure(ac_tag+"_bg", fill=_bg)
-            c.tag_bind(ac_tag, "<Enter>", _ac_enter)
-            c.tag_bind(ac_tag, "<Leave>", _ac_leave)
-
-            def _toggle_ac(e=None):
-                state["auto_center"] = not state["auto_center"]
-                if on_toggle_auto_center:
-                    on_toggle_auto_center(state["auto_center"])
-                redraw()
-
-            c.tag_bind(ac_tag, "<ButtonRelease-1>", lambda e: _toggle_ac())
-            bx += _AC_W + GAP
 
             # --- 分隔线 ---
             c.create_line(bx, by + 4, bx, by + BTN_H_RUN - 4, fill="#555", width=1)

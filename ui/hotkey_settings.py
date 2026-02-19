@@ -158,36 +158,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
                              highlightcolor=widget._accent)
         widget.focus_set()
 
-    # 创建快捷键行的容器
-    hk_frame = tk.Frame(top, bg=C_PM_BG)
-    hk_h = len(_HK_KEYS) * ROW_H
-    hk_frame.place(x=form_x, y=content_y, width=form_w, height=hk_h)
-    hk_frame.lift()
-
-    for i, key in enumerate(_HK_KEYS):
-        local_y = i * ROW_H
-        color = _HK_COLORS.get(key, C_AMBER)
-        label_text = HOTKEY_LABELS.get(key, key)
-        current_val = hotkeys.get(key, DEFAULT_HOTKEYS[key])
-
-        # 色块
-        dot = tk.Frame(hk_frame, bg=color, width=8, height=8)
-        dot.place(x=4, y=local_y + (ROW_H - 8) // 2, width=8, height=8)
-
-        # 标签
-        lbl = tk.Label(hk_frame, text=label_text, bg=C_PM_BG, fg="#CCC",
-                       font=(FF, 10), anchor="w")
-        lbl.place(x=DOT_W, y=local_y, height=ROW_H)
-
-        # TagInput
-        wy = local_y + (ROW_H - INPUT_H) // 2
-        ti = TagInput(hk_frame, initial_value=current_val, accent_color=color)
-        ti.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
-        ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
-        fields[key] = ti
-
-    # ── 回中延迟滑块 ──
-    delay_y = content_y + hk_h + 20
+    # ── 延迟滑块常量 (提前定义用于计算布局) ──
     _DELAY_COLOR = '#176F2C'
     _DELAY_ROW_H = 36
     _DELAY_SLIDER_H = 28
@@ -195,9 +166,60 @@ def open_hotkey_settings(parent, on_save_callback=None):
     _DELAY_MS_W = 26
     _SL_TK_H = 8
     _SL_TR = 10
+    delay_total_h = _DELAY_ROW_H + 4 + _DELAY_SLIDER_H
+
+    # ── 第一组: auto_center ──
+    hk_frame_1 = tk.Frame(top, bg=C_PM_BG)
+    hk1_h = ROW_H
+    hk_frame_1.place(x=form_x, y=content_y, width=form_w, height=hk1_h)
+    hk_frame_1.lift()
+
+    key = "auto_center"
+    color = _HK_COLORS.get(key, C_AMBER)
+    label_text = HOTKEY_LABELS.get(key, key)
+    current_val = hotkeys.get(key, DEFAULT_HOTKEYS[key])
+    dot = tk.Frame(hk_frame_1, bg=color, width=8, height=8)
+    dot.place(x=4, y=(ROW_H - 8) // 2, width=8, height=8)
+    lbl = tk.Label(hk_frame_1, text=label_text, bg=C_PM_BG, fg="#CCC",
+                   font=(FF, 10), anchor="w")
+    lbl.place(x=DOT_W, y=0, height=ROW_H)
+    wy = (ROW_H - INPUT_H) // 2
+    ti = TagInput(hk_frame_1, initial_value=current_val, accent_color=color)
+    ti.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
+    ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
+    fields[key] = ti
+
+    # ── 回中延迟滑块 (紧跟 auto_center 下方) ──
+    delay_y = content_y + hk1_h + 4
+
+    # ── 第二组: 其余快捷键 ──
+    _HK_REST = [k for k in _HK_KEYS if k != "auto_center"]
+    hk2_y = delay_y + delay_total_h + 10
+    hk_frame_2 = tk.Frame(top, bg=C_PM_BG)
+    hk2_h = len(_HK_REST) * ROW_H
+    hk_frame_2.place(x=form_x, y=hk2_y, width=form_w, height=hk2_h)
+    hk_frame_2.lift()
+
+    for i, key in enumerate(_HK_REST):
+        local_y = i * ROW_H
+        color = _HK_COLORS.get(key, C_AMBER)
+        label_text = HOTKEY_LABELS.get(key, key)
+        current_val = hotkeys.get(key, DEFAULT_HOTKEYS[key])
+
+        dot = tk.Frame(hk_frame_2, bg=color, width=8, height=8)
+        dot.place(x=4, y=local_y + (ROW_H - 8) // 2, width=8, height=8)
+
+        lbl = tk.Label(hk_frame_2, text=label_text, bg=C_PM_BG, fg="#CCC",
+                       font=(FF, 10), anchor="w")
+        lbl.place(x=DOT_W, y=local_y, height=ROW_H)
+
+        wy = local_y + (ROW_H - INPUT_H) // 2
+        ti = TagInput(hk_frame_2, initial_value=current_val, accent_color=color)
+        ti.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
+        ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
+        fields[key] = ti
 
     delay_frame = tk.Frame(top, bg=C_PM_BG)
-    delay_total_h = _DELAY_ROW_H + 4 + _DELAY_SLIDER_H
     delay_frame.place(x=form_x, y=delay_y, width=form_w, height=delay_total_h)
     delay_frame.lift()
 
