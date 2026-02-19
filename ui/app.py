@@ -23,6 +23,7 @@ from core.constants import (
     COLOR_BG, COLOR_TRANSPARENT,
     GRID_SIZE,
     PT_ON, PT_OFF, PT_BLOCK, PT_CYCLE,
+    BTN_TYPE_CENTER_BAND, BTN_TYPE_WHEEL_SECTOR,
     default_wheel_sectors,
 )
 from core.config_manager import (
@@ -310,12 +311,16 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         if self.wheel_visible and self.wheel_sectors:
             draw_wheel_sectors(self.canvas, self.wheel_sectors,
                                self._offset_x, self._offset_y)
-            # 编辑模式下绑定双击编辑事件
+            # 编辑模式下绑定双击编辑 + hover tooltip 事件
             if self.current_mode == 'main':
                 for wi in range(len(self.wheel_sectors)):
                     wtag = f"wheel_sector_{wi}"
                     self.canvas.tag_bind(wtag, "<Double-Button-1>",
                                          lambda e, i=wi: self._edit_wheel_sector(i))
+                    self.canvas.tag_bind(wtag, "<Enter>",
+                                         lambda e, i=wi: self._show_edit_tooltip(e, self.wheel_sectors[i], is_wheel=True))
+                    self.canvas.tag_bind(wtag, "<Leave>",
+                                         lambda e: self._hide_edit_tooltip())
 
         if self.current_mode == 'run':
             init_cursor(self.canvas)
@@ -332,7 +337,81 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         for tag in [tag_poly, tag_text]:
             self.canvas.tag_bind(tag, "<B1-Motion>", lambda e, i=idx: self.on_btn_drag(e, i))
             self.canvas.tag_bind(tag, "<Double-Button-1>", lambda e, i=idx: self.edit_btn(i))
+            self.canvas.tag_bind(tag, "<Enter>", lambda e, i=idx: self._show_edit_tooltip(e, self.buttons[i]))
+            self.canvas.tag_bind(tag, "<Leave>", lambda e: self._hide_edit_tooltip())
         self.canvas.tag_bind(tag_resize, "<B1-Motion>", lambda e, i=idx: self.on_btn_resize(e, i))
+
+    # ─── 编辑模式 Tooltip ────────────────────────────────────
+
+    def _build_tooltip_text(self, btn_data, is_wheel=False):
+        """根据按钮类型构建 tooltip 文本。"""
+        btn_type = btn_data.get('type', '')
+
+        if btn_type == BTN_TYPE_CENTER_BAND:
+            return "鼠标到这里就会回中"
+
+        # 普通按钮 / 轮盘扇区：显示所有配置参数
+        fields = [
+            ('名称', 'name'),
+            ('悬停', 'hover'),
+            ('左键', 'lclick'),
+            ('右键', 'rclick'),
+            ('中键', 'mclick'),
+            ('滚上', 'wheelup'),
+            ('滚下', 'wheeldown'),
+        ]
+        lines = []
+        for label, key in fields:
+            val = btn_data.get(key, '')
+            lines.append(f"{label}: {val}")
+
+        if is_wheel:
+            lines.append("⚠ 中心轮盘不可移动和放大")
+
+        return "\n".join(lines)
+
+    def _show_edit_tooltip(self, event, btn_data, is_wheel=False):
+        """在鼠标附近显示配置参数 tooltip。"""
+        self._hide_edit_tooltip()
+        text = self._build_tooltip_text(btn_data, is_wheel=is_wheel)
+
+        # tooltip 位置：鼠标右下方偏移
+        tx = event.x + 16
+        ty = event.y + 16
+
+        # 先绘制文字以获取 bbox
+        tid = self.canvas.create_text(
+            tx + 8, ty + 6, text=text, anchor="nw",
+            font=("Microsoft YaHei UI", 9), fill="#E0E0E0",
+            tags="edit_tooltip",
+        )
+        bbox = self.canvas.bbox(tid)
+        if bbox:
+            pad = 6
+            x1, y1, x2, y2 = bbox
+            # 如果超出屏幕右侧，移到鼠标左侧
+            if x2 + pad > self.screen_w:
+                offset = (x2 - x1) + 32
+                self.canvas.move(tid, -offset, 0)
+                x1 -= offset
+                x2 -= offset
+            # 如果超出屏幕底部，移到鼠标上方
+            if y2 + pad > self.screen_h:
+                offset = (y2 - y1) + 32
+                self.canvas.move(tid, 0, -offset)
+                y1 -= offset
+                y2 -= offset
+            # 背景矩形
+            bg = self.canvas.create_rectangle(
+                x1 - pad, y1 - pad, x2 + pad, y2 + pad,
+                fill="#1A1A2E", outline="#444466", width=1,
+                tags="edit_tooltip",
+            )
+            self.canvas.tag_lower(bg, tid)
+
+    def _hide_edit_tooltip(self):
+        """移除 tooltip。"""
+        self.canvas.delete("edit_tooltip")
 
     # ─── 悬浮球 UI 事件 ─────────────────────────────────────
 
