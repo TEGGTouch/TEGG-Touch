@@ -22,6 +22,7 @@ from ui.widgets import (
     icon_font, rrect,
 )
 from ui.profile_manager import open_profile_manager
+from ui.hotkey_settings import open_hotkey_settings
 from ui.canvas_renderer import init_cursor, update_cursor, remove_cursor
 
 
@@ -100,6 +101,25 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     for t in ("drag_zone", "toolbar_bg"):
         c.tag_bind(t, "<Button-1>", _ds)
         c.tag_bind(t, "<B1-Motion>", _dm)
+
+    # --- Settings button (top-right, left of close) ---
+    _SET_SIZE = CLOSE_SIZE
+    _SET_GAP = 4
+    sx0 = tw - CLOSE_M - CLOSE_SIZE - _SET_GAP - _SET_SIZE
+    C_SET_ED = "#4A4A4A"
+    C_SET_ED_H = "#5A5A5A"
+    rrect(c, sx0, CLOSE_M, _SET_SIZE, _SET_SIZE, BTN_R,
+          fill=C_SET_ED, outline="", tags=("tset", "tset_bg"))
+    scx, scy = sx0 + _SET_SIZE // 2, CLOSE_M + _SET_SIZE // 2
+    if ifont:
+        c.create_text(scx, scy, text="\uE713", font=(ifont, IS), fill="#CCC", tags=("tset",))
+    else:
+        c.create_text(scx, scy, text="\u2699", font=(FF, FS, "bold"), fill="#CCC", tags=("tset",))
+    def _se(e): i = c.find_withtag("tset_bg"); i and c.itemconfigure(i[0], fill=C_SET_ED_H)
+    def _sl2(e): i = c.find_withtag("tset_bg"); i and c.itemconfigure(i[0], fill=C_SET_ED)
+    c.tag_bind("tset", "<Enter>", _se)
+    c.tag_bind("tset", "<Leave>", _sl2)
+    c.tag_bind("tset", "<ButtonRelease-1>", lambda e: open_hotkey_settings(top))
 
     # --- Close button (top-right) ---
     cx0 = tw - CLOSE_M - CLOSE_SIZE
@@ -688,27 +708,6 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             # --- 分隔线 ---
             c.create_line(bx, by + 4, bx, by + BTN_H_RUN - 4, fill="#555", width=1)
             bx += 12
-
-            # --- 5.5 设置 (齿轮按钮) ---
-            _SET_W = 44
-            set_tag = "run_set"
-            C_SET = "#4A4A4A"
-            C_SET_H = "#5A5A5A"
-            rrect(c, bx, by, _SET_W, BTN_H_RUN, BTN_R, fill=C_SET, outline="", tags=(set_tag, set_tag+"_bg"))
-            set_cy = by + BTN_H_RUN // 2
-            if ifont:
-                c.create_text(bx + _SET_W // 2, set_cy, text="\uE713", font=(ifont, IS), fill="#CCC", tags=(set_tag,))
-            else:
-                c.create_text(bx + _SET_W // 2, set_cy, text="\u2699", font=("Microsoft YaHei UI", 14), fill="#CCC", tags=(set_tag,))
-            def _set_en(e): c.itemconfigure(set_tag+"_bg", fill=C_SET_H)
-            def _set_lv(e): c.itemconfigure(set_tag+"_bg", fill=C_SET)
-            c.tag_bind(set_tag, "<Enter>", _set_en)
-            c.tag_bind(set_tag, "<Leave>", _set_lv)
-            def _open_settings_click():
-                if on_open_settings:
-                    on_open_settings()
-            c.tag_bind(set_tag, "<ButtonRelease-1>", lambda e: _open_settings_click())
-            bx += _SET_W + GAP
 
             # --- 6. 停止 [F12] ---
             _EXIT_W = 130
