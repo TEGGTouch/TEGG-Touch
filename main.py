@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='fkb.log',
+    filename='teggtouch.log',
     filemode='w'
 )
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def main():
         root.mainloop()
     except Exception as e:
         logger.critical(f"Unhandled exception: {e}", exc_info=True)
-        messagebox.showerror("严重错误", f"程序发生未捕获异常:\n{e}\n请查看 fkb.log")
+        messagebox.showerror("严重错误", f"程序发生未捕获异常:\n{e}\n请查看 teggtouch.log")
 
 if __name__ == "__main__":
     main()
