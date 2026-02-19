@@ -209,27 +209,25 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     bx += _CFG_W + GAP
 
     # 2) Add
-    _txt_btn(bx, by, "\uE710", "\uff0b", "\u65b0\u5efa", "tadd", C_GRAY, C_GRAY_H, on_add)
+    _txt_btn(bx, by, "\uE710", "\uff0b", "\u6309\u94ae", "tadd", C_GRAY, C_GRAY_H, on_add)
     bx += _TBTN_W + GAP
 
-    # 2b) Add Center Band (回中带)
+    # 2b) Add Center Band (回中带) — 灰色统一样式
     if on_add_center_band:
         _CB_W = 110
-        _C_GREEN_TB = "#176F2C"
-        _C_GREEN_TB_H = "#1E8E38"
         cb_tag = "tcb"
-        rrect(c, bx, by, _CB_W, BTN_H, BTN_R, fill=_C_GREEN_TB, outline="", tags=(cb_tag, cb_tag + "_bg"))
+        rrect(c, bx, by, _CB_W, BTN_H, BTN_R, fill=C_GRAY, outline="", tags=(cb_tag, cb_tag + "_bg"))
         cb_cy = by + BTN_H // 2
         if ifont:
-            c.create_text(bx + 12, cb_cy, text="\uE7C9", font=(ifont, IS),
-                          fill="#FFF", anchor="w", tags=(cb_tag,))
+            c.create_text(bx + 12, cb_cy, text="\uE710", font=(ifont, IS),
+                          fill="#E0E0E0", anchor="w", tags=(cb_tag,))
             c.create_text(bx + 38, cb_cy, text="\u56de\u4e2d\u5e26", font=(FF, FS),
-                          fill="#FFF", anchor="w", tags=(cb_tag,))
+                          fill="#E0E0E0", anchor="w", tags=(cb_tag,))
         else:
-            c.create_text(bx + 12, cb_cy, text="\u229a \u56de\u4e2d\u5e26", font=(FF, FS, "bold"),
-                          fill="#FFF", anchor="w", tags=(cb_tag,))
-        def _cb_en(e): i = c.find_withtag(cb_tag + "_bg"); i and c.itemconfigure(i[0], fill=_C_GREEN_TB_H)
-        def _cb_lv(e): i = c.find_withtag(cb_tag + "_bg"); i and c.itemconfigure(i[0], fill=_C_GREEN_TB)
+            c.create_text(bx + 12, cb_cy, text="\uff0b \u56de\u4e2d\u5e26", font=(FF, FS, "bold"),
+                          fill="#E0E0E0", anchor="w", tags=(cb_tag,))
+        def _cb_en(e): i = c.find_withtag(cb_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_GRAY_H)
+        def _cb_lv(e): i = c.find_withtag(cb_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_GRAY)
         c.tag_bind(cb_tag, "<Enter>", _cb_en)
         c.tag_bind(cb_tag, "<Leave>", _cb_lv)
         c.tag_bind(cb_tag, "<ButtonRelease-1>", lambda e: on_add_center_band())
