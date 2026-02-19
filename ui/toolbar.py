@@ -546,7 +546,50 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             # --- 统一按钮字号 = -18 (与退出/编辑一致) ---
             _RUN_FS = -18
 
-            # --- 2. 穿透模式 (三态循环按钮: PT_ON→PT_OFF→PT_BLOCK) ---
+            # --- 2. 显示/隐藏按键 [F7] (toggle 按钮, 灰色风格) ---
+            _VIS_W = 160
+            vis_tag = "run_vis"
+            vis_on = state["buttons_visible"]
+            vis_icon = "\uED1A" if vis_on else "\uE7B3"
+            vis_text = "\u9690\u85cf\u6309\u952e [F7]" if vis_on else "\u663e\u793a\u6309\u952e [F7]"
+
+            rrect(c, bx, by, _VIS_W, BTN_H_RUN, BTN_R, fill=C_GRAY, outline="", tags=(vis_tag, vis_tag+"_bg"))
+            vis_cy = by + BTN_H_RUN // 2
+            if ifont:
+                c.create_text(bx + 10, vis_cy, text=vis_icon, font=(ifont, IS),
+                              fill="#E0E0E0", anchor="w", tags=(vis_tag,))
+                c.create_text(bx + 34, vis_cy, text=vis_text,
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill="#E0E0E0", anchor="w", tags=(vis_tag,))
+            else:
+                c.create_text(bx + _VIS_W//2, vis_cy, text=vis_text,
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill="#E0E0E0", tags=(vis_tag,))
+
+            def _vis_enter(e): c.itemconfigure(vis_tag+"_bg", fill=C_GRAY_H)
+            def _vis_leave(e): c.itemconfigure(vis_tag+"_bg", fill=C_GRAY)
+            c.tag_bind(vis_tag, "<Enter>", _vis_enter)
+            c.tag_bind(vis_tag, "<Leave>", _vis_leave)
+
+            def _toggle_vis(e=None):
+                state["buttons_visible"] = not state["buttons_visible"]
+                if on_toggle_buttons:
+                    on_toggle_buttons(state["buttons_visible"])
+                redraw()
+
+            c.tag_bind(vis_tag, "<ButtonRelease-1>", lambda e: _toggle_vis())
+            bx += _VIS_W + GAP
+
+            # --- 3. 软键盘 [F8] ---
+            _KB_BTN_W = 130
+            def _toggle_kb_run():
+                from ui.virtual_keyboard import toggle_soft_keyboard
+                toggle_soft_keyboard(top, mode="input")
+
+            _run_btn(bx, _KB_BTN_W, "\u8f6f\u952e\u76d8 [F8]", "\uE765", "btn_kb", C_GRAY, _toggle_kb_run, font_size=_RUN_FS, bold=False)
+            bx += _KB_BTN_W + GAP
+
+            # --- 4. 穿透模式 (三态循环按钮: PT_ON→PT_OFF→PT_BLOCK) ---
             _PT_W = 180
             pt_tag = "run_pt"
             _ct = state["click_through"]
@@ -595,57 +638,13 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             c.tag_bind(pt_tag, "<ButtonRelease-1>", lambda e: _toggle_pt_wrapper())
             bx += _PT_W + GAP
 
-            # --- 3. 显示/隐藏按键 (toggle 按钮, 灰色风格) ---
-            _VIS_W = 130
-            vis_tag = "run_vis"
-            vis_on = state["buttons_visible"]
-            vis_icon = "\uED1A" if vis_on else "\uE7B3"
-            vis_text = "\u9690\u85cf\u6309\u952e" if vis_on else "\u663e\u793a\u6309\u952e"
-
-            rrect(c, bx, by, _VIS_W, BTN_H_RUN, BTN_R, fill=C_GRAY, outline="", tags=(vis_tag, vis_tag+"_bg"))
-            vis_cy = by + BTN_H_RUN // 2
-            vis_cx = bx + _VIS_W // 2  # 按钮水平中心
-            if ifont:
-                c.create_text(bx + 10, vis_cy, text=vis_icon, font=(ifont, IS),
-                              fill="#E0E0E0", anchor="w", tags=(vis_tag,))
-                c.create_text(bx + 34, vis_cy, text=vis_text,
-                              font=("Microsoft YaHei UI", _RUN_FS),
-                              fill="#E0E0E0", anchor="w", tags=(vis_tag,))
-            else:
-                c.create_text(bx + _VIS_W//2, vis_cy, text=vis_text,
-                              font=("Microsoft YaHei UI", _RUN_FS),
-                              fill="#E0E0E0", tags=(vis_tag,))
-
-            def _vis_enter(e): c.itemconfigure(vis_tag+"_bg", fill=C_GRAY_H)
-            def _vis_leave(e): c.itemconfigure(vis_tag+"_bg", fill=C_GRAY)
-            c.tag_bind(vis_tag, "<Enter>", _vis_enter)
-            c.tag_bind(vis_tag, "<Leave>", _vis_leave)
-
-            def _toggle_vis(e=None):
-                state["buttons_visible"] = not state["buttons_visible"]
-                if on_toggle_buttons:
-                    on_toggle_buttons(state["buttons_visible"])
-                redraw()
-
-            c.tag_bind(vis_tag, "<ButtonRelease-1>", lambda e: _toggle_vis())
-            bx += _VIS_W + GAP
-
-            # --- 4. 软键盘按钮 ---
-            _KB_BTN_W = 110
-            def _toggle_kb_run():
-                from ui.virtual_keyboard import toggle_soft_keyboard
-                toggle_soft_keyboard(top, mode="input")
-
-            _run_btn(bx, _KB_BTN_W, "\u8f6f\u952e\u76d8", "\uE765", "btn_kb", C_GRAY, _toggle_kb_run, font_size=_RUN_FS, bold=False)
-            bx += _KB_BTN_W + GAP
-
             # --- 分隔线 ---
             c.create_line(bx, by + 4, bx, by + BTN_H_RUN - 4, fill="#555", width=1)
             bx += 12
 
-            # --- 5. 停止 ---
+            # --- 5. 停止 [F12] ---
             _EXIT_W = 130
-            _run_btn(bx, _EXIT_W, "\u505c\u6b62[F12]", "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
+            _run_btn(bx, _EXIT_W, "\u505c\u6b62 [F12]", "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
             bx += _EXIT_W + 10
             
             # 动态更新窗口宽度以适应内容

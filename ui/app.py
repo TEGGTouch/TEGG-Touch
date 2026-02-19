@@ -449,7 +449,19 @@ class FloatingApp:
                     self.root.after(1, self.update_loop)
                     return
 
-                # 0b. 穿透模式快捷键 (F9/F10/F11 直接切换)
+                # 0b. 隐藏/显示按键 (F7)
+                if is_key_pressed('f7'):
+                    self.toggle_buttons_visibility(self.buttons_hidden)
+                    self._show_run_toolbar()
+                    time.sleep(0.3)
+
+                # 0c. 软键盘 (F8)
+                if is_key_pressed('f8'):
+                    from ui.virtual_keyboard import toggle_soft_keyboard
+                    toggle_soft_keyboard(self.run_toolbar_win or self.root, mode="input")
+                    time.sleep(0.3)
+
+                # 0d. 穿透模式快捷键 (F9/F10/F11 直接切换)
                 _pt_switched = False
                 if is_key_pressed('f9') and self.click_through != PT_ON:
                     self.toggle_click_through_sync(PT_ON)
