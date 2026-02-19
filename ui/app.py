@@ -19,6 +19,7 @@ from core.constants import (
     DEFAULT_PROFILE_NAME,
     PT_ON, PT_OFF, PT_BLOCK, PT_CYCLE,
     COLOR_BLOCK_OVERLAY,
+    BTN_TYPE_CENTER_BAND,
 )
 # Update import to include profile functions
 from core.config_manager import (
@@ -32,7 +33,7 @@ from ui.canvas_renderer import (
     preview_button_transparency, draw_grid,
     draw_charge_bar, remove_charge_bar,
 )
-from ui.edit_panel import create_toolbar_window, destroy_toolbar_window, open_button_editor
+from ui.edit_panel import create_toolbar_window, destroy_toolbar_window, open_button_editor, open_center_band_editor
 
 # Try to import create_run_toolbar. It might be in ui.edit_panel in upstream, 
 # or still in ui.toolbar if that file exists. 
@@ -204,6 +205,7 @@ class FloatingApp:
             transparency=self.transparency,
             on_alpha_change=self.set_alpha,
             on_switch_profile=self.switch_profile,
+            on_add_center_band=self.add_center_band_btn,
             on_edit_passthrough=self.toggle_edit_passthrough,
             edit_passthrough=self.edit_passthrough,
         )
@@ -721,6 +723,12 @@ class FloatingApp:
                 continue
 
             in_rect = self._point_in_btn(btn, rel_x, rel_y)
+
+            # ── 回中带：鼠标进入即刻回中，零延迟 ──
+            if btn.get('type') == BTN_TYPE_CENTER_BAND and in_rect:
+                user32.SetCursorPos(self.screen_w // 2, self.screen_h // 2)
+                continue  # 不处理其他事件
+
             hover_delay = btn.get('hover_delay', 0)
 
             if now < btn.get('_wheel_flash_until', 0):
@@ -961,10 +969,38 @@ class FloatingApp:
         self.redraw_all()
         self.show_toast("✓ 创建成功")
 
+    def add_center_band_btn(self):
+        """新建回中带按钮。"""
+        w, h = GRID_SIZE, GRID_SIZE
+        pos = self._find_empty_slot(w, h, start_x=0, start_y=0, scan='spiral')
+        if pos:
+            cx, cy = pos
+        else:
+            cx, cy = 0, 0
+        new_btn = {
+            'x': cx, 'y': cy,
+            'w': w, 'h': h,
+            'name': '回中带', 'type': BTN_TYPE_CENTER_BAND,
+            'hover_delay': 0, 'hover_release_delay': 0,
+            'hover': '', 'lclick': '', 'rclick': '', 'mclick': '',
+            'wheelup': '', 'wheeldown': '',
+        }
+        self.buttons.append(new_btn)
+        self.redraw_all()
+        self.show_toast("✓ 回中带已创建")
+
     def edit_btn(self, idx):
         if self.current_mode != 'main':
             return
         btn = self.buttons[idx]
+
+        # 回中带按钮：打开简单弹窗
+        if btn.get('type') == BTN_TYPE_CENTER_BAND:
+            def on_delete_cb(del_btn):
+                del_btn['deleted'] = True
+                self.redraw_all()
+            open_center_band_editor(self.root, btn, on_delete=on_delete_cb)
+            return
 
         def on_save(updated_btn):
             self.redraw_all()

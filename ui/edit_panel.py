@@ -9,7 +9,7 @@ TEGG Touch 蛋挞 - edit_panel.py
 
 # Re-export for backward compatibility
 from ui.toolbar import create_toolbar_window, destroy_toolbar_window  # noqa: F401
-from ui.button_editor import open_button_editor  # noqa: F401
+from ui.button_editor import open_button_editor, open_center_band_editor  # noqa: F401
 
 
 def setup_edit_toolbar(frame, **kwargs):

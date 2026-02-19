@@ -28,7 +28,7 @@ from ui.canvas_renderer import init_cursor, update_cursor, remove_cursor
 
 
 def create_toolbar_window(parent, screen_w, screen_h, *,
-                          on_add, on_run,
+                          on_add, on_add_center_band=None, on_run,
                           on_quit, transparency, on_alpha_change,
                           on_switch_profile, on_edit_passthrough=None,
                           edit_passthrough=False):
@@ -212,7 +212,30 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     _txt_btn(bx, by, "\uE710", "\uff0b", "\u65b0\u5efa", "tadd", C_GRAY, C_GRAY_H, on_add)
     bx += _TBTN_W + GAP
 
-    # 3) Separator (between 新建 and 软键盘)
+    # 2b) Add Center Band (回中带)
+    if on_add_center_band:
+        _CB_W = 110
+        _C_GREEN_TB = "#176F2C"
+        _C_GREEN_TB_H = "#1E8E38"
+        cb_tag = "tcb"
+        rrect(c, bx, by, _CB_W, BTN_H, BTN_R, fill=_C_GREEN_TB, outline="", tags=(cb_tag, cb_tag + "_bg"))
+        cb_cy = by + BTN_H // 2
+        if ifont:
+            c.create_text(bx + 12, cb_cy, text="\uE7C9", font=(ifont, IS),
+                          fill="#FFF", anchor="w", tags=(cb_tag,))
+            c.create_text(bx + 38, cb_cy, text="\u56de\u4e2d\u5e26", font=(FF, FS),
+                          fill="#FFF", anchor="w", tags=(cb_tag,))
+        else:
+            c.create_text(bx + 12, cb_cy, text="\u229a \u56de\u4e2d\u5e26", font=(FF, FS, "bold"),
+                          fill="#FFF", anchor="w", tags=(cb_tag,))
+        def _cb_en(e): i = c.find_withtag(cb_tag + "_bg"); i and c.itemconfigure(i[0], fill=_C_GREEN_TB_H)
+        def _cb_lv(e): i = c.find_withtag(cb_tag + "_bg"); i and c.itemconfigure(i[0], fill=_C_GREEN_TB)
+        c.tag_bind(cb_tag, "<Enter>", _cb_en)
+        c.tag_bind(cb_tag, "<Leave>", _cb_lv)
+        c.tag_bind(cb_tag, "<ButtonRelease-1>", lambda e: on_add_center_band())
+        bx += _CB_W + GAP
+
+    # 3) Separator (between 新建/回中带 and 软键盘)
     sep_x = bx + 4
     c.create_line(sep_x, by + 4, sep_x, by + BTN_H - 4, fill="#555", width=1)
     bx += 12

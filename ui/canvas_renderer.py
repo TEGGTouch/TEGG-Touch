@@ -13,7 +13,12 @@ from core.constants import (
     COLOR_BALL_CORE, COLOR_BALL_RING, COLOR_HANDLE,
     CHAMFER_SIZE, RESIZE_HANDLE_SIZE,
     BTN_MARGIN, BTN_RADIUS,
+    BTN_TYPE_CENTER_BAND,
 )
+
+# 回中带专用配色
+COLOR_CENTER_BAND = "#176F2C"        # 绿色边框/文字
+COLOR_CENTER_BAND_BG = "#0A2E12"     # 深绿背景
 
 # ─── 字体配置 ────────────────────────────────────────────────
 FONT_NAME = ("Microsoft YaHei UI", 10, "bold")
@@ -165,21 +170,38 @@ def draw_button(canvas, btn_data, index, show_resize=True, offset_x=0, offset_y=
 
     points = get_rounded_rect_points(vx, vy, vw, vh, BTN_RADIUS)
 
-    poly = canvas.create_polygon(
-        points, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER,
-        width=2, smooth=True, tags=tags_poly,
-    )
-    
-    # 默认只显示名称，使用 YaHei 字体
-    display_text = _format_btn_name(btn_data.get('name', ''))
-    
-    text = canvas.create_text(
-        sx + btn_data['w'] / 2,
-        sy + btn_data['h'] / 2,
-        text=display_text,
-        font=FONT_NAME, fill=COLOR_TEXT, tags=tags_text,
-        justify="center", width=vw  # 辅助换行
-    )
+    # 判断是否为回中带按钮
+    is_center_band = btn_data.get('type') == BTN_TYPE_CENTER_BAND
+
+    if is_center_band:
+        # 回中带：深绿背景 + 绿色边框
+        poly = canvas.create_polygon(
+            points, fill=COLOR_CENTER_BAND_BG, outline=COLOR_CENTER_BAND,
+            width=2, smooth=True, tags=tags_poly,
+        )
+        # 两行文字：第一行 ⊕ 图标，第二行 "回中带"
+        display_text = "\u2295\n\u56de\u4e2d\u5e26"
+        text = canvas.create_text(
+            sx + btn_data['w'] / 2,
+            sy + btn_data['h'] / 2,
+            text=display_text,
+            font=FONT_NAME, fill=COLOR_CENTER_BAND, tags=tags_text,
+            justify="center", width=vw,
+        )
+    else:
+        poly = canvas.create_polygon(
+            points, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER,
+            width=2, smooth=True, tags=tags_poly,
+        )
+        # 默认只显示名称，使用 YaHei 字体
+        display_text = _format_btn_name(btn_data.get('name', ''))
+        text = canvas.create_text(
+            sx + btn_data['w'] / 2,
+            sy + btn_data['h'] / 2,
+            text=display_text,
+            font=FONT_NAME, fill=COLOR_TEXT, tags=tags_text,
+            justify="center", width=vw,
+        )
 
     # 调整手柄 (仅编辑模式显示)
     resize_handle = None

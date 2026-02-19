@@ -143,6 +143,97 @@ class TagInput(tk.Frame):
 #  主函数
 # ═══════════════════════════════════════════════════════════════
 
+def open_center_band_editor(parent, btn, *, on_delete):
+    """打开回中带专用简单弹窗（仅显示说明 + 关闭/删除按钮）。"""
+    overlay = create_modal_overlay(parent)
+
+    width = 400
+    height = 220
+    sw = parent.winfo_screenwidth()
+    sh = parent.winfo_screenheight()
+    x = (sw - width) // 2
+    y = (sh - height) // 2
+
+    top = tk.Toplevel(parent)
+    top.overrideredirect(True)
+    top.geometry(f"{width}x{height}+{x}+{y}")
+    top.attributes("-topmost", True)
+    top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
+    top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
+
+    def _destroy_all(e):
+        try: overlay.destroy()
+        except: pass
+    top.bind("<Destroy>", _destroy_all, add="+")
+    top.focus_set()
+    overlay.attributes("-topmost", True)
+    top.attributes("-topmost", True)
+    top.lift()
+
+    c = tk.Canvas(top, width=width, height=height,
+                  bg=COLOR_TOOLBAR_TRANSPARENT, highlightthickness=0)
+    c.place(x=0, y=0)
+    rrect(c, 0, 0, width, height, TOOLBAR_RADIUS, fill=C_PM_BG, outline="#444", width=1, tags="bg")
+
+    # 拖拽
+    drag = {"sx": 0, "sy": 0, "wx": 0, "wy": 0}
+    def _ds(e):
+        drag["sx"], drag["sy"] = e.x_root, e.y_root
+        drag["wx"], drag["wy"] = top.winfo_x(), top.winfo_y()
+    def _dm(e):
+        nx = drag["wx"] + (e.x_root - drag["sx"])
+        ny = drag["wy"] + (e.y_root - drag["sy"])
+        top.geometry(f"{width}x{height}+{max(0, min(nx, sw - width))}+{max(0, min(ny, sh - height))}")
+    c.tag_bind("bg", "<Button-1>", _ds)
+    c.tag_bind("bg", "<B1-Motion>", _dm)
+
+    # 标题 (绿色)
+    C_GREEN = "#176F2C"
+    c.create_text(width // 2, 30, text="\u2295 \u56de\u4e2d\u5e26",
+                  font=(FF, 14, "bold"), fill=C_GREEN, tags="title")
+    c.tag_bind("title", "<Button-1>", _ds)
+    c.tag_bind("title", "<B1-Motion>", _dm)
+
+    # 关闭按钮
+    ifont = icon_font()
+    cx0 = width - CLOSE_M - CLOSE_SIZE
+    cy0 = CLOSE_M
+    rrect(c, cx0, cy0, CLOSE_SIZE, CLOSE_SIZE, BTN_R,
+          fill=C_CLOSE, outline="", tags=("close", "close_bg"))
+    ccx, ccy = cx0 + CLOSE_SIZE // 2, cy0 + CLOSE_SIZE // 2
+    if ifont:
+        c.create_text(ccx, ccy, text="\uE711", font=(ifont, IS), fill="#FFF", tags=("close",))
+    else:
+        c.create_text(ccx, ccy, text="\u2715", font=(FF, FS, "bold"), fill="#FFF", tags=("close",))
+    c.tag_bind("close", "<Enter>", lambda e: c.itemconfigure("close_bg", fill=C_CLOSE_H))
+    c.tag_bind("close", "<Leave>", lambda e: c.itemconfigure("close_bg", fill=C_CLOSE))
+    c.tag_bind("close", "<ButtonRelease-1>", lambda e: top.destroy())
+
+    # 说明文字
+    desc_text = "\u9f20\u6807\u4e00\u65e6\u63a5\u89e6\u5230\u56de\u4e2d\u5e26\uff0c\u4f1a\u7acb\u523b\u56de\u4e2d"
+    c.create_text(width // 2, 80, text=desc_text,
+                  font=(FF, 11), fill="#CCC", tags="desc")
+
+    sub_text = "\u96f6\u5ef6\u8fdf\uff0c\u6bd4\u81ea\u52a8\u56de\u4e2d\u66f4\u5feb"
+    c.create_text(width // 2, 105, text=sub_text,
+                  font=(FF, 9), fill="#888", tags="desc2")
+
+    # 删除按钮
+    btn_h = 40
+    btn_w = 120
+    del_x = (width - btn_w) // 2
+    del_y = height - 30 - btn_h
+    rrect(c, del_x, del_y, btn_w, btn_h, BTN_R,
+          fill="#6E1E1E", outline="", tags=("del", "del_bg"))
+    c.create_text(del_x + btn_w // 2, del_y + btn_h // 2, text="\u5220\u9664",
+                  font=(FF, FS), fill="white", tags=("del",))
+    c.tag_bind("del", "<Enter>", lambda e: c.itemconfigure("del_bg", fill="#8B2020"))
+    c.tag_bind("del", "<Leave>", lambda e: c.itemconfigure("del_bg", fill="#6E1E1E"))
+    c.tag_bind("del", "<ButtonRelease-1>", lambda e: [on_delete(btn), top.destroy()])
+
+    return top
+
+
 def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_style):
     """打开按钮编辑弹窗。"""
     overlay = create_modal_overlay(parent)

@@ -59,8 +59,12 @@ COLOR_HANDLE = "#666666"      # 灰色，与边框统一
 COLOR_TRANSPARENT = "#010001"
 COLOR_TOOLBAR_TRANSPARENT = "#010002"  # 工具栏窗口镂空用
 
+# === 按钮类型 ===
+BTN_TYPE_NORMAL = "normal"
+BTN_TYPE_CENTER_BAND = "center_band"
+
 # === 工具栏尺寸 ===
-TOOLBAR_WIDTH = 950
+TOOLBAR_WIDTH = 1070
 TOOLBAR_HEIGHT = 104
 TOOLBAR_RADIUS = 12
 TOOLBAR_PADDING = 12
@@ -126,6 +130,7 @@ COLOR_BLOCK_OVERLAY = "#1A1A1A"
 
 # 按钮可选字段及默认值 (兼容旧配置)
 BUTTON_OPTIONAL_DEFAULTS = {
+    'type': BTN_TYPE_NORMAL,  # 按钮类型：normal=普通按钮, center_band=回中带
     'wheelup': '',
     'wheeldown': '',
     'mclick': '',
