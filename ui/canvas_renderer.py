@@ -409,32 +409,86 @@ def _gap_half_angle(radius, gap_px):
 
 def _annular_sector_points(cx, cy, r_inner, r_outer,
                            center_angle_deg, sector_span_deg=45.0,
-                           gap_px=WHEEL_GAP_PX, steps=20):
-    """生成等宽间隙环形扇区的 polygon 顶点列表。
+                           gap_px=WHEEL_GAP_PX, corner_r=BTN_RADIUS,
+                           steps=20, corner_steps=6):
+    """生成带圆角的等宽间隙环形扇区 polygon 顶点列表。
 
-    通过在每个半径上独立计算角度偏移，实现内外圈间隙等宽 (gap_px 像素)。
+    在两条径向边与内外弧的交汇处（共 4 个拐角）用三次 Bézier 曲线过渡，
+    实现与普通按钮一致的圆角外观。
+    corner_r: 圆角半径（像素），默认使用 BTN_RADIUS。
     """
     half_span = sector_span_deg / 2.0
-    # 外弧角度范围（外圈间隙小角度）
+
+    # ── 间隙角度偏移 ──
     outer_half_gap = _gap_half_angle(r_outer, gap_px)
-    outer_start = center_angle_deg - half_span + outer_half_gap
-    outer_end = center_angle_deg + half_span - outer_half_gap
-    # 内弧角度范围（内圈间隙大角度）
     inner_half_gap = _gap_half_angle(r_inner, gap_px)
+
+    # 未裁切的完整弧段角度范围
+    outer_start = center_angle_deg - half_span + outer_half_gap
+    outer_end   = center_angle_deg + half_span - outer_half_gap
     inner_start = center_angle_deg - half_span + inner_half_gap
-    inner_end = center_angle_deg + half_span - inner_half_gap
+    inner_end   = center_angle_deg + half_span - inner_half_gap
+
+    # ── 圆角裁切角度（将 corner_r 像素转为该半径上对应的角度偏移）──
+    outer_trim = math.degrees(corner_r / r_outer) if r_outer > corner_r else 0
+    inner_trim = math.degrees(corner_r / r_inner) if r_inner > corner_r else 0
+
+    # 确保裁切不超过弧段的一半
+    max_outer = (outer_end - outer_start) / 2.0
+    max_inner = (inner_end - inner_start) / 2.0
+    outer_trim = min(outer_trim, max_outer)
+    inner_trim = min(inner_trim, max_inner)
+
+    # 裁切后的弧段范围
+    o_start = outer_start + outer_trim
+    o_end   = outer_end   - outer_trim
+    i_start = inner_start + inner_trim
+    i_end   = inner_end   - inner_trim
+
+    # ── 辅助函数 ──
+    def pt(r, angle_deg):
+        """极坐标→屏幕坐标"""
+        a = math.radians(angle_deg)
+        return (cx + r * math.cos(a), cy - r * math.sin(a))
+
+    def cubic_bezier(p0, p1, p2, p3):
+        """三次 Bézier 插值，只生成中间点（不含首尾，避免与相邻弧段重复）。"""
+        pts = []
+        for i in range(1, corner_steps):
+            t = i / corner_steps
+            mt = 1.0 - t
+            x = mt**3*p0[0] + 3*mt**2*t*p1[0] + 3*mt*t**2*p2[0] + t**3*p3[0]
+            y = mt**3*p0[1] + 3*mt**2*t*p1[1] + 3*mt*t**2*p2[1] + t**3*p3[1]
+            pts.append((x, y))
+        return pts
 
     points = []
-    # 外弧：从 start 到 end
+
+    # ① 外弧（裁切后: o_start → o_end）
     for i in range(steps + 1):
-        a = math.radians(outer_start + (outer_end - outer_start) * i / steps)
-        points.append(cx + r_outer * math.cos(a))
-        points.append(cy - r_outer * math.sin(a))  # y 轴翻转（屏幕坐标）
-    # 内弧：从 end 到 start（反向闭合）
+        p = pt(r_outer, o_start + (o_end - o_start) * i / steps)
+        points.extend(p)
+
+    # ② 右侧圆角：外弧终点 → 内弧终点
+    #    Bézier 控制点使用未裁切端点，曲线自然切入两弧
+    for bp in cubic_bezier(pt(r_outer, o_end),
+                           pt(r_outer, outer_end),
+                           pt(r_inner, inner_end),
+                           pt(r_inner, i_end)):
+        points.extend(bp)
+
+    # ③ 内弧（裁切后: i_end → i_start，反向闭合）
     for i in range(steps + 1):
-        a = math.radians(inner_end - (inner_end - inner_start) * i / steps)
-        points.append(cx + r_inner * math.cos(a))
-        points.append(cy - r_inner * math.sin(a))
+        p = pt(r_inner, i_end - (i_end - i_start) * i / steps)
+        points.extend(p)
+
+    # ④ 左侧圆角：内弧起点 → 外弧起点
+    for bp in cubic_bezier(pt(r_inner, i_start),
+                           pt(r_inner, inner_start),
+                           pt(r_outer, outer_start),
+                           pt(r_outer, o_start)):
+        points.extend(bp)
+
     return points
 
 
