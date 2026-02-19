@@ -501,6 +501,5 @@
   ],
   "ball_x": 531,
   "ball_y": 328,
-  "click_through": "pt_off",
-  "freeze_hotkey": "f10"
+  "click_through": "pt_off"
 }

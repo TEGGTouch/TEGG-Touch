@@ -1000,9 +1000,16 @@ class FloatingApp:
         self.click_through = mode
         self.redraw_all()
         self.set_window_style('no_focus')
-        # PT_ON/PT_OFF 切换后自动给游戏焦点
         if mode in (PT_ON, PT_OFF):
+            # 穿透ON / 穿透OFF：焦点交给游戏
             self._focus_game_window()
+        elif mode == PT_BLOCK:
+            # 不穿透：焦点抢到 TeggTouch 覆盖层，阻止游戏接收鼠标输入
+            try:
+                _hwnd = user32.GetParent(self.root.winfo_id()) or self.root.winfo_id()
+                user32.SetForegroundWindow(_hwnd)
+            except Exception:
+                pass
 
     def switch_profile(self, name):
         """切换方案"""
