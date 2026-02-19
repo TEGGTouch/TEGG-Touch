@@ -93,6 +93,7 @@ class FloatingApp:
         self.is_hidden = False
         self.is_window_solid = True  # True=不穿透, False=穿透
         self.edit_passthrough = False  # 编辑模式穿透开关
+        self.buttons_hidden = False  # 运行模式下隐藏所有悬浮按键
 
         # 硬件输入状态缓存
         self.left_was_down = False
@@ -230,7 +231,9 @@ class FloatingApp:
             on_edit=self.to_edit,
             on_passthrough=self.toggle_click_through_sync, # 同步状态
             click_through=self.click_through,
-            set_window_style=self.set_window_style
+            set_window_style=self.set_window_style,
+            on_toggle_buttons=self.toggle_buttons_visibility,
+            buttons_visible=not self.buttons_hidden,
         )
         if self.run_toolbar_win:
             self.run_toolbar_win.lift()
@@ -307,6 +310,7 @@ class FloatingApp:
         self.current_mode = 'main'
         self.is_hidden = False
         self.edit_passthrough = False
+        self.buttons_hidden = False  # 回编辑模式自动恢复显示
         self.root.geometry(self.fullscreen_geo)
         self.redraw_all()
         self.setup_ui_mode()
@@ -349,7 +353,13 @@ class FloatingApp:
         if self.current_mode == 'main':
             draw_grid(self.canvas, self.screen_w, self.screen_h)
 
-        # 绘制用户按钮
+        # 绘制用户按钮 (运行模式下如果隐藏按键则跳过)
+        if self.current_mode == 'run' and self.buttons_hidden:
+            # 按键已隐藏，不绘制任何按钮
+            if self.current_mode == 'run':
+                init_cursor(self.canvas)
+            return
+
         show_resize = (self.current_mode == 'main')
         for idx, btn in enumerate(self.buttons):
             if btn.get('deleted'):
@@ -508,17 +518,18 @@ class FloatingApp:
                 # 3. 智能穿透判定 (根据模式和设置决定)
                 if not self.is_hidden and not self.mouse_freeze:
                     is_on_ui = False
-                    ox, oy = self._offset_x, self._offset_y
-                    # 检查用户按钮 (逻辑坐标+偏移 vs 屏幕坐标)
-                    for btn in self.buttons:
-                        if btn.get('deleted'):
-                            continue
-                        sx = btn['x'] + ox
-                        sy = btn['y'] + oy
-                        if (sx <= rel_x < sx + btn['w'] and
-                                sy <= rel_y < sy + btn['h']):
-                            is_on_ui = True
-                            break
+                    # 按键隐藏时跳过按钮碰撞检测，视为全空白→穿透
+                    if not self.buttons_hidden:
+                        ox, oy = self._offset_x, self._offset_y
+                        for btn in self.buttons:
+                            if btn.get('deleted'):
+                                continue
+                            sx = btn['x'] + ox
+                            sy = btn['y'] + oy
+                            if (sx <= rel_x < sx + btn['w'] and
+                                    sy <= rel_y < sy + btn['h']):
+                                is_on_ui = True
+                                break
 
                     if self.current_mode == 'main':
                         # === 编辑模式 (Edit Mode) ===
@@ -639,9 +650,10 @@ class FloatingApp:
     def handle_run_interaction(self, rel_x, rel_y, left_down, right_down, middle_down):
         """处理运行模式下的交互。"""
         now = time.time()
-
-        # 系统按钮检测已移除 (交由独立工具栏处理)
-        
+        # 按键隐藏时跳过所有按钮交互
+        if self.buttons_hidden:
+            poll_wheel_events()
+            return
         # ── 滚轮事件处理（硬件级钩子） ──
         wheel_events = poll_wheel_events()
         for direction, wx, wy in wheel_events:
@@ -978,6 +990,23 @@ class FloatingApp:
         else:
             self.set_window_style('no_focus')
     
+    def toggle_buttons_visibility(self, visible):
+        """切换按键显示/隐藏（由运行工具栏调用）。"""
+        self.buttons_hidden = not visible
+        # 隐藏时：释放所有 hover 状态 + 清除充能条
+        if self.buttons_hidden:
+            for btn in self.buttons:
+                if btn.get('deleted'):
+                    continue
+                if btn.get('active_hover') and btn.get('hover'):
+                    trigger(btn['hover'], 'r')
+                btn['active_hover'] = False
+                btn['_hover_enter_time'] = None
+                btn['_hover_charged'] = False
+                btn['_hover_release_time'] = None
+                remove_charge_bar(self.canvas, btn)
+        self.redraw_all()
+
     def toggle_click_through_sync(self, is_on):
         """同步设置穿透状态（由运行工具栏调用）。"""
         self.click_through = is_on

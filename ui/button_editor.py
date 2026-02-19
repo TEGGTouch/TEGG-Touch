@@ -169,7 +169,8 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         try: overlay.destroy()
         except: pass
     top.bind("<Destroy>", _destroy_all, add="+")
-    top.grab_set()
+    # 不使用 grab_set() — overlay 已阻止主画布点击，
+    # 去掉 grab 后工具栏/软键盘可正常交互
     top.focus_set()
     overlay.attributes("-topmost", True)
     top.attributes("-topmost", True)
@@ -215,7 +216,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
 
     # ── 通栏 Tip（标题下方）──
     tip_y = 50
-    tip_text = "💡 点击右侧按键添加到输入框 ｜ Backspace 删除 ｜ 支持无限组合"
+    tip_text = "💡 点击右侧按键添加到输入框 ｜ 名称框可直接输入 ｜ Backspace 删除"
     tip_lbl = tk.Label(top, text=tip_text, bg=C_PM_BG, fg="#777",
                        font=(FF, 9), anchor="w")
     tip_lbl.place(x=PADDING, y=tip_y, width=width - PADDING * 2)
@@ -577,13 +578,16 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     right_container.bind('<Enter>', lambda e: right_canvas.bind_all("<MouseWheel>", _on_mw))
     right_container.bind('<Leave>', lambda e: right_canvas.unbind_all("<MouseWheel>"))
 
-    # ── 追加按键 ──
+    # ── 追加按键（同时支持 TagInput 和 Entry） ──
     def _append_key(key_name):
         w = focus_state["current_widget"]
         if w is None or not w.winfo_exists():
             return
         if isinstance(w, TagInput):
             w.add_tag(key_name)
+        elif isinstance(w, tk.Entry):
+            # 在普通 Entry（如按钮名称）中直接插入文本
+            w.insert(tk.INSERT, key_name)
         w.focus_set()
 
     # ── 按键面板 ──

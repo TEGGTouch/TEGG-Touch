@@ -175,19 +175,34 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     _txt_btn(bx, by, "\uE710", "\uff0b", "\u65b0\u5efa", "tadd", C_GRAY, C_GRAY_H, on_add)
     bx += _TBTN_W + GAP
 
-    # 3) Keyboard button
+    # 3) Separator (between 新建 and 软键盘)
+    sep_x = bx + 4
+    c.create_line(sep_x, by + 4, sep_x, by + BTN_H - 4, fill="#555", width=1)
+    bx += 12
+
+    # 4) Keyboard button (软键盘) — 宽度加大到 110px 容纳三字
+    _KB_W = 110
     def _toggle_kb():
         from ui.virtual_keyboard import toggle_soft_keyboard
         toggle_soft_keyboard(top, mode="input")
 
-    _txt_btn(bx, by, "\uE765", "\u2328", "\u952e\u76d8", "tkb", C_GRAY, C_GRAY_H,
-             _toggle_kb)
-    bx += _TBTN_W + GAP
-
-    # 4) Separator
-    sep_x = bx + 4
-    c.create_line(sep_x, by + 4, sep_x, by + BTN_H - 4, fill="#555", width=1)
-    bx += 12
+    kb_tag = "tkb"
+    rrect(c, bx, by, _KB_W, BTN_H, BTN_R, fill=C_GRAY, outline="", tags=(kb_tag, kb_tag + "_bg"))
+    kb_cy = by + BTN_H // 2
+    if ifont:
+        c.create_text(bx + 12, kb_cy, text="\uE765", font=(ifont, IS),
+                      fill="#E0E0E0", anchor="w", tags=(kb_tag,))
+        c.create_text(bx + 38, kb_cy, text="\u8f6f\u952e\u76d8", font=(FF, FS),
+                      fill="#E0E0E0", anchor="w", tags=(kb_tag,))
+    else:
+        c.create_text(bx + 12, kb_cy, text="\u2328 \u8f6f\u952e\u76d8", font=(FF, FS, "bold"),
+                      fill="#E0E0E0", anchor="w", tags=(kb_tag,))
+    def _kb_en(e): i = c.find_withtag(kb_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_GRAY_H)
+    def _kb_lv(e): i = c.find_withtag(kb_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_GRAY)
+    c.tag_bind(kb_tag, "<Enter>", _kb_en)
+    c.tag_bind(kb_tag, "<Leave>", _kb_lv)
+    c.tag_bind(kb_tag, "<ButtonRelease-1>", lambda e: _toggle_kb())
+    bx += _KB_W + GAP
 
     # 5) Run button
     _RUN_W = 90
@@ -269,43 +284,54 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     # ========== SECOND ROW: Freeze Hotkey + Slider ==========
     row2_y = TOP + BTN_H + 30
 
-    # --- 冻结快捷键 ---
-    fk_x = DRAG_W + 16
-    fk_tag = "tfk"
-    fk_state = {"key": freeze_hotkey or ""}
+    # --- 模拟模式选择器 ---
+    sm_x = DRAG_W + 16
+    sm_tag = "tsm"
 
-    c.create_text(fk_x, row2_y, text="冻结键",
+    c.create_text(sm_x, row2_y, text="模拟模式",
                   font=(FF, 9, "bold"), fill="#AAA", anchor="w")
 
-    _FK_BTN_W = 90
-    _FK_BTN_H = 26
-    fk_btn_x = fk_x + 52
-    fk_btn_y = row2_y - _FK_BTN_H // 2
+    _SM_BTN_W = 100
+    _SM_BTN_H = 26
+    sm_btn_x = sm_x + 66
+    sm_btn_y = row2_y - _SM_BTN_H // 2
 
-    rrect(c, fk_btn_x, fk_btn_y, _FK_BTN_W, _FK_BTN_H, 6,
-          fill=C_CYBER, outline="", tags=(fk_tag, fk_tag + "_bg"))
-    display_key = fk_state["key"].upper() if fk_state["key"] else "未设置"
-    c.create_text(fk_btn_x + _FK_BTN_W // 2, row2_y, text=display_key,
-                  font=(FF, -14, "bold"), fill="#E0E0E0", tags=(fk_tag, "fk_text"))
+    rrect(c, sm_btn_x, sm_btn_y, _SM_BTN_W, _SM_BTN_H, 6,
+          fill=C_CYBER, outline="", tags=(sm_tag, sm_tag + "_bg"))
+    # 按钮文字 "键盘" + 下三角 ▼
+    c.create_text(sm_btn_x + _SM_BTN_W // 2 - 6, row2_y, text="键盘",
+                  font=(FF, -14, "bold"), fill="#E0E0E0", tags=(sm_tag, "sm_text"))
+    c.create_text(sm_btn_x + _SM_BTN_W - 16, row2_y + 1, text="\u25BC",
+                  font=(FF, -10), fill="#999", tags=(sm_tag, "sm_arrow"))
 
-    def _fk_en(e): i = c.find_withtag(fk_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_CYBER_H)
-    def _fk_lv(e): i = c.find_withtag(fk_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_CYBER)
-    c.tag_bind(fk_tag, "<Enter>", _fk_en)
-    c.tag_bind(fk_tag, "<Leave>", _fk_lv)
+    # hover 效果 + tooltip
+    _tooltip_id = {"id": None}
 
-    def _on_fk_click():
-        from ui.virtual_keyboard import open_key_picker
-        def _on_pick(new_key):
-            fk_state["key"] = new_key
-            c.itemconfigure("fk_text", text=new_key.upper() if new_key else "未设置")
-            if on_freeze_hotkey_change:
-                on_freeze_hotkey_change(new_key)
-        open_key_picker(top, _on_pick, current=fk_state["key"])
+    def _sm_en(e):
+        i = c.find_withtag(sm_tag + "_bg")
+        if i:
+            c.itemconfigure(i[0], fill=C_CYBER_H)
+        # 显示 tooltip
+        tip_x = sm_btn_x + _SM_BTN_W // 2
+        tip_y = sm_btn_y - 18
+        _tooltip_id["id"] = c.create_text(
+            tip_x, tip_y, text="手柄模拟模式开发中",
+            font=(FF, -12), fill="#888", tags="sm_tooltip")
 
-    c.tag_bind(fk_tag, "<Button-1>", lambda e: _on_fk_click())
+    def _sm_lv(e):
+        i = c.find_withtag(sm_tag + "_bg")
+        if i:
+            c.itemconfigure(i[0], fill=C_CYBER)
+        # 隐藏 tooltip
+        if _tooltip_id["id"]:
+            c.delete(_tooltip_id["id"])
+            _tooltip_id["id"] = None
+
+    c.tag_bind(sm_tag, "<Enter>", _sm_en)
+    c.tag_bind(sm_tag, "<Leave>", _sm_lv)
 
     # --- Separator ---
-    fk_sep_x = fk_btn_x + _FK_BTN_W + 14
+    fk_sep_x = sm_btn_x + _SM_BTN_W + 14
     c.create_line(fk_sep_x, row2_y - 10, fk_sep_x, row2_y + 10, fill="#444", width=1)
 
     # --- 透明度滑块 ---
@@ -364,7 +390,8 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
 
 def create_run_toolbar(parent, screen_w, screen_h, *,
                        on_edit, on_passthrough, click_through=False,
-                       set_window_style=None):
+                       set_window_style=None,
+                       on_toggle_buttons=None, buttons_visible=True):
     """创建运行模式独立工具栏（可拖拽、可收缩）。"""
     
     # 尺寸配置
@@ -413,6 +440,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
         "width": 800,
         "height": FULL_H,
         "click_through": click_through,
+        "buttons_visible": buttons_visible,
         "x": INIT_X,
         "y": INIT_Y
     }
@@ -472,24 +500,22 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             # 垂直居中 (上下各 10px)
             by = (h - BTN_H_RUN) // 2
             
-            # 按钮样式函数
-            def _run_btn(x, w, text, icon, tag, bg, cb, bg_hover=C_GRAY_H, font_size=9, bold=True):
+            # 按钮样式函数 (icon + text 居中)
+            def _run_btn(x, w, text, icon, tag, bg, cb, bg_hover=C_GRAY_H, font_size=9, bold=True, fg="#E0E0E0"):
                 rrect(c, x, by, w, BTN_H_RUN, BTN_R, fill=bg, outline="", tags=(tag, tag+"_bg"))
                 cy = by + BTN_H_RUN // 2
+                cx = x + w // 2  # 按钮水平中心
                 
                 fw = "bold" if bold else "normal"
                 
-                # Icon + Space + Text
                 if ifont:
-                    # icon
-                    c.create_text(x + 14, cy, text=icon, font=(ifont, IS),
-                                  fill="#E0E0E0", anchor="w", tags=(tag,))
-                    # text (with space)
-                    c.create_text(x + 40, cy, text=text, font=("Microsoft YaHei UI", font_size, fw),
-                                  fill="#E0E0E0", anchor="w", tags=(tag,))
+                    c.create_text(x + 10, cy, text=icon, font=(ifont, IS),
+                                  fill=fg, anchor="w", tags=(tag,))
+                    c.create_text(x + 34, cy, text=text, font=("Microsoft YaHei UI", font_size, fw),
+                                  fill=fg, anchor="w", tags=(tag,))
                 else:
                     c.create_text(x + w//2, cy, text=f"{icon}  {text}", font=("Microsoft YaHei UI", font_size, fw),
-                                  fill="#E0E0E0", tags=(tag,))
+                                  fill=fg, tags=(tag,))
                 
                 def _en(e): c.itemconfigure(tag+"_bg", fill=bg_hover)
                 def _lv(e): c.itemconfigure(tag+"_bg", fill=bg)
@@ -497,72 +523,123 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                 c.tag_bind(tag, "<Leave>", _lv)
                 c.tag_bind(tag, "<ButtonRelease-1>", lambda e: cb())
 
-            # --- 1. 方案文本 ---
+            # --- 1. 方案文本 (带 icon, 固定宽度 200px) ---
+            _PROF_W = 200
             active_profile = get_active_profile_name()
-            _prof_txt = f"方案：{active_profile}"
-            c.create_text(bx, h//2, text=_prof_txt, font=("Microsoft YaHei UI", 10, "bold"),
-                          fill="#AAA", anchor="w", tags="run_profile_txt")
-            
-            # 估算文本宽度并更新 bx
-            _txt_w = len(_prof_txt) * 14 + 10
-            bx += _txt_w + 10
+            _prof_cy = h // 2
+            if ifont:
+                c.create_text(bx, _prof_cy, text="\uE765", font=(ifont, IS),
+                              fill="#AAA", anchor="w", tags="run_profile_txt")
+                c.create_text(bx + 26, _prof_cy, text=f"\u65b9\u6848\uff1a{active_profile}",
+                              font=("Microsoft YaHei UI", 10, "bold"),
+                              fill="#AAA", anchor="w", tags="run_profile_txt")
+            else:
+                c.create_text(bx, _prof_cy, text=f"\U0001F4C4 \u65b9\u6848\uff1a{active_profile}",
+                              font=("Microsoft YaHei UI", 10, "bold"),
+                              fill="#AAA", anchor="w", tags="run_profile_txt")
+            bx += _PROF_W
 
-            # --- GAP: 6个汉字距离 (约 100px) ---
-            bx += 100
+            # --- 分隔线 ---
+            c.create_line(bx, by + 4, bx, by + BTN_H_RUN - 4, fill="#555", width=1)
+            bx += 12
 
-            # --- 2. 穿透开关 (Text + Switch + Status) ---
+            # --- 统一按钮字号 = -18 (与退出/编辑一致) ---
+            _RUN_FS = -18
+
+            # --- 2. 穿透模式 (checkbox 风格 toggle 按钮) ---
+            _PT_W = 130
             pt_tag = "run_pt"
-            pt_state = {"on": state["click_through"]}
-            
-            # Label
-            c.create_text(bx, h//2, text="穿透模式", font=("Microsoft YaHei UI", 9),
-                          fill="#AAA", anchor="w", tags=(pt_tag,))
-            bx += 70 # Label width + gap
-            
-            # Status Text (Left of Switch)
-            status_text = "开启" if pt_state["on"] else "关闭"
-            status_color = C_AMBER if pt_state["on"] else "#888"
-            c.create_text(bx, h//2, text=status_text, font=("Microsoft YaHei UI", 9),
-                          fill=status_color, anchor="w", tags=(pt_tag, "pt_status"))
-            
-            bx += 40 # Status width + gap
+            pt_on = state["click_through"]
 
-            # Switch
-            _SW_W = 48; _SW_H = 24; _SW_R = _SW_H // 2; _SW_DOT = 18
-            sw_x = bx
-            sw_y = (h - _SW_H) // 2
-            
-            pill_color = C_AMBER if pt_state["on"] else C_GRAY
-            c.create_oval(sw_x, sw_y, sw_x + _SW_H, sw_y + _SW_H,
-                          fill=pill_color, outline="", tags=(pt_tag, "pt_pill_l"))
-            c.create_oval(sw_x + _SW_W - _SW_H, sw_y, sw_x + _SW_W, sw_y + _SW_H,
-                          fill=pill_color, outline="", tags=(pt_tag, "pt_pill_r"))
-            c.create_rectangle(sw_x + _SW_R, sw_y, sw_x + _SW_W - _SW_R, sw_y + _SW_H,
-                               fill=pill_color, outline="", tags=(pt_tag, "pt_pill_c"))
+            pt_bg = C_AMBER_D if pt_on else C_GRAY
+            pt_bg_h = C_AMBER if pt_on else C_GRAY_H
+            pt_icon = "\uE73E" if pt_on else "\uE739"
+            pt_fg = "#FFF" if pt_on else "#E0E0E0"
 
-            dot_pad = (_SW_H - _SW_DOT) // 2
-            dot_x = (sw_x + _SW_W - dot_pad - _SW_DOT) if pt_state["on"] else (sw_x + dot_pad)
-            dot_y = sw_y + dot_pad
-            c.create_oval(dot_x, dot_y, dot_x + _SW_DOT, dot_y + _SW_DOT,
-                          fill="white", outline="", tags=(pt_tag, "pt_dot"))
-            
-            bx += _SW_W + 30 # Switch Width + Gap to next button
+            rrect(c, bx, by, _PT_W, BTN_H_RUN, BTN_R, fill=pt_bg, outline="", tags=(pt_tag, pt_tag+"_bg"))
+            pt_cy = by + BTN_H_RUN // 2
+            pt_cx = bx + _PT_W // 2  # 按钮水平中心
+            if ifont:
+                c.create_text(bx + 10, pt_cy, text=pt_icon, font=(ifont, IS),
+                              fill=pt_fg, anchor="w", tags=(pt_tag,))
+                c.create_text(bx + 34, pt_cy, text="\u7a7f\u900f\u6a21\u5f0f",
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill=pt_fg, anchor="w", tags=(pt_tag,))
+            else:
+                _pt_fb = "\u2611" if pt_on else "\u2610"
+                c.create_text(bx + _PT_W//2, pt_cy, text=f"{_pt_fb} \u7a7f\u900f\u6a21\u5f0f",
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill=pt_fg, tags=(pt_tag,))
 
-            # 绑定点击
+            def _pt_enter(e):
+                _h = C_AMBER if state["click_through"] else C_GRAY_H
+                c.itemconfigure(pt_tag+"_bg", fill=_h)
+            def _pt_leave(e):
+                _n = C_AMBER_D if state["click_through"] else C_GRAY
+                c.itemconfigure(pt_tag+"_bg", fill=_n)
+            c.tag_bind(pt_tag, "<Enter>", _pt_enter)
+            c.tag_bind(pt_tag, "<Leave>", _pt_leave)
+
             def _toggle_pt_wrapper(e=None):
                 state["click_through"] = not state["click_through"]
                 on_passthrough(state["click_through"])
-                redraw() # 重绘以更新颜色
+                redraw()
                 
             c.tag_bind(pt_tag, "<ButtonRelease-1>", lambda e: _toggle_pt_wrapper())
+            bx += _PT_W + GAP
 
-            # --- 4. 退出/编辑 ---
-            
-            _EXIT_W = 190 
-            # 使用关闭按钮的红色风格
-            # Change text size to 18px (same as toolbar).
-            _run_btn(bx, _EXIT_W, "退出/编辑[F12]", "\uE711", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=-18, bold=False)
-            bx += _EXIT_W + 10 # 右边距 10px
+            # --- 3. 显示/隐藏按键 (toggle 按钮, 灰色风格) ---
+            _VIS_W = 130
+            vis_tag = "run_vis"
+            vis_on = state["buttons_visible"]
+            vis_icon = "\uED1A" if vis_on else "\uE7B3"
+            vis_text = "\u9690\u85cf\u6309\u952e" if vis_on else "\u663e\u793a\u6309\u952e"
+
+            rrect(c, bx, by, _VIS_W, BTN_H_RUN, BTN_R, fill=C_GRAY, outline="", tags=(vis_tag, vis_tag+"_bg"))
+            vis_cy = by + BTN_H_RUN // 2
+            vis_cx = bx + _VIS_W // 2  # 按钮水平中心
+            if ifont:
+                c.create_text(bx + 10, vis_cy, text=vis_icon, font=(ifont, IS),
+                              fill="#E0E0E0", anchor="w", tags=(vis_tag,))
+                c.create_text(bx + 34, vis_cy, text=vis_text,
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill="#E0E0E0", anchor="w", tags=(vis_tag,))
+            else:
+                c.create_text(bx + _VIS_W//2, vis_cy, text=vis_text,
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill="#E0E0E0", tags=(vis_tag,))
+
+            def _vis_enter(e): c.itemconfigure(vis_tag+"_bg", fill=C_GRAY_H)
+            def _vis_leave(e): c.itemconfigure(vis_tag+"_bg", fill=C_GRAY)
+            c.tag_bind(vis_tag, "<Enter>", _vis_enter)
+            c.tag_bind(vis_tag, "<Leave>", _vis_leave)
+
+            def _toggle_vis(e=None):
+                state["buttons_visible"] = not state["buttons_visible"]
+                if on_toggle_buttons:
+                    on_toggle_buttons(state["buttons_visible"])
+                redraw()
+
+            c.tag_bind(vis_tag, "<ButtonRelease-1>", lambda e: _toggle_vis())
+            bx += _VIS_W + GAP
+
+            # --- 4. 软键盘按钮 ---
+            _KB_BTN_W = 110
+            def _toggle_kb_run():
+                from ui.virtual_keyboard import toggle_soft_keyboard
+                toggle_soft_keyboard(top, mode="input")
+
+            _run_btn(bx, _KB_BTN_W, "\u8f6f\u952e\u76d8", "\uE765", "btn_kb", C_GRAY, _toggle_kb_run, font_size=_RUN_FS, bold=False)
+            bx += _KB_BTN_W + GAP
+
+            # --- 分隔线 ---
+            c.create_line(bx, by + 4, bx, by + BTN_H_RUN - 4, fill="#555", width=1)
+            bx += 12
+
+            # --- 5. 停止 ---
+            _EXIT_W = 130
+            _run_btn(bx, _EXIT_W, "\u505c\u6b62[F12]", "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
+            bx += _EXIT_W + 10
             
             # 动态更新窗口宽度以适应内容
             if bx != state["width"]:
@@ -603,8 +680,6 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             c.config(width=state["width"], height=state["height"])
 
     # 拖拽逻辑
-
-    # 拖拽逻辑
     drag = {"sx": 0, "sy": 0, "wx": 0, "wy": 0}
     def _ds(e):
         drag["sx"], drag["sy"] = e.x_root, e.y_root
@@ -622,6 +697,16 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
         state["y"] = ny
         
         top.geometry(f"{w}x{h}+{nx}+{ny}")
+        
+        # 同步移动软键盘
+        from ui.virtual_keyboard import get_kb_instance, _position_above_toolbar
+        kb = get_kb_instance()
+        if kb:
+            try:
+                if kb.winfo_exists():
+                    _position_above_toolbar(kb, top)
+            except Exception:
+                pass
 
     # Bind drag events to tags
     for t in ("bg", "drag_handle"):
@@ -632,7 +717,18 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
     
     def _keep():
         try:
-            if top.winfo_exists(): top.lift(); top.after(300, _keep)
+            if top.winfo_exists():
+                top.lift()
+                # 同步 lift 软键盘 (同层级)
+                from ui.virtual_keyboard import get_kb_instance
+                kb = get_kb_instance()
+                if kb:
+                    try:
+                        if kb.winfo_exists():
+                            kb.lift()
+                    except Exception:
+                        pass
+                top.after(300, _keep)
         except: pass
     top.lift(); top.after(100, _keep)
 
