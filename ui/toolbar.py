@@ -10,6 +10,7 @@ from core.constants import (
     COLOR_PANEL, COLOR_TOOLBAR_TRANSPARENT,
     TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_RADIUS,
     TOOLBAR_BOTTOM_MARGIN,
+    PT_ON, PT_OFF, PT_BLOCK, PT_CYCLE,
 )
 from core.config_manager import get_active_profile_name
 from ui.widgets import (
@@ -389,7 +390,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
 # ─── 运行模式工具栏 ──────────────────────────────────────────────
 
 def create_run_toolbar(parent, screen_w, screen_h, *,
-                       on_edit, on_passthrough, click_through=False,
+                       on_edit, on_passthrough, click_through=PT_ON,
                        set_window_style=None,
                        on_toggle_buttons=None, buttons_visible=True):
     """创建运行模式独立工具栏（可拖拽、可收缩）。"""
@@ -546,45 +547,54 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             # --- 统一按钮字号 = -18 (与退出/编辑一致) ---
             _RUN_FS = -18
 
-            # --- 2. 穿透模式 (checkbox 风格 toggle 按钮) ---
-            _PT_W = 130
+            # --- 2. 穿透模式 (三态循环按钮: PT_ON→PT_OFF→PT_BLOCK) ---
+            _PT_W = 140
             pt_tag = "run_pt"
-            pt_on = state["click_through"]
+            _ct = state["click_through"]
 
-            pt_bg = C_AMBER_D if pt_on else C_GRAY
-            pt_bg_h = C_AMBER if pt_on else C_GRAY_H
-            pt_icon = "\uE73E" if pt_on else "\uE739"
-            pt_fg = "#FFF" if pt_on else "#E0E0E0"
+            # 三态颜色/文字映射
+            C_BLUE = "#1976D2"      # 蓝色 (穿透ON)
+            C_BLUE_H = "#2196F3"
+            C_BLOCK = "#B71C1C"     # 深红 (不穿透)
+            C_BLOCK_H = "#D32F2F"
 
-            rrect(c, bx, by, _PT_W, BTN_H_RUN, BTN_R, fill=pt_bg, outline="", tags=(pt_tag, pt_tag+"_bg"))
+            _PT_MAP = {
+                PT_ON:    {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE73E", "text": "\u7a7f\u900f ON",  "fg": "#FFF"},
+                PT_OFF:   {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE739", "text": "\u7a7f\u900f OFF", "fg": "#FFF"},
+                PT_BLOCK: {"bg": C_BLOCK,   "bg_h": C_BLOCK_H, "icon": "\uE72E", "text": "\u4e0d\u7a7f\u900f",   "fg": "#FFF"},
+            }
+            _pm = _PT_MAP.get(_ct, _PT_MAP[PT_ON])
+
+            rrect(c, bx, by, _PT_W, BTN_H_RUN, BTN_R, fill=_pm["bg"], outline="", tags=(pt_tag, pt_tag+"_bg"))
             pt_cy = by + BTN_H_RUN // 2
-            pt_cx = bx + _PT_W // 2  # 按钮水平中心
             if ifont:
-                c.create_text(bx + 10, pt_cy, text=pt_icon, font=(ifont, IS),
-                              fill=pt_fg, anchor="w", tags=(pt_tag,))
-                c.create_text(bx + 34, pt_cy, text="\u7a7f\u900f\u6a21\u5f0f",
+                c.create_text(bx + 10, pt_cy, text=_pm["icon"], font=(ifont, IS),
+                              fill=_pm["fg"], anchor="w", tags=(pt_tag,))
+                c.create_text(bx + 34, pt_cy, text=_pm["text"],
                               font=("Microsoft YaHei UI", _RUN_FS),
-                              fill=pt_fg, anchor="w", tags=(pt_tag,))
+                              fill=_pm["fg"], anchor="w", tags=(pt_tag,))
             else:
-                _pt_fb = "\u2611" if pt_on else "\u2610"
-                c.create_text(bx + _PT_W//2, pt_cy, text=f"{_pt_fb} \u7a7f\u900f\u6a21\u5f0f",
+                c.create_text(bx + _PT_W//2, pt_cy, text=_pm["text"],
                               font=("Microsoft YaHei UI", _RUN_FS),
-                              fill=pt_fg, tags=(pt_tag,))
+                              fill=_pm["fg"], tags=(pt_tag,))
 
             def _pt_enter(e):
-                _h = C_AMBER if state["click_through"] else C_GRAY_H
-                c.itemconfigure(pt_tag+"_bg", fill=_h)
+                _m = _PT_MAP.get(state["click_through"], _PT_MAP[PT_ON])
+                c.itemconfigure(pt_tag+"_bg", fill=_m["bg_h"])
             def _pt_leave(e):
-                _n = C_AMBER_D if state["click_through"] else C_GRAY
-                c.itemconfigure(pt_tag+"_bg", fill=_n)
+                _m = _PT_MAP.get(state["click_through"], _PT_MAP[PT_ON])
+                c.itemconfigure(pt_tag+"_bg", fill=_m["bg"])
             c.tag_bind(pt_tag, "<Enter>", _pt_enter)
             c.tag_bind(pt_tag, "<Leave>", _pt_leave)
 
             def _toggle_pt_wrapper(e=None):
-                state["click_through"] = not state["click_through"]
-                on_passthrough(state["click_through"])
+                cur = state["click_through"]
+                idx = PT_CYCLE.index(cur) if cur in PT_CYCLE else 0
+                nxt = PT_CYCLE[(idx + 1) % len(PT_CYCLE)]
+                state["click_through"] = nxt
+                on_passthrough(nxt)
                 redraw()
-                
+
             c.tag_bind(pt_tag, "<ButtonRelease-1>", lambda e: _toggle_pt_wrapper())
             bx += _PT_W + GAP
 

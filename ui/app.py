@@ -17,6 +17,8 @@ from core.constants import (
     COLOR_BG, COLOR_PANEL, COLOR_TRANSPARENT,
     UPDATE_INTERVAL, GRID_SIZE,
     DEFAULT_PROFILE_NAME,
+    PT_ON, PT_OFF, PT_BLOCK, PT_CYCLE,
+    COLOR_BLOCK_OVERLAY,
 )
 # Update import to include profile functions
 from core.config_manager import (
@@ -483,7 +485,7 @@ class FloatingApp:
                             self.set_window_style('no_focus')  # 拦截点击，不传给游戏
                         else:
                             # 冻结 OFF：恢复用户原有穿透设置
-                            if self.click_through:
+                            if self.click_through == PT_ON:
                                 self.set_window_style('click_through')
                             else:
                                 self.set_window_style('no_focus')
@@ -546,21 +548,23 @@ class FloatingApp:
                                 self.set_window_style('click_through')
 
                     elif self.current_mode == 'run':
-                        # === 运行模式 (Run Mode) ===
-                        if self.click_through:
-                            # [开启] = 完全穿透 (Full Passthrough)
-                            # 始终穿透，点击同时触发按钮(通过轮询)和游戏
+                        # === 运行模式 (Run Mode) — 三态穿透 ===
+                        if self.click_through == PT_ON:
+                            # [穿透ON] = 完全穿透 (Full Passthrough)
                             if self.is_window_solid:
                                 self.set_window_style('click_through')
-                        else:
-                            # [关闭] = 智能穿透 (Smart Passthrough)
-                            # 按钮拦截(Solid)，空白穿透(Transparent)
+                        elif self.click_through == PT_OFF:
+                            # [穿透OFF] = 智能穿透 (Smart Passthrough)
                             if is_on_ui:
                                 if not self.is_window_solid:
                                     self.set_window_style('no_focus')
                             else:
                                 if self.is_window_solid:
                                     self.set_window_style('click_through')
+                        elif self.click_through == PT_BLOCK:
+                            # [不穿透] = 全部拦截 (Block All)
+                            if not self.is_window_solid:
+                                self.set_window_style('no_focus')
 
                 # 4. 更新虚拟光标
                 # 策略：如果鼠标在工具栏上方，则隐藏主窗口光标（因为工具栏自己会画光标）
@@ -981,14 +985,11 @@ class FloatingApp:
                 self.set_window_style('normal')
 
     def toggle_click_through(self):
-        self.click_through = not self.click_through
+        """三态循环：PT_ON → PT_OFF → PT_BLOCK → PT_ON ..."""
+        idx = PT_CYCLE.index(self.click_through) if self.click_through in PT_CYCLE else 0
+        self.click_through = PT_CYCLE[(idx + 1) % len(PT_CYCLE)]
         self.redraw_all()
-        if self.click_through:
-            # 开启穿透时，先设为 no_focus (不获取焦点但拦截点击)
-            # 具体的穿透逻辑交给 update_loop 中的智能判定去动态切换
-            self.set_window_style('no_focus')
-        else:
-            self.set_window_style('no_focus')
+        self.set_window_style('no_focus')
     
     def toggle_buttons_visibility(self, visible):
         """切换按键显示/隐藏（由运行工具栏调用）。"""
@@ -1007,15 +1008,11 @@ class FloatingApp:
                 remove_charge_bar(self.canvas, btn)
         self.redraw_all()
 
-    def toggle_click_through_sync(self, is_on):
-        """同步设置穿透状态（由运行工具栏调用）。"""
-        self.click_through = is_on
+    def toggle_click_through_sync(self, mode):
+        """同步设置穿透状态（由运行工具栏调用）。mode 为 PT_ON/PT_OFF/PT_BLOCK。"""
+        self.click_through = mode
         self.redraw_all()
-        if self.click_through:
-            # 同上，不要直接设为 click_through (全穿透)，否则按钮也会无法点击
-            self.set_window_style('no_focus')
-        else:
-            self.set_window_style('no_focus')
+        self.set_window_style('no_focus')
 
     def switch_profile(self, name):
         """切换方案"""

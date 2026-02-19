@@ -16,6 +16,7 @@ from .constants import (
     BUTTON_OPTIONAL_DEFAULTS,
     PROFILES_DIR, PROFILES_INDEX, DEFAULT_PROFILE_NAME,
     DEFAULT_FREEZE_HOTKEY,
+    PT_ON, PT_OFF, PT_BLOCK,
 )
 
 logger = logging.getLogger(__name__)
@@ -159,7 +160,7 @@ def load_config_from_file(filepath: str) -> dict:
         'buttons': copy.deepcopy(DEFAULT_BUTTONS),
         'ball_x': None,
         'ball_y': None,
-        'click_through': True,
+        'click_through': PT_ON,
         'freeze_hotkey': DEFAULT_FREEZE_HOTKEY,
     }
     if not os.path.exists(filepath):
@@ -182,7 +183,14 @@ def load_config_from_file(filepath: str) -> dict:
         result['transparency'] = data.get('transparency', DEFAULT_TRANSPARENCY)
         result['ball_x'] = data.get('ball_x', None)
         result['ball_y'] = data.get('ball_y', None)
-        result['click_through'] = data.get('click_through', True)
+        # 兼容旧版布尔值 click_through → 新三态字符串
+        raw_ct = data.get('click_through', True)
+        if isinstance(raw_ct, bool):
+            result['click_through'] = PT_ON if raw_ct else PT_OFF
+        elif raw_ct in (PT_ON, PT_OFF, PT_BLOCK):
+            result['click_through'] = raw_ct
+        else:
+            result['click_through'] = PT_ON
         result['freeze_hotkey'] = data.get('freeze_hotkey', DEFAULT_FREEZE_HOTKEY)
         buttons = data.get('buttons', None)
         if buttons is not None:
@@ -298,7 +306,7 @@ def create_profile(name: str, from_template: bool = False) -> bool:
         'buttons': copy.deepcopy(DEFAULT_BUTTONS) if not from_template else copy.deepcopy(DEFAULT_BUTTONS),
         'ball_x': None,
         'ball_y': None,
-        'click_through': True,
+        'click_through': PT_ON,
     }
 
     # 写入文件

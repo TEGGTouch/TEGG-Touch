@@ -93,6 +93,15 @@ RUNTIME_FIELDS = frozenset({
     '_sx', '_sy',  # 缓存的屏幕坐标（逻辑坐标+偏移）
 })
 
+# === 穿透模式三态常量 ===
+PT_ON = "pt_on"        # 完全穿透：点击穿透到下层游戏/桌面
+PT_OFF = "pt_off"      # 智能穿透：按钮拦截，空白穿透
+PT_BLOCK = "pt_block"  # 不穿透：所有输入都被拦截
+PT_CYCLE = [PT_ON, PT_OFF, PT_BLOCK]  # 循环顺序
+
+# 不穿透模式覆盖色（半透明黑，提示用户当前处于拦截状态）
+COLOR_BLOCK_OVERLAY = "#1A1A1A"
+
 # 按钮可选字段及默认值 (兼容旧配置)
 BUTTON_OPTIONAL_DEFAULTS = {
     'wheelup': '',
