@@ -37,7 +37,7 @@ def open_about_dialog(parent):
 
     PADDING = 30
     width = 440
-    height = 540
+    height = 555
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -128,7 +128,7 @@ def open_about_dialog(parent):
 
     # 分隔线
     c.create_line(PADDING, cy, width - PADDING, cy, fill="#444", width=1)
-    cy += 20
+    cy += 35
 
     # ── QR 码区域 (左图右文) ──
     QR_SIZE = 160
