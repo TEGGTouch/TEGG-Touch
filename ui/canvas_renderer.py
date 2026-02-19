@@ -403,22 +403,42 @@ def draw_floating_ball(canvas):
 
 import os
 from PIL import Image, ImageTk
+from core.constants import PT_ON, PT_OFF, PT_BLOCK
 
 # 全局引用，防止 GC 回收
-_cursor_photo = None
+_cursor_photos = {}       # {mode: ImageTk.PhotoImage}
+_current_cursor_mode = PT_ON  # 当前光标模式
 
-def _get_cursor_image():
-    """加载普通光标 PNG 图片，返回 ImageTk.PhotoImage。"""
-    global _cursor_photo
-    if _cursor_photo is None:
+_CURSOR_FILES = {
+    PT_ON:    "cursor.png",
+    PT_OFF:   "cursor_off.png",
+    PT_BLOCK: "cursor_block.png",
+}
+
+def _get_cursor_image(mode=None):
+    """加载指定模式的光标 PNG 图片，返回 ImageTk.PhotoImage。"""
+    if mode is None:
+        mode = _current_cursor_mode
+    if mode not in _cursor_photos:
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        path = os.path.join(base, "assets", "cursor.png")
+        filename = _CURSOR_FILES.get(mode, "cursor.png")
+        path = os.path.join(base, "assets", filename)
         try:
             img = Image.open(path).convert("RGBA")
-            _cursor_photo = ImageTk.PhotoImage(img)
+            _cursor_photos[mode] = ImageTk.PhotoImage(img)
         except Exception:
-            pass # ignore missing cursor
-    return _cursor_photo
+            # 找不到对应光标文件，fallback 到默认
+            if mode != PT_ON:
+                return _get_cursor_image(PT_ON)
+            pass
+    return _cursor_photos.get(mode)
+
+
+def set_cursor_mode(mode):
+    """切换光标模式（PT_ON / PT_OFF / PT_BLOCK），下次绘制时生效。"""
+    global _current_cursor_mode
+    _current_cursor_mode = mode
+
 
 def init_cursor(canvas):
     """初始化虚拟光标（使用自定义 PNG 图片）。"""
@@ -432,9 +452,23 @@ def init_cursor(canvas):
 
 
 def update_cursor(canvas, x, y):
-    """更新虚拟光标位置（图片左上角对齐鼠标尖端）。"""
-    if not canvas.find_withtag("v_cursor"):
+    """更新虚拟光标位置（图片左上角对齐鼠标尖端）。
+    同时检查光标模式是否需要切换图片。
+    """
+    items = canvas.find_withtag("v_cursor")
+    if not items:
         init_cursor(canvas)
+        items = canvas.find_withtag("v_cursor")
+    
+    # 检查是否需要切换光标图片
+    if items:
+        new_photo = _get_cursor_image()
+        if new_photo:
+            try:
+                canvas.itemconfigure(items[0], image=new_photo)
+            except Exception:
+                pass
+    
     canvas.coords("v_cursor", x, y)
     canvas.tag_raise("v_cursor")
 

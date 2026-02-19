@@ -28,7 +28,7 @@ from core.config_manager import (
 from ui.canvas_renderer import (
     draw_button, update_button_coords, set_button_visual_state,
     draw_floating_ball,
-    init_cursor, update_cursor, remove_cursor,
+    init_cursor, update_cursor, remove_cursor, set_cursor_mode,
     preview_button_transparency, draw_grid,
     draw_charge_bar, remove_charge_bar,
 )
@@ -275,6 +275,7 @@ class FloatingApp:
             self.set_window_style('no_focus')
 
             self.root.config(cursor="none")
+            set_cursor_mode(self.click_through)  # 初始化光标图片
             self._show_run_toolbar() # 显示运行工具栏
             init_cursor(self.canvas)
 
@@ -998,6 +999,7 @@ class FloatingApp:
     def toggle_click_through_sync(self, mode):
         """同步设置穿透状态（由运行工具栏调用）。mode 为 PT_ON/PT_OFF/PT_BLOCK。"""
         self.click_through = mode
+        set_cursor_mode(mode)  # 切换光标图片
         self.redraw_all()
         self.set_window_style('no_focus')
         if mode in (PT_ON, PT_OFF):

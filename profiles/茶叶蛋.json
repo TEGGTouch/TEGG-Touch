@@ -1,7 +1,7 @@
 {
   "coord_system": "center",
-  "geometry": "2560x1600+0+0",
-  "transparency": 0.9,
+  "geometry": "2560x1440+0+0",
+  "transparency": 0.5,
   "buttons": [
     {
       "x": -100,
@@ -501,5 +501,5 @@
   ],
   "ball_x": 531,
   "ball_y": 328,
-  "click_through": "pt_off"
+  "click_through": "pt_on"
 }

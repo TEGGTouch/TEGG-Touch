@@ -552,15 +552,13 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             _ct = state["click_through"]
 
             # 三态颜色/文字映射
-            C_BLUE = "#1976D2"      # 蓝色 (穿透ON)
+            C_BLUE = "#1976D2"      # 蓝色 (穿透OFF)
             C_BLUE_H = "#2196F3"
-            C_BLOCK = "#B71C1C"     # 深红 (不穿透)
-            C_BLOCK_H = "#D32F2F"
 
             _PT_MAP = {
-                PT_ON:    {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE73E", "text": "\u7a7f\u900fON [F9]",   "fg": "#FFF"},
-                PT_OFF:   {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE739", "text": "\u7a7f\u900fOFF [F10]", "fg": "#FFF"},
-                PT_BLOCK: {"bg": C_BLOCK,   "bg_h": C_BLOCK_H, "icon": "\uE72E", "text": "\u4e0d\u7a7f\u900f [F11]",  "fg": "#FFF"},
+                PT_ON:    {"bg": C_GRAY,    "bg_h": C_GRAY_H,  "icon": "\uE73E", "text": "\u7a7f\u900fON [F9]",   "fg": "#E0E0E0"},
+                PT_OFF:   {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE739", "text": "\u7a7f\u900fOFF [F10]", "fg": "#FFF"},
+                PT_BLOCK: {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE72E", "text": "\u4e0d\u7a7f\u900f [F11]",  "fg": "#FFF"},
             }
             _pm = _PT_MAP.get(_ct, _PT_MAP[PT_ON])
 
