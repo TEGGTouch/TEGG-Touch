@@ -31,19 +31,9 @@ from ui.canvas_renderer import init_cursor, update_cursor, remove_cursor
 _tip_win = None
 
 def _show_tip(canvas, tag, text):
-    """在按钮上方显示独立浮窗 tooltip (不受工具栏边界裁剪)。"""
+    """在工具栏正下方居中显示独立浮窗 tooltip (不跟随按钮)。"""
     global _tip_win
     _hide_tip(canvas)
-    bbox = canvas.bbox(tag + "_bg")
-    if not bbox:
-        bbox = canvas.bbox(tag)
-    if not bbox:
-        return
-    x1, y1, x2, y2 = bbox
-    cx = (x1 + x2) // 2
-    # 屏幕绝对坐标
-    sx = canvas.winfo_rootx() + cx
-    sy = canvas.winfo_rooty() + y1
     # 创建独立 Toplevel 浮窗
     _tip_win = tk.Toplevel(canvas)
     _tip_win.overrideredirect(True)
@@ -57,10 +47,11 @@ def _show_tip(canvas, tag, text):
     lbl.pack()
     _tip_win.update_idletasks()
     tw = _tip_win.winfo_reqwidth()
-    th = _tip_win.winfo_reqheight()
-    # 居中于按钮上方
-    tx = sx - tw // 2
-    ty = sy - th - 4
+    # 工具栏正下方居中, 距底边 5px
+    bar_cx = canvas.winfo_rootx() + canvas.winfo_width() // 2
+    bar_bottom = canvas.winfo_rooty() + canvas.winfo_height()
+    tx = bar_cx - tw // 2
+    ty = bar_bottom + 5
     _tip_win.geometry(f"+{tx}+{ty}")
 
 def _hide_tip(canvas=None):
