@@ -23,6 +23,7 @@ from ui.widgets import (
 )
 from ui.profile_manager import open_profile_manager
 from ui.hotkey_settings import open_hotkey_settings
+from ui.about_dialog import open_about_dialog
 from ui.canvas_renderer import init_cursor, update_cursor, remove_cursor
 
 
@@ -102,12 +103,28 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
         c.tag_bind(t, "<Button-1>", _ds)
         c.tag_bind(t, "<B1-Motion>", _dm)
 
-    # --- Settings button (top-right, left of close) ---
+    # --- About button (top-right, left of settings) ---
     _SET_SIZE = CLOSE_SIZE
     _SET_GAP = 4
-    sx0 = tw - CLOSE_M - CLOSE_SIZE - _SET_GAP - _SET_SIZE
     C_SET_ED = "#4A4A4A"
     C_SET_ED_H = "#5A5A5A"
+
+    ax0 = tw - CLOSE_M - CLOSE_SIZE - _SET_GAP - _SET_SIZE - _SET_GAP - _SET_SIZE
+    rrect(c, ax0, CLOSE_M, _SET_SIZE, _SET_SIZE, BTN_R,
+          fill=C_SET_ED, outline="", tags=("tabout", "tabout_bg"))
+    acx, acy = ax0 + _SET_SIZE // 2, CLOSE_M + _SET_SIZE // 2
+    if ifont:
+        c.create_text(acx, acy, text="\uE946", font=(ifont, IS), fill="#CCC", tags=("tabout",))
+    else:
+        c.create_text(acx, acy, text="\u24d8", font=(FF, FS, "bold"), fill="#CCC", tags=("tabout",))
+    def _ae(e): i = c.find_withtag("tabout_bg"); i and c.itemconfigure(i[0], fill=C_SET_ED_H)
+    def _al(e): i = c.find_withtag("tabout_bg"); i and c.itemconfigure(i[0], fill=C_SET_ED)
+    c.tag_bind("tabout", "<Enter>", _ae)
+    c.tag_bind("tabout", "<Leave>", _al)
+    c.tag_bind("tabout", "<ButtonRelease-1>", lambda e: open_about_dialog(top))
+
+    # --- Settings button (top-right, left of close) ---
+    sx0 = tw - CLOSE_M - CLOSE_SIZE - _SET_GAP - _SET_SIZE
     rrect(c, sx0, CLOSE_M, _SET_SIZE, _SET_SIZE, BTN_R,
           fill=C_SET_ED, outline="", tags=("tset", "tset_bg"))
     scx, scy = sx0 + _SET_SIZE // 2, CLOSE_M + _SET_SIZE // 2
