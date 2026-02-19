@@ -319,6 +319,11 @@ def _position_above_toolbar(top, toolbar_win):
         kx = tx
     ky = ty - KB_HEIGHT - 10
 
+    # 上方空间不够 → 放到工具栏下方
+    if ky < 0:
+        th = toolbar_win.winfo_height()
+        ky = ty + th + 10
+
     # 确保不超出屏幕
     sw = toolbar_win.winfo_screenwidth()
     kx = max(0, min(kx, sw - kw))

@@ -62,7 +62,28 @@ class ButtonManagerMixin:
             def on_delete_cb(del_btn):
                 del_btn['deleted'] = True
                 self.redraw_all()
-            open_center_band_editor(self.root, btn, on_delete=on_delete_cb)
+
+            def on_copy_cb(src_btn):
+                w, h = src_btn['w'], src_btn['h']
+                pos = self._find_empty_slot(w, h, start_x=src_btn['x'], start_y=src_btn['y'], scan='spiral')
+                if pos:
+                    nx, ny = pos
+                else:
+                    nx, ny = src_btn['x'], src_btn['y']
+                new_btn = {
+                    'x': nx, 'y': ny, 'w': w, 'h': h,
+                    'name': '回中带', 'type': BTN_TYPE_CENTER_BAND,
+                    'hover_delay': 0, 'hover_release_delay': 0,
+                    'hover': '', 'lclick': '', 'rclick': '', 'mclick': '',
+                    'wheelup': '', 'wheeldown': '',
+                }
+                self.buttons.append(new_btn)
+                self.redraw_all()
+                self.show_toast("✓ 复制成功")
+
+            open_center_band_editor(self.root, btn,
+                                    on_delete=on_delete_cb,
+                                    on_copy=on_copy_cb)
             return
 
         def on_save(updated_btn):

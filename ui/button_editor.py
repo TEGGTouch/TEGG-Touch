@@ -143,12 +143,12 @@ class TagInput(tk.Frame):
 #  主函数
 # ═══════════════════════════════════════════════════════════════
 
-def open_center_band_editor(parent, btn, *, on_delete):
-    """打开回中带专用简单弹窗（仅显示说明 + 关闭/删除按钮）。"""
+def open_center_band_editor(parent, btn, *, on_delete, on_copy=None):
+    """打开回中带专用简单弹窗（说明 + 复制/删除按钮）。"""
     overlay = create_modal_overlay(parent)
 
     width = 400
-    height = 220
+    height = 280
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -218,14 +218,35 @@ def open_center_band_editor(parent, btn, *, on_delete):
     c.create_text(width // 2, 105, text=sub_text,
                   font=(FF, 9), fill="#888", tags="desc2")
 
-    # 删除按钮
+    # 底部按钮区
     btn_h = 40
-    btn_w = 120
-    del_x = (width - btn_w) // 2
+    btn_w = 160
+    btn_gap = 10
+    base_x = (width - btn_w) // 2
+
+    # 复制按钮（灰色，上方）
+    if on_copy:
+        copy_y = height - 30 - btn_h * 2 - btn_gap
+        rrect(c, base_x, copy_y, btn_w, btn_h, BTN_R,
+              fill=C_GRAY, outline="", tags=("copy", "copy_bg"))
+        copy_cy = copy_y + btn_h // 2
+        if ifont:
+            c.create_text(base_x + btn_w // 2 - 30, copy_cy, text="\uE8C8",
+                          font=(ifont, IS), fill="#E0E0E0", tags=("copy",))
+            c.create_text(base_x + btn_w // 2 + 6, copy_cy, text="\u590d\u5236",
+                          font=(FF, FS), fill="#E0E0E0", tags=("copy",))
+        else:
+            c.create_text(base_x + btn_w // 2, copy_cy, text="\u590d\u5236",
+                          font=(FF, FS, "bold"), fill="#E0E0E0", tags=("copy",))
+        c.tag_bind("copy", "<Enter>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY_H))
+        c.tag_bind("copy", "<Leave>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY))
+        c.tag_bind("copy", "<ButtonRelease-1>", lambda e: [on_copy(btn), top.destroy()])
+
+    # 删除按钮（红色，下方）
     del_y = height - 30 - btn_h
-    rrect(c, del_x, del_y, btn_w, btn_h, BTN_R,
+    rrect(c, base_x, del_y, btn_w, btn_h, BTN_R,
           fill="#6E1E1E", outline="", tags=("del", "del_bg"))
-    c.create_text(del_x + btn_w // 2, del_y + btn_h // 2, text="\u5220\u9664",
+    c.create_text(base_x + btn_w // 2, del_y + btn_h // 2, text="\u5220\u9664",
                   font=(FF, FS), fill="white", tags=("del",))
     c.tag_bind("del", "<Enter>", lambda e: c.itemconfigure("del_bg", fill="#8B2020"))
     c.tag_bind("del", "<Leave>", lambda e: c.itemconfigure("del_bg", fill="#6E1E1E"))
