@@ -644,12 +644,12 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             _AC_W = 150
             ac_tag = "run_ac"
             ac_on = state["auto_center"]
-            C_BLUE = "#1976D2"
-            C_BLUE_H = "#2196F3"
+            C_GREEN = "#176F2C"
+            C_GREEN_H = "#1E8E38"
 
-            ac_bg = C_BLUE if ac_on else C_GRAY
-            ac_bg_h = C_BLUE_H if ac_on else C_GRAY_H
-            ac_icon = "\uE1D3" if ac_on else "\uE72A"
+            ac_bg = C_GREEN if ac_on else C_GRAY
+            ac_bg_h = C_GREEN_H if ac_on else C_GRAY_H
+            ac_icon = "\uE7C9" if ac_on else "\uEA3A"
             ac_text = "\u56de\u4e2dON [F6]" if ac_on else "\u56de\u4e2dOFF [F6]"
             ac_fg = "#FFF" if ac_on else "#E0E0E0"
 
@@ -667,10 +667,10 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                               fill=ac_fg, tags=(ac_tag,))
 
             def _ac_enter(e):
-                _bh = C_BLUE_H if state["auto_center"] else C_GRAY_H
+                _bh = C_GREEN_H if state["auto_center"] else C_GRAY_H
                 c.itemconfigure(ac_tag+"_bg", fill=_bh)
             def _ac_leave(e):
-                _bg = C_BLUE if state["auto_center"] else C_GRAY
+                _bg = C_GREEN if state["auto_center"] else C_GRAY
                 c.itemconfigure(ac_tag+"_bg", fill=_bg)
             c.tag_bind(ac_tag, "<Enter>", _ac_enter)
             c.tag_bind(ac_tag, "<Leave>", _ac_leave)
