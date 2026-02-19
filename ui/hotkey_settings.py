@@ -57,8 +57,8 @@ _HK_DESCS = {
 }
 
 # ─── 行布局常量 ────────────────────────────────────────────────
-ROW_H = 66
-DESC_H = 16        # 说明文本行高
+ROW_H = 78
+DESC_H = 28        # 说明文本行高（可容纳2行小字）
 DOT_W = 20
 LABEL_W = 120
 INPUT_PAD = 10
@@ -190,22 +190,24 @@ def open_hotkey_settings(parent, on_save_callback=None):
     color = _HK_COLORS.get(key, C_AMBER)
     label_text = HOTKEY_LABELS.get(key, key)
     current_val = hotkeys.get(key, DEFAULT_HOTKEYS[key])
+    _input_y = 4  # 输入框固定在顶部，留出下方空间给说明文本
     dot = tk.Frame(hk_frame_1, bg=color, width=8, height=8)
-    dot.place(x=4, y=(ROW_H - 8) // 2, width=8, height=8)
+    dot.place(x=4, y=_input_y + (INPUT_H - 8) // 2, width=8, height=8)
     lbl = tk.Label(hk_frame_1, text=label_text, bg=C_PM_BG, fg="#CCC",
                    font=(FF, 10), anchor="w")
-    lbl.place(x=DOT_W, y=0, height=ROW_H)
-    wy = (ROW_H - INPUT_H) // 2
+    lbl.place(x=DOT_W, y=0, height=_input_y + INPUT_H)
     ti = TagInput(hk_frame_1, initial_value=current_val, accent_color=color)
-    ti.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
+    ti.place(x=input_x, y=_input_y, width=input_w, height=INPUT_H)
     ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
     fields[key] = ti
-    # 说明文本
+    # 说明文本 — 左对齐到标题，支持自动换行
     desc_text = _HK_DESCS.get("auto_center", "")
+    desc_w = form_w - DOT_W
     if desc_text:
         desc_lbl = tk.Label(hk_frame_1, text=desc_text, bg=C_PM_BG, fg="#666",
-                            font=(FF, 8), anchor="w")
-        desc_lbl.place(x=input_x, y=wy + INPUT_H + 1, width=input_w, height=DESC_H)
+                            font=(FF, 8), anchor="nw", justify="left",
+                            wraplength=desc_w)
+        desc_lbl.place(x=DOT_W, y=_input_y + INPUT_H + 2, width=desc_w, height=DESC_H)
 
     # ── 回中延迟滑块 (紧跟 auto_center 下方) ──
     delay_y = content_y + hk1_h + 4
@@ -218,30 +220,32 @@ def open_hotkey_settings(parent, on_save_callback=None):
     hk_frame_2.place(x=form_x, y=hk2_y, width=form_w, height=hk2_h)
     hk_frame_2.lift()
 
+    desc_w = form_w - DOT_W
     for i, key in enumerate(_HK_REST):
         local_y = i * ROW_H
         color = _HK_COLORS.get(key, C_AMBER)
         label_text = HOTKEY_LABELS.get(key, key)
         current_val = hotkeys.get(key, DEFAULT_HOTKEYS[key])
 
+        iy = local_y + 4  # 输入框固定在行顶部偏移4px
         dot = tk.Frame(hk_frame_2, bg=color, width=8, height=8)
-        dot.place(x=4, y=local_y + (ROW_H - 8) // 2, width=8, height=8)
+        dot.place(x=4, y=iy + (INPUT_H - 8) // 2, width=8, height=8)
 
         lbl = tk.Label(hk_frame_2, text=label_text, bg=C_PM_BG, fg="#CCC",
                        font=(FF, 10), anchor="w")
-        lbl.place(x=DOT_W, y=local_y, height=ROW_H)
+        lbl.place(x=DOT_W, y=local_y, height=4 + INPUT_H)
 
-        wy = local_y + (ROW_H - INPUT_H) // 2
         ti = TagInput(hk_frame_2, initial_value=current_val, accent_color=color)
-        ti.place(x=input_x, y=wy, width=input_w, height=INPUT_H)
+        ti.place(x=input_x, y=iy, width=input_w, height=INPUT_H)
         ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
         fields[key] = ti
-        # 说明文本
+        # 说明文本 — 左对齐到标题，支持自动换行
         desc_text = _HK_DESCS.get(key, "")
         if desc_text:
             desc_lbl = tk.Label(hk_frame_2, text=desc_text, bg=C_PM_BG, fg="#666",
-                                font=(FF, 8), anchor="w")
-            desc_lbl.place(x=input_x, y=wy + INPUT_H + 1, width=input_w, height=DESC_H)
+                                font=(FF, 8), anchor="nw", justify="left",
+                                wraplength=desc_w)
+            desc_lbl.place(x=DOT_W, y=iy + INPUT_H + 2, width=desc_w, height=DESC_H)
 
     delay_frame = tk.Frame(top, bg=C_PM_BG)
     delay_frame.place(x=form_x, y=delay_y, width=form_w, height=delay_total_h)
