@@ -27,6 +27,36 @@ from ui.about_dialog import open_about_dialog
 from ui.canvas_renderer import init_cursor, update_cursor, remove_cursor
 
 
+# ─── 工具栏 Tooltip 工具函数 ────────────────────────────────
+_TIP_TAG = "toolbar_tip"
+
+def _show_tip(canvas, tag, text):
+    """在按钮上方显示黑色 tooltip。"""
+    canvas.delete(_TIP_TAG)
+    bbox = canvas.bbox(tag + "_bg")
+    if not bbox:
+        bbox = canvas.bbox(tag)
+    if not bbox:
+        return
+    x1, y1, x2, y2 = bbox
+    cx = (x1 + x2) // 2
+    ty = y1 - 6
+    tid = canvas.create_text(cx, ty, text=text, anchor="s",
+                             font=("Microsoft YaHei UI", -12), fill="#E0E0E0",
+                             tags=_TIP_TAG)
+    tb = canvas.bbox(tid)
+    if tb:
+        pad = 4
+        bg_id = canvas.create_rectangle(
+            tb[0] - pad, tb[1] - pad, tb[2] + pad, tb[3] + pad,
+            fill="#1A1A1A", outline="#333", width=1, tags=_TIP_TAG)
+        canvas.tag_raise(tid)
+
+def _hide_tip(canvas):
+    """移除 tooltip。"""
+    canvas.delete(_TIP_TAG)
+
+
 def create_toolbar_window(parent, screen_w, screen_h, *,
                           on_add, on_add_center_band=None, on_run,
                           on_quit, transparency, on_alpha_change,
@@ -421,21 +451,13 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
         i = c.find_withtag(sm_tag + "_bg")
         if i:
             c.itemconfigure(i[0], fill=C_CYBER_H)
-        # 显示 tooltip
-        tip_x = sm_btn_x + _SM_BTN_W // 2
-        tip_y = sm_btn_y - 18
-        _tooltip_id["id"] = c.create_text(
-            tip_x, tip_y, text="手柄模拟模式开发中",
-            font=(FF, -12), fill="#888", tags="sm_tooltip")
+        _show_tip(c, sm_tag, "手柄模拟模式开发中")
 
     def _sm_lv(e):
         i = c.find_withtag(sm_tag + "_bg")
         if i:
             c.itemconfigure(i[0], fill=C_CYBER)
-        # 隐藏 tooltip
-        if _tooltip_id["id"]:
-            c.delete(_tooltip_id["id"])
-            _tooltip_id["id"] = None
+        _hide_tip(c)
 
     c.tag_bind(sm_tag, "<Enter>", _sm_en)
     c.tag_bind(sm_tag, "<Leave>", _sm_lv)
@@ -492,6 +514,24 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     for t in ("sl_track_bg", "sl_fill", "sl_thumb"):
         c.tag_bind(t, "<Button-1>", _sc)
         c.tag_bind(t, "<B1-Motion>", _sd)
+
+    # ── 编辑工具栏 Tooltip 绑定 (黑色系) ──────────────────────
+    _EDIT_TIPS = [
+        ("tabout", "关于 TEGG Touch"),
+        ("tset", "快捷键设置"),
+        ("tq", "退出应用"),
+        ("tcfg", "管理和切换配置方案"),
+        ("tadd", "添加一个新的触摸按钮"),
+        ("tkb", "打开软键盘，方便输入按键映射"),
+        ("trun", "进入运行模式，开始触控操作"),
+    ]
+    if on_add_center_band:
+        _EDIT_TIPS.append(("tcb", "添加回中带，鼠标进入后自动归位"))
+    if on_toggle_wheel is not None:
+        _EDIT_TIPS.append(("twhl", "显示/隐藏中心轮盘，双击扇区可编辑"))
+    for _tg, _tx in _EDIT_TIPS:
+        c.tag_bind(_tg, "<Enter>", lambda e, tg=_tg, tx=_tx: _show_tip(c, tg, tx), add="+")
+        c.tag_bind(_tg, "<Leave>", lambda e: _hide_tip(c), add="+")
 
     return top
 
@@ -803,7 +843,19 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             _EXIT_W = 130
             _run_btn(bx, _EXIT_W, "\u505c\u6b62 [F12]", "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
             bx += _EXIT_W + 10
-            
+
+            # ── 运行工具栏 Tooltip 绑定 (黑色系) ──────────────
+            _RUN_TIPS = [
+                ("run_ac", "自动回中: 鼠标离开按钮后自动回到屏幕中心"),
+                ("run_vis", "隐藏或显示所有触控按钮"),
+                ("btn_kb", "打开软键盘"),
+                ("run_pt", "切换穿透模式: 穿透→不穿透→拦截"),
+                ("btn_exit", "停止运行，返回编辑模式"),
+            ]
+            for _tg, _tx in _RUN_TIPS:
+                c.tag_bind(_tg, "<Enter>", lambda e, tg=_tg, tx=_tx: _show_tip(c, tg, tx), add="+")
+                c.tag_bind(_tg, "<Leave>", lambda e: _hide_tip(c), add="+")
+
             # 动态更新窗口宽度以适应内容
             if bx != state["width"]:
                 state["width"] = bx
