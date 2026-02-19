@@ -354,6 +354,8 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         fields = [
             ('名称', 'name'),
             ('悬停', 'hover'),
+            ('触发延迟', 'hover_delay'),
+            ('释放延迟', 'hover_release_delay'),
             ('左键', 'lclick'),
             ('右键', 'rclick'),
             ('中键', 'mclick'),
@@ -363,7 +365,11 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         lines = []
         for label, key in fields:
             val = btn_data.get(key, '')
-            lines.append(f"{label}: {val}")
+            # 延迟字段带 ms 后缀
+            if key in ('hover_delay', 'hover_release_delay') and val != '':
+                lines.append(f"{label}: {val}ms")
+            else:
+                lines.append(f"{label}: {val}")
 
         if is_wheel:
             lines.append("⚠ 中心轮盘不可移动和放大")
@@ -404,7 +410,7 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             # 背景矩形
             bg = self.canvas.create_rectangle(
                 x1 - pad, y1 - pad, x2 + pad, y2 + pad,
-                fill="#1A1A2E", outline="#444466", width=1,
+                fill="#005A9E", outline="#005A9E", width=1,
                 tags="edit_tooltip",
             )
             self.canvas.tag_lower(bg, tid)
