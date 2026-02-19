@@ -621,22 +621,25 @@ class FloatingApp:
                         if self._point_in_btn(_b, rel_x, rel_y):
                             _on_any_btn = True
                             break
-                    if _on_any_btn:
+                    # 中心点死区：鼠标已在屏幕中心±50px内视为已回中，不做倒计时
+                    _center_x = self.screen_w // 2
+                    _center_y = self.screen_h // 2
+                    _at_center = abs(rel_x - _center_x) <= 50 and abs(rel_y - _center_y) <= 50
+
+                    if _on_any_btn or _at_center:
                         self._last_btn_hover_time = now
                     else:
                         _elapsed = now - self._last_btn_hover_time
                         if _elapsed >= self.AUTO_CENTER_DELAY:
                             # 回中
-                            cx = self.screen_w // 2
-                            cy = self.screen_h // 2
-                            user32.SetCursorPos(cx, cy)
+                            user32.SetCursorPos(_center_x, _center_y)
                             self._last_btn_hover_time = now
                         else:
-                            # 绘制倒计时进度条 (光标右上角)
+                            # 绘制倒计时进度条 (光标右侧，上边缘对齐光标)
                             _bar_w = 50
                             _bar_h = 6
                             _bar_x = rel_x + 15
-                            _bar_y = rel_y - 15
+                            _bar_y = rel_y
                             _progress = max(0.0, 1.0 - _elapsed / self.AUTO_CENTER_DELAY)
                             _fill_w = int(_bar_w * _progress)
                             # 灰色底
