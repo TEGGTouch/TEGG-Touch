@@ -609,7 +609,8 @@ class FloatingApp:
                 else:
                     self.handle_run_interaction(rel_x, rel_y, left_down, right_down, middle_down)
 
-                # 6b. 自动回中逻辑
+                # 6b. 自动回中逻辑 + 倒计时进度条
+                self.canvas.delete("_ac_bar")  # 每帧清除旧进度条
                 if self.auto_center and not self.buttons_hidden and not self.is_hidden:
                     now = time.time()
                     # 检查鼠标是否在任意按钮上
@@ -622,12 +623,31 @@ class FloatingApp:
                             break
                     if _on_any_btn:
                         self._last_btn_hover_time = now
-                    elif now - self._last_btn_hover_time >= self.AUTO_CENTER_DELAY:
-                        # 直接 SetCursorPos 到屏幕中心
-                        cx = self.screen_w // 2
-                        cy = self.screen_h // 2
-                        user32.SetCursorPos(cx, cy)
-                        self._last_btn_hover_time = now  # 防止连续触发
+                    else:
+                        _elapsed = now - self._last_btn_hover_time
+                        if _elapsed >= self.AUTO_CENTER_DELAY:
+                            # 回中
+                            cx = self.screen_w // 2
+                            cy = self.screen_h // 2
+                            user32.SetCursorPos(cx, cy)
+                            self._last_btn_hover_time = now
+                        else:
+                            # 绘制倒计时进度条 (光标右上角)
+                            _bar_w = 50
+                            _bar_h = 6
+                            _bar_x = rel_x + 15
+                            _bar_y = rel_y - 15
+                            _progress = max(0.0, 1.0 - _elapsed / self.AUTO_CENTER_DELAY)
+                            _fill_w = int(_bar_w * _progress)
+                            # 灰色底
+                            self.canvas.create_rectangle(
+                                _bar_x, _bar_y, _bar_x + _bar_w, _bar_y + _bar_h,
+                                fill="#555555", outline="", tags="_ac_bar")
+                            # 绿色进度
+                            if _fill_w > 0:
+                                self.canvas.create_rectangle(
+                                    _bar_x, _bar_y, _bar_x + _fill_w, _bar_y + _bar_h,
+                                    fill="#176F2C", outline="", tags="_ac_bar")
 
                 # 7. 更新状态
                 self.left_was_down = left_down
