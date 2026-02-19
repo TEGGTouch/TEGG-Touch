@@ -16,6 +16,7 @@ from .constants import (
     BUTTON_OPTIONAL_DEFAULTS,
     PROFILES_DIR, PROFILES_INDEX, DEFAULT_PROFILE_NAME,
     PT_ON, PT_OFF, PT_BLOCK,
+    HOTKEYS_FILE, DEFAULT_HOTKEYS,
 )
 
 logger = logging.getLogger(__name__)
@@ -442,3 +443,35 @@ def load_config(filepath: str = None) -> dict:
 def save_config(filepath: str = None, **kwargs) -> bool:
     """兼容旧接口。"""
     return save_config_to_file(filepath or CONFIG_FILE, **kwargs)
+
+
+# ─── 全局快捷键配置 ──────────────────────────────────────────
+
+def load_hotkeys() -> dict:
+    """加载全局快捷键配置。不存在则返回默认值。"""
+    result = copy.deepcopy(DEFAULT_HOTKEYS)
+    if not os.path.exists(HOTKEYS_FILE):
+        return result
+    try:
+        with open(HOTKEYS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        for k in DEFAULT_HOTKEYS:
+            if k in data:
+                result[k] = data[k]
+        logger.info(f"快捷键配置加载成功: {HOTKEYS_FILE}")
+    except Exception as e:
+        logger.error(f"快捷键配置加载失败: {e}")
+    return result
+
+
+def save_hotkeys(hotkeys: dict) -> bool:
+    """保存全局快捷键配置。"""
+    try:
+        os.makedirs(os.path.dirname(HOTKEYS_FILE) or '.', exist_ok=True)
+        with open(HOTKEYS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(hotkeys, f, ensure_ascii=False, indent=2)
+        logger.info(f"快捷键配置保存成功: {HOTKEYS_FILE}")
+        return True
+    except Exception as e:
+        logger.error(f"快捷键配置保存失败: {e}")
+        return False

@@ -9,6 +9,30 @@ CONFIG_FILE = "config.json"
 PROFILES_DIR = "profiles"
 PROFILES_INDEX = "_index.json"
 DEFAULT_PROFILE_NAME = "默认配置"
+HOTKEYS_FILE = "settings/hotkeys.json"
+
+# === 默认快捷键映射 ===
+DEFAULT_HOTKEYS = {
+    "auto_center":    "f6",
+    "toggle_buttons": "f7",
+    "soft_keyboard":  "f8",
+    "pt_on":          "f9",
+    "pt_off":         "f10",
+    "pt_block":       "f11",
+    "stop":           "f12",
+    "auto_center_delay": 1500,
+}
+
+# 快捷键显示名称
+HOTKEY_LABELS = {
+    "auto_center":    "自动回中",
+    "toggle_buttons": "显示/隐藏按键",
+    "soft_keyboard":  "软键盘",
+    "pt_on":          "穿透ON",
+    "pt_off":         "穿透OFF",
+    "pt_block":       "不穿透",
+    "stop":           "停止(回编辑)",
+}
 
 # === 清晰高对比配色表 (High Clarity) ===
 COLOR_BG = "#202020"          # 深灰背景，降低干扰

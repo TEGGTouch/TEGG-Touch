@@ -392,7 +392,8 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                        on_edit, on_passthrough, click_through=PT_ON,
                        set_window_style=None,
                        on_toggle_buttons=None, buttons_visible=True,
-                       on_toggle_auto_center=None, auto_center=False):
+                       on_toggle_auto_center=None, auto_center=False,
+                       on_open_settings=None):
     """创建运行模式独立工具栏（可拖拽、可收缩）。"""
     
     # 尺寸配置
@@ -687,6 +688,27 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             # --- 分隔线 ---
             c.create_line(bx, by + 4, bx, by + BTN_H_RUN - 4, fill="#555", width=1)
             bx += 12
+
+            # --- 5.5 设置 (齿轮按钮) ---
+            _SET_W = 44
+            set_tag = "run_set"
+            C_SET = "#4A4A4A"
+            C_SET_H = "#5A5A5A"
+            rrect(c, bx, by, _SET_W, BTN_H_RUN, BTN_R, fill=C_SET, outline="", tags=(set_tag, set_tag+"_bg"))
+            set_cy = by + BTN_H_RUN // 2
+            if ifont:
+                c.create_text(bx + _SET_W // 2, set_cy, text="\uE713", font=(ifont, IS), fill="#CCC", tags=(set_tag,))
+            else:
+                c.create_text(bx + _SET_W // 2, set_cy, text="\u2699", font=("Microsoft YaHei UI", 14), fill="#CCC", tags=(set_tag,))
+            def _set_en(e): c.itemconfigure(set_tag+"_bg", fill=C_SET_H)
+            def _set_lv(e): c.itemconfigure(set_tag+"_bg", fill=C_SET)
+            c.tag_bind(set_tag, "<Enter>", _set_en)
+            c.tag_bind(set_tag, "<Leave>", _set_lv)
+            def _open_settings_click():
+                if on_open_settings:
+                    on_open_settings()
+            c.tag_bind(set_tag, "<ButtonRelease-1>", lambda e: _open_settings_click())
+            bx += _SET_W + GAP
 
             # --- 6. 停止 [F12] ---
             _EXIT_W = 130
