@@ -36,7 +36,7 @@ def open_about_dialog(parent):
     overlay = create_modal_overlay(parent)
 
     PADDING = 30
-    width = 440
+    width = 520
     height = 580
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()

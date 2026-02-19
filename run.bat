@@ -1,6 +1,6 @@
 @echo off
 echo ==========================================
-echo       正在启动 TEGG Touch...
+echo       Starting TEGG Touch ...
 echo ==========================================
 echo.
 
@@ -9,6 +9,6 @@ python main.py
 
 echo.
 echo ==========================================
-echo       程序已退出
+echo       Program exited
 echo ==========================================
 pause
