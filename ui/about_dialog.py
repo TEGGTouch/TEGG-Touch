@@ -37,7 +37,7 @@ def open_about_dialog(parent):
 
     PADDING = 30
     width = 440
-    height = 580
+    height = 540
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -131,7 +131,7 @@ def open_about_dialog(parent):
     cy += 20
 
     # ── QR 码区域 (左图右文) ──
-    QR_SIZE = 200
+    QR_SIZE = 160
     qr_x = PADDING
     qr_y = cy
 
@@ -157,10 +157,10 @@ def open_about_dialog(parent):
         c.create_text(qr_x + QR_SIZE // 2, qr_y + QR_SIZE // 2,
                       text="微信二维码\n(图片缺失)", font=(FF, 10), fill="#888", tags="bg")
 
-    # 右侧说明文字
-    txt_x = qr_x + QR_SIZE + 16
+    # 右侧说明文字 (垂直居中于二维码区域)
+    txt_x = qr_x + QR_SIZE + 14
     txt_w = width - txt_x - PADDING
-    txt_y = qr_y + 20
+    txt_y = qr_y + 16
 
     hint_lbl = tk.Label(top, text=_QR_HINT, bg=C_PM_BG, fg="#AAA",
                         font=(FF, 10), anchor="nw", justify="left",
