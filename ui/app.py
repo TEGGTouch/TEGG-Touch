@@ -92,6 +92,9 @@ class FloatingApp:
         self.is_window_solid = True  # True=不穿透, False=穿透
         self.edit_passthrough = False  # 编辑模式穿透开关
         self.buttons_hidden = False  # 运行模式下隐藏所有悬浮按键
+        self.auto_center = False     # 自动回中开关（默认停用）
+        self._last_btn_hover_time = 0  # 最后一次 hover 到按钮的时间戳
+        self.AUTO_CENTER_DELAY = 2.0   # 自动回中延迟（秒）
 
         # 硬件输入状态缓存
         self.left_was_down = False
@@ -224,6 +227,8 @@ class FloatingApp:
             set_window_style=self.set_window_style,
             on_toggle_buttons=self.toggle_buttons_visibility,
             buttons_visible=not self.buttons_hidden,
+            on_toggle_auto_center=self.toggle_auto_center,
+            auto_center=self.auto_center,
         )
         if self.run_toolbar_win:
             self.run_toolbar_win.lift()
@@ -461,6 +466,12 @@ class FloatingApp:
                     toggle_soft_keyboard(self.run_toolbar_win or self.root, mode="input")
                     time.sleep(0.3)
 
+                # 0e. 自动回中 (F6)
+                if is_key_pressed('f6'):
+                    self.toggle_auto_center(not self.auto_center)
+                    self._show_run_toolbar()
+                    time.sleep(0.3)
+
                 # 0d. 穿透模式快捷键 (F9/F10/F11 直接切换)
                 _pt_switched = False
                 if is_key_pressed('f9') and self.click_through != PT_ON:
@@ -597,6 +608,26 @@ class FloatingApp:
                     self.handle_hidden_interaction(abs_x, abs_y, rel_x, rel_y, left_down)
                 else:
                     self.handle_run_interaction(rel_x, rel_y, left_down, right_down, middle_down)
+
+                # 6b. 自动回中逻辑
+                if self.auto_center and not self.buttons_hidden and not self.is_hidden:
+                    now = time.time()
+                    # 检查鼠标是否在任意按钮上
+                    _on_any_btn = False
+                    for _b in self.buttons:
+                        if _b.get('deleted'):
+                            continue
+                        if self._point_in_btn(_b, rel_x, rel_y):
+                            _on_any_btn = True
+                            break
+                    if _on_any_btn:
+                        self._last_btn_hover_time = now
+                    elif now - self._last_btn_hover_time >= self.AUTO_CENTER_DELAY:
+                        # 直接 SetCursorPos 到屏幕中心
+                        cx = self.screen_w // 2
+                        cy = self.screen_h // 2
+                        user32.SetCursorPos(cx, cy)
+                        self._last_btn_hover_time = now  # 防止连续触发
 
                 # 7. 更新状态
                 self.left_was_down = left_down
@@ -991,6 +1022,11 @@ class FloatingApp:
         if self.click_through in (PT_ON, PT_OFF):
             self._focus_game_window()
     
+    def toggle_auto_center(self, on):
+        """切换自动回中开关（由运行工具栏或 F6 调用）。"""
+        self.auto_center = on
+        self._last_btn_hover_time = time.time()  # 重置计时器
+
     def toggle_buttons_visibility(self, visible):
         """切换按键显示/隐藏（由运行工具栏调用）。"""
         self.buttons_hidden = not visible

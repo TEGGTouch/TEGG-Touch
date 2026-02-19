@@ -391,7 +391,8 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
 def create_run_toolbar(parent, screen_w, screen_h, *,
                        on_edit, on_passthrough, click_through=PT_ON,
                        set_window_style=None,
-                       on_toggle_buttons=None, buttons_visible=True):
+                       on_toggle_buttons=None, buttons_visible=True,
+                       on_toggle_auto_center=None, auto_center=False):
     """创建运行模式独立工具栏（可拖拽、可收缩）。"""
     
     # 尺寸配置
@@ -441,6 +442,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
         "height": FULL_H,
         "click_through": click_through,
         "buttons_visible": buttons_visible,
+        "auto_center": auto_center,
         "x": INIT_X,
         "y": INIT_Y
     }
@@ -638,11 +640,55 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             c.tag_bind(pt_tag, "<ButtonRelease-1>", lambda e: _toggle_pt_wrapper())
             bx += _PT_W + GAP
 
+            # --- 5. 自动回中 [F6] (toggle 按钮, 蓝/灰两态) ---
+            _AC_W = 150
+            ac_tag = "run_ac"
+            ac_on = state["auto_center"]
+            C_BLUE = "#1976D2"
+            C_BLUE_H = "#2196F3"
+
+            ac_bg = C_BLUE if ac_on else C_GRAY
+            ac_bg_h = C_BLUE_H if ac_on else C_GRAY_H
+            ac_icon = "\uE1D3" if ac_on else "\uE72A"
+            ac_text = "\u56de\u4e2dON [F6]" if ac_on else "\u56de\u4e2dOFF [F6]"
+            ac_fg = "#FFF" if ac_on else "#E0E0E0"
+
+            rrect(c, bx, by, _AC_W, BTN_H_RUN, BTN_R, fill=ac_bg, outline="", tags=(ac_tag, ac_tag+"_bg"))
+            ac_cy = by + BTN_H_RUN // 2
+            if ifont:
+                c.create_text(bx + 10, ac_cy, text=ac_icon, font=(ifont, IS),
+                              fill=ac_fg, anchor="w", tags=(ac_tag,))
+                c.create_text(bx + 34, ac_cy, text=ac_text,
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill=ac_fg, anchor="w", tags=(ac_tag,))
+            else:
+                c.create_text(bx + _AC_W//2, ac_cy, text=ac_text,
+                              font=("Microsoft YaHei UI", _RUN_FS),
+                              fill=ac_fg, tags=(ac_tag,))
+
+            def _ac_enter(e):
+                _bh = C_BLUE_H if state["auto_center"] else C_GRAY_H
+                c.itemconfigure(ac_tag+"_bg", fill=_bh)
+            def _ac_leave(e):
+                _bg = C_BLUE if state["auto_center"] else C_GRAY
+                c.itemconfigure(ac_tag+"_bg", fill=_bg)
+            c.tag_bind(ac_tag, "<Enter>", _ac_enter)
+            c.tag_bind(ac_tag, "<Leave>", _ac_leave)
+
+            def _toggle_ac(e=None):
+                state["auto_center"] = not state["auto_center"]
+                if on_toggle_auto_center:
+                    on_toggle_auto_center(state["auto_center"])
+                redraw()
+
+            c.tag_bind(ac_tag, "<ButtonRelease-1>", lambda e: _toggle_ac())
+            bx += _AC_W + GAP
+
             # --- 分隔线 ---
             c.create_line(bx, by + 4, bx, by + BTN_H_RUN - 4, fill="#555", width=1)
             bx += 12
 
-            # --- 5. 停止 [F12] ---
+            # --- 6. 停止 [F12] ---
             _EXIT_W = 130
             _run_btn(bx, _EXIT_W, "\u505c\u6b62 [F12]", "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
             bx += _EXIT_W + 10
