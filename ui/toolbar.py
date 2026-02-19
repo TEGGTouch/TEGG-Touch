@@ -1,5 +1,5 @@
 """
-TEGG Touch - toolbar.py
+TEGG Touch 蛋挞 - toolbar.py
 底部编辑工具栏：方案选择、新建/导入/导出、启动、穿透开关、透明度滑块。
 以及运行模式下的独立工具栏。
 """

@@ -1,5 +1,5 @@
 """
-TEGG Touch - virtual_keyboard.py
+TEGG Touch 蛋挞 - virtual_keyboard.py
 可复用软键盘组件（统一暗色 UI 风格，108 键标准布局）。
 
 软键盘作为工具栏的向上扩展，紧贴工具栏上方 10px，同层级管理。

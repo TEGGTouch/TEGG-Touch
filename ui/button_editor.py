@@ -1,5 +1,5 @@
 """
-TEGG Touch - button_editor.py
+TEGG Touch 蛋挞 - button_editor.py
 按钮编辑弹窗：左右两栏布局。
 顶部通栏 tip → 左栏4区块 → 右栏按键面板。
 """

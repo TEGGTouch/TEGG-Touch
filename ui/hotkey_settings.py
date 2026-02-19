@@ -1,5 +1,5 @@
 """
-TEGG Touch - hotkey_settings.py
+TEGG Touch 蛋挞 - hotkey_settings.py
 快捷键设置弹窗：左右两栏布局（与 button_editor 风格一致）。
 左栏：快捷键列表 + 回中延迟滑块
 右栏：可选按键面板

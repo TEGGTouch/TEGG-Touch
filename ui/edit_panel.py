@@ -1,5 +1,5 @@
 """
-TEGG Touch - edit_panel.py
+TEGG Touch 蛋挞 - edit_panel.py
 向后兼容的重导出层。实际实现已拆分到：
   - ui/widgets.py         通用 UI 组件
   - ui/profile_manager.py 方案管理弹窗

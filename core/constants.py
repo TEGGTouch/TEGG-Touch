@@ -1,9 +1,9 @@
 """
-TEGG Touch 辅助软件 - 全局常量与默认值
+TEGG Touch 蛋挞 辅助软件 - 全局常量与默认值
 """
 
 # === 应用信息 ===
-APP_TITLE = "TEGG Touch"
+APP_TITLE = "TEGG Touch 蛋挞"
 APP_VERSION = "0.1"
 CONFIG_FILE = "config.json"
 PROFILES_DIR = "profiles"

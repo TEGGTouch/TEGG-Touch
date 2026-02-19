@@ -1,5 +1,5 @@
 """
-TEGG Touch - widgets.py
+TEGG Touch 蛋挞 - widgets.py
 通用 UI 组件：圆角矩形、图标字体检测、模态遮罩、样式化弹窗。
 所有弹窗/面板共享的基础设施。
 """

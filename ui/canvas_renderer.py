@@ -1,5 +1,5 @@
 """
-TEGG Touch 辅助软件 - Canvas 绘制工具
+TEGG Touch 蛋挞 辅助软件 - Canvas 绘制工具
 
 纯绘制函数，不持有状态，接收 canvas 实例作为参数。
 """

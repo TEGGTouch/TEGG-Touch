@@ -1,5 +1,5 @@
 """
-TEGG Touch 辅助软件 - 启动入口
+TEGG Touch 蛋挞 辅助软件 - 启动入口
 
 """
 

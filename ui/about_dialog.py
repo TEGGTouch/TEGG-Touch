@@ -1,5 +1,5 @@
 """
-TEGG Touch - about_dialog.py
+TEGG Touch 蛋挞 - about_dialog.py
 关于/产品介绍弹窗。
 """
 
@@ -23,7 +23,7 @@ _LAST_UPDATE = "2026.02.19"
 
 # 产品介绍文本
 _DESC_TEXT = (
-    "TEGG Touch 是一款永久免费、完全开源的无障碍辅助软件。\n\n"
+    "TEGG Touch 蛋挞 是一款永久免费、完全开源的无障碍辅助软件。\n\n"
     "想要做到用仅仅用鼠标的简单的点击行为，替代大部分的游戏操作。"
     "希望能给有需求的用户提供帮助，让大家都能体会到游戏的乐趣。"
 )
@@ -37,7 +37,7 @@ def open_about_dialog(parent):
 
     PADDING = 30
     width = 440
-    height = 555
+    height = 580
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -98,7 +98,7 @@ def open_about_dialog(parent):
     cy = 40
     mid_x = width // 2
 
-    # 标题: 🎮 TEGG Touch
+    # 标题: 🎮 TEGG Touch 蛋挞
     c.create_text(mid_x, cy, text=f"🎮  {APP_TITLE}",
                   font=(FF, 18, "bold"), fill=C_AMBER, tags="bg")
     cy += 34
@@ -128,7 +128,7 @@ def open_about_dialog(parent):
 
     # 分隔线
     c.create_line(PADDING, cy, width - PADDING, cy, fill="#444", width=1)
-    cy += 35
+    cy += 60
 
     # ── QR 码区域 (左图右文) ──
     QR_SIZE = 160
@@ -160,7 +160,7 @@ def open_about_dialog(parent):
     # 右侧说明文字 (垂直居中于二维码区域)
     txt_x = qr_x + QR_SIZE + 14
     txt_w = width - txt_x - PADDING
-    txt_y = qr_y + 16
+    txt_y = qr_y
 
     hint_lbl = tk.Label(top, text=_QR_HINT, bg=C_PM_BG, fg="#AAA",
                         font=(FF, 10), anchor="nw", justify="left",
