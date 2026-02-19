@@ -62,6 +62,42 @@ COLOR_TOOLBAR_TRANSPARENT = "#010002"  # 工具栏窗口镂空用
 # === 按钮类型 ===
 BTN_TYPE_NORMAL = "normal"
 BTN_TYPE_CENTER_BAND = "center_band"
+BTN_TYPE_WHEEL_SECTOR = "wheel_sector"
+
+# === 中心轮盘配置 ===
+WHEEL_INNER_RADIUS = 50    # 内圆半径 (px)
+WHEEL_OUTER_RADIUS = 150   # 外圆半径 (px)
+WHEEL_GAP_PX = 10           # 扇面间距 (像素)，内外圈等宽
+WHEEL_SECTOR_COUNT = 8
+
+# 8个扇面方向定义 (名称, 中心角度-tkinter角度, 默认hover键)
+# tkinter arc: 0°=右, 逆时针增加, 90°=上
+WHEEL_SECTORS_DEF = [
+    {"name": "↑",  "angle": 90,  "hover": "w"},
+    {"name": "↖",  "angle": 135, "hover": "w+a"},
+    {"name": "←",  "angle": 180, "hover": "a"},
+    {"name": "↙",  "angle": 225, "hover": "a+s"},
+    {"name": "↓",  "angle": 270, "hover": "s"},
+    {"name": "↘",  "angle": 315, "hover": "s+d"},
+    {"name": "→",  "angle": 0,   "hover": "d"},
+    {"name": "↗",  "angle": 45,  "hover": "d+w"},
+]
+
+def default_wheel_sectors():
+    """生成默认的8个轮盘扇区配置。"""
+    sectors = []
+    for s in WHEEL_SECTORS_DEF:
+        sectors.append({
+            'name': s['name'],
+            'type': BTN_TYPE_WHEEL_SECTOR,
+            'angle': s['angle'],
+            'hover': s['hover'],
+            'hover_delay': 0,
+            'hover_release_delay': 0,
+            'lclick': '', 'rclick': '', 'mclick': '',
+            'wheelup': '', 'wheeldown': '',
+        })
+    return sectors
 
 # === 工具栏尺寸 ===
 TOOLBAR_WIDTH = 1070

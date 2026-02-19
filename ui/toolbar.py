@@ -31,7 +31,8 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
                           on_add, on_add_center_band=None, on_run,
                           on_quit, transparency, on_alpha_change,
                           on_switch_profile, on_edit_passthrough=None,
-                          edit_passthrough=False):
+                          edit_passthrough=False,
+                          on_toggle_wheel=None, wheel_visible=False):
     """创建底部编辑工具栏窗口（居中显示）。"""
     tw, th = TOOLBAR_WIDTH, TOOLBAR_HEIGHT
     tx = (screen_w - tw) // 2
@@ -232,6 +233,57 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
         c.tag_bind(cb_tag, "<Leave>", _cb_lv)
         c.tag_bind(cb_tag, "<ButtonRelease-1>", lambda e: on_add_center_band())
         bx += _CB_W + GAP
+
+    # 2c) Center Wheel toggle (中心轮盘) — toggle 按钮
+    if on_toggle_wheel is not None:
+        _WH_W = 120
+        wh_tag = "twhl"
+        wh_state = {"on": wheel_visible}
+        C_WH_ON = "#1976D2"      # 蓝色 (选中)
+        C_WH_ON_H = "#2196F3"
+        wh_bg = C_WH_ON if wh_state["on"] else C_GRAY
+        wh_bg_h = C_WH_ON_H if wh_state["on"] else C_GRAY_H
+
+        rrect(c, bx, by, _WH_W, BTN_H, BTN_R, fill=wh_bg, outline="", tags=(wh_tag, wh_tag + "_bg"))
+        wh_cy = by + BTN_H // 2
+        # icon: ☑ when on, ▣ when off
+        wh_icon_on = "\uE73E"   # checkmark
+        wh_icon_off = "\uE739"  # square
+        if ifont:
+            c.create_text(bx + 12, wh_cy,
+                          text=wh_icon_on if wh_state["on"] else wh_icon_off,
+                          font=(ifont, IS), fill="#E0E0E0", anchor="w",
+                          tags=(wh_tag, "wh_icon"))
+            c.create_text(bx + 38, wh_cy, text="\u4e2d\u5fc3\u8f6e\u76d8",
+                          font=(FF, FS), fill="#E0E0E0", anchor="w", tags=(wh_tag,))
+        else:
+            prefix = "\u2611" if wh_state["on"] else "\u25a3"
+            c.create_text(bx + 12, wh_cy,
+                          text=f"{prefix} \u4e2d\u5fc3\u8f6e\u76d8",
+                          font=(FF, FS, "bold"), fill="#E0E0E0", anchor="w", tags=(wh_tag,))
+
+        def _wh_en(e):
+            _bg = C_WH_ON_H if wh_state["on"] else C_GRAY_H
+            i = c.find_withtag(wh_tag + "_bg"); i and c.itemconfigure(i[0], fill=_bg)
+        def _wh_lv(e):
+            _bg = C_WH_ON if wh_state["on"] else C_GRAY
+            i = c.find_withtag(wh_tag + "_bg"); i and c.itemconfigure(i[0], fill=_bg)
+        c.tag_bind(wh_tag, "<Enter>", _wh_en)
+        c.tag_bind(wh_tag, "<Leave>", _wh_lv)
+
+        def _toggle_wheel_click():
+            wh_state["on"] = not wh_state["on"]
+            new_bg = C_WH_ON if wh_state["on"] else C_GRAY
+            i = c.find_withtag(wh_tag + "_bg"); i and c.itemconfigure(i[0], fill=new_bg)
+            # update icon
+            if ifont:
+                ic = c.find_withtag("wh_icon")
+                if ic:
+                    c.itemconfigure(ic[0], text=wh_icon_on if wh_state["on"] else wh_icon_off)
+            on_toggle_wheel(wh_state["on"])
+
+        c.tag_bind(wh_tag, "<ButtonRelease-1>", lambda e: _toggle_wheel_click())
+        bx += _WH_W + GAP
 
     # 3) Separator (between 新建/回中带 and 软键盘)
     sep_x = bx + 4

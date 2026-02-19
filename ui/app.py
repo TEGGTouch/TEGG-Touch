@@ -23,6 +23,7 @@ from core.constants import (
     COLOR_BG, COLOR_TRANSPARENT,
     GRID_SIZE,
     PT_ON, PT_OFF, PT_BLOCK, PT_CYCLE,
+    default_wheel_sectors,
 )
 from core.config_manager import (
     load_config, save_config,
@@ -33,6 +34,7 @@ from ui.canvas_renderer import (
     init_cursor, remove_cursor, set_cursor_mode,
     draw_grid,
     remove_charge_bar,
+    draw_wheel_sectors,
 )
 from ui.edit_panel import create_toolbar_window, destroy_toolbar_window
 
@@ -109,6 +111,10 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         self.holding_btn_right = None
         self.holding_btn_middle = None
 
+        # 中心轮盘状态（从 profile 加载）
+        self.wheel_visible = config.get('wheel_visible', False)
+        self.wheel_sectors = config.get('wheel_sectors', default_wheel_sectors())
+
         # 悬浮球拖拽状态
         self.ball_drag_start_x = 0
         self.ball_drag_start_y = 0
@@ -162,6 +168,8 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             on_add_center_band=self.add_center_band_btn,
             on_edit_passthrough=self.toggle_edit_passthrough,
             edit_passthrough=self.edit_passthrough,
+            on_toggle_wheel=self.toggle_wheel,
+            wheel_visible=self.wheel_visible,
         )
         if self.toolbar_win:
             self.toolbar_win.lift()
@@ -298,6 +306,17 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             if self.current_mode == 'main':
                 self.bind_edit_events(idx)
 
+        # 中心轮盘（编辑模式和运行模式都绘制，如果可见）
+        if self.wheel_visible and self.wheel_sectors:
+            draw_wheel_sectors(self.canvas, self.wheel_sectors,
+                               self._offset_x, self._offset_y)
+            # 编辑模式下绑定双击编辑事件
+            if self.current_mode == 'main':
+                for wi in range(len(self.wheel_sectors)):
+                    wtag = f"wheel_sector_{wi}"
+                    self.canvas.tag_bind(wtag, "<Double-Button-1>",
+                                         lambda e, i=wi: self._edit_wheel_sector(i))
+
         if self.current_mode == 'run':
             init_cursor(self.canvas)
 
@@ -364,6 +383,31 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         if self.click_through in (PT_ON, PT_OFF):
             self._focus_game_window()
 
+    def toggle_wheel(self, visible):
+        """切换中心轮盘显示/隐藏。"""
+        self.wheel_visible = visible
+        self.redraw_all()
+
+    def _edit_wheel_sector(self, index):
+        """双击编辑轮盘扇区 — 复用普通按钮编辑弹窗。"""
+        from ui.button_editor import open_button_editor
+        sector = self.wheel_sectors[index]
+        logger.info(f"编辑轮盘扇区 #{index}: {sector.get('name')}")
+
+        def on_save(updated):
+            # 保留 angle/type 等结构字段，合并编辑结果
+            for k, v in updated.items():
+                sector[k] = v
+            self.redraw_all()
+
+        open_button_editor(
+            self.root, sector,
+            on_save=on_save,
+            on_delete=None,
+            on_copy=None,
+            set_window_style=None,
+        )
+
     def toggle_auto_center(self, on):
         self.auto_center = on
         self._last_btn_hover_time = time.time()
@@ -410,6 +454,8 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         self.ball_x = config['ball_x']
         self.ball_y = config['ball_y']
         self.click_through = config['click_through']
+        self.wheel_visible = config.get('wheel_visible', False)
+        self.wheel_sectors = config.get('wheel_sectors', default_wheel_sectors())
         self.redraw_all()
         if self.current_mode == 'main':
             self._show_toolbar()
@@ -425,7 +471,9 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             click_through=self.click_through,
             is_hidden=self.is_hidden,
             saved_geometry=self.fullscreen_geo,
-            root=self.root
+            root=self.root,
+            wheel_visible=self.wheel_visible,
+            wheel_sectors=self.wheel_sectors,
         )
 
     def export_config(self):

@@ -17,6 +17,7 @@ from .constants import (
     PROFILES_DIR, PROFILES_INDEX, DEFAULT_PROFILE_NAME,
     PT_ON, PT_OFF, PT_BLOCK,
     HOTKEYS_FILE, DEFAULT_HOTKEYS,
+    default_wheel_sectors,
 )
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,8 @@ def load_config_from_file(filepath: str) -> dict:
         'ball_x': None,
         'ball_y': None,
         'click_through': PT_ON,
+        'wheel_visible': False,
+        'wheel_sectors': default_wheel_sectors(),
     }
     if not os.path.exists(filepath):
         return result
@@ -193,15 +196,27 @@ def load_config_from_file(filepath: str) -> dict:
         buttons = data.get('buttons', None)
         if buttons is not None:
             result['buttons'] = [_ensure_button_fields(b) for b in buttons]
+        # 中心轮盘
+        result['wheel_visible'] = data.get('wheel_visible', False)
+        raw_sectors = data.get('wheel_sectors', None)
+        if raw_sectors and isinstance(raw_sectors, list) and len(raw_sectors) == 8:
+            result['wheel_sectors'] = raw_sectors
         logger.info(f"配置加载成功: {filepath}")
     except Exception as e:
         logger.error(f"配置加载失败: {e}")
     return result
 
 
+def _clean_sector_for_save(sec: dict) -> dict:
+    """清理轮盘扇区的运行时字段。"""
+    return {k: v for k, v in sec.items()
+            if k not in RUNTIME_FIELDS and k != 'deleted'}
+
+
 def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                         ball_x=None, ball_y=None, click_through=False,
-                        is_hidden=False, saved_geometry=None, root=None) -> bool:
+                        is_hidden=False, saved_geometry=None, root=None,
+                        wheel_visible=False, wheel_sectors=None) -> bool:
     """保存配置到指定文件。"""
     geo_to_save = saved_geometry or geometry
     try:
@@ -221,6 +236,11 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
 
     clean_btns = [_clean_button_for_save(b) for b in buttons if not b.get('deleted')]
 
+    # 清理轮盘扇区运行时字段
+    clean_sectors = None
+    if wheel_sectors:
+        clean_sectors = [_clean_sector_for_save(s) for s in wheel_sectors]
+
     data = {
         'coord_system': 'center',
         'geometry': geo_to_save,
@@ -229,7 +249,10 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         'ball_x': ball_x,
         'ball_y': ball_y,
         'click_through': click_through,
+        'wheel_visible': wheel_visible,
     }
+    if clean_sectors:
+        data['wheel_sectors'] = clean_sectors
 
     try:
         os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)

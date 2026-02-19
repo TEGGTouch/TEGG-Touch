@@ -12,11 +12,14 @@ from core.constants import (
     UPDATE_INTERVAL,
     PT_ON, PT_OFF, PT_BLOCK,
     BTN_TYPE_CENTER_BAND,
+    WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
 )
 from ui.canvas_renderer import (
     set_button_visual_state,
     init_cursor, update_cursor, remove_cursor,
     draw_charge_bar, remove_charge_bar,
+    wheel_sector_hit_test, set_wheel_sector_visual,
+    draw_wheel_charge_bar, remove_wheel_charge_bar,
 )
 from core.input_engine import (
     trigger, is_key_pressed, poll_wheel_events,
@@ -108,6 +111,10 @@ class RunEngineMixin:
                                     sy <= rel_y < sy + btn['h']):
                                 is_on_ui = True
                                 break
+                        # 轮盘扇区也参与穿透判定
+                        if not is_on_ui and self.wheel_visible and self.wheel_sectors:
+                            if wheel_sector_hit_test(self.wheel_sectors, rel_x, rel_y, ox, oy) >= 0:
+                                is_on_ui = True
 
                     if self.current_mode == 'main':
                         if is_on_ui:
@@ -435,3 +442,130 @@ class RunEngineMixin:
             if not btn.get('deleted'):
                 trigger(btn['mclick'], 'r')
             self.holding_btn_middle = None
+
+        # ── 轮盘扇区交互（与普通按钮逻辑一致） ──
+        if self.wheel_visible and self.wheel_sectors:
+            ox, oy = self._offset_x, self._offset_y
+            hit_idx = wheel_sector_hit_test(self.wheel_sectors, rel_x, rel_y, ox, oy)
+
+            # 滚轮事件 → 扇区
+            for direction, wx, wy in wheel_events:
+                w_rx = wx - self.win_x
+                w_ry = wy - self.win_y
+                w_hit = wheel_sector_hit_test(self.wheel_sectors, w_rx, w_ry, ox, oy)
+                if w_hit >= 0:
+                    sec = self.wheel_sectors[w_hit]
+                    key = sec.get('wheelup') if direction == 'up' else sec.get('wheeldown')
+                    if key:
+                        trigger(key, 'c')
+                        ws = 'active_wheelup' if direction == 'up' else 'active_wheeldown'
+                        set_wheel_sector_visual(self.canvas, sec, ws)
+                        sec['last_visual_state'] = ws
+                        sec['_wheel_flash_until'] = now + 0.15
+
+            for si, sec in enumerate(self.wheel_sectors):
+                in_sec = (si == hit_idx)
+                hover_delay = sec.get('hover_delay', 0)
+
+                # 滚轮闪烁期间跳过视觉状态更新
+                if now < sec.get('_wheel_flash_until', 0):
+                    if in_sec and not sec.get('active_hover') and sec.get('hover'):
+                        if hover_delay <= 0:
+                            sec['active_hover'] = True
+                            trigger(sec['hover'], 'p')
+                    elif not in_sec and sec.get('active_hover'):
+                        sec['active_hover'] = False
+                        trigger(sec['hover'], 'r')
+                        remove_wheel_charge_bar(self.canvas, sec)
+                    continue
+
+                # 视觉状态
+                target = 'normal'
+                if in_sec:
+                    if sec.get('active_hover'):
+                        target = 'hover'
+                    if left_down and sec.get('lclick'):
+                        target = 'active_left'
+                    elif right_down and sec.get('rclick'):
+                        target = 'active_right'
+                    elif middle_down and sec.get('mclick'):
+                        target = 'active_middle'
+
+                if sec.get('last_visual_state') != target:
+                    set_wheel_sector_visual(self.canvas, sec, target)
+                    sec['last_visual_state'] = target
+
+                release_delay = sec.get('hover_release_delay', 0)
+
+                if in_sec:
+                    # 重入扇区 → 取消释放倒计时
+                    if sec.get('_hover_release_time') is not None:
+                        sec['_hover_release_time'] = None
+                        remove_wheel_charge_bar(self.canvas, sec)
+                        set_wheel_sector_visual(self.canvas, sec, 'hover')
+                        sec['last_visual_state'] = 'hover'
+
+                    if not sec.get('active_hover') and sec.get('hover'):
+                        if hover_delay <= 0:
+                            sec['active_hover'] = True
+                            trigger(sec['hover'], 'p')
+                        else:
+                            if sec.get('_hover_enter_time') is None:
+                                sec['_hover_enter_time'] = now
+                                sec['_hover_charged'] = False
+                            if not sec.get('_hover_charged'):
+                                elapsed_ms = (now - sec['_hover_enter_time']) * 1000
+                                progress = min(1.0, elapsed_ms / hover_delay)
+                                draw_wheel_charge_bar(self.canvas, sec, progress)
+                                if progress >= 1.0:
+                                    sec['_hover_charged'] = True
+                                    sec['active_hover'] = True
+                                    remove_wheel_charge_bar(self.canvas, sec)
+                                    trigger(sec['hover'], 'p')
+
+                    # 点击
+                    if left_down and not self.left_was_down and sec.get('lclick'):
+                        trigger(sec['lclick'], 'p')
+                        sec['_holding_left'] = True
+                    if right_down and not self.right_was_down and sec.get('rclick'):
+                        trigger(sec['rclick'], 'p')
+                        sec['_holding_right'] = True
+                    if middle_down and not self.middle_was_down and sec.get('mclick'):
+                        trigger(sec['mclick'], 'p')
+                        sec['_holding_middle'] = True
+                else:
+                    # 离开扇区
+                    if sec.get('active_hover'):
+                        if release_delay <= 0:
+                            sec['active_hover'] = False
+                            sec['_hover_release_time'] = None
+                            trigger(sec['hover'], 'r')
+                        else:
+                            if sec.get('_hover_release_time') is None:
+                                sec['_hover_release_time'] = now
+                            elapsed_ms = (now - sec['_hover_release_time']) * 1000
+                            progress = max(0.0, 1.0 - elapsed_ms / release_delay)
+                            if progress <= 0:
+                                sec['active_hover'] = False
+                                sec['_hover_release_time'] = None
+                                remove_wheel_charge_bar(self.canvas, sec)
+                                trigger(sec['hover'], 'r')
+                            else:
+                                draw_wheel_charge_bar(self.canvas, sec, progress)
+
+                    if sec.get('_hover_enter_time') is not None:
+                        sec['_hover_enter_time'] = None
+                        sec['_hover_charged'] = False
+                        if not sec.get('_hover_release_time'):
+                            remove_wheel_charge_bar(self.canvas, sec)
+
+                # 点击释放
+                if not left_down and self.left_was_down and sec.get('_holding_left'):
+                    trigger(sec['lclick'], 'r')
+                    sec['_holding_left'] = False
+                if not right_down and self.right_was_down and sec.get('_holding_right'):
+                    trigger(sec['rclick'], 'r')
+                    sec['_holding_right'] = False
+                if not middle_down and self.middle_was_down and sec.get('_holding_middle'):
+                    trigger(sec['mclick'], 'r')
+                    sec['_holding_middle'] = False

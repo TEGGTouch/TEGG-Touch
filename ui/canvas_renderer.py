@@ -13,7 +13,8 @@ from core.constants import (
     COLOR_BALL_CORE, COLOR_BALL_RING, COLOR_HANDLE,
     CHAMFER_SIZE, RESIZE_HANDLE_SIZE,
     BTN_MARGIN, BTN_RADIUS,
-    BTN_TYPE_CENTER_BAND,
+    BTN_TYPE_CENTER_BAND, BTN_TYPE_WHEEL_SECTOR,
+    WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS, WHEEL_GAP_PX,
 )
 
 # 回中带专用配色
@@ -389,6 +390,236 @@ def set_button_visual_state(canvas, btn, state):
         # 显示键值 (大字体，居中)
         disp = key_val if len(key_val) <= 3 else key_val[:2] + '..'
         canvas.itemconfigure(text_id, text=disp, font=FONT_KEY, fill=text_fill)
+
+
+# ─── 中心轮盘绘制 ────────────────────────────────────────────
+
+# 轮盘扇面字体：与普通按钮统一，使用 FONT_NAME / FONT_KEY
+
+
+def _gap_half_angle(radius, gap_px):
+    """将像素间隙转换为该半径上对应的半角偏移（度）。
+    gap_px 是两扇区边缘之间的总间隙宽度，half = gap_px/2。
+    """
+    half = gap_px / 2.0
+    if radius <= half:
+        return 0.0
+    return math.degrees(math.asin(half / radius))
+
+
+def _annular_sector_points(cx, cy, r_inner, r_outer,
+                           center_angle_deg, sector_span_deg=45.0,
+                           gap_px=WHEEL_GAP_PX, steps=20):
+    """生成等宽间隙环形扇区的 polygon 顶点列表。
+
+    通过在每个半径上独立计算角度偏移，实现内外圈间隙等宽 (gap_px 像素)。
+    """
+    half_span = sector_span_deg / 2.0
+    # 外弧角度范围（外圈间隙小角度）
+    outer_half_gap = _gap_half_angle(r_outer, gap_px)
+    outer_start = center_angle_deg - half_span + outer_half_gap
+    outer_end = center_angle_deg + half_span - outer_half_gap
+    # 内弧角度范围（内圈间隙大角度）
+    inner_half_gap = _gap_half_angle(r_inner, gap_px)
+    inner_start = center_angle_deg - half_span + inner_half_gap
+    inner_end = center_angle_deg + half_span - inner_half_gap
+
+    points = []
+    # 外弧：从 start 到 end
+    for i in range(steps + 1):
+        a = math.radians(outer_start + (outer_end - outer_start) * i / steps)
+        points.append(cx + r_outer * math.cos(a))
+        points.append(cy - r_outer * math.sin(a))  # y 轴翻转（屏幕坐标）
+    # 内弧：从 end 到 start（反向闭合）
+    for i in range(steps + 1):
+        a = math.radians(inner_end - (inner_end - inner_start) * i / steps)
+        points.append(cx + r_inner * math.cos(a))
+        points.append(cy - r_inner * math.sin(a))
+    return points
+
+
+def draw_wheel_sectors(canvas, sectors, offset_x, offset_y):
+    """绘制中心轮盘的8个扇面。
+
+    sectors: 8个扇区配置 list（每个含 angle, name, hover 等）
+    offset_x/offset_y: 屏幕中心坐标 (screen_w//2, screen_h//2)
+    
+    为每个扇区存储 id_poly 和 id_text 到 sector dict 中。
+    """
+    cx, cy = offset_x, offset_y
+    r_in = WHEEL_INNER_RADIUS
+    r_out = WHEEL_OUTER_RADIUS
+
+    for idx, sec in enumerate(sectors):
+        center_angle = sec['angle']
+
+        tag_poly = f"wheel_poly_{idx}"
+        tag_text = f"wheel_text_{idx}"
+        tag_all = f"wheel_sector_{idx}"
+
+        points = _annular_sector_points(cx, cy, r_in, r_out, center_angle)
+
+        poly_id = canvas.create_polygon(
+            points, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER,
+            width=2, tags=(tag_poly, tag_all, "wheel_all"),
+        )
+
+        # 文字位置：在内外圆中间半径、扇区中心角
+        mid_r = (r_in + r_out) / 2
+        mid_a = math.radians(center_angle)
+        tx = cx + mid_r * math.cos(mid_a)
+        ty = cy - mid_r * math.sin(mid_a)  # y 翻转
+
+        # 只显示名称（与普通按钮一致）
+        disp_name = sec.get('name', '')
+
+        text_id = canvas.create_text(
+            tx, ty, text=disp_name,
+            font=FONT_NAME, fill=COLOR_TEXT,
+            justify="center", tags=(tag_text, tag_all, "wheel_all"),
+        )
+
+        sec['id_poly'] = poly_id
+        sec['id_text'] = text_id
+        # 缓存屏幕坐标用于 hit test
+        sec['_cx'] = cx
+        sec['_cy'] = cy
+
+
+def wheel_sector_hit_test(sectors, mx, my, offset_x, offset_y):
+    """判断鼠标 (mx, my) 在哪个轮盘扇区内。
+    
+    返回扇区索引 (0~7)，不在任何扇区内返回 -1。
+    """
+    cx, cy = offset_x, offset_y
+    dx = mx - cx
+    dy = -(my - cy)  # 翻转 y 轴为数学坐标
+    dist = math.sqrt(dx * dx + dy * dy)
+
+    if dist < WHEEL_INNER_RADIUS or dist > WHEEL_OUTER_RADIUS:
+        return -1
+
+    # 计算角度 (0~360, 逆时针, 0=右)
+    angle = math.degrees(math.atan2(dy, dx))
+    if angle < 0:
+        angle += 360
+
+    # 在当前距离处计算像素间隙对应的半角偏移
+    half_gap_deg = _gap_half_angle(dist, WHEEL_GAP_PX)
+
+    for idx, sec in enumerate(sectors):
+        center = sec['angle']
+        a_start = center - 22.5 + half_gap_deg  # 45/2 = 22.5
+        a_end = center + 22.5 - half_gap_deg
+
+        # 规范化角度范围到 [0, 360)
+        a_start_n = a_start % 360
+        a_end_n = a_end % 360
+
+        if a_start_n <= a_end_n:
+            if a_start_n <= angle <= a_end_n:
+                return idx
+        else:
+            # 跨越 0° 的情况 (例如 右: -22.5 ~ 22.5)
+            if angle >= a_start_n or angle <= a_end_n:
+                return idx
+
+    return -1
+
+
+def set_wheel_sector_visual(canvas, sector, state):
+    """设置轮盘扇区的视觉状态（与普通按钮统一配色）。
+    state: 'normal' | 'hover' | 'active_left' | ...
+    """
+    poly_id = sector.get('id_poly')
+    text_id = sector.get('id_text')
+    if not poly_id:
+        return
+
+    if state == 'normal':
+        canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+        disp_name = sector.get('name', '')
+        if text_id:
+            canvas.itemconfigure(text_id, text=disp_name, font=FONT_NAME, fill=COLOR_TEXT)
+        return
+
+    key_field = STATE_TO_KEY.get(state)
+    key_val = sector.get(key_field, '')
+    if not key_val:
+        set_wheel_sector_visual(canvas, sector, 'normal')
+        return
+
+    if state in ACTION_STATE_COLORS:
+        fill, outline, text_fill = ACTION_STATE_COLORS[state]
+        canvas.itemconfigure(poly_id, fill=fill, outline=outline, width=3)
+        disp = key_val if len(key_val) <= 3 else key_val[:2] + '..'
+        if text_id:
+            canvas.itemconfigure(text_id, text=disp, font=FONT_KEY, fill=text_fill)
+
+
+# ─── 轮盘放射充能条 ──────────────────────────────────────────
+
+def draw_wheel_charge_bar(canvas, sector, progress):
+    """绘制轮盘扇区的放射充能条：从内圆向外圆扩展。
+
+    progress: 0.0~1.0  (触发充能=从圆心到外缘, 释放=反向)
+    用一个中间半径的环形扇面作为充能覆盖层。
+    """
+    progress = max(0.0, min(1.0, progress))
+    charge_tag = f"wheel_charge_{id(sector)}"
+    canvas.delete(charge_tag)
+
+    if progress <= 0.01:
+        return
+
+    cx = sector.get('_cx', 0)
+    cy = sector.get('_cy', 0)
+    r_in = WHEEL_INNER_RADIUS
+    r_out = WHEEL_OUTER_RADIUS
+
+    center_angle = sector['angle']
+
+    # 充能半径：从内圆到 inner + (outer-inner)*progress
+    charge_r = r_in + (r_out - r_in) * progress
+
+    points = _annular_sector_points(cx, cy, r_in + 2, max(r_in + 3, charge_r - 2),
+                                    center_angle, gap_px=WHEEL_GAP_PX, steps=16)
+    bar_id = canvas.create_polygon(
+        points, fill=COLOR_CHARGE, outline="", tags=(charge_tag, "wheel_all"),
+    )
+
+    # 确保在 polygon 之上, text 之下
+    poly_id = sector.get('id_poly')
+    text_id = sector.get('id_text')
+    if poly_id:
+        canvas.tag_raise(charge_tag, poly_id)
+    if text_id:
+        canvas.tag_raise(text_id, charge_tag)
+
+    # 充能时显示 hover 键值
+    hover_key = sector.get('hover', '')
+    if hover_key and text_id:
+        disp = hover_key if len(hover_key) <= 3 else hover_key[:2] + '..'
+        canvas.itemconfigure(text_id, text=disp, font=FONT_KEY, fill=COLOR_TEXT)
+
+    # 边框变蓝
+    if poly_id:
+        canvas.itemconfigure(poly_id, outline=COLOR_CHARGE_BORDER, width=3)
+
+
+def remove_wheel_charge_bar(canvas, sector):
+    """移除轮盘扇区充能条，恢复默认外观。"""
+    charge_tag = f"wheel_charge_{id(sector)}"
+    canvas.delete(charge_tag)
+
+    poly_id = sector.get('id_poly')
+    if poly_id:
+        canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+
+    text_id = sector.get('id_text')
+    if text_id:
+        disp_name = sector.get('name', '')
+        canvas.itemconfigure(text_id, text=disp_name, font=FONT_NAME, fill=COLOR_TEXT)
 
 
 # ─── 系统按钮 ────────────────────────────────────────────────
