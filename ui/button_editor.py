@@ -35,8 +35,8 @@ BLOCK_3 = [
     ('lclick',    '左键', True),
     ('rclick',    '右键', True),
     ('mclick',    '中键', True),
-    ('xbutton1',  '侧键1(后退)', True),
-    ('xbutton2',  '侧键2(前进)', True),
+    ('xbutton1',  '侧键1', True),
+    ('xbutton2',  '侧键2', True),
     ('wheelup',   '滚轮向上', True),
     ('wheeldown', '滚轮向下', True),
 ]
@@ -268,7 +268,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     PADDING = 20
     DIVIDER = 1
     width = LEFT_W + DIVIDER + RIGHT_W + PADDING * 2
-    height = 900
+    height = 960
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2

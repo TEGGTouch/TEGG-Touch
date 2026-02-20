@@ -17,7 +17,9 @@
       "mclick": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": -300,
@@ -33,7 +35,9 @@
       "mclick": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": -500,
@@ -49,7 +53,9 @@
       "mclick": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": -500,
@@ -65,7 +71,9 @@
       "mclick": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": 300,
@@ -81,7 +89,9 @@
       "mclick": "3",
       "hover_delay": 0,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": -500,
@@ -97,7 +107,9 @@
       "mclick": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": 300,
@@ -113,7 +125,9 @@
       "mclick": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": 300,
@@ -129,7 +143,9 @@
       "mclick": "",
       "hover_delay": 1000,
       "hover_release_delay": 1000,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": 500,
@@ -145,7 +161,9 @@
       "wheeldown": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": -400,
@@ -161,7 +179,9 @@
       "wheeldown": "",
       "hover_delay": 250,
       "hover_release_delay": 250,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": 400,
@@ -177,7 +197,9 @@
       "wheeldown": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": -300,
@@ -193,7 +215,9 @@
       "wheeldown": "",
       "hover_delay": 180,
       "hover_release_delay": 180,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": -300,
@@ -209,7 +233,9 @@
       "wheeldown": "",
       "hover_delay": 200,
       "hover_release_delay": 200,
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": -1300,
@@ -225,7 +251,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": 1200,
@@ -241,7 +269,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": 600,
@@ -257,7 +287,9 @@
       "mclick": "",
       "wheelup": "0",
       "wheeldown": "",
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "x": 600,
@@ -273,7 +305,9 @@
       "mclick": "",
       "wheelup": "",
       "wheeldown": "0",
-      "type": "normal"
+      "type": "normal",
+      "xbutton1": "",
+      "xbutton2": ""
     }
   ],
   "ball_x": 531,
@@ -339,7 +373,9 @@
       "wheelup": "",
       "wheeldown": "",
       "_cx": 1280,
-      "_cy": 720
+      "_cy": 720,
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "name": "↓",
