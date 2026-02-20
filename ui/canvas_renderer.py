@@ -341,6 +341,8 @@ ACTION_STATE_COLORS = {
     'active_middle':   ('#A855F7', '#9333EA', '#000000'),   # 紫色
     'active_wheelup':  ('#EC4899', '#DB2777', '#000000'),   # 粉红
     'active_wheeldown':('#F43F5E', '#E11D48', '#000000'),   # 玫瑰
+    'active_xbutton1': ('#06B6D4', '#0891B2', '#000000'),   # 青色(侧键1)
+    'active_xbutton2': ('#8B5CF6', '#7C3AED', '#000000'),   # 靛紫(侧键2)
 }
 
 # 状态对应的动作键名
@@ -349,6 +351,8 @@ STATE_TO_KEY = {
     'active_left': 'lclick',
     'active_right': 'rclick',
     'active_middle': 'mclick',
+    'active_xbutton1': 'xbutton1',
+    'active_xbutton2': 'xbutton2',
     'active_wheelup': 'wheelup',
     'active_wheeldown': 'wheeldown',
 }

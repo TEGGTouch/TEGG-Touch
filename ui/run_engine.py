@@ -357,6 +357,10 @@ class RunEngineMixin:
                     target_state = 'active_right'
                 elif middle_down and btn.get('mclick'):
                     target_state = 'active_middle'
+                elif xbutton1_down and btn.get('xbutton1'):
+                    target_state = 'active_xbutton1'
+                elif xbutton2_down and btn.get('xbutton2'):
+                    target_state = 'active_xbutton2'
 
             if btn.get('last_visual_state') != target_state:
                 set_button_visual_state(self.canvas, btn, target_state)
@@ -514,6 +518,10 @@ class RunEngineMixin:
                         target = 'active_right'
                     elif middle_down and sec.get('mclick'):
                         target = 'active_middle'
+                    elif xbutton1_down and sec.get('xbutton1'):
+                        target = 'active_xbutton1'
+                    elif xbutton2_down and sec.get('xbutton2'):
+                        target = 'active_xbutton2'
 
                 if sec.get('last_visual_state') != target:
                     set_wheel_sector_visual(self.canvas, sec, target)
