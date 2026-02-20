@@ -7,12 +7,13 @@ TEGG Touch 蛋挞 辅助软件 - 配置管理器
 
 import json
 import os
+import sys
 import copy
 import logging
 
 from .constants import (
     CONFIG_FILE, DEFAULT_TRANSPARENCY,
-    DEFAULT_BUTTONS, MIN_WINDOW_SIZE, RUNTIME_FIELDS,
+    MIN_WINDOW_SIZE, RUNTIME_FIELDS,
     BUTTON_OPTIONAL_DEFAULTS,
     PROFILES_DIR, PROFILES_INDEX, DEFAULT_PROFILE_NAME,
     PT_ON, PT_OFF, PT_BLOCK,
@@ -22,7 +23,13 @@ from .constants import (
 )
 
 # 默认方案模板文件路径（core/default_profile.json）
-DEFAULT_PROFILE_TEMPLATE = os.path.join(os.path.dirname(__file__), 'default_profile.json')
+# 打包后 __file__ 指向 _internal/ 内部，需要用 EXE 所在目录
+if getattr(sys, 'frozen', False):
+    DEFAULT_PROFILE_TEMPLATE = os.path.abspath(os.path.join(
+        os.path.dirname(sys.executable), 'core', 'default_profile.json'))
+else:
+    DEFAULT_PROFILE_TEMPLATE = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), 'default_profile.json'))
 
 logger = logging.getLogger(__name__)
 
@@ -142,11 +149,24 @@ def init_profiles():
         cfg = load_profile(name)
         return name, cfg
 
-    # 首次迁移：从 config.json 创建默认方案
-    logger.info("首次初始化方案系统，从 config.json 迁移")
-    cfg = _load_legacy_config()
-    save_profile(DEFAULT_PROFILE_NAME, cfg)
+    # 首次初始化：使用 default_profile.json 模板（必须存在）
+    logger.info("首次初始化方案系统，使用默认模板")
+    template = _load_default_template()
+    buttons = [_ensure_button_fields(b) for b in template.get('buttons', [])]
+    save_config_to_file(
+        _profile_path(DEFAULT_PROFILE_NAME),
+        geometry=template.get('geometry', '2560x1440+0+0'),
+        transparency=template.get('transparency', DEFAULT_TRANSPARENCY),
+        buttons=buttons,
+        click_through=template.get('click_through', PT_ON),
+        wheel_visible=template.get('wheel_visible', False),
+        wheel_sectors=template.get('wheel_sectors', default_wheel_sectors()),
+        wheel_enlarged=template.get('wheel_enlarged', False),
+        wheel_center_ring=template.get('wheel_center_ring', default_wheel_center_ring()),
+        wheel_center_ring_visible=template.get('wheel_center_ring_visible', False),
+    )
     _save_index({"active": DEFAULT_PROFILE_NAME, "profiles": [DEFAULT_PROFILE_NAME]})
+    cfg = load_profile(DEFAULT_PROFILE_NAME)
     return DEFAULT_PROFILE_NAME, cfg
 
 
@@ -162,7 +182,7 @@ def load_config_from_file(filepath: str) -> dict:
     result = {
         'geometry': None,
         'transparency': DEFAULT_TRANSPARENCY,
-        'buttons': copy.deepcopy(DEFAULT_BUTTONS),
+        'buttons': [],
         'ball_x': None,
         'ball_y': None,
         'click_through': PT_ON,
@@ -338,17 +358,18 @@ def set_active_profile(name: str):
 
 
 def _load_default_template() -> dict:
-    """从 core/default_profile.json 加载默认方案模板。
-    若文件不存在则 fallback 到 DEFAULT_BUTTONS。"""
-    if os.path.exists(DEFAULT_PROFILE_TEMPLATE):
-        try:
-            with open(DEFAULT_PROFILE_TEMPLATE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            logger.info(f"默认方案模板加载成功: {DEFAULT_PROFILE_TEMPLATE}")
-            return data
-        except Exception as e:
-            logger.warning(f"默认方案模板加载失败, fallback: {e}")
-    return None
+    """从 core/default_profile.json 加载默认方案模板（必须存在）。"""
+    if not os.path.exists(DEFAULT_PROFILE_TEMPLATE):
+        raise FileNotFoundError(
+            f"默认方案模板不存在: {DEFAULT_PROFILE_TEMPLATE}\n"
+            "请确保 core/default_profile.json 已包含在打包中。")
+    try:
+        with open(DEFAULT_PROFILE_TEMPLATE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        logger.info(f"默认方案模板加载成功: {DEFAULT_PROFILE_TEMPLATE}")
+        return data
+    except Exception as e:
+        raise RuntimeError(f"默认方案模板加载失败: {e}")
 
 
 def create_profile(name: str, from_template: bool = False) -> bool:
@@ -367,28 +388,22 @@ def create_profile(name: str, from_template: bool = False) -> bool:
     if name in index.get("profiles", []):
         return False
 
-    # 从默认模板文件加载
+    # 从默认模板文件加载（必定成功或抛异常）
     template = _load_default_template()
-    if template:
-        buttons = [_ensure_button_fields(b) for b in template.get('buttons', [])]
-        wheel_sectors = template.get('wheel_sectors', default_wheel_sectors())
-        wheel_visible = template.get('wheel_visible', False)
-        click_through = template.get('click_through', PT_ON)
-    else:
-        buttons = copy.deepcopy(DEFAULT_BUTTONS)
-        wheel_sectors = default_wheel_sectors()
-        wheel_visible = False
-        click_through = PT_ON
+    buttons = [_ensure_button_fields(b) for b in template.get('buttons', [])]
 
-    # 写入文件
+    # 写入文件（完整传递所有模板字段）
     save_config_to_file(
         _profile_path(name),
-        geometry='2560x1440+0+0',
-        transparency=DEFAULT_TRANSPARENCY,
+        geometry=template.get('geometry', '2560x1440+0+0'),
+        transparency=template.get('transparency', DEFAULT_TRANSPARENCY),
         buttons=buttons,
-        click_through=click_through,
-        wheel_visible=wheel_visible,
-        wheel_sectors=wheel_sectors,
+        click_through=template.get('click_through', PT_ON),
+        wheel_visible=template.get('wheel_visible', False),
+        wheel_sectors=template.get('wheel_sectors', default_wheel_sectors()),
+        wheel_enlarged=template.get('wheel_enlarged', False),
+        wheel_center_ring=template.get('wheel_center_ring', default_wheel_center_ring()),
+        wheel_center_ring_visible=template.get('wheel_center_ring_visible', False),
     )
 
     index.setdefault("profiles", []).append(name)

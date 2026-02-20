@@ -941,7 +941,8 @@ def _get_cursor_image(mode=None):
     if mode is None:
         mode = _current_cursor_mode
     if mode not in _cursor_photos:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        from core.constants import APP_DIR
+        base = APP_DIR
         filename = _CURSOR_FILES.get(mode, "cursor.png")
         path = os.path.join(base, "assets", filename)
         try:

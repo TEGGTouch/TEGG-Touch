@@ -37,7 +37,7 @@ def open_about_dialog(parent):
 
     PADDING = 30
     width = 520
-    height = 580
+    height = 620
     sw = parent.winfo_screenwidth()
     sh = parent.winfo_screenheight()
     x = (sw - width) // 2
@@ -124,7 +124,7 @@ def open_about_dialog(parent):
                         wraplength=desc_w)
     desc_lbl.place(x=PADDING, y=cy, width=desc_w)
     desc_lbl.lift()
-    cy += 110
+    cy += 140
 
     # 分隔线
     c.create_line(PADDING, cy, width - PADDING, cy, fill="#444", width=1)
@@ -137,7 +137,8 @@ def open_about_dialog(parent):
 
     # 尝试加载二维码图片
     _qr_photo = None
-    qr_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "wechat_qr.png")
+    from core.constants import APP_DIR
+    qr_path = os.path.join(APP_DIR, "assets", "wechat_qr.png")
     try:
         img = Image.open(qr_path)
         img = img.resize((QR_SIZE, QR_SIZE), Image.LANCZOS)

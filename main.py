@@ -10,9 +10,11 @@ import traceback
 from tkinter import messagebox
 import logging
 
-# PyInstaller 打包兼容：确保工作目录为 EXE 所在目录
+# 确保工作目录为脚本/EXE 所在目录（无论从哪里启动）
 if getattr(sys, 'frozen', False):
     os.chdir(os.path.dirname(sys.executable))
+else:
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # 配置日志
 logging.basicConfig(

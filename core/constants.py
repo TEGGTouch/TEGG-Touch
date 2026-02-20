@@ -2,6 +2,17 @@
 TEGG Touch 蛋挞 辅助软件 - 全局常量与默认值
 """
 
+import os
+import sys
+
+# === 应用根目录（frozen 兼容） ===
+# 开发时: TEGGTouch/ (项目根)
+# 打包后: dist/TEGGTouch/ (EXE 所在目录，__file__ 在 _internal/ 内)
+if getattr(sys, 'frozen', False):
+    APP_DIR = os.path.dirname(sys.executable)
+else:
+    APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # === 应用信息 ===
 APP_TITLE = "TEGG Touch 蛋挞"
 APP_VERSION = "0.1"
@@ -141,28 +152,6 @@ BTN_RADIUS = 10               # 按钮圆角半径
 UPDATE_INTERVAL = 8
 
 
-# === 默认按钮配置 ===
-# 坐标系：中心原点（x,y 可为负数，绘制时 screen_x = x + screen_w//2）
-DEFAULT_BUTTONS = [
-    {
-        'x': -100, 'y': -100, 'w': 100, 'h': 100,
-        'name': '左上', 'hover': 'w+a', 'hover_delay': 200,
-        'lclick': 'j', 'rclick': 'k', 'mclick': '',
-        'wheelup': '', 'wheeldown': '',
-    },
-    {
-        'x': 0, 'y': -100, 'w': 100, 'h': 100,
-        'name': '右上', 'hover': 'w+d', 'hover_delay': 200,
-        'lclick': 'j', 'rclick': 'k', 'mclick': '',
-        'wheelup': '', 'wheeldown': '',
-    },
-    {
-        'x': -100, 'y': 0, 'w': 200, 'h': 100,
-        'name': '后退', 'hover': 's', 'hover_delay': 200,
-        'lclick': 'j', 'rclick': 'k', 'mclick': '',
-        'wheelup': '', 'wheeldown': '',
-    },
-]
 
 # 按钮运行时字段 (保存时需要剔除)
 RUNTIME_FIELDS = frozenset({

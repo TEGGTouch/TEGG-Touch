@@ -8,7 +8,7 @@ echo.
 cd /d "%~dp0"
 
 echo [1/4] 检查打包工具...
-pip install pyinstaller keyboard pillow >nul 2>&1
+python -m pip install pyinstaller keyboard pillow >nul 2>&1
 echo      √ PyInstaller 已就绪
 echo.
 
@@ -21,7 +21,7 @@ echo.
 
 echo [3/4] PyInstaller 打包 (--onedir)...
 echo -------------------------------------------------------
-pyinstaller --onedir --noconsole --uac-admin --clean ^
+python -m PyInstaller --onedir --noconsole --uac-admin --clean ^
   --name "TEGGTouch" ^
   --icon "assets\cursor.png" ^
   main.py
