@@ -20,6 +20,9 @@ from .constants import (
     default_wheel_sectors,
 )
 
+# 默认方案模板文件路径（core/default_profile.json）
+DEFAULT_PROFILE_TEMPLATE = os.path.join(os.path.dirname(__file__), 'default_profile.json')
+
 logger = logging.getLogger(__name__)
 
 
@@ -304,8 +307,24 @@ def set_active_profile(name: str):
         _save_index(index)
 
 
+def _load_default_template() -> dict:
+    """从 core/default_profile.json 加载默认方案模板。
+    若文件不存在则 fallback 到 DEFAULT_BUTTONS。"""
+    if os.path.exists(DEFAULT_PROFILE_TEMPLATE):
+        try:
+            with open(DEFAULT_PROFILE_TEMPLATE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            logger.info(f"默认方案模板加载成功: {DEFAULT_PROFILE_TEMPLATE}")
+            return data
+        except Exception as e:
+            logger.warning(f"默认方案模板加载失败, fallback: {e}")
+    return None
+
+
 def create_profile(name: str, from_template: bool = False) -> bool:
     """创建新方案。
+
+    从 core/default_profile.json 加载完整默认布局（buttons + wheel_sectors 等）。
 
     Args:
         name: 方案名称
@@ -318,23 +337,28 @@ def create_profile(name: str, from_template: bool = False) -> bool:
     if name in index.get("profiles", []):
         return False
 
-    # 创建空白配置
-    cfg = {
-        'geometry': None,
-        'transparency': DEFAULT_TRANSPARENCY,
-        'buttons': copy.deepcopy(DEFAULT_BUTTONS) if not from_template else copy.deepcopy(DEFAULT_BUTTONS),
-        'ball_x': None,
-        'ball_y': None,
-        'click_through': PT_ON,
-    }
+    # 从默认模板文件加载
+    template = _load_default_template()
+    if template:
+        buttons = [_ensure_button_fields(b) for b in template.get('buttons', [])]
+        wheel_sectors = template.get('wheel_sectors', default_wheel_sectors())
+        wheel_visible = template.get('wheel_visible', False)
+        click_through = template.get('click_through', PT_ON)
+    else:
+        buttons = copy.deepcopy(DEFAULT_BUTTONS)
+        wheel_sectors = default_wheel_sectors()
+        wheel_visible = False
+        click_through = PT_ON
 
     # 写入文件
     save_config_to_file(
         _profile_path(name),
-        geometry=cfg['geometry'] or '1920x1080+0+0',
-        transparency=cfg['transparency'],
-        buttons=cfg['buttons'],
-        click_through=cfg['click_through'],
+        geometry='2560x1440+0+0',
+        transparency=DEFAULT_TRANSPARENCY,
+        buttons=buttons,
+        click_through=click_through,
+        wheel_visible=wheel_visible,
+        wheel_sectors=wheel_sectors,
     )
 
     index.setdefault("profiles", []).append(name)

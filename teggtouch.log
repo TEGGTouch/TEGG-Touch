@@ -1,1 +1,5 @@
-2026-02-20 10:06:34,739 - core.config_manager - INFO - 配置加载成功: profiles\茶叶蛋.json
+2026-02-20 10:18:23,733 - core.config_manager - INFO - 配置加载成功: profiles\1.json
+2026-02-20 10:27:06,714 - core.config_manager - INFO - 配置保存成功: profiles\1.json
+2026-02-20 10:29:13,428 - core.config_manager - INFO - 配置保存成功: profiles\1.json
+2026-02-20 10:29:13,429 - core.config_manager - INFO - 配置加载成功: profiles\茶叶蛋.json
+2026-02-20 10:36:27,193 - core.config_manager - INFO - 配置保存成功: profiles\茶叶蛋.json

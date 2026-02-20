@@ -383,7 +383,9 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         return "\n".join(lines)
 
     def _show_edit_tooltip(self, event, btn_data, is_wheel=False):
-        """在鼠标附近显示配置参数 tooltip。"""
+        """在鼠标附近显示配置参数 tooltip（仅编辑模式）。"""
+        if self.current_mode != 'main':
+            return
         self._hide_edit_tooltip()
         text = self._build_tooltip_text(btn_data, is_wheel=is_wheel)
 
