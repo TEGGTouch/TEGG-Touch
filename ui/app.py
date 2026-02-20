@@ -111,6 +111,10 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         self.holding_btn_left = None
         self.holding_btn_right = None
         self.holding_btn_middle = None
+        self.xbutton1_was_down = False
+        self.xbutton2_was_down = False
+        self.holding_btn_xbutton1 = None
+        self.holding_btn_xbutton2 = None
 
         # 中心轮盘状态（从 profile 加载）
         self.wheel_visible = config.get('wheel_visible', False)
@@ -361,6 +365,8 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             ('中键', 'mclick'),
             ('滚上', 'wheelup'),
             ('滚下', 'wheeldown'),
+            ('侧键1', 'xbutton1'),
+            ('侧键2', 'xbutton2'),
         ]
         lines = []
         for label, key in fields:

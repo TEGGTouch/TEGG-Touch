@@ -178,12 +178,15 @@ class RunEngineMixin:
                 left_down = (user32.GetAsyncKeyState(0x01) & 0x8000) != 0
                 right_down = (user32.GetAsyncKeyState(0x02) & 0x8000) != 0
                 middle_down = (user32.GetAsyncKeyState(0x04) & 0x8000) != 0
+                xbutton1_down = (user32.GetAsyncKeyState(0x05) & 0x8000) != 0  # 侧键1(后退)
+                xbutton2_down = (user32.GetAsyncKeyState(0x06) & 0x8000) != 0  # 侧键2(前进)
 
                 # 6. 处理点击/悬浮
                 if self.is_hidden:
                     self.handle_hidden_interaction(abs_x, abs_y, rel_x, rel_y, left_down)
                 else:
-                    self.handle_run_interaction(rel_x, rel_y, left_down, right_down, middle_down)
+                    self.handle_run_interaction(rel_x, rel_y, left_down, right_down, middle_down,
+                                               xbutton1_down, xbutton2_down)
 
                 # 6b. 自动回中逻辑 + 倒计时进度条
                 self.canvas.delete("_ac_bar")
@@ -226,6 +229,8 @@ class RunEngineMixin:
                 self.left_was_down = left_down
                 self.right_was_down = right_down
                 self.middle_was_down = middle_down
+                self.xbutton1_was_down = xbutton1_down
+                self.xbutton2_was_down = xbutton2_down
 
         except Exception as e:
             logger.error(f"Loop error: {e}")
@@ -255,7 +260,8 @@ class RunEngineMixin:
 
     # ─── 运行模式按钮交互 ────────────────────────────────────
 
-    def handle_run_interaction(self, rel_x, rel_y, left_down, right_down, middle_down):
+    def handle_run_interaction(self, rel_x, rel_y, left_down, right_down, middle_down,
+                               xbutton1_down=False, xbutton2_down=False):
         """处理运行模式下的交互。"""
         now = time.time()
         # 按键隐藏时跳过所有按钮交互
@@ -396,6 +402,12 @@ class RunEngineMixin:
                 if middle_down and not self.middle_was_down and btn.get('mclick'):
                     self.holding_btn_middle = idx
                     trigger(btn['mclick'], 'p')
+                if xbutton1_down and not self.xbutton1_was_down and btn.get('xbutton1'):
+                    self.holding_btn_xbutton1 = idx
+                    trigger(btn['xbutton1'], 'p')
+                if xbutton2_down and not self.xbutton2_was_down and btn.get('xbutton2'):
+                    self.holding_btn_xbutton2 = idx
+                    trigger(btn['xbutton2'], 'p')
             else:
                 if btn.get('active_hover'):
                     if release_delay <= 0:
@@ -442,6 +454,18 @@ class RunEngineMixin:
             if not btn.get('deleted'):
                 trigger(btn['mclick'], 'r')
             self.holding_btn_middle = None
+
+        if not xbutton1_down and self.xbutton1_was_down and self.holding_btn_xbutton1 is not None:
+            btn = self.buttons[self.holding_btn_xbutton1]
+            if not btn.get('deleted'):
+                trigger(btn['xbutton1'], 'r')
+            self.holding_btn_xbutton1 = None
+
+        if not xbutton2_down and self.xbutton2_was_down and self.holding_btn_xbutton2 is not None:
+            btn = self.buttons[self.holding_btn_xbutton2]
+            if not btn.get('deleted'):
+                trigger(btn['xbutton2'], 'r')
+            self.holding_btn_xbutton2 = None
 
         # ── 轮盘扇区交互（与普通按钮逻辑一致） ──
         if self.wheel_visible and self.wheel_sectors:
@@ -533,6 +557,12 @@ class RunEngineMixin:
                     if middle_down and not self.middle_was_down and sec.get('mclick'):
                         trigger(sec['mclick'], 'p')
                         sec['_holding_middle'] = True
+                    if xbutton1_down and not self.xbutton1_was_down and sec.get('xbutton1'):
+                        trigger(sec['xbutton1'], 'p')
+                        sec['_holding_xbutton1'] = True
+                    if xbutton2_down and not self.xbutton2_was_down and sec.get('xbutton2'):
+                        trigger(sec['xbutton2'], 'p')
+                        sec['_holding_xbutton2'] = True
                 else:
                     # 离开扇区
                     if sec.get('active_hover'):
@@ -569,3 +599,9 @@ class RunEngineMixin:
                 if not middle_down and self.middle_was_down and sec.get('_holding_middle'):
                     trigger(sec['mclick'], 'r')
                     sec['_holding_middle'] = False
+                if not xbutton1_down and self.xbutton1_was_down and sec.get('_holding_xbutton1'):
+                    trigger(sec['xbutton1'], 'r')
+                    sec['_holding_xbutton1'] = False
+                if not xbutton2_down and self.xbutton2_was_down and sec.get('_holding_xbutton2'):
+                    trigger(sec['xbutton2'], 'r')
+                    sec['_holding_xbutton2'] = False

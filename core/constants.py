@@ -170,6 +170,8 @@ BUTTON_OPTIONAL_DEFAULTS = {
     'wheelup': '',
     'wheeldown': '',
     'mclick': '',
+    'xbutton1': '',  # 鼠标侧键1（后退键）
+    'xbutton2': '',  # 鼠标侧键2（前进键）
     'hover_delay': 200,  # 悬停触发延迟(ms)，0=立即触发，默认200ms防误触
     'hover_release_delay': 0,  # 悬停释放延迟(ms)，0=立即释放，默认0ms
 }

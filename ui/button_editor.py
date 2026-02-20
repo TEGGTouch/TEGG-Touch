@@ -24,6 +24,8 @@ ACTION_COLORS = {
     'mclick':    '#A855F7',   # 紫色
     'wheelup':   '#EC4899',   # 粉红
     'wheeldown': '#F43F5E',   # 玫瑰
+    'xbutton1':  '#06B6D4',   # 青色 (侧键1-后退)
+    'xbutton2':  '#8B5CF6',   # 紫罗兰 (侧键2-前进)
 }
 
 # ─── 4 区块字段定义 ────────────────────────────────────────────
@@ -33,6 +35,8 @@ BLOCK_3 = [
     ('lclick',    '左键', True),
     ('rclick',    '右键', True),
     ('mclick',    '中键', True),
+    ('xbutton1',  '侧键1(后退)', True),
+    ('xbutton2',  '侧键2(前进)', True),
     ('wheelup',   '滚轮向上', True),
     ('wheeldown', '滚轮向下', True),
 ]
