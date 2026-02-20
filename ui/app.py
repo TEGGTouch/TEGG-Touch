@@ -27,7 +27,7 @@ from core.constants import (
     default_wheel_sectors,
 )
 from core.config_manager import (
-    load_config, save_config,
+    load_config, save_config, load_hotkeys,
     init_profiles, load_profile, save_profile, set_active_profile
 )
 from ui.canvas_renderer import (
@@ -102,7 +102,9 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         self.buttons_hidden = False
         self.auto_center = False
         self._last_btn_hover_time = 0
-        self.AUTO_CENTER_DELAY = 2.0
+        # 从快捷键配置读取回中延迟（ms → 秒）
+        _hk = load_hotkeys()
+        self.AUTO_CENTER_DELAY = _hk.get("auto_center_delay", 1500) / 1000.0
 
         # 硬件输入状态缓存
         self.left_was_down = False
@@ -249,6 +251,9 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
     def to_run(self):
         self.current_mode = 'run'
         self.is_hidden = False
+        # 每次进入运行模式时重新读取回中延迟（编辑模式中可能已修改设置）
+        _hk = load_hotkeys()
+        self.AUTO_CENTER_DELAY = _hk.get("auto_center_delay", 1500) / 1000.0
         self.redraw_all()
         self.setup_ui_mode()
 

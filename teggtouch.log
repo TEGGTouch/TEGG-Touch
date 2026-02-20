@@ -1,1 +1,18 @@
-2026-02-20 10:37:27,660 - core.config_manager - INFO - 配置加载成功: profiles\茶叶蛋.json
+2026-02-20 10:48:17,749 - core.config_manager - INFO - 配置加载成功: profiles\默认配置.json
+2026-02-20 10:48:22,546 - core.config_manager - INFO - 配置保存成功: profiles\默认配置.json
+2026-02-20 10:50:28,166 - core.config_manager - INFO - 配置保存成功: profiles\默认配置.json
+2026-02-20 11:00:38,169 - core.config_manager - INFO - 默认方案模板加载成功: D:\VibeCoding\TEGGTouch\core\default_profile.json
+2026-02-20 11:00:38,171 - core.config_manager - INFO - 配置保存成功: profiles\生化奇兵无限.json
+2026-02-20 11:00:38,175 - core.config_manager - INFO - 配置保存成功: profiles\默认配置.json
+2026-02-20 11:00:38,176 - core.config_manager - INFO - 配置加载成功: profiles\生化奇兵无限.json
+2026-02-20 11:05:17,952 - ui.app - INFO - 编辑轮盘扇区 #0: ↑
+2026-02-20 11:06:49,558 - core.config_manager - INFO - 配置保存成功: profiles\生化奇兵无限.json
+2026-02-20 11:08:47,803 - core.config_manager - INFO - 配置保存成功: profiles\生化奇兵无限.json
+2026-02-20 11:10:01,705 - core.config_manager - INFO - 配置保存成功: profiles\生化奇兵无限.json
+2026-02-20 11:13:17,896 - core.config_manager - INFO - 配置保存成功: profiles\生化奇兵无限.json
+2026-02-20 11:17:49,645 - ui.app - INFO - 编辑轮盘扇区 #0: ↑
+2026-02-20 11:18:17,451 - core.config_manager - INFO - 配置保存成功: profiles\生化奇兵无限.json
+2026-02-20 11:18:45,205 - core.config_manager - INFO - 快捷键配置保存成功: settings/hotkeys.json
+2026-02-20 11:18:57,565 - core.config_manager - INFO - 配置保存成功: profiles\生化奇兵无限.json
+2026-02-20 11:20:49,968 - core.config_manager - INFO - 快捷键配置加载成功: settings/hotkeys.json
+2026-02-20 11:22:05,717 - core.config_manager - INFO - 配置保存成功: profiles\生化奇兵无限.json
