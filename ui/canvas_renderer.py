@@ -14,7 +14,10 @@ from core.constants import (
     CHAMFER_SIZE, RESIZE_HANDLE_SIZE,
     BTN_MARGIN, BTN_RADIUS,
     BTN_TYPE_CENTER_BAND, BTN_TYPE_WHEEL_SECTOR,
-    WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS, WHEEL_GAP_PX,
+    WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
+    WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE,
+    WHEEL_GAP_PX,
+    WHEEL_RING_INNER, WHEEL_RING_OUTER,
 )
 
 # 回中带专用配色
@@ -442,17 +445,19 @@ def _annular_sector_points(cx, cy, r_inner, r_outer,
     return points
 
 
-def draw_wheel_sectors(canvas, sectors, offset_x, offset_y):
+def draw_wheel_sectors(canvas, sectors, offset_x, offset_y,
+                       r_inner=None, r_outer=None):
     """绘制中心轮盘的8个扇面。
 
     sectors: 8个扇区配置 list（每个含 angle, name, hover 等）
     offset_x/offset_y: 屏幕中心坐标 (screen_w//2, screen_h//2)
+    r_inner/r_outer: 可选，覆盖默认内外圆半径（用于大/小版切换）
     
     为每个扇区存储 id_poly 和 id_text 到 sector dict 中。
     """
     cx, cy = offset_x, offset_y
-    r_in = WHEEL_INNER_RADIUS
-    r_out = WHEEL_OUTER_RADIUS
+    r_in = r_inner if r_inner is not None else WHEEL_INNER_RADIUS
+    r_out = r_outer if r_outer is not None else WHEEL_OUTER_RADIUS
 
     for idx, sec in enumerate(sectors):
         center_angle = sec['angle']
@@ -490,17 +495,22 @@ def draw_wheel_sectors(canvas, sectors, offset_x, offset_y):
         sec['_cy'] = cy
 
 
-def wheel_sector_hit_test(sectors, mx, my, offset_x, offset_y):
+def wheel_sector_hit_test(sectors, mx, my, offset_x, offset_y,
+                          r_inner=None, r_outer=None):
     """判断鼠标 (mx, my) 在哪个轮盘扇区内。
     
     返回扇区索引 (0~7)，不在任何扇区内返回 -1。
+    r_inner/r_outer: 可选，覆盖默认内外圆半径。
     """
     cx, cy = offset_x, offset_y
     dx = mx - cx
     dy = -(my - cy)  # 翻转 y 轴为数学坐标
     dist = math.sqrt(dx * dx + dy * dy)
 
-    if dist < WHEEL_INNER_RADIUS or dist > WHEEL_OUTER_RADIUS:
+    r_in = r_inner if r_inner is not None else WHEEL_INNER_RADIUS
+    r_out = r_outer if r_outer is not None else WHEEL_OUTER_RADIUS
+
+    if dist < r_in or dist > r_out:
         return -1
 
     # 计算角度 (0~360, 逆时针, 0=右)
@@ -563,10 +573,12 @@ def set_wheel_sector_visual(canvas, sector, state):
 
 # ─── 轮盘放射充能条 ──────────────────────────────────────────
 
-def draw_wheel_charge_bar(canvas, sector, progress):
+def draw_wheel_charge_bar(canvas, sector, progress,
+                          r_inner=None, r_outer=None):
     """绘制轮盘扇区的放射充能条：从内圆向外圆扩展。
 
     progress: 0.0~1.0  (触发充能=从圆心到外缘, 释放=反向)
+    r_inner/r_outer: 可选，覆盖默认内外圆半径。
     用一个中间半径的环形扇面作为充能覆盖层。
     """
     progress = max(0.0, min(1.0, progress))
@@ -578,8 +590,8 @@ def draw_wheel_charge_bar(canvas, sector, progress):
 
     cx = sector.get('_cx', 0)
     cy = sector.get('_cy', 0)
-    r_in = WHEEL_INNER_RADIUS
-    r_out = WHEEL_OUTER_RADIUS
+    r_in = r_inner if r_inner is not None else WHEEL_INNER_RADIUS
+    r_out = r_outer if r_outer is not None else WHEEL_OUTER_RADIUS
 
     center_angle = sector['angle']
 
@@ -624,6 +636,243 @@ def remove_wheel_charge_bar(canvas, sector):
     if text_id:
         disp_name = sector.get('name', '')
         canvas.itemconfigure(text_id, text=disp_name, font=FONT_NAME, fill=COLOR_TEXT)
+
+
+# ─── 中心圆环按钮（仅大圆盘模式） ────────────────────────────
+
+def _ring_points(cx, cy, r, steps=48):
+    """生成圆形多边形顶点。"""
+    pts = []
+    for i in range(steps):
+        a = math.radians(360.0 * i / steps)
+        pts.append(cx + r * math.cos(a))
+        pts.append(cy - r * math.sin(a))
+    return pts
+
+
+def draw_wheel_center_ring(canvas, ring_data, offset_x, offset_y):
+    """绘制中心圆环按钮（完整 360° 环形，无文字）。
+
+    ring_data: dict（含 hover/lclick 等，和普通按钮一致）
+    tag: "wheel_ring"
+    """
+    cx, cy = offset_x, offset_y
+    r_in = WHEEL_RING_INNER
+    r_out = WHEEL_RING_OUTER
+
+    # 外圆 + 内圆组成环形 polygon（外顺时针 + 内逆时针 = 镂空环）
+    outer = _ring_points(cx, cy, r_out, 48)
+    inner = _ring_points(cx, cy, r_in, 48)
+    inner.reverse()  # 逆向打孔
+
+    # tkinter polygon 不支持孔洞, 用两个 oval 模拟
+    # 外圆（填充 + 边框）
+    poly_outer = canvas.create_oval(
+        cx - r_out, cy - r_out, cx + r_out, cy + r_out,
+        fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER,
+        width=2, tags=("wheel_ring", "wheel_ring_outer", "wheel_all"),
+    )
+    # 内圆（用透明色挖洞）
+    poly_inner = canvas.create_oval(
+        cx - r_in, cy - r_in, cx + r_in, cy + r_in,
+        fill=COLOR_TRANSPARENT, outline=COLOR_BTN_BORDER,
+        width=2, tags=("wheel_ring", "wheel_ring_inner", "wheel_all"),
+    )
+
+    ring_data['id_poly'] = poly_outer
+    ring_data['_id_inner'] = poly_inner
+    ring_data['id_text'] = None  # 圆环无文字
+    ring_data['_cx'] = cx
+    ring_data['_cy'] = cy
+
+
+def wheel_center_ring_hit_test(ring, mx, my, offset_x, offset_y):
+    """判断鼠标 (mx, my) 是否在中心圆环区域内。
+
+    ring: 圆环配置 dict（保留参数，与调用端一致）
+    返回 True/False。
+    """
+    dx = mx - offset_x
+    dy = my - offset_y
+    dist = math.sqrt(dx * dx + dy * dy)
+    return WHEEL_RING_INNER <= dist <= WHEEL_RING_OUTER
+
+
+def set_wheel_center_ring_visual(canvas, ring, state):
+    """设置圆环按钮视觉状态（不显示文字，仅变色）。
+
+    state: 'normal' | 'hover' | 'active_left' | ...
+    """
+    poly_id = ring.get('id_poly')
+    inner_id = ring.get('_id_inner')
+    if not poly_id:
+        return
+
+    if state == 'normal':
+        canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+        if inner_id:
+            canvas.itemconfigure(inner_id, outline=COLOR_BTN_BORDER, width=2)
+        return
+
+    key_field = STATE_TO_KEY.get(state)
+    key_val = ring.get(key_field, '')
+    if not key_val:
+        set_wheel_center_ring_visual(canvas, ring, 'normal')
+        return
+
+    if state in ACTION_STATE_COLORS:
+        fill, outline, _ = ACTION_STATE_COLORS[state]
+        canvas.itemconfigure(poly_id, fill=fill, outline=outline, width=3)
+        if inner_id:
+            canvas.itemconfigure(inner_id, outline=outline, width=3)
+
+
+def draw_wheel_center_ring_charge_bar(canvas, ring, progress):
+    """绘制圆环充能条：从内圆向外圆扩展的环形充能。
+
+    progress: 0.0~1.0
+    """
+    progress = max(0.0, min(1.0, progress))
+    charge_tag = "wheel_ring_charge"
+    canvas.delete(charge_tag)
+
+    if progress <= 0.01:
+        return
+
+    cx = ring.get('_cx', 0)
+    cy = ring.get('_cy', 0)
+
+    # 充能圆环：从 RING_INNER 扩展到 RING_INNER + (OUTER-INNER)*progress
+    charge_r = WHEEL_RING_INNER + (WHEEL_RING_OUTER - WHEEL_RING_INNER) * progress
+
+    # 用 oval 画充能层 (比内圆略大, 比充能半径略小)
+    r_in = WHEEL_RING_INNER + 2
+    r_ch = max(r_in + 1, charge_r - 2)
+
+    canvas.create_oval(
+        cx - r_ch, cy - r_ch, cx + r_ch, cy + r_ch,
+        fill=COLOR_CHARGE, outline="",
+        tags=(charge_tag, "wheel_all"),
+    )
+    # 用透明色再挖出内圆
+    canvas.create_oval(
+        cx - r_in, cy - r_in, cx + r_in, cy + r_in,
+        fill=COLOR_TRANSPARENT, outline="",
+        tags=(charge_tag, "wheel_all"),
+    )
+
+    # 层级：充能在 poly 之上
+    poly_id = ring.get('id_poly')
+    inner_id = ring.get('_id_inner')
+    if poly_id:
+        canvas.tag_raise(charge_tag, poly_id)
+    if inner_id:
+        canvas.tag_raise(inner_id)
+
+    # 边框变蓝
+    if poly_id:
+        canvas.itemconfigure(poly_id, outline=COLOR_CHARGE_BORDER, width=3)
+    if inner_id:
+        canvas.itemconfigure(inner_id, outline=COLOR_CHARGE_BORDER, width=3)
+
+
+def remove_wheel_center_ring_charge_bar(canvas, ring):
+    """移除圆环充能条，恢复默认。"""
+    canvas.delete("wheel_ring_charge")
+
+    poly_id = ring.get('id_poly')
+    inner_id = ring.get('_id_inner')
+    if poly_id:
+        canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+    if inner_id:
+        canvas.itemconfigure(inner_id, outline=COLOR_BTN_BORDER, width=2)
+
+
+# ─── 轮盘缩放切换按钮 ────────────────────────────────────────
+
+# 图标码点 (Segoe Fluent Icons / Segoe MDL2 Assets)
+_ICON_ZOOM_IN  = "\uE8A3"   # ZoomIn  放大镜+
+_ICON_ZOOM_OUT = "\uE71F"   # ZoomOut 放大镜−
+_ZOOM_BTN_SIZE = 30
+_ZOOM_ICON_SIZE = 14
+
+# 中心环开关按钮颜色
+_RING_TOGGLE_COLOR_ON = "#005A9E"    # 蓝色（启用）— 与工具栏轮盘启用一致
+_RING_TOGGLE_COLOR_OFF = "#666666"   # 灰色（禁用）
+
+def draw_wheel_ring_toggle_button(canvas, offset_x, offset_y, is_visible=False):
+    """在编辑模式下绘制中心环开关按钮（⭕ 图标）。
+
+    位置：缩放按钮左侧 (cx+130, cy+165)，30×30px
+    is_visible: True=中心环启用(蓝色), False=中心环禁用(灰色)
+    tag: "wheel_ring_toggle_btn"
+    """
+    cx, cy = offset_x, offset_y
+    x1 = cx + 130
+    y1 = cy + 165
+    s = _ZOOM_BTN_SIZE  # 30
+
+    color = _RING_TOGGLE_COLOR_ON if is_visible else _RING_TOGGLE_COLOR_OFF
+
+    # 圆角矩形背景
+    pts = get_rounded_rect_points(x1, y1, s, s, BTN_RADIUS)
+    canvas.create_polygon(
+        pts, fill=color, outline="",
+        smooth=True, tags="wheel_ring_toggle_btn",
+    )
+
+    # ⭕ 图标 (用简单圆形绘制)
+    icon_r = 7
+    icon_cx = x1 + s / 2
+    icon_cy = y1 + s / 2
+    canvas.create_oval(
+        icon_cx - icon_r, icon_cy - icon_r,
+        icon_cx + icon_r, icon_cy + icon_r,
+        fill="", outline="#E0E0E0", width=2,
+        tags="wheel_ring_toggle_btn",
+    )
+
+
+def draw_wheel_zoom_button(canvas, offset_x, offset_y, is_enlarged=False):
+    """在编辑模式下绘制轮盘缩放切换按钮。
+
+    按钮位置：中心偏移 (+165, +165) → (+195, +195)，30×30px
+    纯灰色圆角矩形底 (COLOR_HANDLE)，无描边。
+    图标使用 Segoe Fluent Icons / MDL2 Assets 字体 (与工具栏统一)。
+    is_enlarged: True=当前为大版(显示缩小镜)，False=当前为小版(显示放大镜)
+    tag: "wheel_zoom_btn"
+    """
+    from ui.widgets import icon_font
+
+    cx, cy = offset_x, offset_y
+    x1 = cx + 165
+    y1 = cy + 165
+    s = _ZOOM_BTN_SIZE
+
+    # 圆角矩形背景 (纯灰色, 无描边, 与按钮体系统一圆角)
+    pts = get_rounded_rect_points(x1, y1, s, s, BTN_RADIUS)
+    canvas.create_polygon(
+        pts, fill=COLOR_HANDLE, outline="",
+        smooth=True, tags="wheel_zoom_btn",
+    )
+
+    # 图标 (Segoe Fluent Icons / MDL2 Assets，与工具栏一致)
+    ifont = icon_font()
+    icon_ch = _ICON_ZOOM_OUT if is_enlarged else _ICON_ZOOM_IN
+    if ifont:
+        canvas.create_text(
+            x1 + s / 2, y1 + s / 2,
+            text=icon_ch, font=(ifont, _ZOOM_ICON_SIZE),
+            fill="#E0E0E0", tags="wheel_zoom_btn",
+        )
+    else:
+        # fallback: 无图标字体时用简单文字
+        canvas.create_text(
+            x1 + s / 2, y1 + s / 2,
+            text="−" if is_enlarged else "+",
+            font=("Microsoft YaHei UI", 14, "bold"),
+            fill="#E0E0E0", tags="wheel_zoom_btn",
+        )
 
 
 # ─── 系统按钮 ────────────────────────────────────────────────

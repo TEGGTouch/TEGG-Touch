@@ -63,12 +63,19 @@ COLOR_TOOLBAR_TRANSPARENT = "#010002"  # 工具栏窗口镂空用
 BTN_TYPE_NORMAL = "normal"
 BTN_TYPE_CENTER_BAND = "center_band"
 BTN_TYPE_WHEEL_SECTOR = "wheel_sector"
+BTN_TYPE_WHEEL_RING = "wheel_center_ring"
 
 # === 中心轮盘配置 ===
-WHEEL_INNER_RADIUS = 50    # 内圆半径 (px)
-WHEEL_OUTER_RADIUS = 150   # 外圆半径 (px)
+WHEEL_INNER_RADIUS = 60    # 内圆半径 (px) — 小版
+WHEEL_OUTER_RADIUS = 150   # 外圆半径 (px) — 小版
+WHEEL_INNER_RADIUS_LARGE = 105   # 内圆半径 (px) — 大版
+WHEEL_OUTER_RADIUS_LARGE = 195   # 外圆半径 (px) — 大版
 WHEEL_GAP_PX = 10           # 扇面间距 (像素)，内外圈等宽
 WHEEL_SECTOR_COUNT = 8
+
+# 中心圆环按钮 (仅大圆盘模式可见)
+WHEEL_RING_INNER = 60       # 圆环内半径 (px)
+WHEEL_RING_OUTER = 95       # 圆环外半径 (px)
 
 # 8个扇面方向定义 (名称, 中心角度-tkinter角度, 默认hover键)
 # tkinter arc: 0°=右, 逆时针增加, 90°=上
@@ -92,12 +99,24 @@ def default_wheel_sectors():
             'type': BTN_TYPE_WHEEL_SECTOR,
             'angle': s['angle'],
             'hover': s['hover'],
-            'hover_delay': 0,
+            'hover_delay': 200,
             'hover_release_delay': 0,
             'lclick': '', 'rclick': '', 'mclick': '',
             'wheelup': '', 'wheeldown': '',
         })
     return sectors
+
+def default_wheel_center_ring():
+    """生成默认的中心圆环按钮配置（仅大圆盘模式可见）。"""
+    return {
+        'name': '中心环',
+        'type': BTN_TYPE_WHEEL_RING,
+        'hover': '', 'hover_delay': 200,
+        'hover_release_delay': 0,
+        'lclick': '', 'rclick': '', 'mclick': '',
+        'wheelup': '', 'wheeldown': '',
+        'xbutton1': '', 'xbutton2': '',
+    }
 
 # === 工具栏尺寸 ===
 TOOLBAR_WIDTH = 1070

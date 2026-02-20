@@ -215,7 +215,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
         c.tag_bind(tag, "<ButtonRelease-1>", lambda e: cb())
 
     # 1) Config selector
-    _CFG_W = 180
+    _CFG_W = 220
     cfg_tag = "tcfg"
     rrect(c, bx, by, _CFG_W, BTN_H, BTN_R,
           fill=C_CYBER, outline="", tags=(cfg_tag, cfg_tag + "_bg"))
@@ -551,37 +551,30 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                        set_window_style=None,
                        on_toggle_buttons=None, buttons_visible=True,
                        on_toggle_auto_center=None, auto_center=False,
-                       on_open_settings=None):
-    """创建运行模式独立工具栏（可拖拽、可收缩）。"""
+                       on_open_settings=None,
+                       init_x=None, init_y=None):
+    """创建运行模式独立工具栏（可拖拽、可收缩）。
+    
+    init_x, init_y: 从方案加载的记忆位置，None 则使用默认（屏幕底部居中）。
+    """
     
     # 尺寸配置
-    # 按钮高度 BTN_H=40 (widgets.py)
-    # 上下间距 10px -> FULL_H = 10 + 40 + 10 = 60
-    # 左右间距 10px
+    FULL_W = TOOLBAR_WIDTH  # 1070, 与编辑工具栏同宽
     FULL_H = 60
     MINI_W, MINI_H = 80, 60
     RADIUS = 10
     
-    # 确保父窗口几何信息已更新
-    parent.update_idletasks()
-    
-    # 初始位置：跟随父窗口左下角
-    # 使用父窗口坐标以支持多显示器或非主屏情况
-    try:
-        base_x = parent.winfo_rootx()
-        base_y = parent.winfo_rooty()
-        base_h = parent.winfo_height()
-    except:
-        base_x, base_y = 0, 0
-        base_h = screen_h
-
-    INIT_X = base_x + 30
-    INIT_Y = base_y + base_h - FULL_H - 30
+    # 初始位置：优先使用方案记忆位置，否则屏幕底部居中距底部 50px
+    if init_x is not None and init_y is not None:
+        INIT_X = int(init_x)
+        INIT_Y = int(init_y)
+    else:
+        INIT_X = (screen_w - FULL_W) // 2
+        INIT_Y = screen_h - FULL_H - 50
 
     top = tk.Toplevel(parent)
     top.overrideredirect(True)
-    # 初始宽度设为 800 (之后会根据内容自动调整)
-    top.geometry(f"800x{FULL_H}+{INIT_X}+{INIT_Y}")
+    top.geometry(f"{FULL_W}x{FULL_H}+{INIT_X}+{INIT_Y}")
     top.attributes("-topmost", True)
     top.attributes("-alpha", 1.0)
     top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
@@ -597,7 +590,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
     # 状态
     state = {
         "minimized": False,
-        "width": 800,
+        "width": FULL_W,
         "height": FULL_H,
         "click_through": click_through,
         "buttons_visible": buttons_visible,
@@ -606,7 +599,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
         "y": INIT_Y
     }
 
-    c = tk.Canvas(top, width=800, height=FULL_H,
+    c = tk.Canvas(top, width=FULL_W, height=FULL_H,
                   bg=COLOR_TOOLBAR_TRANSPARENT, highlightthickness=0)
     c.pack(fill="both", expand=True)
 
@@ -684,8 +677,8 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                 c.tag_bind(tag, "<Leave>", _lv)
                 c.tag_bind(tag, "<ButtonRelease-1>", lambda e: cb())
 
-            # --- 1. 方案文本 (带 icon, 固定宽度 200px) ---
-            _PROF_W = 200
+            # --- 1. 方案文本 (带 icon, 固定宽度 210px) ---
+            _PROF_W = 210
             active_profile = get_active_profile_name()
             _prof_cy = h // 2
             if ifont:
@@ -786,7 +779,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             bx += _VIS_W + GAP
 
             # --- 3. 软键盘 [F8] ---
-            _KB_BTN_W = 130
+            _KB_BTN_W = 140
             def _toggle_kb_run():
                 from ui.virtual_keyboard import toggle_soft_keyboard
                 toggle_soft_keyboard(top, mode="input")
@@ -954,6 +947,11 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                 top.after(300, _keep)
         except: pass
     top.lift(); top.after(100, _keep)
+
+    # 暴露位置查询方法，供外部保存到方案
+    def _get_position():
+        return state["x"], state["y"]
+    top.get_position = _get_position
 
     return top
 

@@ -24,7 +24,10 @@ from core.constants import (
     GRID_SIZE,
     PT_ON, PT_OFF, PT_BLOCK, PT_CYCLE,
     BTN_TYPE_CENTER_BAND, BTN_TYPE_WHEEL_SECTOR,
+    WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
+    WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE,
     default_wheel_sectors,
+    default_wheel_center_ring,
 )
 from core.config_manager import (
     load_config, save_config, load_hotkeys,
@@ -36,6 +39,9 @@ from ui.canvas_renderer import (
     draw_grid,
     remove_charge_bar,
     draw_wheel_sectors,
+    draw_wheel_zoom_button,
+    draw_wheel_ring_toggle_button,
+    draw_wheel_center_ring,
 )
 from ui.edit_panel import create_toolbar_window, destroy_toolbar_window
 
@@ -121,6 +127,11 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         # 中心轮盘状态（从 profile 加载）
         self.wheel_visible = config.get('wheel_visible', False)
         self.wheel_sectors = config.get('wheel_sectors', default_wheel_sectors())
+        self.wheel_enlarged = config.get('wheel_enlarged', False)
+        self.wheel_center_ring = config.get('wheel_center_ring', default_wheel_center_ring())
+        self.wheel_center_ring_visible = config.get('wheel_center_ring_visible', False)
+        self.run_toolbar_x = config.get('run_toolbar_x', None)
+        self.run_toolbar_y = config.get('run_toolbar_y', None)
 
         # 悬浮球拖拽状态
         self.ball_drag_start_x = 0
@@ -199,6 +210,8 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             buttons_visible=not self.buttons_hidden,
             on_toggle_auto_center=self.toggle_auto_center,
             auto_center=self.auto_center,
+            init_x=self.run_toolbar_x,
+            init_y=self.run_toolbar_y,
         )
         if self.run_toolbar_win:
             self.run_toolbar_win.lift()
@@ -318,9 +331,11 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
 
         # 中心轮盘（编辑模式和运行模式都绘制，如果可见）
         if self.wheel_visible and self.wheel_sectors:
+            r_in, r_out = self._get_wheel_radii()
             draw_wheel_sectors(self.canvas, self.wheel_sectors,
-                               self._offset_x, self._offset_y)
-            # 编辑模式下绑定双击编辑 + hover tooltip 事件
+                               self._offset_x, self._offset_y,
+                               r_inner=r_in, r_outer=r_out)
+            # 编辑模式下绑定双击编辑 + hover tooltip 事件 + 缩放按钮
             if self.current_mode == 'main':
                 for wi in range(len(self.wheel_sectors)):
                     wtag = f"wheel_sector_{wi}"
@@ -329,6 +344,37 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
                     self.canvas.tag_bind(wtag, "<Enter>",
                                          lambda e, i=wi: self._show_edit_tooltip(e, self.wheel_sectors[i], is_wheel=True))
                     self.canvas.tag_bind(wtag, "<Leave>",
+                                         lambda e: self._hide_edit_tooltip())
+                # 绘制缩放切换按钮
+                draw_wheel_zoom_button(self.canvas, self._offset_x, self._offset_y,
+                                       is_enlarged=self.wheel_enlarged)
+                self.canvas.tag_bind("wheel_zoom_btn", "<Button-1>", self.toggle_wheel_size)
+                self.canvas.tag_bind("wheel_zoom_btn", "<Enter>",
+                                     lambda e: self._show_simple_tooltip(e, "点击切换轮盘大/小模式"))
+                self.canvas.tag_bind("wheel_zoom_btn", "<Leave>",
+                                     lambda e: self._hide_edit_tooltip())
+
+            # 编辑模式下：大圆盘时绘制中心环开关按钮
+            if self.current_mode == 'main' and self.wheel_enlarged:
+                draw_wheel_ring_toggle_button(self.canvas, self._offset_x, self._offset_y,
+                                              is_visible=self.wheel_center_ring_visible)
+                self.canvas.tag_bind("wheel_ring_toggle_btn", "<Button-1>",
+                                     self.toggle_wheel_center_ring_visible)
+                self.canvas.tag_bind("wheel_ring_toggle_btn", "<Enter>",
+                                     lambda e: self._show_simple_tooltip(e, "点击启用/隐藏中心圆环按钮"))
+                self.canvas.tag_bind("wheel_ring_toggle_btn", "<Leave>",
+                                     lambda e: self._hide_edit_tooltip())
+
+            # 中心圆环按钮（仅大圆盘模式 + 中心环已启用时绘制）
+            if self.wheel_enlarged and self.wheel_center_ring_visible and self.wheel_center_ring:
+                draw_wheel_center_ring(self.canvas, self.wheel_center_ring,
+                                       self._offset_x, self._offset_y)
+                if self.current_mode == 'main':
+                    self.canvas.tag_bind("wheel_ring", "<Double-Button-1>",
+                                         lambda e: self._edit_wheel_center_ring())
+                    self.canvas.tag_bind("wheel_ring", "<Enter>",
+                                         lambda e: self._show_edit_tooltip(e, self.wheel_center_ring, is_wheel=True))
+                    self.canvas.tag_bind("wheel_ring", "<Leave>",
                                          lambda e: self._hide_edit_tooltip())
 
         if self.current_mode == 'run':
@@ -383,7 +429,7 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
                 lines.append(f"{label}: {val}")
 
         if is_wheel:
-            lines.append("⚠ 中心轮盘不可移动和放大")
+            lines.append("⚠ 中心轮盘有两种大小，按需使用")
 
         return "\n".join(lines)
 
@@ -421,6 +467,39 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
                 y1 -= offset
                 y2 -= offset
             # 背景矩形
+            bg = self.canvas.create_rectangle(
+                x1 - pad, y1 - pad, x2 + pad, y2 + pad,
+                fill="#005A9E", outline="#005A9E", width=1,
+                tags="edit_tooltip",
+            )
+            self.canvas.tag_lower(bg, tid)
+
+    def _show_simple_tooltip(self, event, text):
+        """在鼠标附近显示简单文字 tooltip（用于功能按钮）。"""
+        if self.current_mode != 'main':
+            return
+        self._hide_edit_tooltip()
+        tx = event.x + 16
+        ty = event.y + 16
+        tid = self.canvas.create_text(
+            tx + 8, ty + 6, text=text, anchor="nw",
+            font=("Microsoft YaHei UI", 9), fill="#E0E0E0",
+            tags="edit_tooltip",
+        )
+        bbox = self.canvas.bbox(tid)
+        if bbox:
+            pad = 6
+            x1, y1, x2, y2 = bbox
+            if x2 + pad > self.screen_w:
+                offset = (x2 - x1) + 32
+                self.canvas.move(tid, -offset, 0)
+                x1 -= offset
+                x2 -= offset
+            if y2 + pad > self.screen_h:
+                offset = (y2 - y1) + 32
+                self.canvas.move(tid, 0, -offset)
+                y1 -= offset
+                y2 -= offset
             bg = self.canvas.create_rectangle(
                 x1 - pad, y1 - pad, x2 + pad, y2 + pad,
                 fill="#005A9E", outline="#005A9E", width=1,
@@ -486,6 +565,42 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         self.wheel_visible = visible
         self.redraw_all()
 
+    def _get_wheel_radii(self):
+        """根据 wheel_enlarged 返回 (r_inner, r_outer)。"""
+        if self.wheel_enlarged:
+            return WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE
+        return WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS
+
+    def toggle_wheel_size(self, event=None):
+        """切换轮盘大/小版。"""
+        self.wheel_enlarged = not self.wheel_enlarged
+        self.redraw_all()
+
+    def toggle_wheel_center_ring_visible(self, event=None):
+        """切换中心圆环显示/隐藏。"""
+        self.wheel_center_ring_visible = not self.wheel_center_ring_visible
+        self.redraw_all()
+
+    def _edit_wheel_center_ring(self):
+        """双击编辑中心圆环按钮 — 复用普通按钮编辑弹窗。"""
+        from ui.button_editor import open_button_editor
+        ring = self.wheel_center_ring
+        logger.info(f"编辑中心圆环按钮: {ring.get('name')}")
+
+        def on_save(updated):
+            for k, v in updated.items():
+                ring[k] = v
+            self.redraw_all()
+
+        open_button_editor(
+            self.root, ring,
+            on_save=on_save,
+            on_delete=None,
+            on_copy=None,
+            set_window_style=None,
+            no_delete=True,
+        )
+
     def _edit_wheel_sector(self, index):
         """双击编辑轮盘扇区 — 复用普通按钮编辑弹窗。"""
         from ui.button_editor import open_button_editor
@@ -504,6 +619,7 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             on_delete=None,
             on_copy=None,
             set_window_style=None,
+            no_delete=True,
         )
 
     def toggle_auto_center(self, on):
@@ -554,11 +670,22 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         self.click_through = config['click_through']
         self.wheel_visible = config.get('wheel_visible', False)
         self.wheel_sectors = config.get('wheel_sectors', default_wheel_sectors())
+        self.wheel_enlarged = config.get('wheel_enlarged', False)
+        self.wheel_center_ring = config.get('wheel_center_ring', default_wheel_center_ring())
+        self.wheel_center_ring_visible = config.get('wheel_center_ring_visible', False)
+        self.run_toolbar_x = config.get('run_toolbar_x', None)
+        self.run_toolbar_y = config.get('run_toolbar_y', None)
         self.redraw_all()
         if self.current_mode == 'main':
             self._show_toolbar()
 
     def save_config(self):
+        # 从运行工具栏读取当前位置（如果存在）
+        if self.run_toolbar_win and hasattr(self.run_toolbar_win, 'get_position'):
+            try:
+                self.run_toolbar_x, self.run_toolbar_y = self.run_toolbar_win.get_position()
+            except Exception:
+                pass
         save_profile(
             self.current_profile,
             geometry=self.fullscreen_geo,
@@ -572,6 +699,11 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             root=self.root,
             wheel_visible=self.wheel_visible,
             wheel_sectors=self.wheel_sectors,
+            wheel_enlarged=self.wheel_enlarged,
+            wheel_center_ring=self.wheel_center_ring,
+            wheel_center_ring_visible=self.wheel_center_ring_visible,
+            run_toolbar_x=self.run_toolbar_x,
+            run_toolbar_y=self.run_toolbar_y,
         )
 
     def export_config(self):

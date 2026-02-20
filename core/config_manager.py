@@ -18,6 +18,7 @@ from .constants import (
     PT_ON, PT_OFF, PT_BLOCK,
     HOTKEYS_FILE, DEFAULT_HOTKEYS,
     default_wheel_sectors,
+    default_wheel_center_ring,
 )
 
 # 默认方案模板文件路径（core/default_profile.json）
@@ -167,6 +168,11 @@ def load_config_from_file(filepath: str) -> dict:
         'click_through': PT_ON,
         'wheel_visible': False,
         'wheel_sectors': default_wheel_sectors(),
+        'wheel_enlarged': False,
+        'wheel_center_ring': default_wheel_center_ring(),
+        'wheel_center_ring_visible': False,
+        'run_toolbar_x': None,
+        'run_toolbar_y': None,
     }
     if not os.path.exists(filepath):
         return result
@@ -201,9 +207,18 @@ def load_config_from_file(filepath: str) -> dict:
             result['buttons'] = [_ensure_button_fields(b) for b in buttons]
         # 中心轮盘
         result['wheel_visible'] = data.get('wheel_visible', False)
+        result['wheel_enlarged'] = data.get('wheel_enlarged', False)
         raw_sectors = data.get('wheel_sectors', None)
         if raw_sectors and isinstance(raw_sectors, list) and len(raw_sectors) == 8:
             result['wheel_sectors'] = raw_sectors
+        # 中心圆环按钮
+        raw_ring = data.get('wheel_center_ring', None)
+        if raw_ring and isinstance(raw_ring, dict):
+            result['wheel_center_ring'] = raw_ring
+        result['wheel_center_ring_visible'] = data.get('wheel_center_ring_visible', False)
+        # 运行工具栏位置（按方案记忆）
+        result['run_toolbar_x'] = data.get('run_toolbar_x', None)
+        result['run_toolbar_y'] = data.get('run_toolbar_y', None)
         logger.info(f"配置加载成功: {filepath}")
     except Exception as e:
         logger.error(f"配置加载失败: {e}")
@@ -219,7 +234,12 @@ def _clean_sector_for_save(sec: dict) -> dict:
 def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                         ball_x=None, ball_y=None, click_through=False,
                         is_hidden=False, saved_geometry=None, root=None,
-                        wheel_visible=False, wheel_sectors=None) -> bool:
+                        wheel_visible=False, wheel_sectors=None,
+                        wheel_enlarged=False,
+                        wheel_center_ring=None,
+                        wheel_center_ring_visible=False,
+                        run_toolbar_x=None,
+                        run_toolbar_y=None) -> bool:
     """保存配置到指定文件。"""
     geo_to_save = saved_geometry or geometry
     try:
@@ -253,9 +273,19 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         'ball_y': ball_y,
         'click_through': click_through,
         'wheel_visible': wheel_visible,
+        'wheel_enlarged': wheel_enlarged,
+        'wheel_center_ring_visible': wheel_center_ring_visible,
+        'run_toolbar_x': run_toolbar_x,
+        'run_toolbar_y': run_toolbar_y,
     }
     if clean_sectors:
         data['wheel_sectors'] = clean_sectors
+
+    # 中心圆环按钮
+    if wheel_center_ring:
+        clean_ring = {k: v for k, v in wheel_center_ring.items()
+                      if k not in RUNTIME_FIELDS and k != 'deleted'}
+        data['wheel_center_ring'] = clean_ring
 
     try:
         os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)

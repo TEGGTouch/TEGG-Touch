@@ -259,7 +259,7 @@ def open_center_band_editor(parent, btn, *, on_delete, on_copy=None):
     return top
 
 
-def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_style):
+def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_style, no_delete=False):
     """打开按钮编辑弹窗。"""
     overlay = create_modal_overlay(parent)
 
@@ -606,13 +606,20 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     half_w = (total_w - btn_gap) // 2
 
     # 删除
-    rrect(c, PADDING, row2_y, half_w, btn_h, BTN_R,
-          fill="#6E1E1E", outline="", tags=("del", "del_bg"))
-    c.create_text(PADDING + half_w // 2, row2_y + btn_h // 2, text="删除",
-                  font=(FF, FS), fill="white", tags=("del",))
-    c.tag_bind("del", "<Enter>", lambda e: c.itemconfigure("del_bg", fill="#8B2020"))
-    c.tag_bind("del", "<Leave>", lambda e: c.itemconfigure("del_bg", fill="#6E1E1E"))
-    c.tag_bind("del", "<ButtonRelease-1>", lambda e: [on_delete(btn), top.destroy()])
+    if no_delete:
+        # 灰色禁用状态
+        rrect(c, PADDING, row2_y, half_w, btn_h, BTN_R,
+              fill="#3A3A3A", outline="", tags=("del", "del_bg"))
+        c.create_text(PADDING + half_w // 2, row2_y + btn_h // 2, text="删除",
+                      font=(FF, FS), fill="#666666", tags=("del",))
+    else:
+        rrect(c, PADDING, row2_y, half_w, btn_h, BTN_R,
+              fill="#6E1E1E", outline="", tags=("del", "del_bg"))
+        c.create_text(PADDING + half_w // 2, row2_y + btn_h // 2, text="删除",
+                      font=(FF, FS), fill="white", tags=("del",))
+        c.tag_bind("del", "<Enter>", lambda e: c.itemconfigure("del_bg", fill="#8B2020"))
+        c.tag_bind("del", "<Leave>", lambda e: c.itemconfigure("del_bg", fill="#6E1E1E"))
+        c.tag_bind("del", "<ButtonRelease-1>", lambda e: [on_delete(btn), top.destroy()])
 
     # 保存（蓝色，与工具栏方案选择按钮同色）
     save_x = PADDING + half_w + btn_gap

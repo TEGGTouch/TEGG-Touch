@@ -123,15 +123,15 @@ def _build_all_keys():
     for label, key, c, r, cw, rh in MAIN_KEYS:
         keys.append((label, key, c, r, cw, rh))
 
-    # 导航区偏移 (主键区最大列 ~15 + gap)
-    nav_off = 15.75
+    # 导航区偏移 (主键区最大列 15 + 统一间距 0.935 units)
+    nav_off = 15.935
     for label, key, c, r, cw, rh in NAV_TOP_KEYS:
         keys.append((label, key, nav_off + c, r, cw, rh))
     for label, key, c, r, cw, rh in NAV_KEYS_REL:
         keys.append((label, key, nav_off + c, r, cw, rh))
 
-    # 数字键盘偏移 (导航区结束 ~15.75+3 + gap)
-    np_off = nav_off + 3.5
+    # 数字键盘偏移 (导航区结束 + 统一间距 0.935 units)
+    np_off = nav_off + 3.935
     for label, key, c, r, cw, rh in NUMPAD_KEYS_REL:
         keys.append((label, key, np_off + c, r, cw, rh))
 
@@ -296,38 +296,39 @@ def toggle_soft_keyboard(toolbar_win, **kwargs):
 
 
 def _position_above_toolbar(top, toolbar_win):
-    """将软键盘窗口放置在工具栏正上方 10px。
+    """将软键盘窗口放置在工具栏上方（两种模式统一逻辑）。
     
-    定位策略：
-    - 如果工具栏宽度 >= 键盘宽度 → 水平居中对齐工具栏
-    - 如果工具栏宽度 < 键盘宽度 → 左对齐工具栏 X（适用于运行模式工具栏）
+    定位策略（编辑/运行模式统一）：
+    - 水平：与工具栏居中对齐
+    - 垂直：紧贴工具栏上方 10px
+    - 边缘处理：上方放不下 → 翻到工具栏下方；左右超出 → 夹紧屏幕边缘
     """
     try:
         toolbar_win.update_idletasks()
         tx = toolbar_win.winfo_x()
         ty = toolbar_win.winfo_y()
         tw = toolbar_win.winfo_width()
+        th = toolbar_win.winfo_height()
     except Exception:
         return
 
     kw = KB_WIDTH
-    if tw >= kw:
-        # 工具栏比键盘宽 → 水平居中
-        kx = tx + (tw - kw) // 2
-    else:
-        # 工具栏比键盘窄（运行模式） → 左对齐
-        kx = tx
+    sh = toolbar_win.winfo_screenheight()
+    sw = toolbar_win.winfo_screenwidth()
+
+    # 水平：与工具栏居中对齐
+    kx = tx + (tw - kw) // 2
+
+    # 垂直：紧贴工具栏上方 10px
     ky = ty - KB_HEIGHT - 10
 
-    # 上方空间不够 → 放到工具栏下方
+    # 上方空间不够 → 翻到工具栏下方
     if ky < 0:
-        th = toolbar_win.winfo_height()
         ky = ty + th + 10
 
-    # 确保不超出屏幕
-    sw = toolbar_win.winfo_screenwidth()
+    # 确保不超出屏幕（左右、上下夹紧）
     kx = max(0, min(kx, sw - kw))
-    ky = max(0, ky)
+    ky = max(0, min(ky, sh - KB_HEIGHT))
 
     top.geometry(f"{kw}x{KB_HEIGHT}+{kx}+{ky}")
 

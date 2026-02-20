@@ -6,5 +6,5 @@
   "pt_off": "f10",
   "pt_block": "f11",
   "stop": "f12",
-  "auto_center_delay": 200
+  "auto_center_delay": 1500
 }

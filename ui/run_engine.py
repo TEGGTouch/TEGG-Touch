@@ -13,6 +13,7 @@ from core.constants import (
     PT_ON, PT_OFF, PT_BLOCK,
     BTN_TYPE_CENTER_BAND,
     WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
+    WHEEL_RING_INNER, WHEEL_RING_OUTER,
 )
 from ui.canvas_renderer import (
     set_button_visual_state,
@@ -20,6 +21,8 @@ from ui.canvas_renderer import (
     draw_charge_bar, remove_charge_bar,
     wheel_sector_hit_test, set_wheel_sector_visual,
     draw_wheel_charge_bar, remove_wheel_charge_bar,
+    wheel_center_ring_hit_test, set_wheel_center_ring_visual,
+    draw_wheel_center_ring_charge_bar, remove_wheel_center_ring_charge_bar,
 )
 from core.input_engine import (
     trigger, is_key_pressed, poll_wheel_events,
@@ -113,8 +116,13 @@ class RunEngineMixin:
                                 break
                         # 轮盘扇区也参与穿透判定
                         if not is_on_ui and self.wheel_visible and self.wheel_sectors:
-                            if wheel_sector_hit_test(self.wheel_sectors, rel_x, rel_y, ox, oy) >= 0:
+                            _wri, _wro = self._get_wheel_radii()
+                            if wheel_sector_hit_test(self.wheel_sectors, rel_x, rel_y, ox, oy, r_inner=_wri, r_outer=_wro) >= 0:
                                 is_on_ui = True
+                            # 中心圆环也参与穿透判定（仅大圆盘模式 + 已启用）
+                            if not is_on_ui and self.wheel_enlarged and self.wheel_center_ring_visible and self.wheel_center_ring:
+                                if wheel_center_ring_hit_test(self.wheel_center_ring, rel_x, rel_y, ox, oy):
+                                    is_on_ui = True
 
                     if self.current_mode == 'main':
                         if is_on_ui:
@@ -199,6 +207,19 @@ class RunEngineMixin:
                         if self._point_in_btn(_b, rel_x, rel_y):
                             _on_any_btn = True
                             break
+                    # 轮盘扇区也视为"正在操作按钮"
+                    if not _on_any_btn and self.wheel_visible and self.wheel_sectors:
+                        _wri, _wro = self._get_wheel_radii()
+                        _ox, _oy = self._offset_x, self._offset_y
+                        if wheel_sector_hit_test(self.wheel_sectors, rel_x, rel_y, _ox, _oy,
+                                                 r_inner=_wri, r_outer=_wro) >= 0:
+                            _on_any_btn = True
+                    # 中心圆环也视为"正在操作按钮"
+                    if not _on_any_btn and self.wheel_visible and self.wheel_enlarged \
+                       and self.wheel_center_ring_visible and self.wheel_center_ring:
+                        _ox, _oy = self._offset_x, self._offset_y
+                        if wheel_center_ring_hit_test(self.wheel_center_ring, rel_x, rel_y, _ox, _oy):
+                            _on_any_btn = True
                     _center_x = self.screen_w // 2
                     _center_y = self.screen_h // 2
                     _at_center = abs(rel_x - _center_x) <= 50 and abs(rel_y - _center_y) <= 50
@@ -474,13 +495,16 @@ class RunEngineMixin:
         # ── 轮盘扇区交互（与普通按钮逻辑一致） ──
         if self.wheel_visible and self.wheel_sectors:
             ox, oy = self._offset_x, self._offset_y
-            hit_idx = wheel_sector_hit_test(self.wheel_sectors, rel_x, rel_y, ox, oy)
+            _wri, _wro = self._get_wheel_radii()
+            hit_idx = wheel_sector_hit_test(self.wheel_sectors, rel_x, rel_y, ox, oy,
+                                            r_inner=_wri, r_outer=_wro)
 
             # 滚轮事件 → 扇区
             for direction, wx, wy in wheel_events:
                 w_rx = wx - self.win_x
                 w_ry = wy - self.win_y
-                w_hit = wheel_sector_hit_test(self.wheel_sectors, w_rx, w_ry, ox, oy)
+                w_hit = wheel_sector_hit_test(self.wheel_sectors, w_rx, w_ry, ox, oy,
+                                              r_inner=_wri, r_outer=_wro)
                 if w_hit >= 0:
                     sec = self.wheel_sectors[w_hit]
                     key = sec.get('wheelup') if direction == 'up' else sec.get('wheeldown')
@@ -548,7 +572,8 @@ class RunEngineMixin:
                             if not sec.get('_hover_charged'):
                                 elapsed_ms = (now - sec['_hover_enter_time']) * 1000
                                 progress = min(1.0, elapsed_ms / hover_delay)
-                                draw_wheel_charge_bar(self.canvas, sec, progress)
+                                draw_wheel_charge_bar(self.canvas, sec, progress,
+                                                      r_inner=_wri, r_outer=_wro)
                                 if progress >= 1.0:
                                     sec['_hover_charged'] = True
                                     sec['active_hover'] = True
@@ -589,7 +614,8 @@ class RunEngineMixin:
                                 remove_wheel_charge_bar(self.canvas, sec)
                                 trigger(sec['hover'], 'r')
                             else:
-                                draw_wheel_charge_bar(self.canvas, sec, progress)
+                                draw_wheel_charge_bar(self.canvas, sec, progress,
+                                                      r_inner=_wri, r_outer=_wro)
 
                     if sec.get('_hover_enter_time') is not None:
                         sec['_hover_enter_time'] = None
@@ -613,3 +639,139 @@ class RunEngineMixin:
                 if not xbutton2_down and self.xbutton2_was_down and sec.get('_holding_xbutton2'):
                     trigger(sec['xbutton2'], 'r')
                     sec['_holding_xbutton2'] = False
+
+        # ── 中心圆环交互（仅大圆盘模式 + 已启用） ──
+        if self.wheel_visible and self.wheel_enlarged and self.wheel_center_ring_visible and self.wheel_center_ring:
+            ring = self.wheel_center_ring
+            ox, oy = self._offset_x, self._offset_y
+            in_ring = wheel_center_ring_hit_test(ring, rel_x, rel_y, ox, oy)
+            hover_delay = ring.get('hover_delay', 0)
+
+            # 滚轮事件 → 圆环
+            for direction, wx, wy in wheel_events:
+                w_rx = wx - self.win_x
+                w_ry = wy - self.win_y
+                if wheel_center_ring_hit_test(ring, w_rx, w_ry, ox, oy):
+                    key = ring.get('wheelup') if direction == 'up' else ring.get('wheeldown')
+                    if key:
+                        trigger(key, 'c')
+                        ws = 'active_wheelup' if direction == 'up' else 'active_wheeldown'
+                        set_wheel_center_ring_visual(self.canvas, ring, ws)
+                        ring['last_visual_state'] = ws
+                        ring['_wheel_flash_until'] = now + 0.15
+
+            # 滚轮闪烁期间
+            if now < ring.get('_wheel_flash_until', 0):
+                if in_ring and not ring.get('active_hover') and ring.get('hover'):
+                    if hover_delay <= 0:
+                        ring['active_hover'] = True
+                        trigger(ring['hover'], 'p')
+                elif not in_ring and ring.get('active_hover'):
+                    ring['active_hover'] = False
+                    trigger(ring['hover'], 'r')
+                    remove_wheel_center_ring_charge_bar(self.canvas, ring)
+            else:
+                # 视觉状态
+                target = 'normal'
+                if in_ring:
+                    if ring.get('active_hover'):
+                        target = 'hover'
+                    if left_down and ring.get('lclick'):
+                        target = 'active_left'
+                    elif right_down and ring.get('rclick'):
+                        target = 'active_right'
+                    elif middle_down and ring.get('mclick'):
+                        target = 'active_middle'
+                    elif xbutton1_down and ring.get('xbutton1'):
+                        target = 'active_xbutton1'
+                    elif xbutton2_down and ring.get('xbutton2'):
+                        target = 'active_xbutton2'
+
+                if ring.get('last_visual_state') != target:
+                    set_wheel_center_ring_visual(self.canvas, ring, target)
+                    ring['last_visual_state'] = target
+
+                release_delay = ring.get('hover_release_delay', 0)
+
+                if in_ring:
+                    if ring.get('_hover_release_time') is not None:
+                        ring['_hover_release_time'] = None
+                        remove_wheel_center_ring_charge_bar(self.canvas, ring)
+                        set_wheel_center_ring_visual(self.canvas, ring, 'hover')
+                        ring['last_visual_state'] = 'hover'
+
+                    if not ring.get('active_hover') and ring.get('hover'):
+                        if hover_delay <= 0:
+                            ring['active_hover'] = True
+                            trigger(ring['hover'], 'p')
+                        else:
+                            if ring.get('_hover_enter_time') is None:
+                                ring['_hover_enter_time'] = now
+                                ring['_hover_charged'] = False
+                            if not ring.get('_hover_charged'):
+                                elapsed_ms = (now - ring['_hover_enter_time']) * 1000
+                                progress = min(1.0, elapsed_ms / hover_delay)
+                                draw_wheel_center_ring_charge_bar(self.canvas, ring, progress)
+                                if progress >= 1.0:
+                                    ring['_hover_charged'] = True
+                                    ring['active_hover'] = True
+                                    remove_wheel_center_ring_charge_bar(self.canvas, ring)
+                                    trigger(ring['hover'], 'p')
+
+                    # 点击
+                    if left_down and not self.left_was_down and ring.get('lclick'):
+                        trigger(ring['lclick'], 'p')
+                        ring['_holding_left'] = True
+                    if right_down and not self.right_was_down and ring.get('rclick'):
+                        trigger(ring['rclick'], 'p')
+                        ring['_holding_right'] = True
+                    if middle_down and not self.middle_was_down and ring.get('mclick'):
+                        trigger(ring['mclick'], 'p')
+                        ring['_holding_middle'] = True
+                    if xbutton1_down and not self.xbutton1_was_down and ring.get('xbutton1'):
+                        trigger(ring['xbutton1'], 'p')
+                        ring['_holding_xbutton1'] = True
+                    if xbutton2_down and not self.xbutton2_was_down and ring.get('xbutton2'):
+                        trigger(ring['xbutton2'], 'p')
+                        ring['_holding_xbutton2'] = True
+                else:
+                    if ring.get('active_hover'):
+                        if release_delay <= 0:
+                            ring['active_hover'] = False
+                            ring['_hover_release_time'] = None
+                            trigger(ring['hover'], 'r')
+                        else:
+                            if ring.get('_hover_release_time') is None:
+                                ring['_hover_release_time'] = now
+                            elapsed_ms = (now - ring['_hover_release_time']) * 1000
+                            progress = max(0.0, 1.0 - elapsed_ms / release_delay)
+                            if progress <= 0:
+                                ring['active_hover'] = False
+                                ring['_hover_release_time'] = None
+                                remove_wheel_center_ring_charge_bar(self.canvas, ring)
+                                trigger(ring['hover'], 'r')
+                            else:
+                                draw_wheel_center_ring_charge_bar(self.canvas, ring, progress)
+
+                    if ring.get('_hover_enter_time') is not None:
+                        ring['_hover_enter_time'] = None
+                        ring['_hover_charged'] = False
+                        if not ring.get('_hover_release_time'):
+                            remove_wheel_center_ring_charge_bar(self.canvas, ring)
+
+                # 点击释放
+                if not left_down and self.left_was_down and ring.get('_holding_left'):
+                    trigger(ring['lclick'], 'r')
+                    ring['_holding_left'] = False
+                if not right_down and self.right_was_down and ring.get('_holding_right'):
+                    trigger(ring['rclick'], 'r')
+                    ring['_holding_right'] = False
+                if not middle_down and self.middle_was_down and ring.get('_holding_middle'):
+                    trigger(ring['mclick'], 'r')
+                    ring['_holding_middle'] = False
+                if not xbutton1_down and self.xbutton1_was_down and ring.get('_holding_xbutton1'):
+                    trigger(ring['xbutton1'], 'r')
+                    ring['_holding_xbutton1'] = False
+                if not xbutton2_down and self.xbutton2_was_down and ring.get('_holding_xbutton2'):
+                    trigger(ring['xbutton2'], 'r')
+                    ring['_holding_xbutton2'] = False
