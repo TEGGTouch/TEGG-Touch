@@ -4,10 +4,15 @@ TEGG Touch 蛋挞 辅助软件 - 启动入口
 """
 
 import sys
+import os
 import tkinter as tk
 import traceback
 from tkinter import messagebox
 import logging
+
+# PyInstaller 打包兼容：确保工作目录为 EXE 所在目录
+if getattr(sys, 'frozen', False):
+    os.chdir(os.path.dirname(sys.executable))
 
 # 配置日志
 logging.basicConfig(

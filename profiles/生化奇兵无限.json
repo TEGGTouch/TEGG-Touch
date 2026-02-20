@@ -4,8 +4,8 @@
   "transparency": 0.9,
   "buttons": [
     {
-      "x": 200,
-      "y": 0,
+      "x": -300,
+      "y": 100,
       "w": 100,
       "h": 100,
       "name": "H",
@@ -23,9 +23,9 @@
     },
     {
       "x": -300,
-      "y": -100,
+      "y": 0,
       "w": 100,
-      "h": 200,
+      "h": 100,
       "name": "拾取F",
       "hover": "f",
       "hover_delay": 0,
@@ -43,7 +43,7 @@
       "x": -300,
       "y": -200,
       "w": 100,
-      "h": 100,
+      "h": 200,
       "name": "能力Q",
       "hover": "q",
       "hover_delay": 0,
@@ -58,9 +58,9 @@
       "hover_release_delay": 0
     },
     {
-      "x": -300,
-      "y": 100,
-      "w": 100,
+      "x": -600,
+      "y": 400,
+      "w": 200,
       "h": 100,
       "name": "蹲下Ctrl",
       "hover_delay": 0,
@@ -76,8 +76,8 @@
       "type": "normal"
     },
     {
-      "x": -200,
-      "y": 300,
+      "x": -300,
+      "y": 200,
       "w": 100,
       "h": 100,
       "name": "ESC",
@@ -112,9 +112,9 @@
       "type": "normal"
     },
     {
-      "x": 0,
-      "y": 300,
-      "w": 200,
+      "x": -200,
+      "y": 200,
+      "w": 400,
       "h": 100,
       "name": "空格",
       "hover": "space",
@@ -133,7 +133,7 @@
       "x": 200,
       "y": -100,
       "w": 100,
-      "h": 100,
+      "h": 200,
       "name": "换弹R",
       "hover": "r",
       "hover_delay": 0,
@@ -148,8 +148,8 @@
       "type": "normal"
     },
     {
-      "x": -100,
-      "y": 300,
+      "x": 200,
+      "y": 200,
       "w": 100,
       "h": 100,
       "name": "Enter",
@@ -372,7 +372,7 @@
     "name": "中心环",
     "type": "wheel_center_ring",
     "hover": "f",
-    "hover_delay": 200,
+    "hover_delay": 0,
     "hover_release_delay": 0,
     "lclick": "",
     "rclick": "",
@@ -381,7 +381,7 @@
     "wheeldown": "",
     "xbutton1": "",
     "xbutton2": "",
-    "_id_inner": 282,
+    "_id_inner": 26588,
     "_cx": 1280,
     "_cy": 720
   }

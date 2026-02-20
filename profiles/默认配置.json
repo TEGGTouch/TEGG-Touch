@@ -1,7 +1,7 @@
 {
   "coord_system": "center",
   "geometry": "2560x1440+0+0",
-  "transparency": 0.7,
+  "transparency": 0.9,
   "buttons": [
     {
       "x": -600,
@@ -200,12 +200,49 @@
       "xbutton1": "",
       "xbutton2": "",
       "type": "normal"
+    },
+    {
+      "x": -600,
+      "y": 300,
+      "w": 100,
+      "h": 100,
+      "name": "按钮",
+      "hover_delay": 1000,
+      "hover_release_delay": 1000,
+      "hover": "a",
+      "lclick": "b",
+      "rclick": "c",
+      "mclick": "d",
+      "wheelup": "g",
+      "wheeldown": "h",
+      "xbutton1": "e",
+      "xbutton2": "f"
+    },
+    {
+      "x": -200,
+      "y": -600,
+      "w": 400,
+      "h": 100,
+      "name": "回中带",
+      "type": "center_band",
+      "hover_delay": 0,
+      "hover_release_delay": 0,
+      "hover": "",
+      "lclick": "",
+      "rclick": "",
+      "mclick": "",
+      "wheelup": "",
+      "wheeldown": ""
     }
   ],
   "ball_x": null,
   "ball_y": null,
   "click_through": "pt_on",
-  "wheel_visible": false,
+  "wheel_visible": true,
+  "wheel_enlarged": true,
+  "wheel_center_ring_visible": true,
+  "run_toolbar_x": null,
+  "run_toolbar_y": null,
   "wheel_sectors": [
     {
       "name": "↑",
@@ -218,7 +255,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "_cx": 1280,
+      "_cy": 720
     },
     {
       "name": "↖",
@@ -231,7 +270,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "_cx": 1280,
+      "_cy": 720
     },
     {
       "name": "←",
@@ -244,7 +285,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "_cx": 1280,
+      "_cy": 720
     },
     {
       "name": "↙",
@@ -257,7 +300,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "_cx": 1280,
+      "_cy": 720
     },
     {
       "name": "↓",
@@ -270,7 +315,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "_cx": 1280,
+      "_cy": 720
     },
     {
       "name": "↘",
@@ -283,7 +330,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "_cx": 1280,
+      "_cy": 720
     },
     {
       "name": "→",
@@ -296,7 +345,9 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "_cx": 1280,
+      "_cy": 720
     },
     {
       "name": "↗",
@@ -309,7 +360,26 @@
       "rclick": "",
       "mclick": "",
       "wheelup": "",
-      "wheeldown": ""
+      "wheeldown": "",
+      "_cx": 1280,
+      "_cy": 720
     }
-  ]
+  ],
+  "wheel_center_ring": {
+    "name": "中心环",
+    "type": "wheel_center_ring",
+    "hover": "",
+    "hover_delay": 200,
+    "hover_release_delay": 0,
+    "lclick": "",
+    "rclick": "",
+    "mclick": "",
+    "wheelup": "",
+    "wheeldown": "",
+    "xbutton1": "",
+    "xbutton2": "",
+    "_id_inner": 6243,
+    "_cx": 1280,
+    "_cy": 720
+  }
 }
