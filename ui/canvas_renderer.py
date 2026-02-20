@@ -322,16 +322,24 @@ def remove_charge_bar(canvas, btn):
     canvas.delete(charge_tag)
     btn['id_charge'] = None
 
-    # 恢复默认外观
+    # 恢复默认外观（回中带使用绿色配色）
+    is_cb = btn.get('type') == BTN_TYPE_CENTER_BAND
     poly_id = btn.get('id_poly')
     if poly_id:
-        canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
+        fill = COLOR_CENTER_BAND_BG if is_cb else COLOR_BTN_BG
+        outline = COLOR_CENTER_BAND if is_cb else COLOR_BTN_BORDER
+        canvas.itemconfigure(poly_id, fill=fill, outline=outline, width=2)
     
     # 恢复显示名称
     text_id = btn.get('id_text')
     if text_id:
-        display_text = _format_btn_name(btn.get('name', ''))
-        canvas.itemconfigure(text_id, text=display_text, font=FONT_NAME, fill=COLOR_TEXT)
+        if is_cb:
+            display_text = "\u2295\n\u56de\u4e2d\u5e26"
+            text_color = COLOR_CENTER_BAND
+        else:
+            display_text = _format_btn_name(btn.get('name', ''))
+            text_color = COLOR_TEXT
+        canvas.itemconfigure(text_id, text=display_text, font=FONT_NAME, fill=text_color)
 
 
 # ─── 运行时操作配色 ──────────────────────────────────────────
@@ -369,10 +377,17 @@ def set_button_visual_state(canvas, btn, state):
     poly_id = btn.get('id_poly')
 
     if state == 'normal':
-        # 恢复默认
-        canvas.itemconfigure(poly_id, fill=COLOR_BTN_BG, outline=COLOR_BTN_BORDER, width=2)
-        display_text = _format_btn_name(btn.get('name', ''))
-        canvas.itemconfigure(text_id, text=display_text, font=FONT_NAME, fill=COLOR_TEXT)
+        # 恢复默认（回中带使用绿色配色）
+        is_cb = btn.get('type') == BTN_TYPE_CENTER_BAND
+        fill = COLOR_CENTER_BAND_BG if is_cb else COLOR_BTN_BG
+        outline = COLOR_CENTER_BAND if is_cb else COLOR_BTN_BORDER
+        text_color = COLOR_CENTER_BAND if is_cb else COLOR_TEXT
+        canvas.itemconfigure(poly_id, fill=fill, outline=outline, width=2)
+        if is_cb:
+            display_text = "\u2295\n\u56de\u4e2d\u5e26"
+        else:
+            display_text = _format_btn_name(btn.get('name', ''))
+        canvas.itemconfigure(text_id, text=display_text, font=FONT_NAME, fill=text_color)
         return
 
     # 检查该状态是否有配置键值

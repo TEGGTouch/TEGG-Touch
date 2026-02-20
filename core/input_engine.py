@@ -72,6 +72,21 @@ class Input(ctypes.Structure):
 
 _SendInput = ctypes.windll.user32.SendInput
 
+# ─── 扩展键扫描码集合 ────────────────────────────────────────
+# 这些按键与小键盘共享扫描码，必须加 KEYEVENTF_EXTENDEDKEY 标志才能正确识别
+KEYEVENTF_EXTENDEDKEY = 0x0001
+KEYEVENTF_SCANCODE = 0x0008
+KEYEVENTF_KEYUP = 0x0002
+
+# 按键名 → 是否为扩展键（与小键盘共享扫描码，需要 EXTENDEDKEY 标志区分）
+_EXTENDED_KEY_NAMES = {
+    "up", "down", "left", "right",           # 方向键 (vs Numpad 8/2/4/6)
+    "insert", "delete", "home", "end",        # 编辑键 (vs Numpad 0/./7/1)
+    "page up", "page down", "pgup", "pgdn",   # 翻页键 (vs Numpad 9/3)
+    "right ctrl", "right alt",                 # 右侧修饰键
+    "left windows", "right windows",           # Win 键
+}
+
 # ─── keyboard 库加载 ─────────────────────────────────────────
 
 try:
@@ -96,20 +111,26 @@ def get_scan_code(key_name: str) -> int:
         return 0
 
 
-def press_key(scan_code: int):
-    """按下按键（硬件扫描码）。"""
+def press_key(scan_code: int, extended: bool = False):
+    """按下按键（硬件扫描码）。extended=True 为方向键等扩展键。"""
+    flags = KEYEVENTF_SCANCODE
+    if extended:
+        flags |= KEYEVENTF_EXTENDEDKEY
     extra = ctypes.c_ulong(0)
     ii_ = Input_I()
-    ii_.ki = KeyBdInput(0, scan_code, 0x0008, 0, ctypes.pointer(extra))
+    ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
     x = Input(ctypes.c_ulong(1), ii_)
     _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
 
 
-def release_key(scan_code: int):
-    """释放按键（硬件扫描码）。"""
+def release_key(scan_code: int, extended: bool = False):
+    """释放按键（硬件扫描码）。extended=True 为方向键等扩展键。"""
+    flags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
+    if extended:
+        flags |= KEYEVENTF_EXTENDEDKEY
     extra = ctypes.c_ulong(0)
     ii_ = Input_I()
-    ii_.ki = KeyBdInput(0, scan_code, 0x0008 | 0x0002, 0, ctypes.pointer(extra))
+    ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
     x = Input(ctypes.c_ulong(1), ii_)
     _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
 
@@ -131,14 +152,15 @@ def trigger(keys: str, action: str):
             sc = get_scan_code(k)
             if sc == 0:
                 continue
+            ext = k.lower() in _EXTENDED_KEY_NAMES
             if action == 'p':
-                press_key(sc)
+                press_key(sc, ext)
             elif action == 'r':
-                release_key(sc)
+                release_key(sc, ext)
             elif action == 'c':
-                press_key(sc)
+                press_key(sc, ext)
                 time.sleep(random.uniform(0.03, 0.06))
-                release_key(sc)
+                release_key(sc, ext)
     except Exception as e:
         logger.error(f"触发按键失败: keys={keys}, action={action}, error={e}")
 

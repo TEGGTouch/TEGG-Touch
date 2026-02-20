@@ -1,7 +1,7 @@
 {
   "coord_system": "center",
   "geometry": "2560x1440+0+0",
-  "transparency": 0.52,
+  "transparency": 0.9,
   "buttons": [
     {
       "x": 200,
@@ -381,7 +381,7 @@
     "wheeldown": "",
     "xbutton1": "",
     "xbutton2": "",
-    "_id_inner": 155,
+    "_id_inner": 282,
     "_cx": 1280,
     "_cy": 720
   }
