@@ -1,10 +1,10 @@
 {
-  "auto_center": "f1",
+  "auto_center": "f6",
   "toggle_buttons": "f7",
   "soft_keyboard": "f8",
   "pt_on": "f9",
   "pt_off": "f10",
   "pt_block": "f11",
   "stop": "f12",
-  "auto_center_delay": 800
+  "auto_center_delay": 1500
 }

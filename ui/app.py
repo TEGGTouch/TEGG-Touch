@@ -212,6 +212,7 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             auto_center=self.auto_center,
             init_x=self.run_toolbar_x,
             init_y=self.run_toolbar_y,
+            hotkeys=getattr(self, '_hotkeys', None),
         )
         if self.run_toolbar_win:
             self.run_toolbar_win.lift()
@@ -264,8 +265,9 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
     def to_run(self):
         self.current_mode = 'run'
         self.is_hidden = False
-        # 每次进入运行模式时重新读取回中延迟（编辑模式中可能已修改设置）
+        # 每次进入运行模式时重新读取所有快捷键配置（编辑模式中可能已修改设置）
         _hk = load_hotkeys()
+        self._hotkeys = _hk
         self.AUTO_CENTER_DELAY = _hk.get("auto_center_delay", 1500) / 1000.0
         self.redraw_all()
         self.setup_ui_mode()

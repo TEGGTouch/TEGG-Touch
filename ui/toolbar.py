@@ -547,7 +547,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
 # ─── 运行模式工具栏 ──────────────────────────────────────────────
 
 def create_run_toolbar(parent, screen_w, screen_h, *,
-                       on_edit, on_passthrough, click_through=PT_ON,
+                       on_edit, on_passthrough, click_through=PT_ON, hotkeys=None,
                        set_window_style=None,
                        on_toggle_buttons=None, buttons_visible=True,
                        on_toggle_auto_center=None, auto_center=False,
@@ -645,6 +645,16 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
         else:
             # === 展开状态 ===
             
+            # 从 hotkeys 参数读取用户自定义按键名（用于按钮标签显示）
+            _hk = hotkeys or {}
+            _K_AC   = _hk.get('auto_center', 'F6').upper()
+            _K_VIS  = _hk.get('toggle_buttons', 'F7').upper()
+            _K_KB   = _hk.get('soft_keyboard', 'F8').upper()
+            _K_PTON = _hk.get('pt_on', 'F9').upper()
+            _K_PTOFF = _hk.get('pt_off', 'F10').upper()
+            _K_PTBLK = _hk.get('pt_block', 'F11').upper()
+            _K_STOP = _hk.get('stop', 'F12').upper()
+
             # 2. 功能区起始 X (左间距 10px)
             bx = DRAG_ZONE_W + 10
             
@@ -710,7 +720,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             ac_bg = C_GREEN if ac_on else C_GRAY
             ac_bg_h = C_GREEN_H if ac_on else C_GRAY_H
             ac_icon = "\uE7C9" if ac_on else "\uEA3A"
-            ac_text = "\u56de\u4e2dON [F6]" if ac_on else "\u56de\u4e2dOFF [F6]"
+            ac_text = f"\u56de\u4e2dON [{_K_AC}]" if ac_on else f"\u56de\u4e2dOFF [{_K_AC}]"
             ac_fg = "#FFF" if ac_on else "#E0E0E0"
 
             rrect(c, bx, by, _AC_W, BTN_H_RUN, BTN_R, fill=ac_bg, outline="", tags=(ac_tag, ac_tag+"_bg"))
@@ -749,7 +759,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             vis_tag = "run_vis"
             vis_on = state["buttons_visible"]
             vis_icon = "\uED1A" if vis_on else "\uE7B3"
-            vis_text = "\u9690\u85cf\u6309\u952e [F7]" if vis_on else "\u663e\u793a\u6309\u952e [F7]"
+            vis_text = f"\u9690\u85cf\u6309\u952e [{_K_VIS}]" if vis_on else f"\u663e\u793a\u6309\u952e [{_K_VIS}]"
 
             rrect(c, bx, by, _VIS_W, BTN_H_RUN, BTN_R, fill=C_GRAY, outline="", tags=(vis_tag, vis_tag+"_bg"))
             vis_cy = by + BTN_H_RUN // 2
@@ -784,7 +794,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                 from ui.virtual_keyboard import toggle_soft_keyboard
                 toggle_soft_keyboard(top, mode="input")
 
-            _run_btn(bx, _KB_BTN_W, "\u8f6f\u952e\u76d8 [F8]", "\uE765", "btn_kb", C_GRAY, _toggle_kb_run, font_size=_RUN_FS, bold=False)
+            _run_btn(bx, _KB_BTN_W, f"\u8f6f\u952e\u76d8 [{_K_KB}]", "\uE765", "btn_kb", C_GRAY, _toggle_kb_run, font_size=_RUN_FS, bold=False)
             bx += _KB_BTN_W + GAP
 
             # --- 4. 穿透模式 (三态循环按钮: PT_ON→PT_OFF→PT_BLOCK) ---
@@ -797,9 +807,9 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             C_BLUE_H = "#2196F3"
 
             _PT_MAP = {
-                PT_ON:    {"bg": C_GRAY,    "bg_h": C_GRAY_H,  "icon": "\uE73E", "text": "\u7a7f\u900fON [F9]",   "fg": "#E0E0E0"},
-                PT_OFF:   {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE739", "text": "\u7a7f\u900fOFF [F10]", "fg": "#FFF"},
-                PT_BLOCK: {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE72E", "text": "\u4e0d\u7a7f\u900f [F11]",  "fg": "#FFF"},
+                PT_ON:    {"bg": C_GRAY,    "bg_h": C_GRAY_H,  "icon": "\uE73E", "text": f"\u7a7f\u900fON [{_K_PTON}]",   "fg": "#E0E0E0"},
+                PT_OFF:   {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE739", "text": f"\u7a7f\u900fOFF [{_K_PTOFF}]", "fg": "#FFF"},
+                PT_BLOCK: {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE72E", "text": f"\u4e0d\u7a7f\u900f [{_K_PTBLK}]",  "fg": "#FFF"},
             }
             _pm = _PT_MAP.get(_ct, _PT_MAP[PT_ON])
 
@@ -842,7 +852,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
 
             # --- 6. 停止 [F12] ---
             _EXIT_W = 130
-            _run_btn(bx, _EXIT_W, "\u505c\u6b62 [F12]", "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
+            _run_btn(bx, _EXIT_W, f"\u505c\u6b62 [{_K_STOP}]", "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
             bx += _EXIT_W + 10
 
             # ── 运行工具栏 Tooltip 绑定 (黑色系) ──────────────

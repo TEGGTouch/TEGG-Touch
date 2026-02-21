@@ -52,42 +52,45 @@ class RunEngineMixin:
     def update_loop(self):
         try:
             if self.current_mode == 'run':
-                # 0. 全局快捷键检测 (F12)
-                if is_key_pressed('f12'):
+                # 0. 读取用户自定义快捷键配置（to_run 时已存入 self._hotkeys）
+                _hk = getattr(self, '_hotkeys', {})
+
+                # 0a. 停止/回编辑 快捷键
+                if is_key_pressed(_hk.get('stop', 'f12')):
                     self.to_edit()
                     time.sleep(0.3)
                     self.root.after(1, self.update_loop)
                     return
 
-                # 0b. 隐藏/显示按键 (F7)
-                if is_key_pressed('f7'):
+                # 0b. 隐藏/显示按键 快捷键
+                if is_key_pressed(_hk.get('toggle_buttons', 'f7')):
                     self.toggle_buttons_visibility(self.buttons_hidden)
                     self._show_run_toolbar()
                     time.sleep(0.3)
 
-                # 0c. 软键盘 (F8)
-                if is_key_pressed('f8'):
+                # 0c. 软键盘 快捷键
+                if is_key_pressed(_hk.get('soft_keyboard', 'f8')):
                     from ui.virtual_keyboard import toggle_soft_keyboard
                     toggle_soft_keyboard(self.run_toolbar_win or self.root, mode="input")
                     time.sleep(0.3)
 
-                # 0e. 自动回中 (F6)
-                if is_key_pressed('f6'):
+                # 0e. 自动回中 快捷键
+                if is_key_pressed(_hk.get('auto_center', 'f6')):
                     self.toggle_auto_center(not self.auto_center)
                     self._show_run_toolbar()
                     time.sleep(0.3)
 
-                # 0d. 穿透模式快捷键 (F9/F10/F11 直接切换)
+                # 0d. 穿透模式快捷键 (直接切换)
                 _pt_switched = False
-                if is_key_pressed('f9') and self.click_through != PT_ON:
+                if is_key_pressed(_hk.get('pt_on', 'f9')) and self.click_through != PT_ON:
                     self.toggle_click_through_sync(PT_ON)
                     self._show_run_toolbar()
                     _pt_switched = True
-                elif is_key_pressed('f10') and self.click_through != PT_OFF:
+                elif is_key_pressed(_hk.get('pt_off', 'f10')) and self.click_through != PT_OFF:
                     self.toggle_click_through_sync(PT_OFF)
                     self._show_run_toolbar()
                     _pt_switched = True
-                elif is_key_pressed('f11') and self.click_through != PT_BLOCK:
+                elif is_key_pressed(_hk.get('pt_block', 'f11')) and self.click_through != PT_BLOCK:
                     self.toggle_click_through_sync(PT_BLOCK)
                     self._show_run_toolbar()
                     _pt_switched = True
