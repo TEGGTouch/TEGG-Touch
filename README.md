@@ -126,10 +126,6 @@ TEGGTouch/
 │   ├── 默认配置.json
 │   └── 茶叶蛋.json
 │
-├── presets/                 # 预设配置（可导入）
-│   ├── 鬼泣1.json
-│   └── 鬼泣2.json
-│
 ├── assets/                 # 静态资源
 │   ├── cursor.png          # 穿透ON 光标
 │   ├── cursor_off.png      # 穿透OFF 光标
@@ -139,10 +135,8 @@ TEGGTouch/
 ├── docs/                   # 开发文档
 │   └── 编辑工具栏架构分析.md
 │
-└── _archive/               # 历史版本存档
-    ├── FKB.exe             # v1.0 打包版
-    ├── FKB1.1.exe          # v1.1 打包版
-    └── ...
+└── settings/               # 设置
+    └── hotkeys.json        # 快捷键配置
 ```
 
 ---
@@ -240,7 +234,7 @@ cd TEGGTouch
 pyinstaller --onefile --windowed --name "TEGGTouch蛋挞" \
   --add-data "profiles;profiles" \
   --add-data "assets;assets" \
-  --add-data "presets;presets" \
+  --add-data "settings;settings" \
   main.py
 ```
 
