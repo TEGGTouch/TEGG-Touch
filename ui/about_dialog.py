@@ -9,7 +9,7 @@ import os
 from PIL import Image, ImageTk
 
 from core.constants import (
-    APP_TITLE, APP_VERSION,
+    APP_VERSION, get_app_title,
     COLOR_TOOLBAR_TRANSPARENT, TOOLBAR_RADIUS,
 )
 from ui.widgets import (
@@ -17,22 +17,29 @@ from ui.widgets import (
     C_PM_BG, C_CLOSE, C_CLOSE_H, C_AMBER,
     icon_font, rrect, create_modal_overlay,
 )
+from core.i18n import t
 
 # 最后更新日期
-_LAST_UPDATE = "2026.02.19"
+_LAST_UPDATE = "2026.02.22"
 
-# 产品介绍文本
-_DESC_TEXT = (
-    "TEGG Touch 蛋挞 是一款永久免费、完全开源的无障碍辅助软件。\n\n"
-    "蛋挞（TEGG Touch）仅仅用鼠标简单的移动、点击，就能替代大部分的游戏操作。"
-    "希望能给有需求的用户提供帮助，帮到更多的人，让大家都能体会到游戏的乐趣。"
-)
 
-_QR_HINT = "扫码加我微信好友（茶叶蛋TEGG）\n问题 / 建议 / 反馈，看到一定会解答 :)"
+# ─── 单例守卫 ──────────────────────────────────────────────────
+_current_dialog = None
 
 
 def open_about_dialog(parent):
     """打开关于弹窗。"""
+    global _current_dialog
+    if _current_dialog:
+        try:
+            if _current_dialog.winfo_exists():
+                _current_dialog.lift()
+                _current_dialog.focus_set()
+                return _current_dialog
+        except Exception:
+            pass
+        _current_dialog = None
+
     overlay = create_modal_overlay(parent)
 
     PADDING = 30
@@ -50,7 +57,12 @@ def open_about_dialog(parent):
     top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
     top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
 
+    _current_dialog = top
+
     def _destroy_all(e):
+        global _current_dialog
+        if e.widget == top:
+            _current_dialog = None
         try:
             overlay.destroy()
         except Exception:
@@ -99,7 +111,7 @@ def open_about_dialog(parent):
     mid_x = width // 2
 
     # 标题: 🎮 TEGG Touch 蛋挞
-    c.create_text(mid_x, cy, text=f"🎮  {APP_TITLE}",
+    c.create_text(mid_x, cy, text=f"🎮  {get_app_title()}",
                   font=(FF, 18, "bold"), fill=C_AMBER, tags="bg")
     cy += 34
 
@@ -109,7 +121,7 @@ def open_about_dialog(parent):
     cy += 22
 
     # 最后更新
-    c.create_text(mid_x, cy, text=f"最后更新：{_LAST_UPDATE}",
+    c.create_text(mid_x, cy, text=t("about.last_update", date=_LAST_UPDATE),
                   font=(FF, 9), fill="#666", tags="bg")
     cy += 30
 
@@ -119,7 +131,7 @@ def open_about_dialog(parent):
 
     # 产品介绍 (使用 tk.Label 支持 wraplength)
     desc_w = width - PADDING * 2
-    desc_lbl = tk.Label(top, text=_DESC_TEXT, bg=C_PM_BG, fg="#CCC",
+    desc_lbl = tk.Label(top, text=t("about.description"), bg=C_PM_BG, fg="#CCC",
                         font=(FF, 10), anchor="nw", justify="left",
                         wraplength=desc_w)
     desc_lbl.place(x=PADDING, y=cy, width=desc_w)
@@ -156,17 +168,40 @@ def open_about_dialog(parent):
         rrect(c, qr_x, qr_y, QR_SIZE, QR_SIZE, 8,
               fill="#3A3A3A", outline="#555", width=1, tags="bg")
         c.create_text(qr_x + QR_SIZE // 2, qr_y + QR_SIZE // 2,
-                      text="微信二维码\n(图片缺失)", font=(FF, 10), fill="#888", tags="bg")
+                      text=t("about.qr_missing"), font=(FF, 10), fill="#888", tags="bg")
 
     # 右侧说明文字 (垂直居中于二维码区域)
     txt_x = qr_x + QR_SIZE + 14
     txt_w = width - txt_x - PADDING
     txt_y = qr_y
 
-    hint_lbl = tk.Label(top, text=_QR_HINT, bg=C_PM_BG, fg="#AAA",
+    hint_lbl = tk.Label(top, text=t("about.qr_hint"), bg=C_PM_BG, fg="#AAA",
                         font=(FF, 10), anchor="nw", justify="left",
                         wraplength=txt_w)
     hint_lbl.place(x=txt_x, y=txt_y, width=txt_w)
     hint_lbl.lift()
+
+    # ── 邮箱 & GitHub (QR右侧下方) ──
+    email_lbl = tk.Label(top, text=t("about.email"), bg=C_PM_BG, fg="#888",
+                         font=(FF, 9), anchor="nw", justify="left",
+                         cursor="hand2")
+    email_lbl.place(x=txt_x, y=txt_y + 70, width=txt_w)
+    email_lbl.lift()
+
+    def _open_email(e):
+        import webbrowser
+        webbrowser.open("mailto:life.is.like.a.boat@gmail.com")
+    email_lbl.bind("<Button-1>", _open_email)
+
+    github_lbl = tk.Label(top, text=t("about.github"), bg=C_PM_BG, fg="#888",
+                          font=(FF, 9), anchor="nw", justify="left",
+                          cursor="hand2")
+    github_lbl.place(x=txt_x, y=txt_y + 92, width=txt_w)
+    github_lbl.lift()
+
+    def _open_github(e):
+        import webbrowser
+        webbrowser.open("https://github.com/TEGGTouch/TEGG-Touch/releases")
+    github_lbl.bind("<Button-1>", _open_github)
 
     return top

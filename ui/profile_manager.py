@@ -7,6 +7,7 @@ import tkinter as tk
 import tkinter.messagebox as messagebox
 import tkinter.filedialog as filedialog
 
+from core.i18n import t
 from core.constants import COLOR_TOOLBAR_TRANSPARENT, TOOLBAR_RADIUS
 from core.config_manager import (
     list_profiles, get_active_profile_name,
@@ -73,7 +74,7 @@ def open_profile_manager(parent, on_switch):
 
     # Header
     padding = 20
-    c.create_text(padding, 30, text="\u65b9\u6848\u7ba1\u7406",
+    c.create_text(padding, 30, text=t("profile.manager_title"),
                   font=(FF, 12, "bold"), fill="white", anchor="w", tags="pm_title")
     c.tag_bind("pm_title", "<Button-1>", _ds)
     c.tag_bind("pm_title", "<B1-Motion>", _dm)
@@ -168,7 +169,7 @@ def open_profile_manager(parent, on_switch):
 
     def _import_profile():
         path = filedialog.askopenfilename(
-            title="导入方案",
+            title=t("profile.import_title"),
             filetypes=[("JSON", "*.json"), ("All", "*.*")],
             parent=top,
         )
@@ -179,14 +180,14 @@ def open_profile_manager(parent, on_switch):
             on_switch(new_name)
             refresh_list()
         else:
-            messagebox.showerror("错误", "导入失败，JSON 格式无效", parent=top)
+            messagebox.showerror(t("dialog.error"), t("profile.error_import_invalid"), parent=top)
 
     bx = padding
-    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE710", "\u65b0\u5efa", "pm_btn_new", _new_profile)
+    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE710", t("profile.new"), "pm_btn_new", _new_profile)
     bx += btn_w + btn_gap
-    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE8C8", "\u590d\u5236", "pm_btn_copy", _copy_profile)
+    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE8C8", t("profile.copy"), "pm_btn_copy", _copy_profile)
     bx += btn_w + btn_gap
-    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE898", "\u5bfc\u5165", "pm_btn_imp", _import_profile)
+    _draw_pm_btn(bx, btn_y, btn_w, btn_h, "\uE898", t("profile.import_btn"), "pm_btn_imp", _import_profile)
 
     refresh_list()
 
@@ -263,9 +264,9 @@ def _draw_profile_row(parent, name, is_active, refresh_cb, switch_cb, top_win):
             if delete_profile(name):
                 refresh_cb()
             else:
-                messagebox.showerror("\u9519\u8bef", "\u5220\u9664\u5931\u8d25\uff0c\u53ef\u80fd\u662f\u5f53\u524d\u6d3b\u8dc3\u65b9\u6848")
+                messagebox.showerror(t("dialog.error"), t("profile.error_delete_active"))
 
-        create_styled_yesno_dialog(parent, "\u786e\u8ba4", f"\u786e\u5b9a\u5220\u9664\u65b9\u6848 '{name}' \u5417?", do_del)
+        create_styled_yesno_dialog(parent, t("dialog.confirm"), t("profile.confirm_delete", name=name), do_del)
 
     btn_del = tk.Label(row_frame, text="\uE74D" if ifont else "✕",
                        bg=bg_color, fg="#888" if is_active else fg_color,
@@ -280,7 +281,7 @@ def _draw_profile_row(parent, name, is_active, refresh_cb, switch_cb, top_win):
     # Export
     def _export():
         path = filedialog.asksaveasfilename(
-            title=f"导出方案 '{name}'",
+            title=t("profile.export_title", name=name),
             initialfile=f"{name}.json",
             defaultextension=".json",
             filetypes=[("JSON", "*.json"), ("All", "*.*")],
@@ -289,9 +290,9 @@ def _draw_profile_row(parent, name, is_active, refresh_cb, switch_cb, top_win):
         if not path:
             return
         if export_profile(name, path):
-            messagebox.showinfo("成功", f"方案 '{name}' 已导出", parent=top_win)
+            messagebox.showinfo(t("dialog.success"), t("profile.export_success", name=name), parent=top_win)
         else:
-            messagebox.showerror("错误", "导出失败", parent=top_win)
+            messagebox.showerror(t("dialog.error"), t("profile.error_export"), parent=top_win)
 
     btn_exp = tk.Label(row_frame, text="\uE896" if ifont else "↓",
                        bg=bg_color, fg=fg_color,
@@ -319,12 +320,12 @@ def _show_new_profile_dialog(parent, refresh_cb, switch_cb):
             refresh_cb()
             return True
         else:
-            messagebox.showerror("\u9519\u8bef", "\u65b9\u6848\u5df2\u5b58\u5728", parent=parent)
+            messagebox.showerror(t("dialog.error"), t("profile.error_exists"), parent=parent)
             return False
 
-    top, entry = create_styled_dialog(parent, "\u65b0\u5efa\u65b9\u6848", 360, 220,
+    top, entry = create_styled_dialog(parent, t("profile.new_title"), 360, 220,
                                       on_confirm=lambda val: top.destroy() if on_ok(val) else None,
-                                      label_text="\u65b0\u65b9\u6848\u540d\u79f0:")
+                                      label_text=t("profile.new_name_label"))
 
 
 def _show_copy_profile_dialog(parent, refresh_cb, switch_cb):
@@ -340,13 +341,13 @@ def _show_copy_profile_dialog(parent, refresh_cb, switch_cb):
             refresh_cb()
             return True
         else:
-            messagebox.showerror("\u9519\u8bef", "\u65b9\u6848\u5df2\u5b58\u5728", parent=parent)
+            messagebox.showerror(t("dialog.error"), t("profile.error_exists"), parent=parent)
             return False
 
-    top, entry = create_styled_dialog(parent, "\u590d\u5236\u65b9\u6848", 360, 220,
+    top, entry = create_styled_dialog(parent, t("profile.copy_title"), 360, 220,
                                       on_confirm=lambda val: top.destroy() if on_ok(val) else None,
                                       initial_value=f"{base_name}_copy",
-                                      label_text=f"\u590d\u5236 '{base_name}' \u4e3a:")
+                                      label_text=t("profile.copy_label", name=base_name))
 
 
 def _show_rename_dialog(parent, old_name, refresh_cb):
@@ -356,10 +357,10 @@ def _show_rename_dialog(parent, old_name, refresh_cb):
             refresh_cb()
             return True
         else:
-            messagebox.showerror("\u9519\u8bef", "\u91cd\u547d\u540d\u5931\u8d25\uff0c\u540d\u79f0\u53ef\u80fd\u5df2\u5b58\u5728", parent=parent)
+            messagebox.showerror(t("dialog.error"), t("profile.error_rename_exists"), parent=parent)
             return False
 
-    top, entry = create_styled_dialog(parent, "\u91cd\u547d\u540d", 360, 220,
+    top, entry = create_styled_dialog(parent, t("profile.rename_title"), 360, 220,
                                       on_confirm=lambda val: top.destroy() if on_ok(val) else None,
                                       initial_value=old_name,
-                                      label_text=f"\u5c06 '{old_name}' \u91cd\u547d\u540d\u4e3a:")
+                                      label_text=t("profile.rename_label", name=old_name))

@@ -15,6 +15,7 @@ import ctypes
 import traceback
 
 from core.constants import COLOR_TOOLBAR_TRANSPARENT, TOOLBAR_RADIUS
+from core.i18n import t
 from ui.widgets import (
     FF, IS, BTN_R,
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_AMBER_D,
@@ -23,7 +24,7 @@ from ui.widgets import (
 )
 
 # ─── 尺寸常量 ────────────────────────────────────────────────
-KEY_SIZE   = 40   # 最小按键尺寸
+KEY_SIZE   = 40   # 最小按键尺寸1fdw
 KEY_GAP    = 4    # 按键间距
 KEY_UNIT   = KEY_SIZE + KEY_GAP  # 44px
 PADDING    = 10
@@ -550,7 +551,7 @@ def open_soft_keyboard(toolbar_win, *, mode="input", on_pick=None,
         rrect(c, PADDING, bar_y, clr_w, clr_h, 6,
               fill=C_CLOSE, outline="", tags=(clr_tag, clr_tag + "_bg"))
         c.create_text(PADDING + clr_w // 2, bar_y + clr_h // 2,
-                      text="清除（不设快捷键）", font=(FF, -14), fill="#FFF", tags=(clr_tag,))
+                      text=t("vkb.clear"), font=(FF, -14), fill="#FFF", tags=(clr_tag,))
         def _clr_en(e): c.itemconfigure(clr_tag + "_bg", fill=C_CLOSE_H)
         def _clr_lv(e): c.itemconfigure(clr_tag + "_bg", fill=C_CLOSE)
         c.tag_bind(clr_tag, "<Enter>", _clr_en)
@@ -563,7 +564,7 @@ def open_soft_keyboard(toolbar_win, *, mode="input", on_pick=None,
         rrect(c, can_x, bar_y, can_w, clr_h, 6,
               fill=C_GRAY, outline="", tags=(can_tag, can_tag + "_bg"))
         c.create_text(can_x + can_w // 2, bar_y + clr_h // 2,
-                      text="取消", font=(FF, -14), fill="#EEE", tags=(can_tag,))
+                      text=t("vkb.cancel"), font=(FF, -14), fill="#EEE", tags=(can_tag,))
         def _can_en(e): c.itemconfigure(can_tag + "_bg", fill=C_GRAY_H)
         def _can_lv(e): c.itemconfigure(can_tag + "_bg", fill=C_GRAY)
         c.tag_bind(can_tag, "<Enter>", _can_en)

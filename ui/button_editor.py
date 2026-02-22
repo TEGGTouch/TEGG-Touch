@@ -8,6 +8,7 @@ import tkinter as tk
 import tkinter.font as tkFont
 
 from core.constants import COLOR_TOOLBAR_TRANSPARENT, TOOLBAR_RADIUS
+from core.i18n import t
 from ui.widgets import (
     FF, FS, IS, BTN_H, BTN_R, CLOSE_SIZE, CLOSE_M,
     C_GRAY, C_GRAY_H, C_AMBER, C_AMBER_D,
@@ -29,20 +30,34 @@ ACTION_COLORS = {
 }
 
 # ─── 4 区块字段定义 ────────────────────────────────────────────
-BLOCK_1 = [('name', '按钮名称', False)]
-BLOCK_2 = [('hover', '悬停时', True)]
+BLOCK_1 = [('name', None, False)]  # label set dynamically via t('editor.name')
+BLOCK_2 = [('hover', None, True)]  # label set dynamically via t('editor.hover')
 BLOCK_3 = [
-    ('lclick',    '左键', True),
-    ('rclick',    '右键', True),
-    ('mclick',    '中键', True),
-    ('xbutton1',  '侧键1', True),
-    ('xbutton2',  '侧键2', True),
-    ('wheelup',   '滚轮向上', True),
-    ('wheeldown', '滚轮向下', True),
+    ('lclick',    None, True),
+    ('rclick',    None, True),
+    ('mclick',    None, True),
+    ('xbutton1',  None, True),
+    ('xbutton2',  None, True),
+    ('wheelup',   None, True),
+    ('wheeldown', None, True),
 ]
 BLOCK_GAP = 40
 
 # ─── 行布局常量 ────────────────────────────────────────────────
+
+# Dynamic label mapping for i18n
+def _field_label(field_name):
+    """Get translated label for a field name."""
+    _LABEL_MAP = {
+        'name': 'editor.name', 'hover': 'editor.hover',
+        'lclick': 'editor.lclick', 'rclick': 'editor.rclick',
+        'mclick': 'editor.mclick', 'xbutton1': 'editor.xbutton1',
+        'xbutton2': 'editor.xbutton2', 'wheelup': 'editor.wheelup',
+        'wheeldown': 'editor.wheeldown',
+    }
+    key = _LABEL_MAP.get(field_name)
+    return t(key) if key else field_name
+
 ROW_H = 50          # 每行固定高度
 DOT_W = 20          # 色块列宽
 LABEL_W = 70        # 标签列宽
@@ -52,18 +67,18 @@ INPUT_W_SHRINK = 0  # 输入框右侧缩进
 
 # ─── 按键分类数据 ──────────────────────────────────────────────
 KEY_CATEGORIES = [
-    ("字母", [chr(c) for c in range(ord('a'), ord('z') + 1)]),
-    ("数字", [str(i) for i in range(10)]),
-    ("F键", [f"f{i}" for i in range(1, 13)]),
-    ("方向键", ["up", "down", "left", "right"]),
-    ("修饰键", ["ctrl", "shift", "alt", "windows", "caps lock", "menu"]),
-    ("功能键", ["space", "enter", "esc", "tab", "backspace"]),
-    ("标点符号", [",", ".", "/", ";", "'", "[", "]", "\\", "-", "=", "`"]),
-    ("其他", ["home", "end", "pageup", "pagedown", "insert", "delete",
+    (t("key_cat.letters"), [chr(c) for c in range(ord('a'), ord('z') + 1)]),
+    (t("key_cat.numbers"), [str(i) for i in range(10)]),
+    (t("key_cat.fkeys"), [f"f{i}" for i in range(1, 13)]),
+    (t("key_cat.arrows"), ["up", "down", "left", "right"]),
+    (t("key_cat.modifiers"), ["ctrl", "shift", "alt", "windows", "caps lock", "menu"]),
+    (t("key_cat.functions"), ["space", "enter", "esc", "tab", "backspace"]),
+    (t("key_cat.punctuation"), [",", ".", "/", ";", "'", "[", "]", "\\", "-", "=", "`"]),
+    (t("key_cat.other"), ["home", "end", "pageup", "pagedown", "insert", "delete",
               "print screen", "scroll lock", "pause"]),
-    ("小键盘", [f"num {i}" for i in range(10)] + ["num lock",
+    (t("key_cat.numpad"), [f"num {i}" for i in range(10)] + ["num lock",
                "num *", "num +", "num -", "num /", "num .", "num enter"]),
-    ("媒体键", ["play/pause media", "stop media", "next track", "previous track",
+    (t("key_cat.media"), ["play/pause media", "stop media", "next track", "previous track",
                "volume up", "volume down", "volume mute"]),
 ]
 
@@ -147,8 +162,23 @@ class TagInput(tk.Frame):
 #  主函数
 # ═══════════════════════════════════════════════════════════════
 
+# ─── 单例守卫 ──────────────────────────────────────────────────
+_current_editor = None
+
+
 def open_center_band_editor(parent, btn, *, on_delete, on_copy=None):
     """打开回中带专用简单弹窗（说明 + 复制/删除按钮）。"""
+    global _current_editor
+    if _current_editor:
+        try:
+            if _current_editor.winfo_exists():
+                _current_editor.lift()
+                _current_editor.focus_set()
+                return _current_editor
+        except Exception:
+            pass
+        _current_editor = None
+
     overlay = create_modal_overlay(parent)
 
     width = 400
@@ -165,7 +195,12 @@ def open_center_band_editor(parent, btn, *, on_delete, on_copy=None):
     top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
     top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
 
+    _current_editor = top
+
     def _destroy_all(e):
+        global _current_editor
+        if e.widget == top:
+            _current_editor = None
         try: overlay.destroy()
         except: pass
     top.bind("<Destroy>", _destroy_all, add="+")
@@ -310,7 +345,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     c.tag_bind("bg", "<B1-Motion>", _dm)
 
     # ── 标题 ──
-    c.create_text(PADDING, 25, text="编辑按钮", font=(FF, 11, "bold"),
+    c.create_text(PADDING, 25, text=t("editor.title"), font=(FF, 11, "bold"),
                   fill="white", anchor="w", tags="title")
     c.tag_bind("title", "<Button-1>", _ds)
     c.tag_bind("title", "<B1-Motion>", _dm)
@@ -332,7 +367,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
 
     # ── 通栏 Tip（标题下方）──
     tip_y = 50
-    tip_text = "💡 点击右侧按键添加到输入框 ｜ 名称框可直接输入 ｜ Backspace 删除"
+    tip_text = t("editor.tip")
     tip_lbl = tk.Label(top, text=tip_text, bg=C_PM_BG, fg="#777",
                        font=(FF, 9), anchor="w")
     tip_lbl.place(x=PADDING, y=tip_y, width=width - PADDING * 2)
@@ -374,6 +409,8 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
 
     def _build_row(parent_frame, local_y, key, label_text, is_tag):
         """在 parent_frame 中用 place 构建一行，返回控件。"""
+        if label_text is None:
+            label_text = _field_label(key)
         if key not in btn:
             btn[key] = ''
 
@@ -583,8 +620,8 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     delay_frame.place(x=form_x, y=cur_y, width=form_w, height=delay_group_h)
     delay_frame.lift()
 
-    h_trig = _create_delay_group(delay_frame, 0, "悬停-触发延迟", "hover_delay", trigger_val)
-    _create_delay_group(delay_frame, h_trig + _DELAY_GROUP_GAP, "悬停-释放延迟",
+    h_trig = _create_delay_group(delay_frame, 0, t("editor.hover_delay"), "hover_delay", trigger_val)
+    _create_delay_group(delay_frame, h_trig + _DELAY_GROUP_GAP, t("editor.hover_release_delay"),
                         "hover_release_delay", release_val)
 
     cur_y += delay_group_h + BLOCK_GAP - 10
@@ -610,12 +647,12 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         # 灰色禁用状态
         rrect(c, PADDING, row2_y, half_w, btn_h, BTN_R,
               fill="#3A3A3A", outline="", tags=("del", "del_bg"))
-        c.create_text(PADDING + half_w // 2, row2_y + btn_h // 2, text="删除",
+        c.create_text(PADDING + half_w // 2, row2_y + btn_h // 2, text=t("editor.delete"),
                       font=(FF, FS), fill="#666666", tags=("del",))
     else:
         rrect(c, PADDING, row2_y, half_w, btn_h, BTN_R,
               fill="#6E1E1E", outline="", tags=("del", "del_bg"))
-        c.create_text(PADDING + half_w // 2, row2_y + btn_h // 2, text="删除",
+        c.create_text(PADDING + half_w // 2, row2_y + btn_h // 2, text=t("editor.delete"),
                       font=(FF, FS), fill="white", tags=("del",))
         c.tag_bind("del", "<Enter>", lambda e: c.itemconfigure("del_bg", fill="#8B2020"))
         c.tag_bind("del", "<Leave>", lambda e: c.itemconfigure("del_bg", fill="#6E1E1E"))
@@ -625,7 +662,7 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
     save_x = PADDING + half_w + btn_gap
     rrect(c, save_x, row2_y, half_w, btn_h, BTN_R,
           fill=C_CYBER, outline="", tags=("save", "save_bg"))
-    c.create_text(save_x + half_w // 2, row2_y + btn_h // 2, text="保存",
+    c.create_text(save_x + half_w // 2, row2_y + btn_h // 2, text=t("editor.save"),
                   font=(FF, FS), fill="white", tags=("save",))
     c.tag_bind("save", "<Enter>", lambda e: c.itemconfigure("save_bg", fill=C_CYBER_H))
     c.tag_bind("save", "<Leave>", lambda e: c.itemconfigure("save_bg", fill=C_CYBER))
@@ -659,10 +696,10 @@ def open_button_editor(parent, btn, *, on_save, on_delete, on_copy, set_window_s
         text_x = icon_x + 20 + 12
         c.create_text(icon_x, copy_cy, text="\uE8C8",
                       font=(ifont, IS), fill="#E0E0E0", anchor="center", tags=("copy",))
-        c.create_text(text_x, copy_cy, text="复制按钮",
+        c.create_text(text_x, copy_cy, text=t("editor.copy"),
                       font=(FF, FS), fill="#E0E0E0", anchor="w", tags=("copy",))
     else:
-        c.create_text(PADDING + total_w // 2, copy_cy, text="复制按钮",
+        c.create_text(PADDING + total_w // 2, copy_cy, text=t("editor.copy"),
                       font=(FF, FS, "bold"), fill="#E0E0E0", tags=("copy",))
     c.tag_bind("copy", "<Enter>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY_H))
     c.tag_bind("copy", "<Leave>", lambda e: c.itemconfigure("copy_bg", fill=C_GRAY))

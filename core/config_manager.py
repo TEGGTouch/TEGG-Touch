@@ -550,6 +550,9 @@ def load_hotkeys() -> dict:
         for k in DEFAULT_HOTKEYS:
             if k in data:
                 result[k] = data[k]
+        # 保留 language 字段（不在 DEFAULT_HOTKEYS 中）
+        if 'language' in data:
+            result['language'] = data['language']
         logger.info(f"快捷键配置加载成功: {HOTKEYS_FILE}")
     except Exception as e:
         logger.error(f"快捷键配置加载失败: {e}")
@@ -557,11 +560,20 @@ def load_hotkeys() -> dict:
 
 
 def save_hotkeys(hotkeys: dict) -> bool:
-    """保存全局快捷键配置。"""
+    """保存全局快捷键配置（合并写入，保留 language 等额外字段）。"""
     try:
+        # 先读取现有文件，合并保存（避免丢失 language 等字段）
+        existing = {}
+        if os.path.exists(HOTKEYS_FILE):
+            try:
+                with open(HOTKEYS_FILE, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+        existing.update(hotkeys)
         os.makedirs(os.path.dirname(HOTKEYS_FILE) or '.', exist_ok=True)
         with open(HOTKEYS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(hotkeys, f, ensure_ascii=False, indent=2)
+            json.dump(existing, f, ensure_ascii=False, indent=2)
         logger.info(f"快捷键配置保存成功: {HOTKEYS_FILE}")
         return True
     except Exception as e:

@@ -4,6 +4,7 @@ TEGG Touch - 按钮管理 Mixin
 负责按钮的增删改、空位查找、拖拽/缩放、Toast 提示。
 """
 
+from core.i18n import t
 from core.constants import GRID_SIZE, BTN_TYPE_CENTER_BAND
 from ui.canvas_renderer import update_button_coords
 from ui.edit_panel import open_button_editor, open_center_band_editor
@@ -24,13 +25,13 @@ class ButtonManagerMixin:
         new_btn = {
             'x': cx, 'y': cy,
             'w': w, 'h': h,
-            'name': '按钮', 'hover_delay': 200, 'hover_release_delay': 0,
+            'name': t("button_defaults.name"), 'hover_delay': 200, 'hover_release_delay': 0,
             'hover': '', 'lclick': '', 'rclick': '', 'mclick': '',
             'wheelup': '', 'wheeldown': '',
         }
         self.buttons.append(new_btn)
         self.redraw_all()
-        self.show_toast("✓ 创建成功")
+        self.show_toast(t("toast.created"))
 
     def add_center_band_btn(self):
         """新建回中带按钮。"""
@@ -43,14 +44,14 @@ class ButtonManagerMixin:
         new_btn = {
             'x': cx, 'y': cy,
             'w': w, 'h': h,
-            'name': '回中带', 'type': BTN_TYPE_CENTER_BAND,
+            'name': t("button_defaults.center_band"), 'type': BTN_TYPE_CENTER_BAND,
             'hover_delay': 0, 'hover_release_delay': 0,
             'hover': '', 'lclick': '', 'rclick': '', 'mclick': '',
             'wheelup': '', 'wheeldown': '',
         }
         self.buttons.append(new_btn)
         self.redraw_all()
-        self.show_toast("✓ 回中带已创建")
+        self.show_toast(t("toast.center_band_created"))
 
     def edit_btn(self, idx):
         if self.current_mode != 'main':
@@ -72,14 +73,14 @@ class ButtonManagerMixin:
                     nx, ny = src_btn['x'], src_btn['y']
                 new_btn = {
                     'x': nx, 'y': ny, 'w': w, 'h': h,
-                    'name': '回中带', 'type': BTN_TYPE_CENTER_BAND,
+                    'name': t("button_defaults.center_band"), 'type': BTN_TYPE_CENTER_BAND,
                     'hover_delay': 0, 'hover_release_delay': 0,
                     'hover': '', 'lclick': '', 'rclick': '', 'mclick': '',
                     'wheelup': '', 'wheeldown': '',
                 }
                 self.buttons.append(new_btn)
                 self.redraw_all()
-                self.show_toast("✓ 复制成功")
+                self.show_toast(t("toast.copy_success"))
 
             open_center_band_editor(self.root, btn,
                                     on_delete=on_delete_cb,
@@ -103,7 +104,7 @@ class ButtonManagerMixin:
             new_btn = {
                 'x': nx, 'y': ny,
                 'w': w, 'h': h,
-                'name': src_btn.get('name', '按钮'),
+                'name': src_btn.get('name', t("button_defaults.name")),
                 'hover': src_btn.get('hover', ''),
                 'hover_delay': src_btn.get('hover_delay', 200),
                 'hover_release_delay': src_btn.get('hover_release_delay', 0),
@@ -115,7 +116,7 @@ class ButtonManagerMixin:
             }
             self.buttons.append(new_btn)
             self.redraw_all()
-            self.show_toast("✓ 复制成功")
+            self.show_toast(t("toast.copy_success"))
 
         open_button_editor(
             self.root, btn,

@@ -37,8 +37,10 @@ if not exist "dist\TEGGTouch\TEGGTouch.exe" (
 echo [4/4] 复制数据文件到发布目录...
 :: 复制 assets（图片资源）
 xcopy /E /I /Y "assets" "dist\TEGGTouch\assets" >nul
-:: 复制 settings（默认快捷键）
+:: 复制 settings（默认快捷键 + 语言设置）
 xcopy /E /I /Y "settings" "dist\TEGGTouch\settings" >nul
+:: 复制 locales（i18n 翻译文件）
+xcopy /E /I /Y "locales" "dist\TEGGTouch\locales" >nul
 :: 复制默认方案模板
 if not exist "dist\TEGGTouch\core" mkdir "dist\TEGGTouch\core"
 if exist "core\default_profile.json" copy /Y "core\default_profile.json" "dist\TEGGTouch\core\" >nul

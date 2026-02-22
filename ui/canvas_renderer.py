@@ -3,6 +3,7 @@ TEGG Touch 蛋挞 辅助软件 - Canvas 绘制工具
 
 纯绘制函数，不持有状态，接收 canvas 实例作为参数。
 """
+from core.i18n import t
 
 import math
 
@@ -184,7 +185,7 @@ def draw_button(canvas, btn_data, index, show_resize=True, offset_x=0, offset_y=
             width=2, smooth=True, tags=tags_poly,
         )
         # 两行文字：第一行 ⊕ 图标，第二行 "回中带"
-        display_text = "\u2295\n\u56de\u4e2d\u5e26"
+        display_text = t("canvas.center_band_label")
         text = canvas.create_text(
             sx + btn_data['w'] / 2,
             sy + btn_data['h'] / 2,
@@ -334,7 +335,7 @@ def remove_charge_bar(canvas, btn):
     text_id = btn.get('id_text')
     if text_id:
         if is_cb:
-            display_text = "\u2295\n\u56de\u4e2d\u5e26"
+            display_text = t("canvas.center_band_label")
             text_color = COLOR_CENTER_BAND
         else:
             display_text = _format_btn_name(btn.get('name', ''))
@@ -384,7 +385,7 @@ def set_button_visual_state(canvas, btn, state):
         text_color = COLOR_CENTER_BAND if is_cb else COLOR_TEXT
         canvas.itemconfigure(poly_id, fill=fill, outline=outline, width=2)
         if is_cb:
-            display_text = "\u2295\n\u56de\u4e2d\u5e26"
+            display_text = t("canvas.center_band_label")
         else:
             display_text = _format_btn_name(btn.get('name', ''))
         canvas.itemconfigure(text_id, text=display_text, font=FONT_NAME, fill=text_color)
@@ -915,7 +916,7 @@ def draw_floating_ball(canvas):
         fill=COLOR_BALL_CORE, outline="white", width=2, tags="float_ball",
     )
     canvas.create_text(
-        cx, cy + 32, text="展开", fill=COLOR_TEXT,
+        cx, cy + 32, text=t("canvas.expand"), fill=COLOR_TEXT,
         font=("Microsoft YaHei UI", 8, "bold"), tags="float_ball",
     )
 

@@ -9,9 +9,10 @@ import tkinter.font as tkfont
 from core.constants import (
     COLOR_TOOLBAR_TRANSPARENT, TOOLBAR_RADIUS,
 )
+from core.i18n import t, get_font
 
 # ─── 字体常量 ─────────────────────────────────────────────────
-FF = "Microsoft YaHei UI"
+FF = get_font()  # 根据语言动态选择字体: en→"Segoe UI", zh→"Microsoft YaHei UI"
 FI = "Segoe Fluent Icons"
 FI2 = "Segoe MDL2 Assets"
 
@@ -198,7 +199,7 @@ def create_styled_dialog(parent, title, width, height, on_confirm=None, initial_
     bx = (width - btn_w) // 2
 
     rrect(c, bx, btn_y, btn_w, btn_h, 6, fill=C_AMBER, outline="", tags=("btn", "btn_bg"))
-    c.create_text(bx + btn_w // 2, btn_y + btn_h // 2, text="\u786e\u5b9a",
+    c.create_text(bx + btn_w // 2, btn_y + btn_h // 2, text=t("dialog.confirm"),
                   font=(FF, FS), fill="black", tags=("btn",))
 
     def _be(e): c.itemconfigure("btn_bg", fill=C_AMBER_D)
@@ -273,7 +274,7 @@ def create_styled_yesno_dialog(parent, title, message_text, on_yes):
 
     # Yes
     rrect(c, start_x, btn_y, btn_w, btn_h, 6, fill=C_AMBER, outline="", tags=("yes", "yes_bg"))
-    c.create_text(start_x + btn_w // 2, btn_y + btn_h // 2, text="\u786e\u5b9a",
+    c.create_text(start_x + btn_w // 2, btn_y + btn_h // 2, text=t("dialog.yes"),
                   font=(FF, FS), fill="black", tags=("yes",))
 
     def _ye(e): c.itemconfigure("yes_bg", fill=C_AMBER_D)
@@ -285,7 +286,7 @@ def create_styled_yesno_dialog(parent, title, message_text, on_yes):
     # No
     no_x = start_x + btn_w + 20
     rrect(c, no_x, btn_y, btn_w, btn_h, 6, fill=C_GRAY, outline="", tags=("no", "no_bg"))
-    c.create_text(no_x + btn_w // 2, btn_y + btn_h // 2, text="\u53d6\u6d88",
+    c.create_text(no_x + btn_w // 2, btn_y + btn_h // 2, text=t("dialog.no"),
                   font=(FF, FS), fill="#EEE", tags=("no",))
 
     def _ne(e): c.itemconfigure("no_bg", fill=C_GRAY_H)

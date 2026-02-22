@@ -6,6 +6,7 @@ TEGG Touch 蛋挞 - toolbar.py
 
 import tkinter as tk
 
+from core.i18n import t
 from core.constants import (
     COLOR_PANEL, COLOR_TOOLBAR_TRANSPARENT,
     TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_RADIUS,
@@ -138,9 +139,9 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
                     _position_above_toolbar(kb, top)
             except Exception:
                 pass
-    for t in ("drag_zone", "toolbar_bg"):
-        c.tag_bind(t, "<Button-1>", _ds)
-        c.tag_bind(t, "<B1-Motion>", _dm)
+    for _tg0 in ("drag_zone", "toolbar_bg"):
+        c.tag_bind(_tg0, "<Button-1>", _ds)
+        c.tag_bind(_tg0, "<B1-Motion>", _dm)
 
     # --- About button (top-right, left of settings) ---
     _SET_SIZE = CLOSE_SIZE
@@ -248,7 +249,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     bx += _CFG_W + GAP
 
     # 2) Add
-    _txt_btn(bx, by, "\uE710", "\uff0b", "\u6309\u94ae", "tadd", C_GRAY, C_GRAY_H, on_add)
+    _txt_btn(bx, by, "\uE710", "\uff0b", t("toolbar.add_button"), "tadd", C_GRAY, C_GRAY_H, on_add)
     bx += _TBTN_W + GAP
 
     # 2b) Add Center Band (回中带) — 灰色统一样式
@@ -260,10 +261,10 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
         if ifont:
             c.create_text(bx + 12, cb_cy, text="\uE710", font=(ifont, IS),
                           fill="#E0E0E0", anchor="w", tags=(cb_tag,))
-            c.create_text(bx + 38, cb_cy, text="\u56de\u4e2d\u5e26", font=(FF, FS),
+            c.create_text(bx + 38, cb_cy, text=t("toolbar.add_center_band"), font=(FF, FS),
                           fill="#E0E0E0", anchor="w", tags=(cb_tag,))
         else:
-            c.create_text(bx + 12, cb_cy, text="\uff0b \u56de\u4e2d\u5e26", font=(FF, FS, "bold"),
+            c.create_text(bx + 12, cb_cy, text="\uff0b " + t("toolbar.add_center_band"), font=(FF, FS, "bold"),
                           fill="#E0E0E0", anchor="w", tags=(cb_tag,))
         def _cb_en(e): i = c.find_withtag(cb_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_GRAY_H)
         def _cb_lv(e): i = c.find_withtag(cb_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_GRAY)
@@ -292,12 +293,12 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
                           text=wh_icon_on if wh_state["on"] else wh_icon_off,
                           font=(ifont, IS), fill="#E0E0E0", anchor="w",
                           tags=(wh_tag, "wh_icon"))
-            c.create_text(bx + 38, wh_cy, text="\u4e2d\u5fc3\u8f6e\u76d8",
+            c.create_text(bx + 38, wh_cy, text=t("toolbar.center_wheel"),
                           font=(FF, FS), fill="#E0E0E0", anchor="w", tags=(wh_tag,))
         else:
             prefix = "\u2611" if wh_state["on"] else "\u25a3"
             c.create_text(bx + 12, wh_cy,
-                          text=f"{prefix} \u4e2d\u5fc3\u8f6e\u76d8",
+                          text=f"{prefix} " + t("toolbar.center_wheel"),
                           font=(FF, FS, "bold"), fill="#E0E0E0", anchor="w", tags=(wh_tag,))
 
         def _wh_en(e):
@@ -340,10 +341,10 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     if ifont:
         c.create_text(bx + 12, kb_cy, text="\uE765", font=(ifont, IS),
                       fill="#E0E0E0", anchor="w", tags=(kb_tag,))
-        c.create_text(bx + 38, kb_cy, text="\u8f6f\u952e\u76d8", font=(FF, FS),
+        c.create_text(bx + 38, kb_cy, text=t("toolbar.keyboard"), font=(FF, FS),
                       fill="#E0E0E0", anchor="w", tags=(kb_tag,))
     else:
-        c.create_text(bx + 12, kb_cy, text="\u2328 \u8f6f\u952e\u76d8", font=(FF, FS, "bold"),
+        c.create_text(bx + 12, kb_cy, text="\u2328 " + t("toolbar.keyboard"), font=(FF, FS, "bold"),
                       fill="#E0E0E0", anchor="w", tags=(kb_tag,))
     def _kb_en(e): i = c.find_withtag(kb_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_GRAY_H)
     def _kb_lv(e): i = c.find_withtag(kb_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_GRAY)
@@ -361,10 +362,10 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     if ifont:
         c.create_text(bx + 14, rcy, text="\uE768", font=(ifont, IS),
                       fill="#FFF", anchor="w", tags=(run_tag,))
-        c.create_text(bx + 40, rcy, text="\u542f\u52a8",
+        c.create_text(bx + 40, rcy, text=t("toolbar.start"),
                       font=(FF, FS), fill="#FFF", anchor="w", tags=(run_tag,))
     else:
-        c.create_text(bx + 12, rcy, text="\u25b6 \u542f\u52a8",
+        c.create_text(bx + 12, rcy, text="\u25b6 " + t("toolbar.start"),
                       font=(FF, FS, "bold"), fill="#FFF", anchor="w", tags=(run_tag,))
     def _ren(e): i = c.find_withtag(run_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_AMBER)
     def _rlv(e): i = c.find_withtag(run_tag + "_bg"); i and c.itemconfigure(i[0], fill=C_AMBER_D)
@@ -436,7 +437,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     sm_x = DRAG_W + 16
     sm_tag = "tsm"
 
-    c.create_text(sm_x, row2_y, text="模拟模式",
+    c.create_text(sm_x, row2_y, text=t("toolbar.sim_mode"),
                   font=(FF, 9, "bold"), fill="#AAA", anchor="w")
 
     _SM_BTN_W = 100
@@ -447,7 +448,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     rrect(c, sm_btn_x, sm_btn_y, _SM_BTN_W, _SM_BTN_H, 6,
           fill=C_CYBER, outline="", tags=(sm_tag, sm_tag + "_bg"))
     # 按钮文字 "键盘" + 下三角 ▼
-    c.create_text(sm_btn_x + _SM_BTN_W // 2 - 6, row2_y, text="键盘",
+    c.create_text(sm_btn_x + _SM_BTN_W // 2 - 6, row2_y, text=t("toolbar.sim_keyboard"),
                   font=(FF, -14, "bold"), fill="#E0E0E0", tags=(sm_tag, "sm_text"))
     c.create_text(sm_btn_x + _SM_BTN_W - 16, row2_y + 1, text="\u25BC",
                   font=(FF, -10), fill="#999", tags=(sm_tag, "sm_arrow"))
@@ -459,7 +460,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
         i = c.find_withtag(sm_tag + "_bg")
         if i:
             c.itemconfigure(i[0], fill=C_CYBER_H)
-        _show_tip(c, sm_tag, "手柄模拟模式开发中")
+        _show_tip(c, sm_tag, t("toolbar.sim_tooltip"))
 
     def _sm_lv(e):
         i = c.find_withtag(sm_tag + "_bg")
@@ -477,7 +478,7 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
     # --- 透明度滑块 ---
     sl_x = fk_sep_x + 14
     sl_y = row2_y
-    c.create_text(sl_x, sl_y, text="\u900f\u660e\u5ea6",
+    c.create_text(sl_x, sl_y, text=t("toolbar.opacity"),
                   font=(FF, 9, "bold"), fill="#AAA", anchor="w")
 
     sl_tx = sl_x + 52 + SL_LABEL_GAP + 12
@@ -519,24 +520,24 @@ def create_toolbar_window(parent, screen_w, screen_h, *,
 
     def _sc(e): _upd(int(10 + (e.x - sl_tx) / sl_tw * 80))
     def _sd(e): _upd(int(10 + (e.x - sl_tx) / sl_tw * 80))
-    for t in ("sl_track_bg", "sl_fill", "sl_thumb"):
-        c.tag_bind(t, "<Button-1>", _sc)
-        c.tag_bind(t, "<B1-Motion>", _sd)
+    for _tg1 in ("sl_track_bg", "sl_fill", "sl_thumb"):
+        c.tag_bind(_tg1, "<Button-1>", _sc)
+        c.tag_bind(_tg1, "<B1-Motion>", _sd)
 
     # ── 编辑工具栏 Tooltip 绑定 (黑色系) ──────────────────────
     _EDIT_TIPS = [
-        ("tabout", "关于 TEGG Touch"),
-        ("tset", "快捷键设置"),
-        ("tq", "退出应用"),
-        ("tcfg", "管理和切换配置方案"),
-        ("tadd", "添加一个新的触摸按钮"),
-        ("tkb", "打开软键盘，方便输入按键映射"),
-        ("trun", "进入运行模式，开始触控操作"),
+        ("tabout", t("tooltip.about")),
+        ("tset", t("tooltip.settings")),
+        ("tq", t("tooltip.quit")),
+        ("tcfg", t("tooltip.profiles")),
+        ("tadd", t("tooltip.add_button")),
+        ("tkb", t("tooltip.keyboard")),
+        ("trun", t("tooltip.start")),
     ]
     if on_add_center_band:
-        _EDIT_TIPS.append(("tcb", "添加回中带，鼠标进入后自动归位"))
+        _EDIT_TIPS.append(("tcb", t("tooltip.center_band")))
     if on_toggle_wheel is not None:
-        _EDIT_TIPS.append(("twhl", "显示/隐藏中心轮盘，双击扇区可编辑"))
+        _EDIT_TIPS.append(("twhl", t("tooltip.wheel")))
     for _tg, _tx in _EDIT_TIPS:
         c.tag_bind(_tg, "<Enter>", lambda e, tg=_tg, tx=_tx: _show_tip(c, tg, tx), add="+")
         c.tag_bind(_tg, "<Leave>", lambda e: _hide_tip(c), add="+")
@@ -694,11 +695,11 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             if ifont:
                 c.create_text(bx, _prof_cy, text="\uE765", font=(ifont, IS),
                               fill="#AAA", anchor="w", tags="run_profile_txt")
-                c.create_text(bx + 26, _prof_cy, text=f"\u65b9\u6848\uff1a{active_profile}",
+                c.create_text(bx + 26, _prof_cy, text=t("run.profile_label", name=active_profile),
                               font=("Microsoft YaHei UI", 10, "bold"),
                               fill="#AAA", anchor="w", tags="run_profile_txt")
             else:
-                c.create_text(bx, _prof_cy, text=f"\U0001F4C4 \u65b9\u6848\uff1a{active_profile}",
+                c.create_text(bx, _prof_cy, text="\U0001F4C4 " + t("run.profile_label", name=active_profile),
                               font=("Microsoft YaHei UI", 10, "bold"),
                               fill="#AAA", anchor="w", tags="run_profile_txt")
             bx += _PROF_W
@@ -720,7 +721,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             ac_bg = C_GREEN if ac_on else C_GRAY
             ac_bg_h = C_GREEN_H if ac_on else C_GRAY_H
             ac_icon = "\uE7C9" if ac_on else "\uEA3A"
-            ac_text = f"\u56de\u4e2dON [{_K_AC}]" if ac_on else f"\u56de\u4e2dOFF [{_K_AC}]"
+            ac_text = t("run.auto_center_on", key=_K_AC) if ac_on else t("run.auto_center_off", key=_K_AC)
             ac_fg = "#FFF" if ac_on else "#E0E0E0"
 
             rrect(c, bx, by, _AC_W, BTN_H_RUN, BTN_R, fill=ac_bg, outline="", tags=(ac_tag, ac_tag+"_bg"))
@@ -759,7 +760,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             vis_tag = "run_vis"
             vis_on = state["buttons_visible"]
             vis_icon = "\uED1A" if vis_on else "\uE7B3"
-            vis_text = f"\u9690\u85cf\u6309\u952e [{_K_VIS}]" if vis_on else f"\u663e\u793a\u6309\u952e [{_K_VIS}]"
+            vis_text = t("run.hide_buttons", key=_K_VIS) if vis_on else t("run.show_buttons", key=_K_VIS)
 
             rrect(c, bx, by, _VIS_W, BTN_H_RUN, BTN_R, fill=C_GRAY, outline="", tags=(vis_tag, vis_tag+"_bg"))
             vis_cy = by + BTN_H_RUN // 2
@@ -794,7 +795,7 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                 from ui.virtual_keyboard import toggle_soft_keyboard
                 toggle_soft_keyboard(top, mode="input")
 
-            _run_btn(bx, _KB_BTN_W, f"\u8f6f\u952e\u76d8 [{_K_KB}]", "\uE765", "btn_kb", C_GRAY, _toggle_kb_run, font_size=_RUN_FS, bold=False)
+            _run_btn(bx, _KB_BTN_W, t("run.soft_keyboard", key=_K_KB), "\uE765", "btn_kb", C_GRAY, _toggle_kb_run, font_size=_RUN_FS, bold=False)
             bx += _KB_BTN_W + GAP
 
             # --- 4. 穿透模式 (三态循环按钮: PT_ON→PT_OFF→PT_BLOCK) ---
@@ -807,9 +808,9 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
             C_BLUE_H = "#2196F3"
 
             _PT_MAP = {
-                PT_ON:    {"bg": C_GRAY,    "bg_h": C_GRAY_H,  "icon": "\uE73E", "text": f"\u7a7f\u900fON [{_K_PTON}]",   "fg": "#E0E0E0"},
-                PT_OFF:   {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE739", "text": f"\u7a7f\u900fOFF [{_K_PTOFF}]", "fg": "#FFF"},
-                PT_BLOCK: {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE72E", "text": f"\u4e0d\u7a7f\u900f [{_K_PTBLK}]",  "fg": "#FFF"},
+                PT_ON:    {"bg": C_GRAY,    "bg_h": C_GRAY_H,  "icon": "\uE73E", "text": t("run.pt_on", key=_K_PTON),   "fg": "#E0E0E0"},
+                PT_OFF:   {"bg": C_BLUE,    "bg_h": C_BLUE_H,  "icon": "\uE739", "text": t("run.pt_off", key=_K_PTOFF), "fg": "#FFF"},
+                PT_BLOCK: {"bg": C_AMBER_D, "bg_h": C_AMBER,   "icon": "\uE72E", "text": t("run.pt_block", key=_K_PTBLK),  "fg": "#FFF"},
             }
             _pm = _PT_MAP.get(_ct, _PT_MAP[PT_ON])
 
@@ -852,16 +853,16 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
 
             # --- 6. 停止 [F12] ---
             _EXIT_W = 130
-            _run_btn(bx, _EXIT_W, f"\u505c\u6b62 [{_K_STOP}]", "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
+            _run_btn(bx, _EXIT_W, t("run.stop", key=_K_STOP), "\uE71A", "btn_exit", C_CLOSE, on_edit, bg_hover=C_CLOSE_H, font_size=_RUN_FS, bold=False, fg="#FFF")
             bx += _EXIT_W + 10
 
             # ── 运行工具栏 Tooltip 绑定 (黑色系) ──────────────
             _RUN_TIPS = [
-                ("run_ac", "自动回中: 鼠标离开按钮后自动回到屏幕中心"),
-                ("run_vis", "隐藏或显示所有触控按钮"),
-                ("btn_kb", "打开软键盘"),
-                ("run_pt", "切换穿透模式: 穿透→不穿透→拦截"),
-                ("btn_exit", "停止运行，返回编辑模式"),
+                ("run_ac", t("tooltip.auto_center")),
+                ("run_vis", t("tooltip.toggle_vis")),
+                ("btn_kb", t("tooltip.soft_keyboard")),
+                ("run_pt", t("tooltip.passthrough")),
+                ("btn_exit", t("tooltip.stop")),
             ]
             for _tg, _tx in _RUN_TIPS:
                 c.tag_bind(_tg, "<Enter>", lambda e, tg=_tg, tx=_tx: _show_tip(c, tg, tx), add="+")
@@ -935,9 +936,9 @@ def create_run_toolbar(parent, screen_w, screen_h, *,
                 pass
 
     # Bind drag events to tags
-    for t in ("bg", "drag_handle"):
-        c.tag_bind(t, "<Button-1>", _ds)
-        c.tag_bind(t, "<B1-Motion>", _dm)
+    for _tg2 in ("bg", "drag_handle"):
+        c.tag_bind(_tg2, "<Button-1>", _ds)
+        c.tag_bind(_tg2, "<B1-Motion>", _dm)
 
     redraw()
     

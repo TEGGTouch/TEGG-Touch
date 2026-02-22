@@ -87,7 +87,9 @@
       "wheelup": "",
       "wheeldown": "",
       "_cx": 1280,
-      "_cy": 720
+      "_cy": 720,
+      "xbutton1": "",
+      "xbutton2": ""
     },
     {
       "name": "↘",

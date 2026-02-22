@@ -1,9 +1,10 @@
 """
-TEGG Touch 蛋挞 辅助软件 - 全局常量与默认值
+TEGG Touch - 全局常量与默认值
 """
 
 import os
 import sys
+from core.i18n import t, get_font
 
 # === 应用根目录（frozen 兼容） ===
 # 开发时: TEGGTouch/ (项目根)
@@ -14,13 +15,16 @@ else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # === 应用信息 ===
-APP_TITLE = "TEGG Touch 蛋挞"
-APP_VERSION = "0.1"
+APP_VERSION = "0.1.1"
 CONFIG_FILE = "config.json"
 PROFILES_DIR = "profiles"
 PROFILES_INDEX = "_index.json"
-DEFAULT_PROFILE_NAME = "默认配置"
+DEFAULT_PROFILE_NAME = "Default"  # 固定英文作为文件名 key，显示名用 t("profile.default_name")
 HOTKEYS_FILE = "settings/hotkeys.json"
+
+def get_app_title():
+    """返回本地化的应用标题。"""
+    return t("app.title")
 
 # === 默认快捷键映射 ===
 DEFAULT_HOTKEYS = {
@@ -34,16 +38,17 @@ DEFAULT_HOTKEYS = {
     "auto_center_delay": 1500,
 }
 
-# 快捷键显示名称
-HOTKEY_LABELS = {
-    "auto_center":    "自动回中",
-    "toggle_buttons": "显示/隐藏按键",
-    "soft_keyboard":  "软键盘",
-    "pt_on":          "穿透ON",
-    "pt_off":         "穿透OFF",
-    "pt_block":       "不穿透",
-    "stop":           "停止(回编辑)",
-}
+def get_hotkey_labels():
+    """返回本地化的快捷键显示名称（运行时求值）。"""
+    return {
+        "auto_center":    t("hotkey.auto_center"),
+        "toggle_buttons": t("hotkey.toggle_buttons"),
+        "soft_keyboard":  t("hotkey.soft_keyboard"),
+        "pt_on":          t("hotkey.pt_on"),
+        "pt_off":         t("hotkey.pt_off"),
+        "pt_block":       t("hotkey.pt_block"),
+        "stop":           t("hotkey.stop"),
+    }
 
 # === 清晰高对比配色表 (High Clarity) ===
 COLOR_BG = "#202020"          # 深灰背景，降低干扰
@@ -120,7 +125,7 @@ def default_wheel_sectors():
 def default_wheel_center_ring():
     """生成默认的中心圆环按钮配置（仅大圆盘模式可见）。"""
     return {
-        'name': '中心环',
+        'name': t("button_defaults.center_ring"),
         'type': BTN_TYPE_WHEEL_RING,
         'hover': '', 'hover_delay': 200,
         'hover_release_delay': 0,

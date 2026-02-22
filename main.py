@@ -1,10 +1,11 @@
 """
-TEGG Touch 蛋挞 辅助软件 - 启动入口
+TEGG Touch - Entry Point
 
 """
 
 import sys
 import os
+import json
 import tkinter as tk
 import traceback
 from tkinter import messagebox
@@ -25,15 +26,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ═══ i18n 初始化（必须在所有 UI 模块导入之前） ═══
+from core.i18n import load_locale, t
+
+def _detect_language():
+    """从 settings/hotkeys.json 读取 language 字段，默认 zh-CN。"""
+    try:
+        hk_path = os.path.join(os.getcwd(), "settings", "hotkeys.json")
+        if os.path.exists(hk_path):
+            with open(hk_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("language", "zh-CN")
+    except Exception:
+        pass
+    return "zh-CN"
+
+load_locale(_detect_language())
+
 # 依赖检查
 try:
     import keyboard
 except ImportError:
-    msg = "错误: 找不到 keyboard 库\n请运行: pip install keyboard"
+    msg = t("app.dep_missing_msg")
     print(msg)
     try:
         import tkinter
-        tkinter.messagebox.showerror("依赖缺失", msg)
+        tkinter.messagebox.showerror(t("app.dep_missing_title"), msg)
     except:
         pass
     sys.exit(1)
@@ -47,7 +65,8 @@ def main():
         root.mainloop()
     except Exception as e:
         logger.critical(f"Unhandled exception: {e}", exc_info=True)
-        messagebox.showerror("严重错误", f"程序发生未捕获异常:\n{e}\n请查看 teggtouch.log")
+        messagebox.showerror(t("app.error_title"),
+                             t("app.error_msg", error=str(e)))
 
 if __name__ == "__main__":
     main()

@@ -12,8 +12,9 @@ import copy
 
 from core.constants import (
     COLOR_TOOLBAR_TRANSPARENT, TOOLBAR_RADIUS,
-    DEFAULT_HOTKEYS, HOTKEY_LABELS,
+    DEFAULT_HOTKEYS, get_hotkey_labels,
 )
+from core.i18n import t, get_lang
 from core.config_manager import load_hotkeys, save_hotkeys
 from ui.widgets import (
     FF, FS, IS, BTN_H, BTN_R, CLOSE_SIZE, CLOSE_M,
@@ -45,16 +46,17 @@ _HK_COLORS = {
 _HK_KEYS = ["auto_center", "toggle_buttons", "soft_keyboard",
             "pt_on", "pt_off", "pt_block", "stop"]
 
-# 每个快捷键的说明文本
-_HK_DESCS = {
-    "auto_center":    "没有触发按键后鼠标自动归位到中心",
-    "toggle_buttons": "运行时切换屏幕按钮的显示/隐藏",
-    "soft_keyboard":  "打开/关闭屏幕软键盘输入面板",
-    "pt_on":          "可以操作被按钮覆盖的游戏画面",
-    "pt_off":         "按钮覆盖的游戏画面不可被操作，空余区域可以",
-    "pt_block":       "视角几乎不会随鼠标移动，但按键操作有效",
-    "stop":           "退出运行模式，返回编辑界面",
-}
+# 每个快捷键的说明文本（运行时从 locale 读取）
+def _get_hk_descs():
+    return {
+        "auto_center":    t("hotkey.desc_auto_center"),
+        "toggle_buttons": t("hotkey.desc_toggle_buttons"),
+        "soft_keyboard":  t("hotkey.desc_soft_keyboard"),
+        "pt_on":          t("hotkey.desc_pt_on"),
+        "pt_off":         t("hotkey.desc_pt_off"),
+        "pt_block":       t("hotkey.desc_pt_block"),
+        "stop":           t("hotkey.desc_stop"),
+    }
 
 # ─── 行布局常量 ────────────────────────────────────────────────
 ROW_H = 78
@@ -64,9 +66,23 @@ LABEL_W = 120
 INPUT_PAD = 10
 INPUT_H = 42
 
+# ─── 单例守卫 ──────────────────────────────────────────────────
+_current_dialog = None
+
 
 def open_hotkey_settings(parent, on_save_callback=None):
     """打开快捷键设置弹窗。"""
+    global _current_dialog
+    if _current_dialog:
+        try:
+            if _current_dialog.winfo_exists():
+                _current_dialog.lift()
+                _current_dialog.focus_set()
+                return _current_dialog
+        except Exception:
+            pass
+        _current_dialog = None
+
     overlay = create_modal_overlay(parent)
 
     LEFT_W = 380
@@ -87,7 +103,12 @@ def open_hotkey_settings(parent, on_save_callback=None):
     top.configure(bg=COLOR_TOOLBAR_TRANSPARENT)
     top.wm_attributes("-transparentcolor", COLOR_TOOLBAR_TRANSPARENT)
 
+    _current_dialog = top
+
     def _destroy_all(e):
+        global _current_dialog
+        if e.widget == top:
+            _current_dialog = None
         try: overlay.destroy()
         except: pass
     top.bind("<Destroy>", _destroy_all, add="+")
@@ -114,7 +135,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
     c.tag_bind("bg", "<B1-Motion>", _dm)
 
     # ── 标题 ──
-    c.create_text(PADDING, 25, text="⚙ 快捷键设置", font=(FF, 11, "bold"),
+    c.create_text(PADDING, 25, text=t("hotkey.title"), font=(FF, 11, "bold"),
                   fill="white", anchor="w", tags="title")
     c.tag_bind("title", "<Button-1>", _ds)
     c.tag_bind("title", "<B1-Motion>", _dm)
@@ -136,7 +157,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
 
     # ── Tip ──
     tip_y = 50
-    tip_text = "💡 点击右侧按键添加到输入框 ｜ Backspace 删除 ｜ 支持组合键"
+    tip_text = t("hotkey.tip")
     tip_lbl = tk.Label(top, text=tip_text, bg=C_PM_BG, fg="#777", font=(FF, 9), anchor="w")
     tip_lbl.place(x=PADDING, y=tip_y, width=width - PADDING * 2)
     tip_lbl.lift()
@@ -188,7 +209,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
 
     key = "auto_center"
     color = _HK_COLORS.get(key, C_AMBER)
-    label_text = HOTKEY_LABELS.get(key, key)
+    label_text = get_hotkey_labels().get(key, key)
     current_val = hotkeys.get(key, DEFAULT_HOTKEYS[key])
     _input_y = 4  # 输入框固定在顶部，留出下方空间给说明文本
     dot = tk.Frame(hk_frame_1, bg=color, width=8, height=8)
@@ -201,7 +222,8 @@ def open_hotkey_settings(parent, on_save_callback=None):
     ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
     fields[key] = ti
     # 说明文本 — 左对齐到标题，支持自动换行
-    desc_text = _HK_DESCS.get("auto_center", "")
+    _hk_descs = _get_hk_descs()
+    desc_text = _hk_descs.get("auto_center", "")
     desc_w = form_w - DOT_W
     if desc_text:
         desc_lbl = tk.Label(hk_frame_1, text=desc_text, bg=C_PM_BG, fg="#666",
@@ -224,7 +246,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
     for i, key in enumerate(_HK_REST):
         local_y = i * ROW_H
         color = _HK_COLORS.get(key, C_AMBER)
-        label_text = HOTKEY_LABELS.get(key, key)
+        label_text = get_hotkey_labels().get(key, key)
         current_val = hotkeys.get(key, DEFAULT_HOTKEYS[key])
 
         iy = local_y + 4  # 输入框固定在行顶部偏移4px
@@ -240,7 +262,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
         ti.bind("<FocusIn>", lambda ev, w=ti: _set_focus(w))
         fields[key] = ti
         # 说明文本 — 左对齐到标题，支持自动换行
-        desc_text = _HK_DESCS.get(key, "")
+        desc_text = _hk_descs.get(key, "")
         if desc_text:
             desc_lbl = tk.Label(hk_frame_2, text=desc_text, bg=C_PM_BG, fg="#666",
                                 font=(FF, 8), anchor="nw", justify="left",
@@ -255,7 +277,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
     dot2 = tk.Frame(delay_frame, bg=_DELAY_COLOR, width=8, height=8)
     dot2.place(x=4, y=(_DELAY_ROW_H - 8) // 2, width=8, height=8)
 
-    lbl2 = tk.Label(delay_frame, text="回中延迟", bg=C_PM_BG, fg="#CCC",
+    lbl2 = tk.Label(delay_frame, text=t("hotkey.auto_center_delay"), bg=C_PM_BG, fg="#CCC",
                     font=(FF, 10), anchor="w")
     lbl2.place(x=DOT_W, y=0, height=_DELAY_ROW_H)
 
@@ -327,9 +349,9 @@ def open_hotkey_settings(parent, on_save_callback=None):
             delay_entry.insert(0, str(v))
             _syncing[0] = False
 
-    for t in ("dl_bg", "dl_fill", "dl_thumb"):
-        sc.tag_bind(t, "<Button-1>", _on_slider_click)
-        sc.tag_bind(t, "<B1-Motion>", _on_slider_click)
+    for _sl_tag in ("dl_bg", "dl_fill", "dl_thumb"):
+        sc.tag_bind(_sl_tag, "<Button-1>", _on_slider_click)
+        sc.tag_bind(_sl_tag, "<B1-Motion>", _on_slider_click)
 
     def _on_entry_change(*_):
         if _syncing[0]:
@@ -349,6 +371,86 @@ def open_hotkey_settings(parent, on_save_callback=None):
         top.after(100, lambda: _set_focus(fields[_HK_KEYS[0]]))
 
     # =================================================================
+    #  LANGUAGE SELECTOR: 🌐 语言 / Language
+    # =================================================================
+    _LANG_OPTIONS = [("中文", "zh-CN"), ("English", "en")]
+    _LANG_MAP = {code: name for name, code in _LANG_OPTIONS}
+    _LANG_COLOR = "#0284C7"  # 蓝色高亮
+    _LANG_COLOR_H = "#0EA5E9"
+
+    lang_y = hk2_y + hk2_h + 10
+    _LANG_ROW_H = 44
+    lang_frame = tk.Frame(top, bg=C_PM_BG)
+    lang_frame.place(x=form_x, y=lang_y, width=form_w, height=_LANG_ROW_H)
+    lang_frame.lift()
+
+    # 分隔线
+    sep_line = tk.Frame(lang_frame, bg="#444", height=1)
+    sep_line.place(x=0, y=0, width=form_w, height=1)
+
+    # 🌐 icon + label
+    lang_icon = tk.Label(lang_frame, text="🌐", bg=C_PM_BG, fg="#AAA",
+                         font=(FF, 12), anchor="w")
+    lang_icon.place(x=0, y=8, height=30)
+
+    lang_label = tk.Label(lang_frame, text="Language / 语言", bg=C_PM_BG, fg="#CCC",
+                          font=(FF, 10), anchor="w")
+    lang_label.place(x=32, y=8, height=30)
+
+    # 当前语言
+    current_lang = hotkeys.get("language", get_lang())
+    lang_state = {"selected": current_lang}
+
+    # 两个 toggle 按钮：中文 | English
+    _LBTN_W = 80
+    _LBTN_H = 30
+    _LBTN_GAP = 6
+    lbtn_x = form_w - (_LBTN_W * 2 + _LBTN_GAP)
+
+    lang_btns = {}  # code -> Label widget
+
+    def _update_lang_btns():
+        for code, btn in lang_btns.items():
+            if code == lang_state["selected"]:
+                btn.configure(bg=_LANG_COLOR, fg="#FFF")
+            else:
+                btn.configure(bg=_C_TAG_BG, fg=_C_TAG_TEXT)
+
+    def _on_lang_click(code):
+        lang_state["selected"] = code
+        _update_lang_btns()
+
+    for i, (name, code) in enumerate(_LANG_OPTIONS):
+        bx = lbtn_x + i * (_LBTN_W + _LBTN_GAP)
+        btn = tk.Label(lang_frame, text=name, bg=_C_TAG_BG, fg=_C_TAG_TEXT,
+                       font=(FF, 10), cursor="hand2", anchor="center",
+                       relief="flat", bd=0)
+        btn.place(x=bx, y=8, width=_LBTN_W, height=_LBTN_H)
+        btn.bind("<Button-1>", lambda ev, c=code: _on_lang_click(c))
+        btn.bind("<Enter>", lambda ev, w=btn, c=code: w.configure(
+            bg=_LANG_COLOR_H if c == lang_state["selected"] else _C_TAG_HOVER))
+        btn.bind("<Leave>", lambda ev, w=btn, c=code: w.configure(
+            bg=_LANG_COLOR if c == lang_state["selected"] else _C_TAG_BG))
+        lang_btns[code] = btn
+
+    _update_lang_btns()
+
+    # 重启提示标签（语言变更时显示）
+    restart_hint = tk.Label(top, text="⚠ Restart required", bg=C_PM_BG,
+                            fg="#D97706", font=(FF, 9), anchor="w")
+
+    def _check_lang_changed():
+        if lang_state["selected"] != current_lang:
+            restart_hint.place(x=form_x + DOT_W + 8,
+                               y=lang_y + _LANG_ROW_H + 2, width=200, height=20)
+            restart_hint.lift()
+        else:
+            restart_hint.place_forget()
+        top.after(300, _check_lang_changed)
+
+    _check_lang_changed()
+
+    # =================================================================
     #  BOTTOM BUTTONS: 重置 / 保存
     # =================================================================
     btn_h = 40
@@ -360,7 +462,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
     # 重置
     rrect(c, PADDING, row_btn_y, half_w, btn_h, BTN_R,
           fill="#6E1E1E", outline="", tags=("reset", "reset_bg"))
-    c.create_text(PADDING + half_w // 2, row_btn_y + btn_h // 2, text="重置默认",
+    c.create_text(PADDING + half_w // 2, row_btn_y + btn_h // 2, text=t("hotkey.reset"),
                   font=(FF, FS), fill="white", tags=("reset",))
     c.tag_bind("reset", "<Enter>", lambda e: c.itemconfigure("reset_bg", fill="#8B2020"))
     c.tag_bind("reset", "<Leave>", lambda e: c.itemconfigure("reset_bg", fill="#6E1E1E"))
@@ -385,7 +487,7 @@ def open_hotkey_settings(parent, on_save_callback=None):
     save_x = PADDING + half_w + btn_gap
     rrect(c, save_x, row_btn_y, half_w, btn_h, BTN_R,
           fill=C_CYBER, outline="", tags=("save", "save_bg"))
-    c.create_text(save_x + half_w // 2, row_btn_y + btn_h // 2, text="保存",
+    c.create_text(save_x + half_w // 2, row_btn_y + btn_h // 2, text=t("hotkey.save"),
                   font=(FF, FS), fill="white", tags=("save",))
     c.tag_bind("save", "<Enter>", lambda e: c.itemconfigure("save_bg", fill=C_CYBER_H))
     c.tag_bind("save", "<Leave>", lambda e: c.itemconfigure("save_bg", fill=C_CYBER))
@@ -398,6 +500,8 @@ def open_hotkey_settings(parent, on_save_callback=None):
             result["auto_center_delay"] = max(0, int(delay_entry.get()))
         except ValueError:
             result["auto_center_delay"] = DEFAULT_HOTKEYS["auto_center_delay"]
+        # 保存语言选择
+        result["language"] = lang_state["selected"]
         save_hotkeys(result)
         if on_save_callback:
             on_save_callback(result)

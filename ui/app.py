@@ -18,8 +18,9 @@ import time
 import logging
 import ctypes
 
+from core.i18n import t
 from core.constants import (
-    APP_TITLE, APP_VERSION,
+    APP_VERSION, get_app_title,
     COLOR_BG, COLOR_TRANSPARENT,
     GRID_SIZE,
     PT_ON, PT_OFF, PT_BLOCK, PT_CYCLE,
@@ -81,7 +82,7 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
 
     def __init__(self, root):
         self.root = root
-        self.root.title(f"{APP_TITLE} v{APP_VERSION}")
+        self.root.title(f"{get_app_title()} v{APP_VERSION}")
 
         # 获取屏幕尺寸（全屏用）
         self.screen_w = self.root.winfo_screenwidth()
@@ -352,7 +353,7 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
                                        is_enlarged=self.wheel_enlarged)
                 self.canvas.tag_bind("wheel_zoom_btn", "<Button-1>", self.toggle_wheel_size)
                 self.canvas.tag_bind("wheel_zoom_btn", "<Enter>",
-                                     lambda e: self._show_simple_tooltip(e, "点击切换轮盘大/小模式"))
+                                     lambda e: self._show_simple_tooltip(e, t("btn_tooltip.zoom_tooltip")))
                 self.canvas.tag_bind("wheel_zoom_btn", "<Leave>",
                                      lambda e: self._hide_edit_tooltip())
 
@@ -363,7 +364,7 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
                 self.canvas.tag_bind("wheel_ring_toggle_btn", "<Button-1>",
                                      self.toggle_wheel_center_ring_visible)
                 self.canvas.tag_bind("wheel_ring_toggle_btn", "<Enter>",
-                                     lambda e: self._show_simple_tooltip(e, "点击启用/隐藏中心圆环按钮"))
+                                     lambda e: self._show_simple_tooltip(e, t("btn_tooltip.ring_tooltip")))
                 self.canvas.tag_bind("wheel_ring_toggle_btn", "<Leave>",
                                      lambda e: self._hide_edit_tooltip())
 
@@ -405,21 +406,21 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
         btn_type = btn_data.get('type', '')
 
         if btn_type == BTN_TYPE_CENTER_BAND:
-            return "鼠标到这里就会回中"
+            return t("btn_tooltip.center_band_tip")
 
         # 普通按钮 / 轮盘扇区：显示所有配置参数
         fields = [
-            ('名称', 'name'),
-            ('悬停', 'hover'),
-            ('触发延迟', 'hover_delay'),
-            ('释放延迟', 'hover_release_delay'),
-            ('左键', 'lclick'),
-            ('右键', 'rclick'),
-            ('中键', 'mclick'),
-            ('滚上', 'wheelup'),
-            ('滚下', 'wheeldown'),
-            ('侧键1', 'xbutton1'),
-            ('侧键2', 'xbutton2'),
+            (t('btn_tooltip.name'), 'name'),
+            (t('btn_tooltip.hover'), 'hover'),
+            (t('btn_tooltip.trigger_delay'), 'hover_delay'),
+            (t('btn_tooltip.release_delay'), 'hover_release_delay'),
+            (t('btn_tooltip.lclick'), 'lclick'),
+            (t('btn_tooltip.rclick'), 'rclick'),
+            (t('btn_tooltip.mclick'), 'mclick'),
+            (t('btn_tooltip.wheelup'), 'wheelup'),
+            (t('btn_tooltip.wheeldown'), 'wheeldown'),
+            (t('btn_tooltip.xbutton1'), 'xbutton1'),
+            (t('btn_tooltip.xbutton2'), 'xbutton2'),
         ]
         lines = []
         for label, key in fields:
@@ -431,7 +432,7 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
                 lines.append(f"{label}: {val}")
 
         if is_wheel:
-            lines.append("⚠ 中心轮盘有两种大小，按需使用")
+            lines.append(t("btn_tooltip.wheel_hint"))
 
         return "\n".join(lines)
 
@@ -711,8 +712,8 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
     def export_config(self):
         path = filedialog.asksaveasfilename(
             defaultextension=".json",
-            filetypes=[("配置", "*.json")],
-            title="导出配置"
+            filetypes=[("JSON", "*.json")],
+            title="Export Config"
         )
         if path:
             save_config(
@@ -722,12 +723,12 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
                 buttons=self.buttons,
                 click_through=self.click_through
             )
-            messagebox.showinfo("成功", "配置已导出")
+            messagebox.showinfo(t("dialog.success"), "Config exported")
 
     def import_config(self):
         path = filedialog.askopenfilename(
             filetypes=[("配置", "*.json")],
-            title="导入配置"
+            title="Import Config"
         )
         if not path:
             return
@@ -739,9 +740,9 @@ class FloatingApp(WindowStyleMixin, RunEngineMixin, ButtonManagerMixin):
             self.redraw_all()
             if self.current_mode == 'main':
                 self._show_toolbar()
-            messagebox.showinfo("成功", "配置已导入")
+            messagebox.showinfo(t("dialog.success"), "Config imported")
         except Exception as e:
-            messagebox.showerror("错误", str(e))
+            messagebox.showerror(t("dialog.error"), str(e))
 
     def quit(self):
         self.save_config()

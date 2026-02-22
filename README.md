@@ -1,264 +1,260 @@
-# TEGG Touch 蛋挞 🥮
-
-**Windows 全屏触摸按键映射工具** — 用鼠标/触摸屏模拟键盘操作，适用于触控屏玩 PC 游戏、远程桌面操控等场景。
-
-> 版本: v0.1 | Python 3.10+ | Windows 10/11
-
----
-
-## ✨ 核心功能
-
-### 🎮 触摸按键映射
-- **全屏透明覆盖层**：在游戏/应用上方创建一个透明的触控层
-- **自定义按钮区域**：在屏幕任意位置放置触摸按钮，支持拖拽移动和缩放
-- **丰富的按键绑定**：每个按钮支持 悬停(hover)、左键、右键、中键、滚轮上/下 六种触发方式
-- **悬停延迟控制**：可设置悬停触发延迟和释放延迟（防误触），支持蓄力条可视化
-- **组合键支持**：支持 `w+a`、`ctrl+shift+z` 等组合键映射
-
-### 🎡 中心轮盘
-- **8方向摇杆**：屏幕中心的虚拟摇杆，8个扇形分区对应8个方向
-- **方向键映射**：默认映射 WASD 方向组合（↑=W, ↗=D+W, →=D, ...）
-- **可自定义**：每个扇区可双击编辑，支持修改按键映射
-- **显示/隐藏切换**：编辑工具栏可切换轮盘显示
-
-### 📐 回中带
-- **自动回中区域**：鼠标进入回中带后自动归位到屏幕中心
-- **适用于摇杆模拟**：配合中心轮盘使用，模拟摇杆回中效果
-
-### 🔀 三态穿透模式
-| 模式 | 快捷键 | 说明 |
-|------|--------|------|
-| **穿透ON** | F9 | 完全穿透，点击直达下层游戏/桌面 |
-| **穿透OFF** | F10 | 智能穿透，按钮拦截输入，空白区域穿透 |
-| **不穿透** | F11 | 全部拦截，所有点击被捕获（用于调试/配置） |
-
-### 📋 配置方案管理
-- **多方案切换**：为不同游戏/场景保存独立配置方案
-- **新建/重命名/删除**：方案管理面板支持完整 CRUD
-- **导入/导出**：支持 JSON 格式导入导出，方便分享
-- **即时切换**：工具栏一键切换，无需重启
-
-### ⌨️ 软键盘
-- **浮动虚拟键盘**：快速输入按键映射值，无需记忆键名
-- **跟随工具栏**：自动定位在工具栏上方
-- **支持组合键**：可输入 Shift/Ctrl/Alt 组合
-
-### 🎯 运行模式功能
-- **自动回中 [F6]**：鼠标离开按钮后自动回到屏幕中心（模拟摇杆释放）
-- **隐藏按键 [F7]**：运行时隐藏所有按钮（不影响触发），减少视觉干扰
-- **软键盘 [F8]**：运行中打开软键盘
-- **穿透切换 [F9/F10/F11]**：三态穿透模式快速切换
-- **停止 [F12]**：返回编辑模式
-- **虚拟光标**：三种光标样式对应三种穿透状态，清晰标识当前模式
-
-### ⚙️ 自定义快捷键
-- 所有功能键（F6~F12）均可在设置面板中自定义
-- 支持自定义自动回中延迟时间
+<p align="center">
+  <h1 align="center">🎮 TEGG Touch 蛋挞</h1>
+  <p align="center">
+    <strong>免费开源的触屏按键映射工具 | Free & Open-Source Touch-to-Key Mapper</strong>
+  </p>
+  <p align="center">
+    <a href="#-快速开始--quick-start">快速开始</a> · <a href="#-功能特性--features">功能特性</a> · <a href="#-项目结构--project-structure">项目结构</a> · <a href="#-联系方式--contact">联系方式</a>
+  </p>
+  <p align="center">
+    <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-blue" alt="Platform">
+    <img src="https://img.shields.io/badge/python-3.10%2B-green" alt="Python">
+    <img src="https://img.shields.io/badge/license-CC%20BY--NC%204.0-orange" alt="License">
+    <img src="https://img.shields.io/badge/version-v0.1.1-brightgreen" alt="Version">
+    <img src="https://img.shields.io/badge/i18n-中文%20%7C%20English-blueviolet" alt="i18n">
+  </p>
+</p>
 
 ---
 
-## 🚀 快速开始
+> **中文** ｜ [English](#english)
+
+## 🥮 简介
+
+**TEGG Touch 蛋挞** 是一款永久免费、完全开源的 Windows 无障碍辅助软件。
+
+仅仅用鼠标简单的移动和点击，就能替代大部分的游戏操作。我们希望能帮到有需求的用户，让大家都能体会到游戏的乐趣。
+
+适用场景：触屏玩 PC 游戏、远程桌面操控、辅助操作、游戏直播等。
+
+---
+
+## ✨ 功能特性 | Features
+
+| 功能 | 说明 |
+|------|------|
+| 🎮 **触摸按键映射** | 全屏透明覆盖层，任意位置放置触摸按钮，支持悬停 / 左右键 / 中键 / 滚轮 / 侧键，支持组合键 |
+| 🎡 **中心轮盘** | 8方向虚拟摇杆，默认映射 WASD 方向组合，每个扇区可自定义 |
+| 📐 **回中带** | 鼠标进入后自动归位屏幕中心，零延迟，配合轮盘模拟摇杆回中 |
+| 🔀 **三态穿透模式** | 穿透ON（完全穿透）/ 穿透OFF（智能穿透）/ 不穿透（全部拦截） |
+| 📋 **多方案管理** | 为不同游戏保存独立配置，支持新建 / 复制 / 重命名 / 导入导出 |
+| ⌨️ **浮动软键盘** | 108键标准布局，快速输入按键映射，支持粘滞键和组合键 |
+| ⚙️ **自定义快捷键** | 所有功能键均可在设置面板中自定义，支持自定义回中延迟 |
+| 🌐 **多语言支持** | 中文 / English 双语切换 |
+
+---
+
+## 🚀 快速开始 | Quick Start
 
 ### 环境要求
+
 - **操作系统**：Windows 10 / 11
-- **Python**：3.10 或以上
-- **依赖库**：`keyboard`（全局键盘钩子）
+- **Python**：3.10+
+- **依赖库**：`keyboard`（全局键盘钩子）、`Pillow`（图片加载）
 
 ### 安装运行
 
 ```bash
-# 1. 克隆项目
-git clone <仓库地址>
-cd TEGGTouch
+# 克隆项目
+git clone https://github.com/TEGGTouch/TEGG-Touch.git
+cd TEGG-Touch
 
-# 2. 安装依赖
-pip install keyboard
+# 安装依赖
+pip install keyboard Pillow
 
-# 3. 以管理员权限运行（keyboard 库需要）
+# 以管理员权限运行（keyboard 库需要）
 python main.py
 ```
 
-或者直接双击 `run.bat`。
+或者直接右键 `run.bat` → 以管理员身份运行。
 
-> ⚠️ **注意**：`keyboard` 库需要管理员权限才能全局监听键盘事件。请以管理员身份运行 CMD/PowerShell，或右键 `run.bat` → 以管理员身份运行。
+> ⚠️ `keyboard` 库需要管理员权限才能全局监听键盘事件。
 
-### 基本使用流程
+### 基本流程
 
 1. **启动** → 全屏透明覆盖层 + 底部编辑工具栏
-2. **添加按钮** → 点击工具栏「+ 按钮」，在画布上创建触摸区域
-3. **编辑按钮** → 双击按钮打开编辑面板，设置名称和按键映射
-4. **拖拽/缩放** → 拖拽按钮移动位置，拖拽右下角三角手柄缩放
-5. **启动运行** → 点击「▶ 启动」进入运行模式，触摸按钮即模拟按键
-6. **停止** → 按 F12 或点击运行工具栏「停止」返回编辑
+2. **添加按钮** → 点击「按键」在画布上创建触摸区域
+3. **编辑按钮** → 双击按钮打开编辑面板，设置按键映射
+4. **拖拽/缩放** → 拖拽移动，右下角三角手柄缩放
+5. **启动运行** → 点击「▶ 启动」进入运行模式
+6. **停止** → 按 F12 返回编辑模式
 
 ---
 
-## 📁 项目结构
+## ⌨️ 默认快捷键
+
+| 快捷键 | 功能 | Key | Function |
+|--------|------|-----|----------|
+| F6 | 自动回中 开/关 | F6 | Toggle Auto-Center |
+| F7 | 显示/隐藏按键 | F7 | Show/Hide Buttons |
+| F8 | 软键盘 | F8 | Soft Keyboard |
+| F9 | 穿透ON | F9 | Pass-Through ON |
+| F10 | 穿透OFF | F10 | Pass-Through OFF |
+| F11 | 不穿透 | F11 | Block Mode |
+| F12 | 停止（回编辑） | F12 | Stop (Edit Mode) |
+
+> 所有快捷键可在 ⚙ 设置面板中自定义。
+
+---
+
+## 📁 项目结构 | Project Structure
 
 ```
 TEGGTouch/
-├── main.py                 # 启动入口
-├── run.bat                 # Windows 快速启动脚本
-├── config.json             # 全局配置
+├── main.py                 # 启动入口 / Entry point
+├── run.bat                 # Windows 快速启动 / Quick launch
+├── build.bat               # PyInstaller 打包 / Build script
 │
-├── core/                   # 核心逻辑层
-│   ├── constants.py        # 全局常量、配色、默认值
-│   ├── config_manager.py   # 配置/方案 读写管理
-│   └── input_engine.py     # 键盘模拟引擎 (按下/释放/组合键)
+├── core/                   # 核心逻辑 / Core logic
+│   ├── constants.py        # 全局常量 / Constants & defaults
+│   ├── config_manager.py   # 配置方案管理 / Config & profile manager
+│   ├── input_engine.py     # 键盘模拟引擎 / Key simulation engine
+│   └── i18n.py             # 国际化翻译引擎 / i18n translation engine
 │
-├── ui/                     # 界面层 (Tkinter Canvas)
-│   ├── app.py              # 主应用类 (FloatingApp, Mixin 架构)
-│   ├── toolbar.py          # 编辑工具栏 + 运行工具栏
-│   ├── edit_panel.py       # 工具栏入口（代理到 toolbar.py）
-│   ├── canvas_renderer.py  # 画布渲染（按钮/网格/光标/轮盘/蓄力条）
-│   ├── button_editor.py    # 按钮编辑弹窗
-│   ├── button_manager.py   # 按钮增删改/拖拽/缩放 (Mixin)
-│   ├── run_engine.py       # 运行模式核心循环 (Mixin)
-│   ├── window_manager.py   # 窗口穿透样式管理 (Mixin)
-│   ├── profile_manager.py  # 方案管理弹窗
-│   ├── hotkey_settings.py  # 快捷键设置弹窗
-│   ├── virtual_keyboard.py # 浮动软键盘
-│   ├── widgets.py          # 通用 UI 组件（圆角矩形/按钮/对话框）
-│   └── about_dialog.py     # 关于对话框
+├── ui/                     # 界面层 / UI layer (Tkinter Canvas)
+│   ├── app.py              # 主应用 (Mixin 架构) / Main app
+│   ├── toolbar.py          # 编辑/运行工具栏 / Edit & Run toolbars
+│   ├── canvas_renderer.py  # 画布渲染 / Canvas rendering
+│   ├── button_editor.py    # 按钮编辑弹窗 / Button editor dialog
+│   ├── button_manager.py   # 按钮增删改 / Button CRUD (Mixin)
+│   ├── run_engine.py       # 运行模式引擎 / Run mode engine (Mixin)
+│   ├── window_manager.py   # 窗口穿透管理 / Window style (Mixin)
+│   ├── profile_manager.py  # 方案管理弹窗 / Profile manager
+│   ├── hotkey_settings.py  # 快捷键设置 / Hotkey settings
+│   ├── virtual_keyboard.py # 浮动软键盘 / Soft keyboard
+│   ├── widgets.py          # 通用组件 / Common widgets
+│   └── about_dialog.py     # 关于对话框 / About dialog
 │
-├── profiles/               # 用户配置方案 (JSON)
-│   ├── _index.json         # 方案索引
-│   ├── 默认配置.json
-│   └── 茶叶蛋.json
+├── locales/                # 语言包 / Locale files
+│   ├── en.json             # English
+│   └── zh-CN.json          # 简体中文
 │
-├── assets/                 # 静态资源
-│   ├── cursor.png          # 穿透ON 光标
-│   ├── cursor_off.png      # 穿透OFF 光标
-│   ├── cursor_block.png    # 不穿透 光标
-│   └── wechat_qr.png       # 微信二维码
-│
-├── docs/                   # 开发文档
-│   └── 编辑工具栏架构分析.md
-│
-└── settings/               # 设置
-    └── hotkeys.json        # 快捷键配置
+├── profiles/               # 用户方案 / User profiles (JSON)
+├── assets/                 # 静态资源 / Static assets
+├── settings/               # 设置 / Settings
+│   └── hotkeys.json        # 快捷键配置 / Hotkey config
+└── docs/                   # 开发文档 / Dev docs
 ```
 
 ---
 
-## 🏗️ 架构设计
+## 🏗️ 架构设计 | Architecture
 
 ### Mixin 组合架构
 
-`FloatingApp` 通过多重继承组合三个职责模块：
-
 ```
 FloatingApp
-  ├── WindowStyleMixin   (window_manager.py)  → 窗口穿透/焦点控制
-  ├── RunEngineMixin     (run_engine.py)       → 运行模式核心循环
-  └── ButtonManagerMixin (button_manager.py)   → 按钮增删改/拖拽缩放
+  ├── WindowStyleMixin   → 窗口穿透/焦点控制 / Window pass-through
+  ├── RunEngineMixin     → 运行模式核心循环 / Run mode loop
+  └── ButtonManagerMixin → 按钮增删改拖拽缩放 / Button CRUD & drag
 ```
 
-### 坐标系
+### 坐标系 | Coordinate System
 
-采用**中心原点坐标系**：
-- 原点 `(0, 0)` 在屏幕正中心
-- x 正方向→右，y 正方向→下
-- 绘制时 `screen_x = x + screen_w // 2`
-- 方便按钮在不同分辨率下保持相对位置
+采用**中心原点坐标系**：原点 `(0,0)` 在屏幕正中心，方便按钮在不同分辨率下保持相对位置。
 
-### 两种模式
+Center-origin coordinate system: `(0,0)` at screen center, preserving relative button positions across resolutions.
 
-| | 编辑模式 | 运行模式 |
+### 两种模式 | Two Modes
+
+| | 编辑模式 Edit | 运行模式 Run |
 |---|---|---|
-| 工具栏 | 底部编辑工具栏 | 可拖拽运行工具栏 |
-| 按钮交互 | 双击编辑、拖拽移动、缩放 | 鼠标悬停/点击触发按键 |
-| 窗口样式 | 普通窗口（可交互） | 无焦点（不抢游戏焦点） |
-| 网格 | 显示辅助网格 | 隐藏 |
-| 光标 | 系统光标 | 虚拟光标（显示穿透状态） |
-
-### 输入引擎
-
-- 基于 `keyboard` 库的全局钩子
-- 支持单键 (`j`)、组合键 (`w+a`)、特殊键 (`space`, `enter`)
-- 悬停触发支持延迟蓄力和释放延迟
-- 滚轮事件通过 `ctypes` 底层钩子捕获
+| 工具栏 Toolbar | 底部固定 Bottom-fixed | 可拖拽 Draggable |
+| 按钮交互 Buttons | 双击编辑/拖拽/缩放 | 悬停/点击触发按键 |
+| 窗口 Window | 普通（可交互） | 无焦点（不抢游戏） |
+| 光标 Cursor | 系统光标 | 虚拟光标（显示穿透状态） |
 
 ---
 
-## ⌨️ 快捷键一览
-
-| 快捷键 | 功能 | 说明 |
-|--------|------|------|
-| F6 | 自动回中 | 切换自动回中开/关 |
-| F7 | 显示/隐藏按键 | 运行时隐藏按钮减少干扰 |
-| F8 | 软键盘 | 打开/关闭浮动软键盘 |
-| F9 | 穿透ON | 完全穿透模式 |
-| F10 | 穿透OFF | 智能穿透模式 |
-| F11 | 不穿透 | 全部拦截模式 |
-| F12 | 停止 | 返回编辑模式 |
-
-> 所有快捷键可在编辑工具栏 → ⚙ 设置 中自定义。
-
----
-
-## 🔧 按钮配置参数
-
-每个按钮支持以下配置项：
-
-| 参数 | 说明 | 示例 |
-|------|------|------|
-| `name` | 按钮名称（显示在按钮上） | `前进` |
-| `hover` | 鼠标悬停时触发的按键 | `w` / `w+a` |
-| `hover_delay` | 悬停触发延迟 (ms) | `200`（防误触） |
-| `hover_release_delay` | 悬停释放延迟 (ms) | `0` |
-| `lclick` | 左键点击触发 | `j` |
-| `rclick` | 右键点击触发 | `k` |
-| `mclick` | 中键点击触发 | `space` |
-| `wheelup` | 滚轮上触发 | `e` |
-| `wheeldown` | 滚轮下触发 | `q` |
-
-### 按钮类型
-
-| 类型 | 说明 |
-|------|------|
-| `normal` | 普通按钮，支持所有操作 |
-| `center_band` | 回中带，鼠标进入后自动归位到屏幕中心 |
-| `wheel_sector` | 中心轮盘扇区（8方向虚拟摇杆） |
-
----
-
-## 📦 打包分发
-
-使用 PyInstaller 打包为独立 EXE，用户无需安装 Python：
+## 📦 打包分发 | Build & Distribution
 
 ```bash
-pip install pyinstaller
+pip install pyinstaller Pillow
 
-cd TEGGTouch
-pyinstaller --onefile --windowed --name "TEGGTouch蛋挞" \
-  --add-data "profiles;profiles" \
-  --add-data "assets;assets" \
-  --add-data "settings;settings" \
+# 使用项目提供的打包脚本
+build.bat
+```
+
+或手动：
+
+```bash
+pyinstaller --onefile --windowed --name "TEGGTouch" ^
+  --add-data "profiles;profiles" ^
+  --add-data "assets;assets" ^
+  --add-data "settings;settings" ^
+  --add-data "locales;locales" ^
+  --add-data "core/default_profile.json;core" ^
   main.py
 ```
 
-产出文件：`dist/TEGGTouch蛋挞.exe`
-
-> ⚠️ 由于 `keyboard` 库需要全局钩子权限，打包后的 EXE 建议以管理员身份运行。
+> ⚠️ 打包后的 EXE 需以管理员身份运行（`keyboard` 库需要全局钩子权限）。
 
 ---
 
-## 🎯 典型使用场景
+## 📄 开源协议 | License
 
-- **触屏玩 PC 游戏**：在 Windows 平板/触摸屏上用触摸模拟键盘操作
-- **远程桌面操控**：通过触摸板/手柄模拟键鼠操作
-- **辅助操作**：为行动不便的用户提供大面积触控区域
-- **游戏直播**：触屏操控 + 键鼠映射，实现一屏多操作
+本项目采用 [**CC BY-NC 4.0**](https://creativecommons.org/licenses/by-nc/4.0/) 协议。
+
+This project is licensed under [**Creative Commons Attribution-NonCommercial 4.0 International**](https://creativecommons.org/licenses/by-nc/4.0/).
+
+### 你可以 | You may:
+- ✅ 自由使用、复制、分发本软件 / Use, copy, and distribute freely
+- ✅ 自由修改、二次开发 / Modify and create derivative works
+- ✅ 需注明原作者及出处 / Must give appropriate credit
+
+### 你不可以 | You may NOT:
+- ❌ 将本软件用于任何商业目的 / Use for any commercial purpose
+- ❌ 在不注明出处的情况下分发 / Distribute without attribution
+
+详见 [LICENSE](./LICENSE) 文件。See [LICENSE](./LICENSE) for details.
 
 ---
 
-## 📄 开源协议
+## 🤝 联系方式 | Contact
 
-内部项目，暂不公开。
+| 方式 | 信息 |
+|------|------|
+| 💬 **微信 WeChat** | `teggwx` |
+| 📧 **邮箱 Email** | `life.is.like.a.boat@gmail.com` |
+
+欢迎提问、建议、反馈，看到一定会解答 :)
+
+Questions, suggestions, and feedback are always welcome!
 
 ---
 
-## 🤝 联系我们
+<a id="english"></a>
 
-扫描软件内「关于」页面的微信二维码，加入用户群交流反馈。
+## 🇬🇧 English
+
+### What is TEGG Touch?
+
+**TEGG Touch** is a free, open-source accessibility tool for Windows that maps touch/mouse input to keyboard actions. With simple mouse movements and clicks, it can replace most game controls — bringing the joy of gaming to everyone.
+
+### Key Features
+
+- **Touch-to-Key Mapping** — Full-screen transparent overlay with customizable touch buttons (hover, click, scroll, side-buttons, combos)
+- **Center Wheel** — 8-direction virtual joystick with WASD mapping
+- **Auto-Center Band** — Mouse instantly returns to screen center on contact
+- **3-State Pass-Through** — ON (full) / OFF (smart) / Block (all intercepted)
+- **Multi-Profile** — Save profiles per game, import/export JSON
+- **Soft Keyboard** — 108-key floating keyboard with sticky modifier keys
+- **i18n** — English & Chinese UI
+
+### Quick Start
+
+```bash
+git clone https://github.com/TEGGTouch/TEGG-Touch.git
+cd TEGG-Touch
+pip install keyboard Pillow
+python main.py    # Run as Administrator
+```
+
+### License
+
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — Free to use & modify, **no commercial use**.
+
+### Contact
+
+- **WeChat**: `teggwx`
+- **Email**: `life.is.like.a.boat@gmail.com`
