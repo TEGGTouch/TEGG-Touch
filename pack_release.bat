@@ -15,7 +15,7 @@ if not exist "dist\TEGGTouch\TEGGTouch.exe" (
 )
 
 :: 读取版本号
-set VERSION=0.1
+set VERSION=0.1.1
 
 :: 清理旧发布包
 set RELEASE_NAME=TEGGTouch_v%VERSION%
