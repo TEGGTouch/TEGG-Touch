@@ -1,0 +1,530 @@
+"""
+TEGG Touch 蛋挞 (PyQt6) - overlay_window.py
+全屏透明覆盖窗口 — 替代旧版 FloatingApp。
+"""
+
+import logging
+
+from PyQt6.QtWidgets import QGraphicsView, QApplication
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QPainter
+
+from core.i18n import t, load_locale
+from core.constants import APP_VERSION, PT_ON, PT_OFF, PT_BLOCK, DEFAULT_TRANSPARENCY
+from core.config_manager import (
+    init_profiles, load_hotkeys, get_active_profile_name,
+    load_profile, save_profile, set_active_profile,
+)
+from core.input_engine import install_wheel_hook, uninstall_wheel_hook
+from scene.overlay_scene import OverlayScene
+from engine.run_controller import RunController
+from engine.passthrough_manager import PassthroughManager
+
+from views.edit_toolbar import EditToolbar
+from views.run_toolbar import RunToolbar
+from views.button_editor_dialog import ButtonEditorDialog
+from views.center_band_dialog import CenterBandDialog
+from views.profile_manager_dialog import ProfileManagerDialog
+from views.hotkey_settings_dialog import HotkeySettingsDialog
+from views.about_dialog import AboutDialog
+from views.virtual_keyboard import VirtualKeyboard
+from views.toast_widget import ToastWidget
+from scene.virtual_cursor_item import VirtualCursorItem
+from core.constants import BTN_TYPE_CENTER_BAND
+
+logger = logging.getLogger(__name__)
+
+
+class OverlayWindow(QGraphicsView):
+    """全屏透明覆盖窗口 — 替代旧版 FloatingApp"""
+
+    def __init__(self):
+        self._scene = OverlayScene()
+        super().__init__(self._scene)
+
+        self._current_mode = 'edit'  # 'edit' | 'run'
+        self._buttons_hidden = False
+        self._profile_name = ''
+        self._current_opacity = DEFAULT_TRANSPARENCY
+
+        # ── 窗口属性 ──
+        self.setWindowTitle(f"{t('app.title')} v{APP_VERSION}")
+
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.Tool
+        )
+
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        self.setStyleSheet("background: transparent; border: none;")
+        self.setFrameShape(QGraphicsView.Shape.NoFrame)
+
+        # ── 全屏尺寸 ──
+        screen = QApplication.primaryScreen().geometry()
+        self.setGeometry(screen)
+        self._scene.setSceneRect(0, 0, screen.width(), screen.height())
+
+        # ── 引擎初始化 ──
+        self._pt_manager = PassthroughManager(self)
+        self._run_controller = RunController(self._scene, self)
+
+        # 连接运行控制器信号
+        self._run_controller.request_edit_mode.connect(self.to_edit)
+        self._run_controller.request_toggle_buttons.connect(self._toggle_buttons_visibility)
+        self._run_controller.request_toggle_auto_center.connect(self._toggle_auto_center)
+        self._run_controller.request_soft_keyboard.connect(self._toggle_soft_keyboard)
+        self._run_controller.passthrough_changed.connect(
+            lambda mode: self._pt_manager.set_mode(mode))
+        self._run_controller.auto_center_progress.connect(
+            self._scene.update_auto_center_bar)
+        self._run_controller.cursor_on_ui.connect(
+            self._pt_manager.update_smart_passthrough)
+
+        # ── 工具栏 (parent=self ensures Z-order above overlay) ──
+        self._edit_toolbar = EditToolbar(parent=self)
+        self._run_toolbar = RunToolbar(parent=self)
+        self._run_toolbar.hide()
+
+        # 连接编辑工具栏信号
+        self._edit_toolbar.add_button_clicked.connect(self._on_add_button)
+        self._edit_toolbar.add_center_band_clicked.connect(self._on_add_center_band)
+        self._edit_toolbar.keyboard_clicked.connect(self._toggle_soft_keyboard)
+        self._edit_toolbar.run_clicked.connect(self.to_run)
+        self._edit_toolbar.wheel_clicked.connect(self._on_toggle_wheel)
+        self._edit_toolbar.opacity_changed.connect(self._on_opacity_changed)
+        self._edit_toolbar.profile_clicked.connect(self._open_profile_manager)
+        self._edit_toolbar.settings_clicked.connect(self._open_hotkey_settings)
+        self._edit_toolbar.about_clicked.connect(self._open_about)
+        self._edit_toolbar.quit_clicked.connect(self.close)
+
+        # 连接运行工具栏信号
+        self._run_toolbar.stop_clicked.connect(self.to_edit)
+        self._run_toolbar.auto_center_clicked.connect(self._toggle_auto_center)
+        self._run_toolbar.toggle_buttons_clicked.connect(self._toggle_buttons_visibility)
+        self._run_toolbar.soft_keyboard_clicked.connect(self._toggle_soft_keyboard)
+        self._run_toolbar.pt_clicked.connect(self._on_pt_clicked)
+
+        # 工具栏拖拽时同步软键盘位置 (匹配原版 _dm 中的 _position_above_toolbar 调用)
+        self._edit_toolbar.moved.connect(self._sync_keyboard_to_toolbar)
+        self._run_toolbar.moved.connect(self._sync_keyboard_to_toolbar)
+
+        # 运行工具栏位置持久化
+        self._run_toolbar.position_changed.connect(self._on_run_toolbar_moved)
+
+        # 连接穿透变化到运行工具栏更新
+        self._run_controller.passthrough_changed.connect(
+            self._run_toolbar.update_pt_mode)
+
+        # ── 软键盘 (parent=self ensures Z-order above overlay) ──
+        self._virtual_keyboard = VirtualKeyboard(parent=self)
+        self._virtual_keyboard.hide()
+
+        # ── Toast 通知 ──
+        self._toast = ToastWidget(parent=self)
+        self._scene.toast_requested.connect(self._toast.show_toast)
+
+        # ── 虚拟光标 ──
+        self._virtual_cursor = VirtualCursorItem()
+        self._virtual_cursor.setVisible(False)
+        self._scene.addItem(self._virtual_cursor)
+
+        # ── 智能穿透轮询定时器 (编辑模式) ──
+        self._smart_pt_timer = QTimer(self)
+        self._smart_pt_timer.setInterval(16)  # ~60fps，与原版 update_loop 对齐
+        self._smart_pt_timer.timeout.connect(self._poll_smart_passthrough)
+
+        # 连接场景信号
+        self._scene.button_double_clicked.connect(self._open_button_editor)
+
+        # ── 默认透明度 (与工具栏滑块初始值一致) ──
+        self._apply_item_opacity(DEFAULT_TRANSPARENCY)
+
+        # ── 加载配置 ──
+        self._load_profile()
+
+        # 连接按钮信号到运行控制器
+        self._wire_button_signals()
+
+    def _load_profile(self):
+        """加载方案配置，创建场景中的按钮"""
+        profile_name, config = init_profiles()
+        self._profile_name = profile_name
+        self._scene.load_from_config(config)
+        self._edit_toolbar.set_profile_name(profile_name)
+        self._run_toolbar.set_profile_name(profile_name)
+        # 同步轮盘按钮状态到工具栏
+        self._edit_toolbar.set_wheel_state(self._scene.wheel_visible)
+        # 恢复透明度 (从 profile 读取)
+        saved_opacity = config.get('transparency', DEFAULT_TRANSPARENCY)
+        if isinstance(saved_opacity, (int, float)):
+            saved_opacity = max(0.1, min(0.9, float(saved_opacity)))
+        else:
+            saved_opacity = DEFAULT_TRANSPARENCY
+        self._apply_item_opacity(saved_opacity)
+        self._edit_toolbar.set_opacity(saved_opacity)
+
+    def _wire_button_signals(self):
+        """将所有按钮的信号连接到运行控制器"""
+        for item in self._scene.button_items:
+            self._wire_single_item(item)
+        self._wire_wheel_signals()
+
+    def _wire_wheel_signals(self):
+        """将轮盘扇面和圆环的信号连接到运行控制器"""
+        for item in self._scene.wheel_items:
+            self._wire_single_item(item)
+        if self._scene.ring_item:
+            self._wire_single_item(self._scene.ring_item)
+
+    def _wire_single_item(self, item):
+        """将单个 Item 的信号连接到运行控制器"""
+        item.hoverActivated.connect(self._run_controller.on_hover_activated)
+        item.hoverDeactivated.connect(self._run_controller.on_hover_deactivated)
+        item.actionTriggered.connect(self._run_controller.on_action_triggered)
+
+    # ── 模式切换 ──
+
+    def to_run(self):
+        """切换到运行模式"""
+        self._smart_pt_timer.stop()
+        self._current_mode = 'run'
+        self._scene.save_config()
+        self._scene.set_mode('run')
+        self._pt_manager.set_mode(PT_ON)
+        install_wheel_hook()
+        self._run_controller.start()
+
+        self._edit_toolbar.hide()
+        # 恢复运行工具栏保存的位置
+        cfg = self._scene._config
+        saved_x = cfg.get('run_toolbar_x') if cfg else None
+        saved_y = cfg.get('run_toolbar_y') if cfg else None
+        self._run_toolbar.set_saved_position(saved_x, saved_y)
+        self._run_toolbar.show()
+        self._run_toolbar.update_auto_center(False)
+        self._run_toolbar.update_buttons_visibility(False)
+        self._run_toolbar.update_pt_mode(PT_ON)
+
+        # 切换工具栏后，重新吸附软键盘到运行工具栏
+        if self._virtual_keyboard.isVisible():
+            self._virtual_keyboard.position_above_toolbar(self._run_toolbar)
+
+        # 启动虚拟光标跟踪
+        self._virtual_cursor.start_tracking()
+
+        logger.info("Entered run mode")
+
+    def to_edit(self):
+        """切换到编辑模式"""
+        self._current_mode = 'edit'
+        self._run_controller.stop()
+        uninstall_wheel_hook()
+        self._pt_manager.set_mode(PT_OFF)
+        self._scene.set_mode('edit')
+        self._buttons_hidden = False
+        for item in self._scene.button_items:
+            item.setVisible(True)
+        # 恢复轮盘可见性 (原版 toggle_buttons_visibility 隐藏的轮盘需要恢复)
+        for item in self._scene.wheel_items:
+            item.setVisible(self._scene.wheel_visible)
+        if self._scene.ring_item:
+            visible = (self._scene.wheel_visible and self._scene._wheel_enlarged
+                       and self._scene._wheel_center_ring_visible)
+            self._scene.ring_item.setVisible(visible)
+
+        self._run_toolbar.hide()
+        self._edit_toolbar.show()
+        self._smart_pt_timer.start()
+
+        # 停止虚拟光标和软键盘
+        self._virtual_cursor.stop_tracking()
+        self._virtual_keyboard.hide()
+
+        logger.info("Entered edit mode")
+
+    # PT 模式 → 光标类型映射
+    _PT_CURSOR_MAP = {
+        PT_ON: 'cursor',
+        PT_OFF: 'cursor_off',
+        PT_BLOCK: 'cursor_block',
+    }
+
+    def _on_pt_clicked(self, mode):
+        """工具栏穿透按钮点击 → 同步 manager + toolbar + 光标"""
+        self._pt_manager.set_mode(mode)
+        self._run_toolbar.update_pt_mode(mode)
+        # 同步虚拟光标类型
+        cursor_type = self._PT_CURSOR_MAP.get(mode, 'cursor')
+        self._virtual_cursor.set_cursor_type(cursor_type)
+
+    def _toggle_buttons_visibility(self):
+        """隐藏/显示所有按钮（含轮盘扇区和圆环 — 匹配原版 toggle_buttons_visibility）"""
+        self._buttons_hidden = not self._buttons_hidden
+        for item in self._scene.button_items:
+            item.setVisible(not self._buttons_hidden)
+        # 轮盘扇区也参与隐藏 (原版: self.buttons_hidden 影响整个 handle_run_interaction)
+        for item in self._scene.wheel_items:
+            if self._buttons_hidden:
+                item.setVisible(False)
+            else:
+                item.setVisible(self._scene.wheel_visible)
+        if self._scene.ring_item:
+            if self._buttons_hidden:
+                self._scene.ring_item.setVisible(False)
+            else:
+                visible = (self._scene.wheel_visible and self._scene._wheel_enlarged
+                           and self._scene._wheel_center_ring_visible)
+                self._scene.ring_item.setVisible(visible)
+        self._run_toolbar.update_buttons_visibility(self._buttons_hidden)
+
+    def _toggle_auto_center(self):
+        """切换自动回中"""
+        self._run_controller.auto_center = not self._run_controller.auto_center
+        self._run_toolbar.update_auto_center(self._run_controller.auto_center)
+
+    def _toggle_soft_keyboard(self):
+        """切换软键盘 — 吸附在当前活动工具栏上方 (匹配原版 toggle_soft_keyboard)"""
+        if self._virtual_keyboard.isVisible():
+            self._virtual_keyboard.hide()
+        else:
+            # 绑定到当前可见的工具栏
+            toolbar = (self._run_toolbar if self._current_mode == 'run'
+                       else self._edit_toolbar)
+            self._virtual_keyboard.position_above_toolbar(toolbar)
+            self._virtual_keyboard.show()
+
+    def _sync_keyboard_to_toolbar(self):
+        """工具栏拖拽时同步软键盘位置"""
+        if self._virtual_keyboard.isVisible():
+            self._virtual_keyboard.position_above_toolbar()
+
+    def _on_run_toolbar_moved(self, x, y):
+        """运行工具栏拖拽结束 → 将位置持久化到 config"""
+        if self._scene._config:
+            self._scene._config['run_toolbar_x'] = x
+            self._scene._config['run_toolbar_y'] = y
+
+    # ── 编辑操作 ──
+
+    def _on_add_button(self):
+        """工具栏添加按钮"""
+        item = self._scene.add_button()
+        if item:
+            item.setOpacity(self._current_opacity)
+            self._wire_single_item(item)
+
+    def _on_add_center_band(self):
+        """工具栏添加回中带"""
+        item = self._scene.add_center_band()
+        if item:
+            item.setOpacity(self._current_opacity)
+            self._wire_single_item(item)
+
+    def _on_toggle_wheel(self):
+        """切换轮盘显示"""
+        visible = self._scene.toggle_wheel()
+        # Bug 8 fix: 同步工具栏轮盘按钮状态
+        self._edit_toolbar.set_wheel_state(visible)
+
+    def _on_opacity_changed(self, value):
+        """编辑模式背景透明度调整 — 仅影响按钮/轮盘，不影响虚拟光标"""
+        # value: 0.1 ~ 0.9 (来自滑块 10%-90%)
+        self._apply_item_opacity(value)
+        # 持久化到 config（下次 save_config 时写入文件）
+        if self._scene._config:
+            self._scene._config['transparency'] = value
+
+    def _apply_item_opacity(self, value):
+        """对按钮和轮盘设置透明度，虚拟光标和进度条保持完全不透明"""
+        self._current_opacity = value
+        for item in self._scene.button_items:
+            item.setOpacity(value)
+        for item in self._scene.wheel_items:
+            item.setOpacity(value)
+        if self._scene.ring_item:
+            self._scene.ring_item.setOpacity(value)
+
+    # ── 弹窗 ──
+
+    def _open_button_editor(self, item):
+        """打开按钮编辑弹窗 — 回中带使用简化弹窗"""
+        if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_CENTER_BAND:
+            dialog = CenterBandDialog(item, self)
+            dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            dialog.deleted.connect(lambda it: self._on_button_deleted(it))
+            dialog.copied.connect(lambda it: self._on_button_copied(it))
+            dialog.show()
+            return
+        dialog = ButtonEditorDialog(item, self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.saved.connect(lambda data: self._on_button_saved(item))
+        dialog.deleted.connect(lambda it: self._on_button_deleted(it))
+        dialog.copied.connect(lambda it: self._on_button_copied(it))
+        dialog.show()
+
+    def _on_button_saved(self, item):
+        """按钮编辑保存后"""
+        item.update()
+        self._scene.save_config()
+
+    def _on_button_deleted(self, item):
+        """按钮删除后"""
+        self._scene.delete_button(item)
+        self._scene.save_config()
+
+    def _on_button_copied(self, item):
+        """按钮复制后"""
+        new_item = self._scene.copy_button(item)
+        if new_item:
+            self._wire_single_item(new_item)
+            self._scene.save_config()
+
+    def _open_profile_manager(self):
+        """打开方案管理弹窗"""
+        dialog = ProfileManagerDialog(self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.profile_switched.connect(self._on_profile_switched)
+        dialog.show()
+
+    def _on_profile_switched(self, name):
+        """方案切换"""
+        # 保存当前方案
+        self._scene.save_config()
+        # Bug 1 fix: 更新索引文件中的活跃方案名（必须在保存旧方案之后、加载新方案之前）
+        set_active_profile(name)
+        # 清空场景中的按钮
+        for item in list(self._scene.button_items):
+            self._scene.removeItem(item)
+        self._scene.button_items.clear()
+        # 清空轮盘
+        for item in list(self._scene.wheel_items):
+            self._scene.removeItem(item)
+        self._scene.wheel_items.clear()
+        if self._scene.ring_item:
+            self._scene.removeItem(self._scene.ring_item)
+            self._scene.ring_item = None
+        # 加载新方案
+        config = load_profile(name)
+        self._profile_name = name
+        self._scene.load_from_config(config)
+        self._wire_button_signals()
+        # 恢复新方案的透明度
+        saved_opacity = config.get('transparency', DEFAULT_TRANSPARENCY)
+        if isinstance(saved_opacity, (int, float)):
+            saved_opacity = max(0.1, min(0.9, float(saved_opacity)))
+        else:
+            saved_opacity = DEFAULT_TRANSPARENCY
+        self._apply_item_opacity(saved_opacity)
+        self._edit_toolbar.set_opacity(saved_opacity)
+        self._edit_toolbar.set_profile_name(name)
+        self._run_toolbar.set_profile_name(name)
+        # 同步轮盘按钮状态到工具栏
+        self._edit_toolbar.set_wheel_state(self._scene.wheel_visible)
+
+    def _open_hotkey_settings(self):
+        """打开快捷键设置弹窗"""
+        dialog = HotkeySettingsDialog(self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.settings_saved.connect(self._on_settings_saved)
+        dialog.defaults_reset.connect(self._on_defaults_reset)
+        dialog.language_changed.connect(self._on_language_changed)
+        dialog.show()
+
+    def _on_settings_saved(self):
+        """设置保存后"""
+        # 运行控制器重新读取热键
+        self._run_controller.reload_hotkeys()
+
+    def _on_defaults_reset(self):
+        """设置面板重置默认 → 重置透明度 + 清除运行工具栏保存的位置"""
+        default_opacity = DEFAULT_TRANSPARENCY
+        # 重置透明度
+        self._apply_item_opacity(default_opacity)
+        self._edit_toolbar.set_opacity(default_opacity)
+        if self._scene._config:
+            self._scene._config['transparency'] = default_opacity
+        # 清除运行工具栏位置（下次进入运行模式将使用居中默认位置）
+        if self._scene._config:
+            self._scene._config['run_toolbar_x'] = None
+            self._scene._config['run_toolbar_y'] = None
+        # 重置运行工具栏到默认居中位置
+        self._run_toolbar._position_toolbar()
+        logger.info("Defaults reset: transparency=%.2f, run_toolbar position cleared",
+                     default_opacity)
+
+    def _on_language_changed(self, lang):
+        """语言切换后刷新 UI"""
+        # 重建工具栏（语言变更影响所有文字）
+        # 简单方式：关闭重新打开
+        logger.info(f"Language changed to {lang}")
+
+    def _open_about(self):
+        """打开关于弹窗"""
+        dialog = AboutDialog(self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.show()
+
+    # ── 事件处理 ──
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._pt_manager.init_hwnd()
+        self._edit_toolbar.show()
+        if self._current_mode == 'edit':
+            self._smart_pt_timer.start()
+
+    def _poll_smart_passthrough(self):
+        """每帧检查光标位置，切换 WS_EX_TRANSPARENT — 对齐原版 update_loop"""
+        from PyQt6.QtGui import QCursor
+        global_pos = QCursor.pos()
+        view_pos = self.mapFromGlobal(global_pos)
+        scene_pos = self.mapToScene(view_pos)
+        item = self._scene.itemAt(scene_pos, self.transform())
+        self._pt_manager.update_smart_passthrough(item is not None)
+
+    def mousePressEvent(self, event):
+        """智能穿透: 空白区域的点击转发到底层窗口（轮询间隙兜底）"""
+        scene_pos = self.mapToScene(event.pos())
+        item = self._scene.itemAt(scene_pos, self.transform())
+
+        if item is None:
+            # 空白区域 — 无论编辑/运行模式都转发点击
+            self._pt_manager.forward_click_to_game(
+                event.globalPosition().toPoint(), event.button())
+            event.ignore()
+            return
+        super().mousePressEvent(event)
+
+    def closeEvent(self, event):
+        """关闭时保存配置并退出进程"""
+        self._smart_pt_timer.stop()
+        self._run_controller.stop()
+        uninstall_wheel_hook()
+        self._scene.save_config()
+        # 关闭所有非模态弹窗
+        from PyQt6.QtWidgets import QDialog
+        for child in self.findChildren(QDialog):
+            child.close()
+        self._edit_toolbar.close()
+        self._run_toolbar.close()
+        self._virtual_keyboard.close()
+        self._toast.close()
+        self._virtual_cursor.stop_tracking()
+        event.accept()
+        QApplication.quit()
+
+    def keyPressEvent(self, event):
+        """Esc 键退出"""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+        else:
+            super().keyPressEvent(event)
