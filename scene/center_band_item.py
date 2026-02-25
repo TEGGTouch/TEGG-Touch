@@ -74,10 +74,11 @@ class CenterBandItem(QGraphicsObject):
         self._resize_handle.setPos(self.data.w - 20, self.data.h - 20)
 
     def resize_to(self, new_w, new_h):
-        from core.constants import GRID_SIZE
+        from core.constants import DEFAULT_GRID_SIZE
+        gs = self.scene().grid_size if self.scene() else DEFAULT_GRID_SIZE
         self.prepareGeometryChange()
-        self.data.w = max(GRID_SIZE, new_w)
-        self.data.h = max(GRID_SIZE, new_h)
+        self.data.w = max(gs, new_w)
+        self.data.h = max(gs, new_h)
         self._update_handle_pos()
         self.update()
         self.data_changed.emit()
@@ -85,8 +86,8 @@ class CenterBandItem(QGraphicsObject):
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
             if self._mode == 'edit':
-                from core.constants import GRID_SIZE
-                gs = GRID_SIZE
+                from core.constants import DEFAULT_GRID_SIZE
+                gs = self.scene().grid_size if self.scene() else DEFAULT_GRID_SIZE
                 from PyQt6.QtCore import QPointF
                 new_pos = QPointF(
                     round(value.x() / gs) * gs,

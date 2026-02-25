@@ -16,6 +16,7 @@
     "sim_keyboard": "键盘",
     "sim_tooltip": "模拟模式（仅键盘）",
     "opacity": "透明度",
+    "grid": "网格",
     "center_wheel": "中心轮盘",
     "start_icon": "▶ 启动",
     "profile_prefix": "方案："

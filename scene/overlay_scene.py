@@ -12,7 +12,7 @@ from PyQt6.QtCore import QRectF, Qt as _Qt
 from PyQt6.QtGui import QPainter as _QPainter, QColor as _QColor, QFont as _QFont, QPen as _QPen
 
 from core.constants import (
-    GRID_SIZE, BTN_TYPE_WHEEL_SECTOR, BTN_TYPE_WHEEL_RING,
+    DEFAULT_GRID_SIZE, BTN_TYPE_WHEEL_SECTOR, BTN_TYPE_WHEEL_RING,
     BTN_TYPE_CENTER_BAND,
     WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
     WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE,
@@ -224,7 +224,7 @@ class OverlayScene(QGraphicsScene):
     def __init__(self):
         super().__init__()
         self.mode = 'edit'  # 'edit' | 'run'
-        self.grid_size = GRID_SIZE
+        self.grid_size = DEFAULT_GRID_SIZE
         self.button_items = []
         self.wheel_items = []
         self.ring_item = None
@@ -284,7 +284,12 @@ class OverlayScene(QGraphicsScene):
     # ── 配置加载/保存 ──
 
     def load_from_config(self, config: dict):
-        """从配置数据创建所有 Item — 替代旧版 redraw_all()"""
+        """从配置数据创建所有 Item — 替代旧版 redraw_all()
+
+        x/y/w/h 存储的是像素坐标（以屏幕中心为原点）。
+        grid_size 由 overlay_window 在调用本方法之前通过
+        self.grid_size = saved_grid 直接赋值恢复。
+        """
         from models.button_model import ButtonData
         from scene.touch_button_item import TouchButtonItem
 
@@ -369,18 +374,24 @@ class OverlayScene(QGraphicsScene):
             self.addItem(self.ring_item)
 
     def save_config(self):
-        """将当前场景中的按钮状态保存回配置"""
+        """将当前场景中的按钮状态保存回配置
+
+        x/y/w/h 以像素存储，grid_size 一起保存。
+        加载时先恢复 grid_size 再加载像素坐标，保证一致。
+        """
         from core.config_manager import get_active_profile_name, save_profile
 
         if not self._config:
             return
 
-        # 从按钮 Item 收集最新数据
+        # 从按钮 Item 收集最新数据（原始像素坐标）
         new_buttons = []
         for item in self.button_items:
             new_buttons.append(item.data.to_dict())
 
         self._config['buttons'] = new_buttons
+        # 清除旧的 coord_format 标记（如果残留）
+        self._config.pop('coord_format', None)
 
         # 轮盘扇面数据（从 Item 回写）
         if self.wheel_items:
@@ -397,6 +408,8 @@ class OverlayScene(QGraphicsScene):
         self._config['wheel_visible'] = self._wheel_visible
         self._config['wheel_enlarged'] = self._wheel_enlarged
         self._config['wheel_center_ring_visible'] = self._wheel_center_ring_visible
+        # 网格大小
+        self._config['grid_size'] = self.grid_size
 
         profile_name = get_active_profile_name()
         save_profile(profile_name, self._config)
@@ -408,8 +421,9 @@ class OverlayScene(QGraphicsScene):
         from models.button_model import ButtonData
         from scene.touch_button_item import TouchButtonItem
 
+        gs = self.grid_size
         if data is None:
-            data = ButtonData(name=t("button_defaults.name"))
+            data = ButtonData(name=t("button_defaults.name"), w=gs, h=gs)
 
         # 空位查找
         pos = self._find_empty_slot(data.w, data.h, start_x=data.x, start_y=data.y)
@@ -586,9 +600,34 @@ class OverlayScene(QGraphicsScene):
         """按钮双击 → 转发信号"""
         self.button_double_clicked.emit(item)
 
+    def set_grid_size(self, new_gs: int):
+        """动态修改网格大小 — 先算格子数，再乘新 grid（以屏幕中心为原点）"""
+        old_gs = self.grid_size
+        if new_gs == old_gs:
+            return
+        self.grid_size = new_gs
+
+        # 格子数不变，只是每格像素变了
+        for item in self.button_items:
+            cell_x = round(item.data.x / old_gs)
+            cell_y = round(item.data.y / old_gs)
+            cell_w = max(1, round(item.data.w / old_gs))
+            cell_h = max(1, round(item.data.h / old_gs))
+            item.data.x = cell_x * new_gs
+            item.data.y = cell_y * new_gs
+            item.data.w = cell_w * new_gs
+            item.data.h = cell_h * new_gs
+            item.setPos(item.data.x + item._offset_x, item.data.y + item._offset_y)
+            item.prepareGeometryChange()
+            item._update_handle_pos()
+            item.update()
+
+        # 重绘网格
+        self.invalidate()
+
     def _find_empty_slot(self, w, h, start_x=0, start_y=0):
         """在网格上查找不与现有按钮重叠的空位（逻辑坐标，中心原点）。"""
-        gs = GRID_SIZE
+        gs = self.grid_size
         scene_rect = self.sceneRect()
         ox = scene_rect.width() / 2
         oy = scene_rect.height() / 2

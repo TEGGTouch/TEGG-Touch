@@ -16,6 +16,7 @@
     "sim_keyboard": "Keyboard",
     "sim_tooltip": "Simulation mode (keyboard only)",
     "opacity": "Opacity",
+    "grid": "Grid",
     "center_wheel": "Wheel",
     "start_icon": "▶ Start",
     "profile_prefix": "Profile: "

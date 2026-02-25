@@ -67,6 +67,7 @@ class HoverStateMachine(QObject):
             # 重入：取消释放倒计时，直接恢复 ACTIVE
             self._release_timer.stop()
             self._state = HoverState.ACTIVE
+            self.release_progress.emit(0.0)  # 清除进度条，避免与 hover 填充双层叠加
             return
 
         if self._state != HoverState.IDLE:

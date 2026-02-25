@@ -450,7 +450,7 @@ class _ProfileRowWidget(QFrame):
 
         bg = C_PM_SEL if is_active else C_PM_ITEM
         fg = "black" if is_active else "white"
-        fg_dim = "#888" if is_active else "white"
+        fg_dim = "rgba(0,0,0,0.35)" if is_active else "white"
         hover_bg = "#D97706" if is_active else "rgba(255,255,255,0.15)"
 
         self.setObjectName("profile_row")

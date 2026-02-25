@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPainter
 
 from core.i18n import t, load_locale
-from core.constants import APP_VERSION, PT_ON, PT_OFF, PT_BLOCK, DEFAULT_TRANSPARENCY
+from core.constants import APP_VERSION, PT_ON, PT_OFF, PT_BLOCK, DEFAULT_TRANSPARENCY, DEFAULT_GRID_SIZE
 from core.config_manager import (
     init_profiles, load_hotkeys, get_active_profile_name,
     load_profile, save_profile, set_active_profile,
@@ -101,6 +101,7 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.run_clicked.connect(self.to_run)
         self._edit_toolbar.wheel_clicked.connect(self._on_toggle_wheel)
         self._edit_toolbar.opacity_changed.connect(self._on_opacity_changed)
+        self._edit_toolbar.grid_changed.connect(self._on_grid_changed)
         self._edit_toolbar.profile_clicked.connect(self._open_profile_manager)
         self._edit_toolbar.settings_clicked.connect(self._open_hotkey_settings)
         self._edit_toolbar.about_clicked.connect(self._open_about)
@@ -158,9 +159,18 @@ class OverlayWindow(QGraphicsView):
         """加载方案配置，创建场景中的按钮"""
         profile_name, config = init_profiles()
         self._profile_name = profile_name
+        # 恢复网格大小 — 必须在 load_from_config 之前设置，
+        # 否则 set_grid_size 会对已经正确的坐标做二次比例缩放
+        saved_grid = config.get('grid_size', DEFAULT_GRID_SIZE)
+        if isinstance(saved_grid, (int, float)):
+            saved_grid = max(60, min(100, round(int(saved_grid) / 10) * 10))
+        else:
+            saved_grid = DEFAULT_GRID_SIZE
+        self._scene.grid_size = saved_grid  # 直接赋值，不触发缩放
         self._scene.load_from_config(config)
         self._edit_toolbar.set_profile_name(profile_name)
         self._run_toolbar.set_profile_name(profile_name)
+        self._edit_toolbar.set_grid_size(saved_grid)
         # 同步轮盘按钮状态到工具栏
         self._edit_toolbar.set_wheel_state(self._scene.wheel_visible)
         # 恢复透明度 (从 profile 读取)
@@ -335,6 +345,12 @@ class OverlayWindow(QGraphicsView):
         # Bug 8 fix: 同步工具栏轮盘按钮状态
         self._edit_toolbar.set_wheel_state(visible)
 
+    def _on_grid_changed(self, gs):
+        """网格滑块回调 — 缩放按钮并持久化"""
+        self._scene.set_grid_size(gs)
+        if self._scene._config:
+            self._scene._config['grid_size'] = gs
+
     def _on_opacity_changed(self, value):
         """编辑模式背景透明度调整 — 仅影响按钮/轮盘，不影响虚拟光标"""
         # value: 0.1 ~ 0.9 (来自滑块 10%-90%)
@@ -415,8 +431,17 @@ class OverlayWindow(QGraphicsView):
         # 加载新方案
         config = load_profile(name)
         self._profile_name = name
+        # 恢复网格大小 — 必须在 load_from_config 之前设置，
+        # 否则 set_grid_size 会对已经正确的坐标做二次比例缩放
+        saved_grid = config.get('grid_size', DEFAULT_GRID_SIZE)
+        if isinstance(saved_grid, (int, float)):
+            saved_grid = max(60, min(100, round(int(saved_grid) / 10) * 10))
+        else:
+            saved_grid = DEFAULT_GRID_SIZE
+        self._scene.grid_size = saved_grid  # 直接赋值，不触发缩放
         self._scene.load_from_config(config)
         self._wire_button_signals()
+        self._edit_toolbar.set_grid_size(saved_grid)
         # 恢复新方案的透明度
         saved_opacity = config.get('transparency', DEFAULT_TRANSPARENCY)
         if isinstance(saved_opacity, (int, float)):
@@ -456,10 +481,15 @@ class OverlayWindow(QGraphicsView):
         if self._scene._config:
             self._scene._config['run_toolbar_x'] = None
             self._scene._config['run_toolbar_y'] = None
+        # 重置网格大小
+        self._scene.set_grid_size(DEFAULT_GRID_SIZE)
+        self._edit_toolbar.set_grid_size(DEFAULT_GRID_SIZE)
+        if self._scene._config:
+            self._scene._config['grid_size'] = DEFAULT_GRID_SIZE
         # 重置运行工具栏到默认居中位置
         self._run_toolbar._position_toolbar()
-        logger.info("Defaults reset: transparency=%.2f, run_toolbar position cleared",
-                     default_opacity)
+        logger.info("Defaults reset: transparency=%.2f, grid=%d, run_toolbar position cleared",
+                     default_opacity, DEFAULT_GRID_SIZE)
 
     def _on_language_changed(self, lang):
         """语言切换后刷新 UI"""

@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QLabel, QSlider, QPushButton, QWidget,
     QScrollArea, QFrame, QApplication,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font, load_locale, get_lang
@@ -82,6 +82,19 @@ def _detect_icon_font():
     else:
         _ICON_FONT = ""
     return _ICON_FONT
+
+
+# ── 自适应宽度语言按钮（参照 edit_toolbar._IconTextBtn 的 sizeHint）──
+class _LangBtn(QPushButton):
+    def sizeHint(self):
+        lay = self.layout()
+        if lay:
+            m = self.contentsMargins()
+            s = lay.sizeHint()
+            return QSize(
+                s.width() + m.left() + m.right(),
+                max(s.height() + m.top() + m.bottom(), self.minimumHeight()))
+        return super().sizeHint()
 
 
 # ── 色点 ──
@@ -258,7 +271,7 @@ class HotkeySettingsDialog(QDialog):
     RIGHT_W = 500
     PADDING = 20
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20
-    WIN_H = 880
+    WIN_H = 920
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -415,20 +428,50 @@ class HotkeySettingsDialog(QDialog):
 
         current_lang = get_lang()
 
-        self._lang_zh_btn = QPushButton("中文")
-        self._lang_zh_btn.setFixedSize(80, 36)
+        self._lang_zh_btn = _LangBtn()
+        self._lang_zh_btn.setFixedHeight(36)
         self._lang_zh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._lang_zh_btn.setFont(_make_font(fn, 16, bold=True))
         self._lang_zh_btn.clicked.connect(lambda: self._set_lang("zh-CN"))
+        zh_lay = QHBoxLayout(self._lang_zh_btn)
+        zh_lay.setContentsMargins(10, 0, 10, 0)
+        zh_lay.setSpacing(4)
+        self._zh_icon_lbl = QLabel("\uE73E" if _ICON_FONT else "\u2713")
+        if _ICON_FONT:
+            self._zh_icon_lbl.setFont(_make_font(_ICON_FONT, 16))
+        else:
+            self._zh_icon_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._zh_icon_lbl.setStyleSheet("color: #FFF; background: transparent;")
+        self._zh_icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        zh_lay.addWidget(self._zh_icon_lbl)
+        self._zh_text_lbl = QLabel("中文")
+        self._zh_text_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._zh_text_lbl.setStyleSheet("color: #FFF; background: transparent;")
+        self._zh_text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        zh_lay.addWidget(self._zh_text_lbl)
         lang_row.addWidget(self._lang_zh_btn)
 
         lang_row.addSpacing(10)
 
-        self._lang_en_btn = QPushButton("English")
-        self._lang_en_btn.setFixedSize(80, 36)
+        self._lang_en_btn = _LangBtn()
+        self._lang_en_btn.setFixedHeight(36)
         self._lang_en_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._lang_en_btn.setFont(_make_font(fn, 16, bold=True))
         self._lang_en_btn.clicked.connect(lambda: self._set_lang("en"))
+        en_lay = QHBoxLayout(self._lang_en_btn)
+        en_lay.setContentsMargins(10, 0, 10, 0)
+        en_lay.setSpacing(4)
+        self._en_icon_lbl = QLabel("\uE73E" if _ICON_FONT else "\u2713")
+        if _ICON_FONT:
+            self._en_icon_lbl.setFont(_make_font(_ICON_FONT, 16))
+        else:
+            self._en_icon_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._en_icon_lbl.setStyleSheet("color: #FFF; background: transparent;")
+        self._en_icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        en_lay.addWidget(self._en_icon_lbl)
+        self._en_text_lbl = QLabel("English")
+        self._en_text_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._en_text_lbl.setStyleSheet("color: #FFF; background: transparent;")
+        self._en_text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        en_lay.addWidget(self._en_text_lbl)
         lang_row.addWidget(self._lang_en_btn)
 
         self._selected_lang = current_lang
@@ -436,6 +479,17 @@ class HotkeySettingsDialog(QDialog):
 
         lang_row.addStretch()
         left.addLayout(lang_row)
+
+        # ── 重启提示（中英双语，硬编码，不走 i18n）──
+        left.addSpacing(8)
+        restart_hint = QLabel(
+            "切换语言需要重启应用才能生效\n"
+            "Language change requires restart to take effect")
+        restart_hint.setFont(_make_font(fn, 13))
+        restart_hint.setStyleSheet("color: #888; background: transparent;")
+        restart_hint.setWordWrap(True)
+        restart_hint.setContentsMargins(26, 0, 0, 0)
+        left.addWidget(restart_hint)
 
         left.addStretch()
 
@@ -685,24 +739,34 @@ class HotkeySettingsDialog(QDialog):
 
     def _update_lang_buttons(self):
         is_zh = self._selected_lang.startswith("zh")
+
+        # 中文按钮: 选中时显示勾 icon
+        self._zh_icon_lbl.setVisible(is_zh)
+        zh_fg = "#FFF" if is_zh else "#E0E0E0"
+        self._zh_text_lbl.setStyleSheet(f"color: {zh_fg}; background: transparent;")
+        self._zh_icon_lbl.setStyleSheet(f"color: {zh_fg}; background: transparent;")
         self._lang_zh_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {"#0284C7" if is_zh else "#404040"};
-                color: {"#FFF" if is_zh else "#E0E0E0"};
+                background: {C_CYBER if is_zh else "#404040"};
                 border: none; border-radius: 6px;
             }}
             QPushButton:hover {{
-                background: {"#0EA5E9" if is_zh else "#505050"};
+                background: {C_CYBER_H if is_zh else "#505050"};
             }}
         """)
+
+        # English 按钮: 选中时显示勾 icon
+        self._en_icon_lbl.setVisible(not is_zh)
+        en_fg = "#FFF" if not is_zh else "#E0E0E0"
+        self._en_text_lbl.setStyleSheet(f"color: {en_fg}; background: transparent;")
+        self._en_icon_lbl.setStyleSheet(f"color: {en_fg}; background: transparent;")
         self._lang_en_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {"#0284C7" if not is_zh else "#404040"};
-                color: {"#FFF" if not is_zh else "#E0E0E0"};
+                background: {C_CYBER if not is_zh else "#404040"};
                 border: none; border-radius: 6px;
             }}
             QPushButton:hover {{
-                background: {"#0EA5E9" if not is_zh else "#505050"};
+                background: {C_CYBER_H if not is_zh else "#505050"};
             }}
         """)
 

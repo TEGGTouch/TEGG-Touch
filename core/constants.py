@@ -149,7 +149,11 @@ MIN_WINDOW_SIZE = 200
 MIN_BTN_SIZE = 100
 RESIZE_HANDLE_SIZE = 30       # 调整手柄尺寸 (直角三角形 30x30)
 CHAMFER_SIZE = 8
-GRID_SIZE = 100               # 网格吸附尺寸 (100px)
+GRID_SIZE = 100               # 网格吸附尺寸 (100px) — 旧版兼容，新代码用 DEFAULT_GRID_SIZE
+DEFAULT_GRID_SIZE = 100       # 默认网格大小
+MIN_GRID_SIZE = 60            # 最小网格
+MAX_GRID_SIZE = 100           # 最大网格
+GRID_STEP = 10                # 网格步进
 BTN_MARGIN = 5                # 按钮边距
 BTN_RADIUS = 10               # 按钮圆角半径
 

@@ -7,7 +7,12 @@ from PyQt6.QtWidgets import QGraphicsItem
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter, QPainterPath, QColor, QCursor
 
-from core.constants import GRID_SIZE
+from core.constants import DEFAULT_GRID_SIZE, BTN_TYPE_CENTER_BAND
+
+
+# 回中带手柄颜色 — 与回中带边框一致
+_COLOR_HANDLE_DEFAULT = "#555555"
+_COLOR_HANDLE_CENTER_BAND = "#176F2C"
 
 
 class ResizeHandleItem(QGraphicsItem):
@@ -35,14 +40,18 @@ class ResizeHandleItem(QGraphicsItem):
         path.lineTo(s, s)
         path.lineTo(0, s)
         path.closeSubpath()
-        painter.fillPath(path, QColor("#555555"))
+        # 回中带使用绿色手柄，普通按钮使用灰色
+        is_band = (hasattr(self._parent_btn, 'data')
+                   and getattr(self._parent_btn.data, 'btn_type', '') == BTN_TYPE_CENTER_BAND)
+        color = _COLOR_HANDLE_CENTER_BAND if is_band else _COLOR_HANDLE_DEFAULT
+        painter.fillPath(path, QColor(color))
 
     def mousePressEvent(self, event):
         event.accept()  # 拦截，不传给父 Item
 
     def mouseMoveEvent(self, event):
         """拖拽缩放，网格吸附"""
-        gs = GRID_SIZE
+        gs = self._parent_btn.scene().grid_size if self._parent_btn.scene() else DEFAULT_GRID_SIZE
         scene_pos = event.scenePos()
         parent_pos = self._parent_btn.scenePos()
 

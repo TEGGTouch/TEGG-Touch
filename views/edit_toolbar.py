@@ -33,8 +33,8 @@ C_CLOSE_H = "#8B2020"
 C_PANEL = "#2D2D2D"
 C_TOOL = "#4A4A4A"
 C_TOOL_H = "#5A5A5A"
-C_WH_ON = "#1976D2"
-C_WH_ON_H = "#2196F3"
+C_WH_ON = "#E11D48"       # 玫瑰红 (rose-600)
+C_WH_ON_H = "#F43F5E"     # 玫瑰红 hover (rose-500)
 
 # ── 图标字体检测 ──
 _ICON_FONT = None
@@ -179,6 +179,7 @@ class EditToolbar(QWidget):
     run_clicked = pyqtSignal()
     wheel_clicked = pyqtSignal()
     opacity_changed = pyqtSignal(float)
+    grid_changed = pyqtSignal(int)
     profile_clicked = pyqtSignal()
     settings_clicked = pyqtSignal()
     about_clicked = pyqtSignal()
@@ -395,6 +396,56 @@ class EditToolbar(QWidget):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         r2.addWidget(self._val_lbl)
 
+        r2.addSpacing(14)
+        r2.addWidget(_VSep())
+        r2.addSpacing(14)
+
+        # 网格标签
+        grid_lbl = QLabel(t("toolbar.grid"))
+        grid_lbl.setFont(_make_font(fn, 14, bold=True))
+        grid_lbl.setStyleSheet("color: #AAA; background: transparent;")
+        r2.addWidget(grid_lbl)
+        r2.addSpacing(12)
+
+        # 网格滑块 (50-100, step 10)
+        self._grid_slider = QSlider(Qt.Orientation.Horizontal)
+        self._grid_slider.setFixedHeight(24)
+        self._grid_slider.setRange(60, 100)
+        self._grid_slider.setSingleStep(10)
+        self._grid_slider.setPageStep(10)
+        self._grid_slider.setValue(100)
+        self._grid_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                background: #404040; height: 8px; border-radius: 4px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #10B981; border-radius: 4px;
+            }
+            QSlider::add-page:horizontal {
+                background: #404040; border-radius: 4px;
+            }
+            QSlider::handle:horizontal {
+                background: #DDD; border: 1px solid #999;
+                width: 18px; height: 18px; margin: -5px 0; border-radius: 9px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #10B981; border-color: #059669;
+            }
+        """)
+        self._grid_slider.valueChanged.connect(self._on_grid_changed)
+        r2.addWidget(self._grid_slider, 1)
+
+        r2.addSpacing(8)
+
+        # 网格数值 (px)
+        self._grid_val_lbl = QLabel("100px")
+        self._grid_val_lbl.setFont(_make_font(fn, 14, bold=True))
+        self._grid_val_lbl.setStyleSheet("color: #10B981; background: transparent;")
+        self._grid_val_lbl.setFixedWidth(48)
+        self._grid_val_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        r2.addWidget(self._grid_val_lbl)
+
         main.addLayout(r2)
 
     # ── 组件构建辅助 ─────────────────────────────────────────
@@ -482,6 +533,17 @@ class EditToolbar(QWidget):
         self._val_lbl.setText(f"{value}%")
         self.opacity_changed.emit(value / 100.0)
 
+    def _on_grid_changed(self, value):
+        """网格滑块回调 — 吸附到 10px 步进"""
+        snapped = round(value / 10) * 10
+        snapped = max(60, min(100, snapped))
+        if snapped != value:
+            self._grid_slider.blockSignals(True)
+            self._grid_slider.setValue(snapped)
+            self._grid_slider.blockSignals(False)
+        self._grid_val_lbl.setText(f"{snapped}px")
+        self.grid_changed.emit(snapped)
+
     def set_opacity(self, value: float):
         """外部设置透明度 (0.1~0.9)，同步滑块和标签"""
         int_val = max(10, min(90, int(value * 100)))
@@ -489,6 +551,14 @@ class EditToolbar(QWidget):
         self._slider.setValue(int_val)
         self._slider.blockSignals(False)
         self._val_lbl.setText(f"{int_val}%")
+
+    def set_grid_size(self, gs: int):
+        """外部设置网格大小 (60-100)，同步滑块和标签"""
+        gs = max(60, min(100, round(gs / 10) * 10))
+        self._grid_slider.blockSignals(True)
+        self._grid_slider.setValue(gs)
+        self._grid_slider.blockSignals(False)
+        self._grid_val_lbl.setText(f"{gs}px")
 
     # ── 定位 ─────────────────────────────────────────────────
 
