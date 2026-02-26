@@ -758,8 +758,8 @@ class VoiceSettingsDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = f"QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 6px; padding: 0 14px; }} QPushButton:hover {{ background: {C_CYBER_H}; }}"
-        off = f"QPushButton {{ background: #404040; color: #E0E0E0; border: none; border-radius: 6px; padding: 0 14px; }} QPushButton:hover {{ background: #505050; }}"
+        sel = f"QPushButton {{ background: transparent; color: #FFF; border: none; border-bottom: 2px solid {C_CYBER_H}; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #FFF; }}"
+        off = f"QPushButton {{ background: transparent; color: #AAA; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #E0E0E0; }}"
         self._tab_keys_btn.setStyleSheet(sel if idx == 0 else off)
         self._tab_mouse_btn.setStyleSheet(sel if idx == 1 else off)
         self._tab_macros_btn.setStyleSheet(sel if idx == 2 else off)
@@ -846,17 +846,22 @@ class VoiceSettingsDialog(QDialog):
         self._macro_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         lay.addWidget(self._macro_list, 1)
 
-        # 底部「新建」按钮
-        new_btn = QPushButton(t("macro.new"))
+        # 底部「新建」按钮 (紫色, + icon)
+        _detect_icon_font()
+        plus_icon = "\uE710 " if _ICON_FONT else "+ "
+        new_btn = QPushButton(plus_icon + t("macro.new"))
         new_btn.setFixedHeight(40)
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        new_btn.setFont(_make_font(fn, 16))
+        if _ICON_FONT:
+            new_btn.setFont(_make_font(_ICON_FONT, 16))
+        else:
+            new_btn.setFont(_make_font(fn, 16))
         new_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_GRAY}; color: #E0E0E0;
+                background: {self.C_MACRO}; color: #FFF;
                 border: none; border-radius: 6px;
             }}
-            QPushButton:hover {{ background: {C_GRAY_H}; }}
+            QPushButton:hover {{ background: #7C3AED; }}
         """)
         new_btn.clicked.connect(self._new_macro)
         lay.addWidget(new_btn)
@@ -948,7 +953,7 @@ class VoiceSettingsDialog(QDialog):
             row.mousePressEvent = lambda e, n=name: self._insert_macro_tag(n)
 
             item = QListWidgetItem()
-            item.setSizeHint(QSize(0, ROW_H + 6))
+            item.setSizeHint(QSize(0, ROW_H + 10))
             self._macro_list.addItem(item)
             self._macro_list.setItemWidget(item, row)
 
