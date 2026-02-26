@@ -3,10 +3,12 @@ TEGG Touch (PyQt6) - voice_settings_dialog.py
 语音指令设置弹窗 — 双栏布局: 左侧指令列表 + 右侧键位面板。
 """
 
+import copy
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QWidget, QScrollArea, QFrame, QApplication, QLineEdit,
-    QComboBox, QStackedWidget,
+    QComboBox, QStackedWidget, QListWidget, QListWidgetItem,
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
@@ -230,6 +232,7 @@ class _CommandRow(QFrame):
 class VoiceSettingsDialog(QDialog):
     """语音指令设置弹窗 — 双栏布局"""
     settings_saved = pyqtSignal()
+    macros_changed = pyqtSignal(list)
 
     LEFT_W = 560
     RIGHT_W = 480
@@ -752,43 +755,185 @@ class VoiceSettingsDialog(QDialog):
         self._tab_keys_btn.setStyleSheet(sel if idx == 0 else off)
         self._tab_macros_btn.setStyleSheet(sel if idx == 1 else off)
 
+    C_MACRO = "#8B5CF6"
+    MAX_MACROS = 20
+
     def _build_macro_browse(self, fn):
+        """构建宏 Tab: 横条列表 + 底部「新建」按钮 (完整管理模式)"""
         page = QWidget()
         page.setStyleSheet("background: transparent;")
         lay = QVBoxLayout(page)
-        lay.setContentsMargins(10, 8, 10, 10)
+        lay.setContentsMargins(10, 0, 10, 10)
         lay.setSpacing(8)
 
-        C_MACRO = "#8B5CF6"
+        # 宏列表 (QListWidget)
+        self._macro_list = QListWidget()
+        self._macro_list.setStyleSheet(f"""
+            QListWidget {{
+                background: {C_PM_BG};
+                border: none; outline: none;
+            }}
+            QListWidget::item {{
+                background: transparent; padding: 0px;
+                border: none; margin-right: 0px;
+            }}
+            QListWidget::item:selected {{ background: transparent; }}
+            QListWidget::item:hover {{ background: transparent; }}
+            QScrollBar:vertical {{
+                background: transparent; width: 18px; border: none;
+                padding-left: 10px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #404040; border-radius: 4px; min-height: 30px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+        """)
+        self._macro_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._macro_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        lay.addWidget(self._macro_list, 1)
+
+        # 底部「新建」按钮
+        new_btn = QPushButton(t("macro.new"))
+        new_btn.setFixedHeight(40)
+        new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        new_btn.setFont(_make_font(fn, 16))
+        new_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        new_btn.clicked.connect(self._new_macro)
+        lay.addWidget(new_btn)
+
+        self._rebuild_macro_list()
+        return page
+
+    def _rebuild_macro_list(self):
+        """重建宏列表 (横条风格, 参考 _ProfileRowWidget)"""
+        fn = get_font()
+        _detect_icon_font()
+        self._macro_list.clear()
+
+        ROW_H = 40
+
         if not self._macros:
+            hint_item = QListWidgetItem()
+            hint_item.setSizeHint(QSize(0, 60))
+            hint_item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self._macro_list.addItem(hint_item)
             hint = QLabel(t("macro.no_macros_hint"))
             hint.setFont(_make_font(fn, 14))
             hint.setStyleSheet("color: #666; background: transparent;")
             hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
             hint.setWordWrap(True)
-            lay.addWidget(hint)
-        else:
-            for macro in self._macros:
-                name = macro.get('name', 'Macro')
-                btn = QPushButton(name)
-                btn.setFixedHeight(36)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setFont(_make_font(fn, 13, bold=True))
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_MACRO}; color: #FFF;
-                        border: none; border-radius: 6px; padding: 0 12px;
-                    }}
-                    QPushButton:hover {{ background: #7C3AED; }}
-                """)
-                btn.clicked.connect(lambda _, n=name: self._insert_macro_tag(n))
-                lay.addWidget(btn)
-        lay.addStretch()
-        return page
+            self._macro_list.setItemWidget(hint_item, hint)
+            return
+
+        for i, macro in enumerate(self._macros):
+            name = macro.get('name', f'Macro {i+1}')
+
+            row = QFrame()
+            row.setFixedHeight(ROW_H)
+            row.setObjectName("macro_row")
+            row.setStyleSheet(f"""
+                QFrame#macro_row {{
+                    background: {C_GRAY}; border-radius: 6px;
+                }}
+                QFrame#macro_row:hover {{
+                    background: {self.C_MACRO};
+                }}
+            """)
+            row.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            row_lay = QHBoxLayout(row)
+            row_lay.setContentsMargins(15, 0, 10, 0)
+            row_lay.setSpacing(6)
+
+            name_lbl = QLabel(name)
+            name_lbl.setFont(_make_font(fn, 14))
+            name_lbl.setStyleSheet("color: white; background: transparent;")
+            name_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            row_lay.addWidget(name_lbl, 1)
+
+            btn_size = 30
+            edit_btn = QPushButton()
+            edit_btn.setFixedSize(btn_size, btn_size)
+            edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if _ICON_FONT:
+                edit_btn.setText("\uE70F")
+                edit_btn.setFont(_make_font(_ICON_FONT, 14))
+            else:
+                edit_btn.setText("\u270E")
+                edit_btn.setFont(_make_font(fn, 14))
+            edit_btn.setStyleSheet("""
+                QPushButton { color: white; background: transparent; border: none; }
+                QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+            """)
+            edit_btn.clicked.connect(lambda _, idx=i: self._edit_macro(idx))
+            row_lay.addWidget(edit_btn)
+
+            del_btn = QPushButton()
+            del_btn.setFixedSize(btn_size, btn_size)
+            del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if _ICON_FONT:
+                del_btn.setText("\uE74D")
+                del_btn.setFont(_make_font(_ICON_FONT, 14))
+            else:
+                del_btn.setText("\u2715")
+                del_btn.setFont(_make_font(fn, 12))
+            del_btn.setStyleSheet("""
+                QPushButton { color: white; background: transparent; border: none; }
+                QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+            """)
+            del_btn.clicked.connect(lambda _, idx=i: self._delete_macro(idx))
+            row_lay.addWidget(del_btn)
+
+            row.mousePressEvent = lambda e, n=name: self._insert_macro_tag(n)
+
+            item = QListWidgetItem()
+            item.setSizeHint(QSize(0, ROW_H + 6))
+            self._macro_list.addItem(item)
+            self._macro_list.setItemWidget(item, row)
 
     def _insert_macro_tag(self, macro_name):
         if self._focus_widget and isinstance(self._focus_widget, TagInput):
             self._focus_widget.add_tag(f"macro:{macro_name}")
+
+    def _new_macro(self):
+        from views.macro_editor_dialog import MacroEditorDialog
+        dlg = MacroEditorDialog(parent=self)
+        dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
+        dlg.exec()
+
+    def _edit_macro(self, idx):
+        from views.macro_editor_dialog import MacroEditorDialog
+        data = copy.deepcopy(self._macros[idx])
+        dlg = MacroEditorDialog(macro_data=data, parent=self)
+        dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
+        dlg.exec()
+
+    def _delete_macro(self, idx):
+        name = self._macros[idx].get('name', '')
+        msg = t("macro.confirm_delete").replace("{name}", name)
+        reply = QMessageBox.question(
+            self, t("macro.confirm_delete_title"), msg,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            self._macros.pop(idx)
+            self._rebuild_macro_list()
+            self.macros_changed.emit(self._macros)
+
+    def _on_macro_editor_saved(self, data, idx):
+        if 0 <= idx < len(self._macros):
+            self._macros[idx] = data
+        else:
+            self._macros.append(data)
+        self._rebuild_macro_list()
+        self.macros_changed.emit(self._macros)
 
     def _on_key_clicked(self, key_name):
         if self._focus_widget and isinstance(self._focus_widget, TagInput):
