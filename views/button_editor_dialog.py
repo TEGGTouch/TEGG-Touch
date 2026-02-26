@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QFrame, QSizePolicy, QApplication, QMessageBox,
     QStackedWidget, QListWidget, QListWidgetItem,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font
@@ -869,7 +869,8 @@ class ButtonEditorDialog(QDialog):
         new_btn.clicked.connect(self._new_macro)
         lay.addWidget(new_btn)
 
-        self._rebuild_macro_list()
+        # 延迟到下一帧事件循环再填充列表，确保 QListWidget 已完成布局
+        QTimer.singleShot(0, self._rebuild_macro_list)
         return page
 
     def _rebuild_macro_list(self):
