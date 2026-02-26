@@ -825,7 +825,7 @@ class ButtonEditorDialog(QDialog):
         page = QWidget()
         page.setStyleSheet("background: transparent;")
         lay = QVBoxLayout(page)
-        lay.setContentsMargins(10, 0, 10, 10)
+        lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
 
         # 宏列表 (QListWidget, 与 profile_manager_dialog 一致)
@@ -842,8 +842,7 @@ class ButtonEditorDialog(QDialog):
             QListWidget::item:selected {{ background: transparent; }}
             QListWidget::item:hover {{ background: transparent; }}
             QScrollBar:vertical {{
-                background: transparent; width: 18px; border: none;
-                padding-left: 10px;
+                background: transparent; width: 8px; border: none;
             }}
             QScrollBar::handle:vertical {{
                 background: #404040; border-radius: 4px; min-height: 30px;
