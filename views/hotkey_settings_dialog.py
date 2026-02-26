@@ -35,6 +35,7 @@ C_CAT_LABEL = "#888888"
 
 # 各热键字段的强调色
 HOTKEY_COLORS = {
+    'voice':          '#10B981',
     'auto_center':    '#176F2C',
     'toggle_buttons': '#6B7280',
     'soft_keyboard':  '#0284C7',
@@ -271,7 +272,7 @@ class HotkeySettingsDialog(QDialog):
     RIGHT_W = 500
     PADDING = 20
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20
-    WIN_H = 920
+    WIN_H = 980
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -368,6 +369,7 @@ class HotkeySettingsDialog(QDialog):
 
         labels = get_hotkey_labels()
         descriptions = {
+            'voice': t("hotkey.desc_voice"),
             'auto_center': t("hotkey.desc_auto_center"),
             'toggle_buttons': t("hotkey.desc_toggle_buttons"),
             'soft_keyboard': t("hotkey.desc_soft_keyboard"),
@@ -380,9 +382,14 @@ class HotkeySettingsDialog(QDialog):
         self._key_edits = {}
 
         hotkey_fields = [
-            'auto_center', 'toggle_buttons', 'soft_keyboard',
+            'voice', 'auto_center', 'toggle_buttons', 'soft_keyboard',
             'pt_on', 'pt_off', 'pt_block', 'stop',
         ]
+
+        # 语音识别字段
+        left.addLayout(self._build_hotkey_row(
+            fn, 'voice', labels, descriptions))
+        left.addSpacing(10)
 
         # 自动回中字段 + 延迟滑块
         left.addLayout(self._build_hotkey_row(
@@ -392,8 +399,8 @@ class HotkeySettingsDialog(QDialog):
             fn, t("hotkey.auto_center_delay"), HOTKEY_COLORS['auto_center']))
         left.addSpacing(14)
 
-        # 其余热键字段
-        for field in hotkey_fields[1:]:
+        # 其余热键字段 (skip voice + auto_center already added above)
+        for field in hotkey_fields[2:]:
             left.addLayout(self._build_hotkey_row(fn, field, labels, descriptions))
             left.addSpacing(10)
 

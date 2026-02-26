@@ -41,6 +41,7 @@ class RunToolbar(QWidget):
     """运行模式工具栏 — 匹配原版单行布局"""
 
     stop_clicked = pyqtSignal()
+    voice_toggle_clicked = pyqtSignal()
     auto_center_clicked = pyqtSignal()
     toggle_buttons_clicked = pyqtSignal()
     soft_keyboard_clicked = pyqtSignal()
@@ -82,6 +83,7 @@ class RunToolbar(QWidget):
         except Exception:
             pass
 
+        _K_VOICE = hotkeys.get('voice', 'F5').upper()
         _K_AC = hotkeys.get('auto_center', 'F6').upper()
         _K_VIS = hotkeys.get('toggle_buttons', 'F7').upper()
         _K_KB = hotkeys.get('soft_keyboard', 'F8').upper()
@@ -149,20 +151,30 @@ class RunToolbar(QWidget):
         # 分隔线
         row.addWidget(_VSep())
 
-        # 自动回中 [F6] (绿/灰 toggle)
+        # 语音 [F5] (绿/灰 toggle, 默认灰色-关闭)
+        self._voice_btn = _IconTextBtn(
+            "\uE720", "\U0001F3A4",
+            t("run.voice", key=_K_VOICE),
+            C_GRAY, C_GRAY_H)
+        self._voice_btn.setToolTip(t("tooltip.voice_run"))
+        self._install_tip(self._voice_btn)
+        self._voice_btn.clicked.connect(self.voice_toggle_clicked.emit)
+        row.addWidget(self._voice_btn)
+
+        # 回中 [F6] (绿/灰 toggle, 统一文案)
         self._ac_btn = _IconTextBtn(
             "\uEA3A", "\u21BA",
-            t("run.auto_center_off", key=_K_AC),
+            t("run.auto_center", key=_K_AC),
             C_GRAY, C_GRAY_H)
         self._ac_btn.setToolTip(t("tooltip.auto_center"))
         self._install_tip(self._ac_btn)
         self._ac_btn.clicked.connect(self.auto_center_clicked.emit)
         row.addWidget(self._ac_btn)
 
-        # 显示/隐藏 [F7] (灰色)
+        # 隐藏/显示 [F7] (统一文案)
         self._vis_btn = _IconTextBtn(
             "\uED1A", "\U0001F441",
-            t("run.hide_buttons", key=_K_VIS),
+            t("run.toggle_vis", key=_K_VIS),
             C_GRAY, C_GRAY_H)
         self._vis_btn.setToolTip(t("tooltip.toggle_vis"))
         self._install_tip(self._vis_btn)
@@ -212,41 +224,32 @@ class RunToolbar(QWidget):
 
     # ── 状态更新 (外部调用) ──────────────────────────────────
 
+    def update_voice_state(self, enabled: bool):
+        """语音开关状态变化 → 更新按钮颜色"""
+        if enabled:
+            self._voice_btn.set_colors(C_GREEN, C_GREEN_H)
+            self._voice_btn.set_icon_text("\uE720", "\U0001F3A4")
+        else:
+            self._voice_btn.set_colors(C_GRAY, C_GRAY_H)
+            self._voice_btn.set_icon_text("\uE720", "\U0001F3A4")
+
     def update_auto_center(self, enabled):
         self._auto_center = enabled
-        hotkeys = {}
-        try:
-            from core.config_manager import load_hotkeys
-            hotkeys = load_hotkeys()
-        except Exception:
-            pass
-        key = hotkeys.get('auto_center', 'F6').upper()
-
+        # 仅切换颜色和icon，文案统一为 "回中 [F6]"
         if enabled:
             self._ac_btn.set_colors(C_GREEN, C_GREEN_H)
             self._ac_btn.set_icon_text("\uE7C9", "\u2714")
-            self._ac_btn.set_label(t("run.auto_center_on", key=key))
         else:
             self._ac_btn.set_colors(C_GRAY, C_GRAY_H)
             self._ac_btn.set_icon_text("\uEA3A", "\u21BA")
-            self._ac_btn.set_label(t("run.auto_center_off", key=key))
 
     def update_buttons_visibility(self, hidden):
         self._buttons_hidden = hidden
-        hotkeys = {}
-        try:
-            from core.config_manager import load_hotkeys
-            hotkeys = load_hotkeys()
-        except Exception:
-            pass
-        key = hotkeys.get('toggle_buttons', 'F7').upper()
-
+        # 仅切换icon，文案统一为 "隐藏/显示 [F7]"
         if hidden:
             self._vis_btn.set_icon_text("\uE7B3", "\U0001F648")
-            self._vis_btn.set_label(t("run.show_buttons", key=key))
         else:
             self._vis_btn.set_icon_text("\uED1A", "\U0001F441")
-            self._vis_btn.set_label(t("run.hide_buttons", key=key))
 
     def update_pt_mode(self, mode):
         self._pt_mode = mode

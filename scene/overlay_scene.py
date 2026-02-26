@@ -410,6 +410,7 @@ class OverlayScene(QGraphicsScene):
         self._config['wheel_center_ring_visible'] = self._wheel_center_ring_visible
         # 网格大小
         self._config['grid_size'] = self.grid_size
+        # 语音配置透传（voice_commands 等字段已在 _config 中，无需额外处理）
 
         profile_name = get_active_profile_name()
         save_profile(profile_name, self._config)

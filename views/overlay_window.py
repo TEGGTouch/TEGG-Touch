@@ -28,6 +28,7 @@ from views.profile_manager_dialog import ProfileManagerDialog
 from views.hotkey_settings_dialog import HotkeySettingsDialog
 from views.about_dialog import AboutDialog
 from views.virtual_keyboard import VirtualKeyboard
+from views.voice_settings_dialog import VoiceSettingsDialog
 from views.toast_widget import ToastWidget
 from scene.virtual_cursor_item import VirtualCursorItem
 from core.constants import BTN_TYPE_CENTER_BAND
@@ -43,6 +44,7 @@ class OverlayWindow(QGraphicsView):
         super().__init__(self._scene)
 
         self._current_mode = 'edit'  # 'edit' | 'run'
+        self._voice_active = False   # 运行模式中语音开关状态
         self._buttons_hidden = False
         self._profile_name = ''
         self._current_opacity = DEFAULT_TRANSPARENCY
@@ -88,6 +90,7 @@ class OverlayWindow(QGraphicsView):
             self._scene.update_auto_center_bar)
         self._run_controller.cursor_on_ui.connect(
             self._pt_manager.update_smart_passthrough)
+        self._run_controller.request_toggle_voice.connect(self._toggle_voice)
 
         # ── 工具栏 (parent=self ensures Z-order above overlay) ──
         self._edit_toolbar = EditToolbar(parent=self)
@@ -97,6 +100,7 @@ class OverlayWindow(QGraphicsView):
         # 连接编辑工具栏信号
         self._edit_toolbar.add_button_clicked.connect(self._on_add_button)
         self._edit_toolbar.add_center_band_clicked.connect(self._on_add_center_band)
+        self._edit_toolbar.voice_clicked.connect(self._open_voice_settings)
         self._edit_toolbar.keyboard_clicked.connect(self._toggle_soft_keyboard)
         self._edit_toolbar.run_clicked.connect(self.to_run)
         self._edit_toolbar.wheel_clicked.connect(self._on_toggle_wheel)
@@ -109,6 +113,7 @@ class OverlayWindow(QGraphicsView):
 
         # 连接运行工具栏信号
         self._run_toolbar.stop_clicked.connect(self.to_edit)
+        self._run_toolbar.voice_toggle_clicked.connect(self._toggle_voice)
         self._run_toolbar.auto_center_clicked.connect(self._toggle_auto_center)
         self._run_toolbar.toggle_buttons_clicked.connect(self._toggle_buttons_visibility)
         self._run_toolbar.soft_keyboard_clicked.connect(self._toggle_soft_keyboard)
@@ -205,6 +210,10 @@ class OverlayWindow(QGraphicsView):
 
     def to_run(self):
         """切换到运行模式"""
+        # 关闭所有编辑模式弹窗
+        from PyQt6.QtWidgets import QDialog
+        for dlg in self.findChildren(QDialog):
+            dlg.close()
         self._smart_pt_timer.stop()
         self._current_mode = 'run'
         self._scene.save_config()
@@ -220,6 +229,8 @@ class OverlayWindow(QGraphicsView):
         saved_y = cfg.get('run_toolbar_y') if cfg else None
         self._run_toolbar.set_saved_position(saved_x, saved_y)
         self._run_toolbar.show()
+        self._voice_active = False
+        self._run_toolbar.update_voice_state(False)
         self._run_toolbar.update_auto_center(False)
         self._run_toolbar.update_buttons_visibility(False)
         self._run_toolbar.update_pt_mode(PT_ON)
@@ -295,6 +306,60 @@ class OverlayWindow(QGraphicsView):
                            and self._scene._wheel_center_ring_visible)
                 self._scene.ring_item.setVisible(visible)
         self._run_toolbar.update_buttons_visibility(self._buttons_hidden)
+
+    @staticmethod
+    def _check_microphone() -> bool:
+        """检测是否有可用的麦克风输入设备（sounddevice 优先，pyaudio 回退）"""
+        try:
+            import sounddevice as sd
+            devs = sd.query_devices()
+            return any(d.get('max_input_channels', 0) > 0 for d in devs)
+        except ImportError:
+            pass
+        try:
+            import pyaudio
+            pa = pyaudio.PyAudio()
+            for i in range(pa.get_device_count()):
+                if pa.get_device_info_by_index(i).get('maxInputChannels', 0) > 0:
+                    pa.terminate()
+                    return True
+            pa.terminate()
+            return False
+        except Exception:
+            return False
+
+    def _toggle_voice(self):
+        """运行模式中切换语音识别开关"""
+        config = self._scene._config or {}
+        commands = config.get('voice_commands', [])
+        language = config.get('voice_language', 'zh-CN')
+
+        if self._voice_active:
+            # 关闭语音
+            self._run_controller._stop_voice()
+            self._voice_active = False
+            self._run_toolbar.update_voice_state(False)
+            logger.info("Voice recognition disabled")
+        else:
+            # 开启语音 — 检查是否有配置指令
+            if not commands:
+                self._toast.show_toast(t("voice.error_no_commands"))
+                logger.warning("Voice toggle: no commands configured")
+                return
+            # 检查麦克风
+            if not self._check_microphone():
+                self._toast.show_toast(t("voice_dialog.mic_not_found"))
+                logger.warning("Voice toggle: no microphone detected")
+                return
+            voice_config = {
+                'voice_enabled': True,
+                'voice_commands': commands,
+                'voice_language': language,
+            }
+            self._run_controller._start_voice(voice_config)
+            self._voice_active = True
+            self._run_toolbar.update_voice_state(True)
+            logger.info("Voice recognition enabled: %d commands", len(commands))
 
     def _toggle_auto_center(self):
         """切换自动回中"""
@@ -380,8 +445,10 @@ class OverlayWindow(QGraphicsView):
             dialog.copied.connect(lambda it: self._on_button_copied(it))
             dialog.show()
             return
-        dialog = ButtonEditorDialog(item, self)
+        macros = self._scene._config.get('macros', [])
+        dialog = ButtonEditorDialog(item, self, macros=macros)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.macros_changed.connect(self._on_macros_changed)
         dialog.saved.connect(lambda data: self._on_button_saved(item))
         dialog.deleted.connect(lambda it: self._on_button_deleted(it))
         dialog.copied.connect(lambda it: self._on_button_copied(it))
@@ -403,6 +470,13 @@ class OverlayWindow(QGraphicsView):
         if new_item:
             self._wire_single_item(new_item)
             self._scene.save_config()
+
+    def _on_macros_changed(self, macros_list):
+        """宏列表变更 → 写入 config 并保存"""
+        if self._scene._config is not None:
+            self._scene._config['macros'] = macros_list
+            self._scene.save_config()
+            logger.info("Macros updated: %d macros", len(macros_list))
 
     def _open_profile_manager(self):
         """打开方案管理弹窗"""
@@ -454,6 +528,31 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar.set_profile_name(name)
         # 同步轮盘按钮状态到工具栏
         self._edit_toolbar.set_wheel_state(self._scene.wheel_visible)
+
+    def _open_voice_settings(self):
+        """打开语音指令设置弹窗"""
+        config = self._scene._config or {}
+        voice_commands = config.get('voice_commands', [])
+        voice_language = config.get('voice_language', None)
+        voice_mic_device = config.get('voice_mic_device', None)
+        macros = config.get('macros', [])
+        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, macros=macros)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.settings_saved.connect(self._on_voice_settings_saved)
+        dialog.show()
+
+    def _on_voice_settings_saved(self):
+        """语音设置保存后 → 写入 config"""
+        dialog = self.sender()
+        if dialog and hasattr(dialog, 'get_result'):
+            result = dialog.get_result()
+            if self._scene._config:
+                self._scene._config['voice_commands'] = result.get('voice_commands', [])
+                self._scene._config['voice_language'] = result.get('voice_language', 'zh-CN')
+                self._scene._config['voice_enabled'] = result.get('voice_enabled', False)
+                self._scene._config['voice_mic_device'] = result.get('voice_mic_device')
+            self._scene.save_config()
+            logger.info("Voice settings saved: %d commands", len(result.get('voice_commands', [])))
 
     def _open_hotkey_settings(self):
         """打开快捷键设置弹窗"""

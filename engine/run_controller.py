@@ -12,6 +12,8 @@ TEGG Touch 蛋挞 (PyQt6) - run_controller.py
 import ctypes
 import ctypes.wintypes
 import logging
+import threading
+import time as _time
 
 from PyQt6.QtCore import QObject, QTimer, QPoint, pyqtSignal
 
@@ -32,12 +34,14 @@ class RunController(QObject):
     """运行模式控制器"""
     # 信号
     request_edit_mode = pyqtSignal()
+    request_toggle_voice = pyqtSignal()
     request_toggle_buttons = pyqtSignal()
     request_toggle_auto_center = pyqtSignal()
     request_soft_keyboard = pyqtSignal()
     passthrough_changed = pyqtSignal(str)   # 'pt_on' | 'pt_off' | 'pt_block'
     cursor_on_ui = pyqtSignal(bool)         # 每帧: 光标是否在 UI 元素上
     auto_center_progress = pyqtSignal(float, float, float)  # progress, x, y
+    voice_command_triggered = pyqtSignal(str)  # 语音指令触发通知 (phrase)
 
     def __init__(self, scene, window):
         super().__init__()
@@ -78,6 +82,9 @@ class RunController(QObject):
 
         self._hotkeys = load_hotkeys()
 
+        # 语音引擎（延迟创建，仅在配置启用时）
+        self._voice_engine = None
+
     def reload_hotkeys(self):
         """重新加载快捷键配置"""
         self._hotkeys = load_hotkeys()
@@ -93,8 +100,13 @@ class RunController(QObject):
         if not val:
             self._ac_start_time = None
 
-    def start(self):
-        """进入运行模式"""
+    def start(self, voice_config: dict = None):
+        """进入运行模式
+
+        Args:
+            voice_config: 语音配置 dict，包含 voice_enabled, voice_language, voice_commands。
+                          为 None 时不启动语音。
+        """
         self._active = True
         self._hotkeys = load_hotkeys()
         self._auto_center_delay = self._hotkeys.get('auto_center_delay', 1500)
@@ -108,11 +120,15 @@ class RunController(QObject):
         self._holding_mclick = None
         self._timer.start()
 
+        # 启动语音引擎
+        self._start_voice(voice_config)
+
     def stop(self):
         """退出运行模式"""
         self._active = False
         self._timer.stop()
         self._ac_start_time = None
+        self._stop_voice()
         self._active_key_count = 0
         # 释放当前 hover
         if self._poll_hover_item is not None:
@@ -352,6 +368,9 @@ class RunController(QObject):
             self.request_edit_mode.emit()
             return
 
+        if _debounced('voice', hk.get('voice', 'f5')):
+            self.request_toggle_voice.emit()
+
         if _debounced('toggle_buttons', hk.get('toggle_buttons', 'f7')):
             self.request_toggle_buttons.emit()
 
@@ -435,13 +454,13 @@ class RunController(QObject):
         self._active_key_count += 1
         self._ac_start_time = None
         if data.hover:
-            trigger(data.hover, 'p')
+            self._smart_trigger(data.hover, 'p')
 
     def on_hover_deactivated(self, data):
         """按钮 hover 释放 → 释放按键"""
         self._active_key_count = max(0, self._active_key_count - 1)
         if data.hover:
-            trigger(data.hover, 'r')
+            self._smart_trigger(data.hover, 'r')
 
     def on_action_triggered(self, data, key_str, action):
         """按钮点击/滚轮 → 触发按键"""
@@ -450,4 +469,118 @@ class RunController(QObject):
             self._ac_start_time = None
         elif action == 'r':
             self._active_key_count = max(0, self._active_key_count - 1)
-        trigger(key_str, action)
+        self._smart_trigger(key_str, action)
+
+    # ── 宏感知的智能触发 ──
+
+    def _smart_trigger(self, key_str: str, action: str):
+        """解析 key_str, 分离普通键和 macro:name 标签, 分别执行"""
+        if not key_str:
+            return
+        parts = [p.strip() for p in key_str.split('+')]
+        normal_keys = []
+        macro_names = []
+        for p in parts:
+            if p.startswith('macro:'):
+                macro_names.append(p[6:])
+            else:
+                normal_keys.append(p)
+
+        # 普通键照常触发
+        if normal_keys:
+            trigger('+'.join(normal_keys), action)
+
+        # 宏: 仅在 press / click 时触发 (release 忽略, 避免重复)
+        if macro_names and action in ('p', 'click'):
+            for name in macro_names:
+                macro_data = self._find_macro(name)
+                if macro_data:
+                    self._execute_macro(macro_data)
+                else:
+                    logger.warning("Macro not found: '%s'", name)
+
+    def _find_macro(self, name: str):
+        """从当前 config 中查找宏"""
+        config = getattr(self._scene, '_config', None) or {}
+        for m in config.get('macros', []):
+            if m.get('name') == name:
+                return m
+        return None
+
+    def _execute_macro(self, macro_data: dict):
+        """在后台线程中顺序执行宏步骤 (避免 delay 阻塞主循环)"""
+        steps = macro_data.get('steps', [])
+        repeat = max(1, macro_data.get('repeat', 1))
+        name = macro_data.get('name', '?')
+        if not steps:
+            return
+
+        def _run():
+            for r in range(repeat):
+                for step in steps:
+                    if not self._active:
+                        return
+                    keys = step.get('keys', '')
+                    act = step.get('action', 'click')
+                    delay = step.get('delay', 50)
+                    if keys:
+                        if act == 'click':
+                            trigger(keys, 'p')
+                            trigger(keys, 'r')
+                        elif act == 'press':
+                            trigger(keys, 'p')
+                        elif act == 'release':
+                            trigger(keys, 'r')
+                    if delay > 0:
+                        _time.sleep(delay / 1000.0)
+            logger.info("Macro '%s' executed (repeat=%d, steps=%d)", name, repeat, len(steps))
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+    # ── 语音引擎集成 ──
+
+    def _start_voice(self, voice_config: dict = None):
+        """根据配置启动语音引擎"""
+        if not voice_config:
+            return
+        if not voice_config.get('voice_enabled', False):
+            return
+        commands = voice_config.get('voice_commands', [])
+        language = voice_config.get('voice_language', 'zh-CN')
+        if not commands:
+            return
+
+        try:
+            from engine.voice_engine import VoiceEngine
+            self._voice_engine = VoiceEngine(self)
+            self._voice_engine.command_recognized.connect(self._on_voice_command)
+            self._voice_engine.error_occurred.connect(
+                lambda e: logger.warning(f"语音引擎错误: {e}"))
+            self._voice_engine.start(commands, language)
+        except Exception as e:
+            logger.warning(f"语音引擎启动失败: {e}")
+            self._voice_engine = None
+
+    def _stop_voice(self):
+        """停止语音引擎"""
+        if self._voice_engine:
+            try:
+                self._voice_engine.stop()
+            except Exception as e:
+                logger.warning(f"语音引擎停止异常: {e}")
+            self._voice_engine = None
+
+    def _on_voice_command(self, phrase: str, keys: str, action: str, latency_ms: int = 0):
+        """语音指令识别回调 → 触发按键 (支持宏)"""
+        if not self._active or not keys:
+            return
+        if action == 'click':
+            self._smart_trigger(keys, 'p')
+            self._smart_trigger(keys, 'r')
+        elif action == 'press':
+            self._smart_trigger(keys, 'p')
+        elif action == 'release':
+            self._smart_trigger(keys, 'r')
+        self.voice_command_triggered.emit(phrase)
+        logger.info(f"语音指令触发: '{phrase}' → keys='{keys}', action='{action}'")

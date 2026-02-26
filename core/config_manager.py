@@ -194,6 +194,13 @@ def load_config_from_file(filepath: str) -> dict:
         'run_toolbar_x': None,
         'run_toolbar_y': None,
         'grid_size': None,
+        # 语音识别
+        'voice_enabled': False,
+        'voice_language': 'zh-CN',
+        'voice_commands': [],
+        'voice_mic_device': None,
+        # 自定义宏
+        'macros': [],
     }
     if not os.path.exists(filepath):
         return result
@@ -244,6 +251,17 @@ def load_config_from_file(filepath: str) -> dict:
         result['grid_size'] = data.get('grid_size', None)
         # 坐标格式标记（cells=格子数，无=旧像素格式）
         result['coord_format'] = data.get('coord_format', None)
+        # 语音识别
+        result['voice_enabled'] = data.get('voice_enabled', False)
+        result['voice_language'] = data.get('voice_language', 'zh-CN')
+        raw_vc = data.get('voice_commands', [])
+        if isinstance(raw_vc, list):
+            result['voice_commands'] = raw_vc
+        result['voice_mic_device'] = data.get('voice_mic_device', None)
+        # 自定义宏
+        raw_macros = data.get('macros', [])
+        if isinstance(raw_macros, list):
+            result['macros'] = raw_macros
         logger.info(f"配置加载成功: {filepath}")
     except Exception as e:
         logger.error(f"配置加载失败: {e}")
@@ -265,7 +283,12 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          run_toolbar_x=None,
                          run_toolbar_y=None,
                          grid_size=None,
-                         coord_format=None) -> bool:
+                         coord_format=None,
+                         voice_enabled=None,
+                         voice_language=None,
+                         voice_commands=None,
+                         voice_mic_device=None,
+                         macros=None) -> bool:
     """保存配置到指定文件。"""
     # Bug 5 fix: geometry 为 None 时使用当前屏幕尺寸作为 fallback
     if geometry is None:
@@ -321,6 +344,20 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         clean_ring = {k: v for k, v in wheel_center_ring.items()
                       if k not in RUNTIME_FIELDS and k != 'deleted'}
         data['wheel_center_ring'] = clean_ring
+
+    # 语音识别
+    if voice_enabled is not None:
+        data['voice_enabled'] = voice_enabled
+    if voice_language is not None:
+        data['voice_language'] = voice_language
+    if voice_commands is not None:
+        data['voice_commands'] = voice_commands
+    if voice_mic_device is not None:
+        data['voice_mic_device'] = voice_mic_device
+
+    # 自定义宏
+    if macros is not None:
+        data['macros'] = macros
 
     try:
         os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)

@@ -175,6 +175,7 @@ class EditToolbar(QWidget):
     # 信号
     add_button_clicked = pyqtSignal()
     add_center_band_clicked = pyqtSignal()
+    voice_clicked = pyqtSignal()
     keyboard_clicked = pyqtSignal()
     run_clicked = pyqtSignal()
     wheel_clicked = pyqtSignal()
@@ -272,6 +273,17 @@ class EditToolbar(QWidget):
         self._install_tip(self._wheel_btn)
         self._wheel_btn.clicked.connect(self._on_wheel_toggle)
         r1.addWidget(self._wheel_btn)
+
+        # 分隔线
+        r1.addWidget(_VSep())
+
+        # 语音识别
+        voice_btn = _IconTextBtn("\uE720", "\U0001F3A4", t("toolbar.voice"),
+                                 C_GRAY, C_GRAY_H)
+        voice_btn.setToolTip(t("tooltip.voice"))
+        self._install_tip(voice_btn)
+        voice_btn.clicked.connect(self.voice_clicked.emit)
+        r1.addWidget(voice_btn)
 
         # 分隔线
         r1.addWidget(_VSep())

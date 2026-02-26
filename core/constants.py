@@ -28,6 +28,7 @@ def get_app_title():
 
 # === 默认快捷键映射 ===
 DEFAULT_HOTKEYS = {
+    "voice":          "f5",
     "auto_center":    "f6",
     "toggle_buttons": "f7",
     "soft_keyboard":  "f8",
@@ -41,6 +42,7 @@ DEFAULT_HOTKEYS = {
 def get_hotkey_labels():
     """返回本地化的快捷键显示名称（运行时求值）。"""
     return {
+        "voice":          t("hotkey.voice"),
         "auto_center":    t("hotkey.auto_center"),
         "toggle_buttons": t("hotkey.toggle_buttons"),
         "soft_keyboard":  t("hotkey.soft_keyboard"),
@@ -180,6 +182,15 @@ PT_CYCLE = [PT_ON, PT_OFF, PT_BLOCK]  # 循环顺序
 
 # 不穿透模式覆盖色（半透明黑，提示用户当前处于拦截状态）
 COLOR_BLOCK_OVERLAY = "#1A1A1A"
+
+# === 语音识别配置 ===
+VOICE_MODELS_DIR = os.path.join(APP_DIR, "models", "vosk")
+VOICE_SAMPLE_RATE = 16000       # Vosk 推荐采样率
+VOICE_CHUNK_SIZE = 4000         # 每次读取的采样数 (~250ms @16kHz)
+VOICE_MODEL_MAP = {
+    "zh-CN": "vosk-model-small-cn-0.22",
+    "en":    "vosk-model-small-en-us-0.15",
+}
 
 # 按钮可选字段及默认值 (兼容旧配置)
 BUTTON_OPTIONAL_DEFAULTS = {
