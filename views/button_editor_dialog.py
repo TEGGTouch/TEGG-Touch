@@ -923,11 +923,11 @@ class ButtonEditorDialog(QDialog):
         self._macro_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         lay.addWidget(self._macro_list, 1)
 
-        # 底部「新建」按钮 (紫色, + icon)
-        new_btn = QPushButton("+ " + t("macro.new"))
+        # 底部「新建」按钮 (紫色, icon + 文字双 label)
+        _detect_icon_font()
+        new_btn = QPushButton()
         new_btn.setFixedHeight(40)
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        new_btn.setFont(_make_font(fn, 16))
         new_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {self.C_MACRO}; color: #FFF;
@@ -935,6 +935,25 @@ class ButtonEditorDialog(QDialog):
             }}
             QPushButton:hover {{ background: #7C3AED; }}
         """)
+        nb_lay = QHBoxLayout(new_btn)
+        nb_lay.setContentsMargins(0, 0, 0, 0)
+        nb_lay.setSpacing(4)
+        nb_lay.addStretch()
+        if _ICON_FONT:
+            nb_icon = QLabel("\uE710")
+            nb_icon.setFont(_make_font(_ICON_FONT, 16))
+        else:
+            nb_icon = QLabel("+")
+            nb_icon.setFont(_make_font(fn, 16, bold=True))
+        nb_icon.setStyleSheet("color: #FFF; background: transparent;")
+        nb_icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        nb_lay.addWidget(nb_icon)
+        nb_text = QLabel(t("macro.new"))
+        nb_text.setFont(_make_font(fn, 16))
+        nb_text.setStyleSheet("color: #FFF; background: transparent;")
+        nb_text.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        nb_lay.addWidget(nb_text)
+        nb_lay.addStretch()
         new_btn.clicked.connect(self._new_macro)
         lay.addWidget(new_btn)
 
