@@ -508,7 +508,13 @@ class RunController(QObject):
         return None
 
     def _execute_macro(self, macro_data: dict):
-        """在后台线程中顺序执行宏步骤 (避免 delay 阻塞主循环)"""
+        """在后台线程中顺序执行宏步骤 (避免 delay 阻塞主循环)
+
+        支持两种步骤格式:
+          - type='key':  {"type":"key", "key":"a+b", "action":"click"}
+          - type='delay': {"type":"delay", "ms":100}
+          - 旧格式(兼容): {"keys":"a+b", "action":"click", "delay":50}
+        """
         steps = macro_data.get('steps', [])
         repeat = max(1, macro_data.get('repeat', 1))
         name = macro_data.get('name', '?')
@@ -520,19 +526,48 @@ class RunController(QObject):
                 for step in steps:
                     if not self._active:
                         return
-                    keys = step.get('keys', '')
-                    act = step.get('action', 'click')
-                    delay = step.get('delay', 50)
-                    if keys:
-                        if act == 'click':
-                            trigger(keys, 'p')
-                            trigger(keys, 'r')
-                        elif act == 'press':
-                            trigger(keys, 'p')
-                        elif act == 'release':
-                            trigger(keys, 'r')
-                    if delay > 0:
-                        _time.sleep(delay / 1000.0)
+                    step_type = step.get('type', 'key')
+
+                    if step_type == 'delay':
+                        # 延迟步骤: {"type":"delay", "ms":100}
+                        ms = step.get('ms', 50)
+                        if ms > 0:
+                            _time.sleep(ms / 1000.0)
+
+                    elif step_type == 'key':
+                        # 按键步骤: {"type":"key", "key":"a+b", "action":"click"}
+                        # 兼容旧格式 "keys" 字段
+                        keys = step.get('key', '') or step.get('keys', '')
+                        act = step.get('action', 'click')
+                        if keys:
+                            if act == 'click':
+                                trigger(keys, 'p')
+                                trigger(keys, 'r')
+                            elif act == 'press':
+                                trigger(keys, 'p')
+                            elif act == 'release':
+                                trigger(keys, 'r')
+                        # 旧格式可能有内嵌 delay
+                        delay = step.get('delay', 0)
+                        if delay > 0:
+                            _time.sleep(delay / 1000.0)
+
+                    else:
+                        # 未知类型，尝试旧格式兼容
+                        keys = step.get('keys', '') or step.get('key', '')
+                        act = step.get('action', 'click')
+                        delay = step.get('delay', 50)
+                        if keys:
+                            if act == 'click':
+                                trigger(keys, 'p')
+                                trigger(keys, 'r')
+                            elif act == 'press':
+                                trigger(keys, 'p')
+                            elif act == 'release':
+                                trigger(keys, 'r')
+                        if delay > 0:
+                            _time.sleep(delay / 1000.0)
+
             logger.info("Macro '%s' executed (repeat=%d, steps=%d)", name, repeat, len(steps))
 
         t = threading.Thread(target=_run, daemon=True)
