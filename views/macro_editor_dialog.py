@@ -23,7 +23,7 @@ from views.button_editor_dialog import (
 
 # 宏步骤强调色
 C_MACRO_KEY = "#8B5CF6"     # 紫色 — 指令步骤
-C_MACRO_DELAY = "#D97706"   # 琥珀色 — 延迟步骤
+C_MACRO_DELAY = "#06B6D4"   # 青绿色 — 延迟步骤
 C_MACRO_NAME = "#8B5CF6"    # 紫色 — 宏名称 (与 C_MACRO 统一)
 
 MAX_STEPS = 32
@@ -52,14 +52,31 @@ class _StepRow(QWidget):
         lay.setContentsMargins(0, 2, 0, 2)
         lay.setSpacing(6)
 
-        # 序号 + 拖动手柄
-        handle = QLabel(f"☰ {self._index + 1}")
-        handle.setFont(_make_font(fn, 14))
-        handle.setStyleSheet("color: #666; background: transparent;")
-        handle.setFixedWidth(36)
-        handle.setCursor(Qt.CursorShape.OpenHandCursor)
-        self._handle = handle
-        lay.addWidget(handle)
+        # 序号 + 拖动手柄 (Segoe icon + 数字双 label)
+        _detect_icon_font()
+        handle_box = QWidget()
+        handle_box.setFixedWidth(42)
+        handle_box.setCursor(Qt.CursorShape.OpenHandCursor)
+        handle_box.setStyleSheet("background: transparent;")
+        h_lay = QHBoxLayout(handle_box)
+        h_lay.setContentsMargins(0, 0, 0, 0)
+        h_lay.setSpacing(2)
+        if _ICON_FONT:
+            h_icon = QLabel("\uE700")
+            h_icon.setFont(_make_font(_ICON_FONT, 14))
+        else:
+            h_icon = QLabel("☰")
+            h_icon.setFont(_make_font(fn, 14))
+        h_icon.setStyleSheet("color: #666; background: transparent;")
+        h_icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        h_lay.addWidget(h_icon)
+        self._handle_num = QLabel(str(self._index + 1))
+        self._handle_num.setFont(_make_font(fn, 13))
+        self._handle_num.setStyleSheet("color: #666; background: transparent;")
+        self._handle_num.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        h_lay.addWidget(self._handle_num)
+        self._handle = handle_box
+        lay.addWidget(handle_box)
 
         if self.step_data.get('type') == 'delay':
             self._build_delay_row(lay, fn)
@@ -198,7 +215,7 @@ class _StepRow(QWidget):
 
     def set_index(self, idx: int):
         self._index = idx
-        self._handle.setText(f"☰ {idx + 1}")
+        self._handle_num.setText(str(idx + 1))
 
     def get_step_data(self) -> dict:
         """读取当前步骤数据"""
@@ -400,7 +417,7 @@ class MacroEditorDialog(QDialog):
                 background: {C_MACRO_DELAY}; color: #FFF;
                 border: none; border-radius: 6px;
             }}
-            QPushButton:hover {{ background: #B45309; }}
+            QPushButton:hover {{ background: #0891B2; }}
         """)
         add_delay_btn.clicked.connect(self._add_delay_step)
         btn_row1.addWidget(add_delay_btn)
@@ -563,9 +580,16 @@ class MacroEditorDialog(QDialog):
         y = (screen.height() - self.height()) // 2
         self.move(x, y)
 
+    # 标题栏拖拽区域高度 (PADDING + title_row ~40 + spacing 16)
+    _TITLE_BAR_H = 76
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            local_y = event.position().y()
+            if local_y <= self._TITLE_BAR_H:
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            else:
+                self._drag_pos = None
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
