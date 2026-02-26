@@ -199,6 +199,7 @@ def load_config_from_file(filepath: str) -> dict:
         'voice_language': 'zh-CN',
         'voice_commands': [],
         'voice_mic_device': None,
+        'voice_auto_start': True,
         # 自定义宏
         'macros': [],
     }
@@ -258,6 +259,7 @@ def load_config_from_file(filepath: str) -> dict:
         if isinstance(raw_vc, list):
             result['voice_commands'] = raw_vc
         result['voice_mic_device'] = data.get('voice_mic_device', None)
+        result['voice_auto_start'] = data.get('voice_auto_start', True)
         # 自定义宏
         raw_macros = data.get('macros', [])
         if isinstance(raw_macros, list):
@@ -288,6 +290,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          voice_language=None,
                          voice_commands=None,
                          voice_mic_device=None,
+                         voice_auto_start=None,
                          macros=None) -> bool:
     """保存配置到指定文件。"""
     # Bug 5 fix: geometry 为 None 时使用当前屏幕尺寸作为 fallback
@@ -354,6 +357,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['voice_commands'] = voice_commands
     if voice_mic_device is not None:
         data['voice_mic_device'] = voice_mic_device
+    if voice_auto_start is not None:
+        data['voice_auto_start'] = voice_auto_start
 
     # 自定义宏
     if macros is not None:

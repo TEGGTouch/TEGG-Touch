@@ -9,8 +9,9 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLineEdit, QLabel, QSlider, QPushButton, QWidget,
     QScrollArea, QFrame, QApplication, QComboBox,
+    QGraphicsOpacityEffect,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QMimeData
+from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
 
 from core.i18n import t, get_font
@@ -23,7 +24,7 @@ from views.button_editor_dialog import (
 
 # 宏步骤强调色
 C_MACRO_KEY = "#8B5CF6"     # 紫色 — 指令步骤
-C_MACRO_DELAY = "#06B6D4"   # 青绿色 — 延迟步骤
+C_MACRO_DELAY = "#D97706"   # 琥珀黄 — 延迟步骤
 C_MACRO_NAME = "#8B5CF6"    # 紫色 — 宏名称 (与 C_MACRO 统一)
 
 MAX_STEPS = 32
@@ -43,6 +44,7 @@ class _StepRow(QWidget):
         self.step_data = step_data
         self._index = index
         self._fn = fn
+        self._dragging = False
         self.setFixedHeight(52)
         self._init_ui()
 
@@ -233,6 +235,43 @@ class _StepRow(QWidget):
                 'action': self._action_combo.currentData(),
             }
 
+    # ── 拖拽排序 ──
+
+    def mousePressEvent(self, event):
+        if (event.button() == Qt.MouseButton.LeftButton
+                and event.position().x() < 42):
+            self._dragging = True
+            self.grabMouse()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            eff = QGraphicsOpacityEffect(self)
+            eff.setOpacity(0.4)
+            self.setGraphicsEffect(eff)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._dragging:
+            dlg = self.window()
+            if hasattr(dlg, '_on_row_dragging'):
+                dlg._on_row_dragging(self, event.globalPosition().y())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._dragging:
+            self._dragging = False
+            self.releaseMouse()
+            self.unsetCursor()
+            self.setGraphicsEffect(None)
+            dlg = self.window()
+            if hasattr(dlg, '_on_row_drop'):
+                dlg._on_row_drop(self)
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
 
 class MacroEditorDialog(QDialog):
     """宏编辑弹窗 — 左右双栏: 左侧步骤编辑 + 右侧键位面板"""
@@ -245,12 +284,14 @@ class MacroEditorDialog(QDialog):
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20
     WIN_H = 800
 
-    def __init__(self, macro_data: dict = None, parent=None):
+    def __init__(self, macro_data: dict = None, existing_names: list[str] = None, parent=None):
         super().__init__(parent)
         # macro_data: {"name": "...", "steps": [...]} or None for new
         self._macro = macro_data or {"name": "", "steps": []}
         self._step_rows: list[_StepRow] = []
         self._focus_widget = None
+        self._existing_names = set(existing_names or [])
+        self._original_name = self._macro.get('name', '')
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -335,14 +376,16 @@ class MacroEditorDialog(QDialog):
         self._name_edit.setPlaceholderText(t("macro.name_placeholder"))
         self._name_edit.setFont(_make_font(fn, 14))
         self._name_edit.setFixedHeight(38)
-        self._name_edit.setStyleSheet(f"""
+        self._name_style_normal = f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: white;
                 border: 2px solid #555; border-radius: 6px;
                 padding: 4px 8px;
             }}
             QLineEdit:focus {{ border-color: {C_MACRO_NAME}; }}
-        """)
+        """
+        self._name_edit.setStyleSheet(self._name_style_normal)
+        self._name_edit.textChanged.connect(self._on_name_changed)
         name_row.addWidget(self._name_edit, 1)
         left.addLayout(name_row)
         left.addSpacing(12)
@@ -385,6 +428,13 @@ class MacroEditorDialog(QDialog):
         self._steps_layout.setSpacing(4)
         self._steps_layout.addStretch()
 
+        # 拖拽指示线 (绝对定位在 _steps_container 上)
+        self._drop_indicator = QFrame(self._steps_container)
+        self._drop_indicator.setFixedHeight(2)
+        self._drop_indicator.setStyleSheet("background: #0078D7;")
+        self._drop_indicator.hide()
+        self._drag_target_idx = 0
+
         self._steps_scroll.setWidget(self._steps_container)
         left.addWidget(self._steps_scroll, 1)
 
@@ -417,7 +467,7 @@ class MacroEditorDialog(QDialog):
                 background: {C_MACRO_DELAY}; color: #FFF;
                 border: none; border-radius: 6px;
             }}
-            QPushButton:hover {{ background: #0891B2; }}
+            QPushButton:hover {{ background: #B45309; }}
         """)
         add_delay_btn.clicked.connect(self._add_delay_step)
         btn_row1.addWidget(add_delay_btn)
@@ -556,10 +606,29 @@ class MacroEditorDialog(QDialog):
         self._limit_lbl.setText(f"{n} / {MAX_STEPS}")
         self._limit_lbl.setStyleSheet(f"color: {color}; background: transparent;")
 
+    def _on_name_changed(self):
+        """名称输入变化时恢复正常边框样式"""
+        self._name_edit.setStyleSheet(self._name_style_normal)
+        self._name_edit.setPlaceholderText(t("macro.name_placeholder"))
+
     def _on_save(self):
         name = self._name_edit.text().strip()
         if not name:
             name = f"Macro {len(self._step_rows)}"
+
+        # 校验名称不能与其他宏重复 (编辑时允许保留原名)
+        if name != self._original_name and name in self._existing_names:
+            self._name_edit.setStyleSheet(f"""
+                QLineEdit {{
+                    background: {C_INPUT_BG}; color: white;
+                    border: 2px solid #F43F5E; border-radius: 6px;
+                    padding: 4px 8px;
+                }}
+            """)
+            self._name_edit.setFocus()
+            self._name_edit.setPlaceholderText(t("macro.name_duplicate"))
+            return
+
         steps = [row.get_step_data() for row in self._step_rows]
         result = {'name': name, 'steps': steps}
         self.macro_saved.emit(result)
@@ -571,6 +640,69 @@ class MacroEditorDialog(QDialog):
             name = f"Macro {len(self._step_rows)}"
         steps = [row.get_step_data() for row in self._step_rows]
         return {'name': name, 'steps': steps}
+
+    # ── 步骤行拖拽排序 ──
+
+    def _on_row_dragging(self, row, global_y):
+        """拖拽中 — 更新指示线位置"""
+        rows = self._step_rows
+        if len(rows) < 2:
+            return
+
+        local_y = self._steps_container.mapFromGlobal(
+            QPoint(0, int(global_y))
+        ).y()
+
+        # 计算目标插入索引 (基于各行中点)
+        target_idx = len(rows)
+        for i, r in enumerate(rows):
+            row_mid = r.y() + r.height() / 2
+            if local_y < row_mid:
+                target_idx = i
+                break
+
+        self._drag_target_idx = target_idx
+
+        # 定位指示线
+        if target_idx < len(rows):
+            ind_y = rows[target_idx].y() - 2
+        else:
+            last = rows[-1]
+            ind_y = last.y() + last.height()
+
+        self._drop_indicator.setGeometry(
+            0, ind_y, self._steps_container.width(), 2
+        )
+        self._drop_indicator.raise_()
+        self._drop_indicator.show()
+
+    def _on_row_drop(self, row):
+        """拖拽释放 — 执行重排"""
+        self._drop_indicator.hide()
+
+        if row not in self._step_rows:
+            return
+
+        old_idx = self._step_rows.index(row)
+        new_idx = self._drag_target_idx
+
+        # 从原位置移除后, 后续索引前移
+        if old_idx < new_idx:
+            new_idx -= 1
+
+        if old_idx == new_idx:
+            return
+
+        # 从列表 & 布局中移除, 再插入新位置
+        self._step_rows.pop(old_idx)
+        self._steps_layout.removeWidget(row)
+
+        self._step_rows.insert(new_idx, row)
+        self._steps_layout.insertWidget(new_idx, row)
+
+        # 重新编号
+        for i, r in enumerate(self._step_rows):
+            r.set_index(i)
 
     # ── 定位 + 拖拽 ──
 

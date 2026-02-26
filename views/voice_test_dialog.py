@@ -170,12 +170,12 @@ class _LogEntry(QWidget):
         phrase_lbl = QLabel(phrase)
         phrase_lbl.setFont(_make_font(fn, 14))
         phrase_lbl.setStyleSheet("color: #CCC; background: transparent;")
-        lay.addWidget(phrase_lbl, 3)
+        lay.addWidget(phrase_lbl, 4)
 
         keys_lbl = QLabel(keys or "—")
         keys_lbl.setFont(_make_font(fn, 14))
         keys_lbl.setStyleSheet(f"color: {C_AMBER}; background: transparent;")
-        lay.addWidget(keys_lbl, 2)
+        lay.addWidget(keys_lbl, 4)
 
         action_map = {"click": t("voice_dialog.action_click"),
                       "press": t("voice_dialog.action_press"),
@@ -200,7 +200,7 @@ class _LogEntry(QWidget):
 class VoiceTestDialog(QDialog):
     """语音指令测试弹窗 — 声波 + 识别日志"""
 
-    WIN_W = 520
+    WIN_W = 620
     WIN_H = 600
     PAD = 20
 
@@ -322,8 +322,8 @@ class VoiceTestDialog(QDialog):
         header.setContentsMargins(8, 0, 8, 0)
         header.setSpacing(8)
         for text, stretch in [
-            (t("voice_test.col_cmd"), 3),
-            (t("voice_test.col_keys"), 2),
+            (t("voice_test.col_cmd"), 4),
+            (t("voice_test.col_keys"), 4),
             (t("voice_test.col_action"), 2),
             (t("voice_test.col_time"), 2),
             (t("voice_test.col_latency"), 2),

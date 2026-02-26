@@ -11,15 +11,15 @@
       "name": "左上",
       "hover": "w+a",
       "hover_delay": 0,
+      "hover_release_delay": 0,
       "lclick": "",
       "rclick": "",
       "mclick": "",
       "wheelup": "",
       "wheeldown": "",
-      "type": "normal",
       "xbutton1": "",
       "xbutton2": "",
-      "hover_release_delay": 0
+      "type": "normal"
     },
     {
       "x": -400,
@@ -29,15 +29,15 @@
       "name": "右上",
       "hover": "w+d",
       "hover_delay": 0,
+      "hover_release_delay": 0,
       "lclick": "",
       "rclick": "",
       "mclick": "",
       "wheelup": "",
       "wheeldown": "",
-      "type": "normal",
       "xbutton1": "",
       "xbutton2": "",
-      "hover_release_delay": 0
+      "type": "normal"
     },
     {
       "x": -500,
@@ -47,15 +47,15 @@
       "name": "后退",
       "hover": "s",
       "hover_delay": 0,
+      "hover_release_delay": 0,
       "lclick": "",
       "rclick": "",
       "mclick": "",
       "wheelup": "",
       "wheeldown": "",
-      "type": "normal",
       "xbutton1": "",
       "xbutton2": "",
-      "hover_release_delay": 0
+      "type": "normal"
     },
     {
       "x": -600,
@@ -153,9 +153,9 @@
       "w": 300,
       "h": 100,
       "name": "全配置示范",
+      "hover": "a",
       "hover_delay": 0,
       "hover_release_delay": 0,
-      "hover": "a",
       "lclick": "b",
       "rclick": "c",
       "mclick": "d",
@@ -171,9 +171,9 @@
       "w": 300,
       "h": 100,
       "name": "触发延迟和释放延迟示范",
+      "hover": "a",
       "hover_delay": 500,
       "hover_release_delay": 500,
-      "hover": "a",
       "lclick": "",
       "rclick": "",
       "mclick": "",
@@ -189,9 +189,9 @@
       "w": 200,
       "h": 200,
       "name": "没设置的空按钮",
+      "hover": "",
       "hover_delay": 200,
       "hover_release_delay": 0,
-      "hover": "",
       "lclick": "",
       "rclick": "",
       "mclick": "",
@@ -210,6 +210,7 @@
   "wheel_center_ring_visible": false,
   "run_toolbar_x": null,
   "run_toolbar_y": null,
+  "grid_size": 100,
   "wheel_sectors": [
     {
       "name": "↑",
@@ -329,5 +330,11 @@
     "wheeldown": "",
     "xbutton1": "",
     "xbutton2": ""
-  }
+  },
+  "voice_enabled": false,
+  "voice_language": "zh-CN",
+  "voice_commands": [],
+  "voice_mic_device": null,
+  "voice_auto_start": false,
+  "macros": []
 }

@@ -233,12 +233,14 @@
     "mic_test_done": "测试完成",
     "mic_select": "选择麦克风",
     "mic_dep_missing": "音频库未安装",
+    "mic_system_default": "🎙 系统默认",
     "mic_check_failed": "麦克风检测失败",
     "save": "保存",
     "no_commands_hint": "还没有语音指令，点击下方按钮添加",
     "action_click_desc": "按下后立即释放",
     "action_press_desc": "按下并保持",
-    "action_release_desc": "释放之前按下的键"
+    "action_release_desc": "释放之前按下的键",
+    "auto_start": "运行时启用音频"
   },
   "macro": {
     "tab_keys": "常规按键",
@@ -256,6 +258,7 @@
     "add_key_step": "+ 新增指令",
     "add_delay_step": "+ 新增延迟行",
     "save": "保存",
+    "name_duplicate": "宏名称已存在",
     "delete": "删除宏",
     "delay_label": "延迟",
     "action_click": "点击",

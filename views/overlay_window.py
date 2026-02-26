@@ -30,6 +30,7 @@ from views.about_dialog import AboutDialog
 from views.virtual_keyboard import VirtualKeyboard
 from views.voice_settings_dialog import VoiceSettingsDialog
 from views.toast_widget import ToastWidget
+from views.voice_hud_widget import VoiceHudWidget
 from scene.virtual_cursor_item import VirtualCursorItem
 from core.constants import BTN_TYPE_CENTER_BAND
 
@@ -138,6 +139,11 @@ class OverlayWindow(QGraphicsView):
         self._toast = ToastWidget(parent=self)
         self._scene.toast_requested.connect(self._toast.show_toast)
 
+        # ── 语音指令 HUD ──
+        self._voice_hud = VoiceHudWidget(parent=self)
+        self._run_controller.voice_command_triggered.connect(
+            self._voice_hud.show_command)
+
         # ── 虚拟光标 ──
         self._virtual_cursor = VirtualCursorItem()
         self._virtual_cursor.setVisible(False)
@@ -231,6 +237,23 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar.show()
         self._voice_active = False
         self._run_toolbar.update_voice_state(False)
+
+        # 自动启用语音（如果用户在设置中勾选了"运行时启用音频"）
+        cfg_voice = self._scene._config or {}
+        if (cfg_voice.get('voice_auto_start', True)
+                and cfg_voice.get('voice_commands')):
+            if self._check_microphone():
+                voice_config = {
+                    'voice_enabled': True,
+                    'voice_commands': cfg_voice['voice_commands'],
+                    'voice_language': cfg_voice.get('voice_language', 'zh-CN'),
+                }
+                self._run_controller._start_voice(voice_config)
+                self._voice_active = True
+                self._run_toolbar.update_voice_state(True)
+            else:
+                self._toast.show_toast(t("voice_dialog.mic_not_found"))
+
         self._run_toolbar.update_auto_center(False)
         self._run_toolbar.update_buttons_visibility(False)
         self._run_toolbar.update_pt_mode(PT_ON)
@@ -535,8 +558,9 @@ class OverlayWindow(QGraphicsView):
         voice_commands = config.get('voice_commands', [])
         voice_language = config.get('voice_language', None)
         voice_mic_device = config.get('voice_mic_device', None)
+        voice_auto_start = config.get('voice_auto_start', True)
         macros = config.get('macros', [])
-        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, macros=macros)
+        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, macros=macros, voice_auto_start=voice_auto_start)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.settings_saved.connect(self._on_voice_settings_saved)
         dialog.show()
@@ -551,6 +575,7 @@ class OverlayWindow(QGraphicsView):
                 self._scene._config['voice_language'] = result.get('voice_language', 'zh-CN')
                 self._scene._config['voice_enabled'] = result.get('voice_enabled', False)
                 self._scene._config['voice_mic_device'] = result.get('voice_mic_device')
+                self._scene._config['voice_auto_start'] = result.get('voice_auto_start', True)
             self._scene.save_config()
             logger.info("Voice settings saved: %d commands", len(result.get('voice_commands', [])))
 

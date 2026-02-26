@@ -805,6 +805,7 @@ class ButtonEditorDialog(QDialog):
 
         tab_row.addStretch()
         panel_lay.addLayout(tab_row)
+        panel_lay.addSpacing(10)
 
         # Stacked widget
         self._tab_stack = QStackedWidget()
@@ -1066,25 +1067,27 @@ class ButtonEditorDialog(QDialog):
 
     def _new_macro(self):
         from views.macro_editor_dialog import MacroEditorDialog
-        dlg = MacroEditorDialog(parent=self)
+        names = [m.get('name', '') for m in self._macros]
+        dlg = MacroEditorDialog(existing_names=names, parent=self)
         dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
         dlg.exec()
 
     def _edit_macro(self, idx):
         from views.macro_editor_dialog import MacroEditorDialog
         data = copy.deepcopy(self._macros[idx])
-        dlg = MacroEditorDialog(macro_data=data, parent=self)
+        names = [m.get('name', '') for m in self._macros]
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self)
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
         dlg.exec()
 
     def _delete_macro(self, idx):
+        from views.profile_manager_dialog import _StyledConfirmDialog
         name = self._macros[idx].get('name', '')
         msg = t("macro.confirm_delete").replace("{name}", name)
-        reply = QMessageBox.question(
-            self, t("macro.confirm_delete_title"), msg,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
+        dlg = _StyledConfirmDialog(
+            t("macro.confirm_delete_title"), msg,
+            parent=self, accent_color="#8B5CF6")
+        if dlg.exec() == QDialog.DialogCode.Accepted:
             self._macros.pop(idx)
             self._rebuild_macro_list()
             self.macros_changed.emit(self._macros)

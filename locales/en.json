@@ -233,12 +233,14 @@
     "mic_test_done": "Test complete",
     "mic_select": "Select Microphone",
     "mic_dep_missing": "Audio library not installed",
+    "mic_system_default": "🎙 System Default",
     "mic_check_failed": "Mic check failed",
     "save": "Save",
     "no_commands_hint": "No voice commands yet. Click the button below to add one.",
     "action_click_desc": "Press and release immediately",
     "action_press_desc": "Press and hold",
-    "action_release_desc": "Release previously pressed key"
+    "action_release_desc": "Release previously pressed key",
+    "auto_start": "Auto-enable audio in run mode"
   },
   "macro": {
     "tab_keys": "Keys",
@@ -256,6 +258,7 @@
     "add_key_step": "+ Add Key Step",
     "add_delay_step": "+ Add Delay Row",
     "save": "Save",
+    "name_duplicate": "Macro name already exists",
     "delete": "Delete Macro",
     "delay_label": "Delay",
     "action_click": "Click",

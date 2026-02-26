@@ -1,0 +1,4 @@
+PyQt6>=6.6.0
+keyboard>=0.13.5
+vosk>=0.3.45
+sounddevice>=0.4.6

@@ -41,7 +41,7 @@ class RunController(QObject):
     passthrough_changed = pyqtSignal(str)   # 'pt_on' | 'pt_off' | 'pt_block'
     cursor_on_ui = pyqtSignal(bool)         # 每帧: 光标是否在 UI 元素上
     auto_center_progress = pyqtSignal(float, float, float)  # progress, x, y
-    voice_command_triggered = pyqtSignal(str)  # 语音指令触发通知 (phrase)
+    voice_command_triggered = pyqtSignal(str, str, str)  # phrase, keys, action
 
     def __init__(self, scene, window):
         super().__init__()
@@ -617,5 +617,5 @@ class RunController(QObject):
             self._smart_trigger(keys, 'p')
         elif action == 'release':
             self._smart_trigger(keys, 'r')
-        self.voice_command_triggered.emit(phrase)
+        self.voice_command_triggered.emit(phrase, keys, action)
         logger.info(f"语音指令触发: '{phrase}' → keys='{keys}', action='{action}'")

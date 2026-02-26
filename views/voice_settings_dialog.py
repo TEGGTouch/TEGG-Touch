@@ -65,6 +65,62 @@ class _LangBtn(QPushButton):
         return super().sizeHint()
 
 
+class _CheckToggle(QWidget):
+    """带勾号的自定义 checkbox — 点击切换选中状态。"""
+
+    def __init__(self, text, fn, checked=True, parent=None):
+        super().__init__(parent)
+        self._checked = checked
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet("background: transparent;")
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        # 方框 + 勾
+        self._box = QLabel()
+        self._box.setFixedSize(18, 18)
+        self._box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._box.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        if _ICON_FONT:
+            self._box.setFont(_make_font(_ICON_FONT, 13))
+        else:
+            self._box.setFont(_make_font(fn, 13, bold=True))
+        lay.addWidget(self._box)
+
+        lbl = QLabel(text)
+        lbl.setFont(_make_font(fn, 14))
+        lbl.setStyleSheet("color: #CCC; background: transparent;")
+        lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        lay.addWidget(lbl)
+
+        self._update_style()
+
+    def isChecked(self):
+        return self._checked
+
+    def mousePressEvent(self, event):
+        self._checked = not self._checked
+        self._update_style()
+        super().mousePressEvent(event)
+
+    def _update_style(self):
+        if self._checked:
+            icon = "\uE73E" if _ICON_FONT else "\u2713"
+            self._box.setText(icon)
+            self._box.setStyleSheet(
+                f"background: {C_CYBER}; color: #FFF;"
+                " border-radius: 4px;"
+            )
+        else:
+            self._box.setText("")
+            self._box.setStyleSheet(
+                "background: #333; color: transparent;"
+                " border: 1px solid #666; border-radius: 4px;"
+            )
+
+
 # ── 单条指令行 ──
 class _CommandRow(QFrame):
     """单条语音指令行: 短语输入 + 按键TagInput + 动作选择 + 删除"""
@@ -78,9 +134,9 @@ class _CommandRow(QFrame):
         self._build_ui(phrase, keys, action, fn)
 
     # Column fixed widths
-    COL_PHRASE = 145
-    COL_KEYS = 185
-    COL_ACT = 160
+    COL_PHRASE = 160
+    COL_KEYS = 220
+    COL_ACT = 180
     COL_DEL = 36
 
     def _build_ui(self, phrase, keys, action, fn):
@@ -234,18 +290,19 @@ class VoiceSettingsDialog(QDialog):
     settings_saved = pyqtSignal()
     macros_changed = pyqtSignal(list)
 
-    LEFT_W = 560
-    RIGHT_W = 480
+    LEFT_W = 640
+    RIGHT_W = 520
     PADDING = 20
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20
     WIN_H = 880
 
-    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, macros=None):
+    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, macros=None, voice_auto_start=True):
         super().__init__(parent)
         self._macros = list(macros) if macros else []
         self._commands = voice_commands or []
         self._language = voice_language or get_lang()
         self._saved_mic_device = voice_mic_device  # 之前保存的麦克风设备名
+        self._auto_start = voice_auto_start
         self._focus_widget = None
         self._command_rows = []
         self._drag_pos = None
@@ -365,13 +422,13 @@ class VoiceSettingsDialog(QDialog):
         self._cmd_content = QWidget()
         self._cmd_content.setStyleSheet("background: transparent;")
         self._cmd_layout = QVBoxLayout(self._cmd_content)
-        self._cmd_layout.setContentsMargins(0, 0, 4, 0)
+        self._cmd_layout.setContentsMargins(0, 0, 10, 0)
         self._cmd_layout.setSpacing(10)
         self._cmd_layout.addStretch()
         self._cmd_scroll.setWidget(self._cmd_content)
         left.addWidget(self._cmd_scroll, 1)
 
-        left.addSpacing(8)
+        left.addSpacing(18)
 
         # Mic status
         left.addLayout(self._build_mic_status(fn))
@@ -491,6 +548,11 @@ class VoiceSettingsDialog(QDialog):
         row.addWidget(self._lang_en_btn)
 
         row.addStretch()
+
+        self._auto_start_cb = _CheckToggle(
+            t("voice_dialog.auto_start"), fn, checked=self._auto_start
+        )
+        row.addWidget(self._auto_start_cb)
         self._update_lang_buttons()
         return row
 
@@ -528,29 +590,21 @@ class VoiceSettingsDialog(QDialog):
         """)
 
     def _build_mic_status(self, fn):
-        """构建麦克风状态区: 状态行 + 设备选择下拉 + 测试按钮"""
-        wrapper = QVBoxLayout()
-        wrapper.setSpacing(6)
-
-        # Row 1: status dot + label
-        r1 = QHBoxLayout()
-        r1.setSpacing(8)
+        """构建麦克风状态区: 状态圆点 + 标签 + 设备下拉 + 测试按钮 (单行)"""
+        row = QHBoxLayout()
+        row.setSpacing(8)
 
         self._mic_dot = QLabel("\u25CF")
         self._mic_dot.setFont(_make_font(fn, 14))
         self._mic_dot.setStyleSheet("color: #666; background: transparent;")
-        r1.addWidget(self._mic_dot)
+        row.addWidget(self._mic_dot)
 
         self._mic_lbl = QLabel(t("voice_dialog.mic_status"))
-        self._mic_lbl.setFont(_make_font(fn, 14))
+        self._mic_lbl.setFont(_make_font(fn, 13))
         self._mic_lbl.setStyleSheet("color: #AAA; background: transparent;")
-        r1.addWidget(self._mic_lbl)
-        r1.addStretch()
-        wrapper.addLayout(r1)
+        row.addWidget(self._mic_lbl)
 
-        # Row 2: device combo + test button
-        r2 = QHBoxLayout()
-        r2.setSpacing(8)
+        row.addSpacing(4)
 
         self._mic_combo = QComboBox()
         self._mic_combo.setFixedHeight(32)
@@ -559,14 +613,13 @@ class VoiceSettingsDialog(QDialog):
             QComboBox {{
                 background: {C_INPUT_BG}; color: #E0E0E0;
                 border: 2px solid {C_GRAY}; border-radius: 6px;
-                padding: 2px 8px;
+                padding: 2px 28px 2px 8px;
             }}
             QComboBox:hover {{ border-color: #666; }}
             QComboBox::drop-down {{
-                border: none; width: 0px;
-            }}
-            QComboBox::down-arrow {{
-                image: none; width: 0; height: 0;
+                border: none; width: 28px;
+                subcontrol-origin: padding;
+                subcontrol-position: center right;
             }}
             QComboBox QAbstractItemView {{
                 background: #2A2A2A; color: #E0E0E0;
@@ -574,75 +627,99 @@ class VoiceSettingsDialog(QDialog):
                 border: 1px solid #444; border-radius: 4px;
             }}
         """)
-        r2.addWidget(self._mic_combo, 1)
-
-        # Chevron down icon (icon font, right of combo)
-        chevron_lbl = QLabel()
-        if _ICON_FONT:
-            chevron_lbl.setText("\uE70D")
-            chevron_lbl.setFont(_make_font(_ICON_FONT, 14))
-        else:
-            chevron_lbl.setText("\u25BC")
-            chevron_lbl.setFont(_make_font(fn, 12))
-        chevron_lbl.setStyleSheet("color: #AAA; background: transparent;")
-        chevron_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
-        chevron_lbl.mousePressEvent = lambda e: self._mic_combo.showPopup()
-        r2.addWidget(chevron_lbl)
+        row.addWidget(self._mic_combo, 1)
 
         self._test_btn = QPushButton(t("voice_test.btn"))
-        self._test_btn.setFixedSize(120, 32)
+        self._test_btn.setFixedSize(100, 32)
         self._test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._test_btn.setFont(_make_font(fn, 13))
         self._test_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px; padding: 0 12px;
+                border: none; border-radius: 6px; padding: 0 10px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         self._test_btn.clicked.connect(self._on_test_commands)
-        r2.addWidget(self._test_btn)
-        wrapper.addLayout(r2)
+        row.addWidget(self._test_btn)
 
         # Populate devices
-        self._mic_devices = []  # list of (index, name)
+        self._mic_devices = []
         self._populate_mic_devices()
-        return wrapper
+        return row
+
+    # 「系统默认」的内部标记值 (不会与任何真实设备名冲突)
+    _MIC_DEFAULT_TAG = "__system_default__"
 
     def _populate_mic_devices(self):
-        """用 sounddevice 枚举输入设备，填充下拉框"""
+        """枚举麦克风设备 — 仅保留 WASAPI 后端 + 首项「系统默认」"""
         self._mic_combo.clear()
-        self._mic_devices = []
+        self._mic_devices = []  # list of (sd_index | None, display_name)
         try:
             import sounddevice as sd
             devs = sd.query_devices()
-            seen_names = set()
-            for i, d in enumerate(devs):
-                if d.get('max_input_channels', 0) > 0:
-                    name = d.get('name', f'Device {i}')
-                    # 去重 (同一设备在 MME/WASAPI/WDM-KS 下会出现多次)
-                    if name in seen_names:
-                        continue
-                    seen_names.add(name)
-                    self._mic_devices.append((i, name))
-                    self._mic_combo.addItem(name, i)
+            host_apis = sd.query_hostapis()
 
-            if self._mic_devices:
+            # 找到 WASAPI 的 hostapi index (Windows 推荐 API)
+            wasapi_idx = None
+            for hi, ha in enumerate(host_apis):
+                if 'WASAPI' in ha.get('name', ''):
+                    wasapi_idx = hi
+                    break
+
+            # ── 第 1 项: 系统默认 ──
+            default_label = t("voice_dialog.mic_system_default")
+            self._mic_combo.addItem(default_label, self._MIC_DEFAULT_TAG)
+            self._mic_devices.append((None, default_label))
+
+            # ── 遍历设备，只取 WASAPI (或全部取 + 去重) ──
+            seen = set()
+            for i, d in enumerate(devs):
+                if d.get('max_input_channels', 0) <= 0:
+                    continue
+                # 优先只保留 WASAPI 后端的设备
+                if wasapi_idx is not None and d.get('hostapi') != wasapi_idx:
+                    continue
+                raw_name = d.get('name', f'Device {i}')
+                # 清洗: 去掉尾部可能的 host api 标注
+                clean = raw_name.strip()
+                if clean in seen:
+                    continue
+                seen.add(clean)
+                self._mic_devices.append((i, clean))
+                self._mic_combo.addItem(clean, i)
+
+            # 如果 WASAPI 没找到任何设备，回退: 取全部后端去重
+            if len(self._mic_devices) <= 1 and wasapi_idx is not None:
+                seen.clear()
+                for i, d in enumerate(devs):
+                    if d.get('max_input_channels', 0) <= 0:
+                        continue
+                    raw_name = d.get('name', f'Device {i}')
+                    clean = raw_name.strip()
+                    if clean in seen:
+                        continue
+                    seen.add(clean)
+                    self._mic_devices.append((i, clean))
+                    self._mic_combo.addItem(clean, i)
+
+            if len(self._mic_devices) > 1:
+                # 至少有 1 个真实设备 (除去「系统默认」)
                 self._mic_dot.setStyleSheet("color: #10B981; background: transparent;")
                 self._mic_lbl.setText(t("voice_dialog.mic_ready"))
                 self._test_btn.setEnabled(True)
                 # 恢复之前保存的设备
-                if self._saved_mic_device:
+                if self._saved_mic_device and self._saved_mic_device != self._MIC_DEFAULT_TAG:
                     idx = self._mic_combo.findText(self._saved_mic_device)
                     if idx >= 0:
                         self._mic_combo.setCurrentIndex(idx)
-                # 否则选系统默认
-                elif hasattr(sd, 'default') and sd.default.device[0] is not None:
-                    default_idx = sd.default.device[0]
-                    default_name = devs[default_idx].get('name', '')
-                    combo_idx = self._mic_combo.findText(default_name)
-                    if combo_idx >= 0:
-                        self._mic_combo.setCurrentIndex(combo_idx)
+                    # else: 设备已拔出，回落到「系统默认」(index 0)
+                # 否则保持「系统默认」(index 0)
+            elif len(self._mic_devices) == 1:
+                # 只有「系统默认」，没有真实设备
+                self._mic_dot.setStyleSheet("color: #EF4444; background: transparent;")
+                self._mic_lbl.setText(t("voice_dialog.mic_not_found"))
+                self._test_btn.setEnabled(False)
             else:
                 self._mic_dot.setStyleSheet("color: #EF4444; background: transparent;")
                 self._mic_lbl.setText(t("voice_dialog.mic_not_found"))
@@ -668,8 +745,13 @@ class VoiceSettingsDialog(QDialog):
         self._test_dlg.show()
 
     def get_selected_mic(self):
-        """返回当前选中的麦克风设备名"""
-        return self._mic_combo.currentText() if self._mic_devices else None
+        """返回当前选中的麦克风设备名; 「系统默认」返回 None"""
+        if not self._mic_devices:
+            return None
+        data = self._mic_combo.currentData()
+        if data == self._MIC_DEFAULT_TAG:
+            return None  # 系统默认 → voice_engine 不指定 device
+        return self._mic_combo.currentText()
 
     def _build_key_palette(self, fn):
         scroll = QScrollArea()
@@ -746,6 +828,7 @@ class VoiceSettingsDialog(QDialog):
         tab_row.addWidget(self._tab_macros_btn)
         tab_row.addStretch()
         panel_lay.addLayout(tab_row)
+        panel_lay.addSpacing(10)
 
         self._tab_stack = QStackedWidget()
         self._tab_stack.setStyleSheet("background: transparent;")
@@ -977,25 +1060,27 @@ class VoiceSettingsDialog(QDialog):
 
     def _new_macro(self):
         from views.macro_editor_dialog import MacroEditorDialog
-        dlg = MacroEditorDialog(parent=self)
+        names = [m.get('name', '') for m in self._macros]
+        dlg = MacroEditorDialog(existing_names=names, parent=self)
         dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
         dlg.exec()
 
     def _edit_macro(self, idx):
         from views.macro_editor_dialog import MacroEditorDialog
         data = copy.deepcopy(self._macros[idx])
-        dlg = MacroEditorDialog(macro_data=data, parent=self)
+        names = [m.get('name', '') for m in self._macros]
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self)
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
         dlg.exec()
 
     def _delete_macro(self, idx):
+        from views.profile_manager_dialog import _StyledConfirmDialog
         name = self._macros[idx].get('name', '')
         msg = t("macro.confirm_delete").replace("{name}", name)
-        reply = QMessageBox.question(
-            self, t("macro.confirm_delete_title"), msg,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
+        dlg = _StyledConfirmDialog(
+            t("macro.confirm_delete_title"), msg,
+            parent=self, accent_color="#8B5CF6")
+        if dlg.exec() == QDialog.DialogCode.Accepted:
             self._macros.pop(idx)
             self._rebuild_macro_list()
             self.macros_changed.emit(self._macros)
@@ -1061,6 +1146,7 @@ class VoiceSettingsDialog(QDialog):
             'voice_language': getattr(self, '_result_language', self._language),
             'voice_enabled': len(getattr(self, '_result_commands', [])) > 0,
             'voice_mic_device': self.get_selected_mic(),
+            'voice_auto_start': self._auto_start_cb.isChecked(),
         }
 
     # ── Positioning ──

@@ -185,9 +185,9 @@ class _StyledInputDialog(QDialog):
 
 
 class _StyledConfirmDialog(QDialog):
-    """暗色确认弹窗: 标题 + 消息 + 是(琥珀)/否(灰) 按钮。"""
+    """暗色确认弹窗: 标题 + 消息 + 是/否 按钮。accent_color 控制确定按钮颜色。"""
 
-    def __init__(self, title, message, parent=None):
+    def __init__(self, title, message, parent=None, accent_color=None):
         super().__init__(parent)
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
@@ -201,6 +201,11 @@ class _StyledConfirmDialog(QDialog):
         _detect_icon_font()
         from views.edit_toolbar import _ICON_FONT
         fn = get_font()
+
+        # 确定按钮配色
+        ac = accent_color or C_AMBER
+        ac_hover = C_AMBER_D if ac == C_AMBER else ac
+        ac_fg = "black" if ac == C_AMBER else "#FFF"
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -257,7 +262,7 @@ class _StyledConfirmDialog(QDialog):
 
         layout.addStretch()
 
-        # 按钮: 是(琥珀) | 否(灰)
+        # 按钮: 是(强调色) | 否(灰)
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
@@ -267,10 +272,10 @@ class _StyledConfirmDialog(QDialog):
         yes_btn.setFont(_make_font(fn, 16))
         yes_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_AMBER}; color: black;
+                background: {ac}; color: {ac_fg};
                 border: none; border-radius: 6px;
             }}
-            QPushButton:hover {{ background: {C_AMBER_D}; }}
+            QPushButton:hover {{ background: {ac_hover}; }}
         """)
         yes_btn.clicked.connect(self.accept)
         btn_row.addWidget(yes_btn)

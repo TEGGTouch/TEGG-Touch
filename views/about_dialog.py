@@ -18,7 +18,7 @@ from core.constants import APP_VERSION, get_app_title, APP_DIR
 from views.edit_toolbar import _detect_icon_font, _make_font, C_CLOSE, C_CLOSE_H
 
 
-_LAST_UPDATE = "2026.02.22"
+_LAST_UPDATE = "2026.02.28"
 
 
 class AboutDialog(QDialog):
@@ -59,7 +59,7 @@ class AboutDialog(QDialog):
         outer.addWidget(container)
 
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(50, 20, 50, 20)
         layout.setSpacing(12)
 
         # 关闭按钮 (右上角, 与工具栏关闭按钮同规格)
@@ -86,7 +86,7 @@ class AboutDialog(QDialog):
         layout.addLayout(header)
 
         # 标题
-        title = QLabel(f"🎮  {get_app_title()}")
+        title = QLabel(get_app_title())
         title.setStyleSheet(f"""
             color: #F59E0B; font-size: 28px; font-weight: bold;
             font-family: '{font_name}';
@@ -123,10 +123,11 @@ class AboutDialog(QDialog):
         sep2.setFixedHeight(1)
         sep2.setStyleSheet("background: #444;")
         layout.addWidget(sep2)
+        layout.addSpacing(50)
 
         # QR 码区域
         qr_layout = QHBoxLayout()
-        qr_layout.setSpacing(14)
+        qr_layout.setSpacing(20)
 
         # 尝试加载二维码
         qr_path = os.path.join(APP_DIR, "assets", "wechat_qr.png")
