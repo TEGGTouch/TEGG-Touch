@@ -50,6 +50,15 @@ ACTION_COLORS = {
     'xbutton2':  '#8B5CF6',
 }
 
+# 鼠标按键 (mouse: 前缀, 与 macro: 前缀对齐)
+MOUSE_KEYS = [
+    (t("editor.lclick"), "mouse:left"),
+    (t("editor.rclick"), "mouse:right"),
+    (t("editor.mclick"), "mouse:middle"),
+    (t("editor.xbutton1"), "mouse:x1"),
+    (t("editor.xbutton2"), "mouse:x2"),
+]
+
 # 键位面板分类
 KEY_CATEGORIES = [
     (t("key_cat.letters"), [chr(c) for c in range(ord('a'), ord('z') + 1)]),
@@ -762,14 +771,14 @@ class ButtonEditorDialog(QDialog):
     # ── 右栏 Tab 面板 ────────────────────────────────────────
 
     def _build_right_tabbed_panel(self, fn):
-        """构建右栏: Tab 切换 [常规按键] [自定义宏]"""
+        """构建右栏: Tab 切换 [常规按键] [鼠标操作] [自定义宏]"""
         panel = QWidget()
         panel.setStyleSheet("background: transparent;")
         panel_lay = QVBoxLayout(panel)
         panel_lay.setContentsMargins(0, 0, 0, 0)
         panel_lay.setSpacing(8)
 
-        # Tab 按钮行
+        # Tab 按钮行 (3 个)
         tab_row = QHBoxLayout()
         tab_row.setSpacing(8)
 
@@ -780,11 +789,18 @@ class ButtonEditorDialog(QDialog):
         self._tab_keys_btn.clicked.connect(lambda: self._switch_tab(0))
         tab_row.addWidget(self._tab_keys_btn)
 
+        self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
+        self._tab_mouse_btn.setFixedHeight(34)
+        self._tab_mouse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tab_mouse_btn.setFont(_make_font(fn, 14, bold=True))
+        self._tab_mouse_btn.clicked.connect(lambda: self._switch_tab(1))
+        tab_row.addWidget(self._tab_mouse_btn)
+
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
         self._tab_macros_btn.setFixedHeight(34)
         self._tab_macros_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tab_macros_btn.setFont(_make_font(fn, 14, bold=True))
-        self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(1))
+        self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(2))
         tab_row.addWidget(self._tab_macros_btn)
 
         tab_row.addStretch()
@@ -797,7 +813,10 @@ class ButtonEditorDialog(QDialog):
         # Page 0: 常规按键
         self._tab_stack.addWidget(self._build_key_palette(fn))
 
-        # Page 1: 自定义宏
+        # Page 1: 鼠标操作
+        self._tab_stack.addWidget(self._build_mouse_palette(fn))
+
+        # Page 2: 自定义宏
         self._tab_stack.addWidget(self._build_macro_tab(fn))
 
         panel_lay.addWidget(self._tab_stack, 1)
@@ -816,7 +835,48 @@ class ButtonEditorDialog(QDialog):
             border: none; border-radius: 6px; padding: 0 14px;
         }} QPushButton:hover {{ background: #505050; }}"""
         self._tab_keys_btn.setStyleSheet(sel_style if idx == 0 else off_style)
-        self._tab_macros_btn.setStyleSheet(sel_style if idx == 1 else off_style)
+        self._tab_mouse_btn.setStyleSheet(sel_style if idx == 1 else off_style)
+        self._tab_macros_btn.setStyleSheet(sel_style if idx == 2 else off_style)
+
+    def _build_mouse_palette(self, fn):
+        """构建鼠标操作 Tab: 分类标签 + 5 个鼠标按键 flow"""
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(10, 0, 10, 10)
+        lay.setSpacing(0)
+
+        cat_lbl = QLabel(f"── {t('key_cat.mouse_buttons')} ──")
+        cat_lbl.setFont(_make_font(fn, 14, bold=True))
+        cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+        lay.addWidget(cat_lbl)
+        lay.addSpacing(8)
+
+        # 鼠标按键 flow (显示名称, 点击插入 mouse:xxx tag)
+        mouse_display_names = [label for label, _ in MOUSE_KEYS]
+        mouse_tag_values = [tag for _, tag in MOUSE_KEYS]
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        flow = _FlowWidget(
+            mouse_display_names,
+            lambda name: self._on_mouse_key_clicked(name),
+            fn, container
+        )
+        c_lay = QVBoxLayout(container)
+        c_lay.setContentsMargins(0, 0, 0, 0)
+        c_lay.setSpacing(0)
+        c_lay.addWidget(flow)
+        lay.addWidget(container)
+
+        # 存储 display_name → tag 映射
+        self._mouse_name_to_tag = dict(zip(mouse_display_names, mouse_tag_values))
+
+        lay.addStretch()
+        return page
+
+    def _on_mouse_key_clicked(self, display_name):
+        tag = self._mouse_name_to_tag.get(display_name, display_name)
+        self._on_key_clicked(tag)
 
     # ── 宏 Tab (列表化, 参考 profile_manager_dialog) ─────────
 
@@ -827,6 +887,13 @@ class ButtonEditorDialog(QDialog):
         lay = QVBoxLayout(page)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
+
+        # 分类标题 (与常规按键分类标签风格一致)
+        cat_lbl = QLabel(f"── {t('macro.macro_list_label')} ──")
+        cat_lbl.setFont(_make_font(fn, 14, bold=True))
+        cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+        cat_lbl.setContentsMargins(10, 0, 0, 0)
+        lay.addWidget(cat_lbl)
 
         # 宏列表 (QListWidget, 与 profile_manager_dialog 一致)
         self._macro_list = QListWidget()

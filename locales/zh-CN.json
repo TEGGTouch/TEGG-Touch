@@ -192,7 +192,8 @@
     "punctuation": "标点符号",
     "other": "其他",
     "numpad": "小键盘",
-    "media": "媒体键"
+    "media": "媒体键",
+    "mouse_buttons": "鼠标按键"
   },
   "button_defaults": {
     "name": "按钮",
@@ -241,7 +242,9 @@
   },
   "macro": {
     "tab_keys": "常规按键",
+    "tab_mouse": "鼠标操作",
     "tab_macros": "自定义宏",
+    "macro_list_label": "宏列表",
     "manage": "管理宏",
     "exit_manage": "退出管理",
     "new": "新增",

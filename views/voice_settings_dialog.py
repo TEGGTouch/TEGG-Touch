@@ -17,7 +17,7 @@ from core.i18n import t, get_font, get_lang
 
 # Reuse shared components from existing dialogs
 from views.button_editor_dialog import (
-    TagInput, _FlowWidget, KEY_CATEGORIES,
+    TagInput, _FlowWidget, KEY_CATEGORIES, MOUSE_KEYS,
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL,
@@ -731,11 +731,18 @@ class VoiceSettingsDialog(QDialog):
         self._tab_keys_btn.clicked.connect(lambda: self._switch_tab(0))
         tab_row.addWidget(self._tab_keys_btn)
 
+        self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
+        self._tab_mouse_btn.setFixedHeight(34)
+        self._tab_mouse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tab_mouse_btn.setFont(_make_font(fn, 14, bold=True))
+        self._tab_mouse_btn.clicked.connect(lambda: self._switch_tab(1))
+        tab_row.addWidget(self._tab_mouse_btn)
+
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
         self._tab_macros_btn.setFixedHeight(34)
         self._tab_macros_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._tab_macros_btn.setFont(_make_font(fn, 14, bold=True))
-        self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(1))
+        self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(2))
         tab_row.addWidget(self._tab_macros_btn)
         tab_row.addStretch()
         panel_lay.addLayout(tab_row)
@@ -743,6 +750,7 @@ class VoiceSettingsDialog(QDialog):
         self._tab_stack = QStackedWidget()
         self._tab_stack.setStyleSheet("background: transparent;")
         self._tab_stack.addWidget(self._build_key_palette(fn))
+        self._tab_stack.addWidget(self._build_mouse_palette(fn))
         self._tab_stack.addWidget(self._build_macro_browse(fn))
         panel_lay.addWidget(self._tab_stack, 1)
         self._switch_tab(0)
@@ -753,7 +761,46 @@ class VoiceSettingsDialog(QDialog):
         sel = f"QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 6px; padding: 0 14px; }} QPushButton:hover {{ background: {C_CYBER_H}; }}"
         off = f"QPushButton {{ background: #404040; color: #E0E0E0; border: none; border-radius: 6px; padding: 0 14px; }} QPushButton:hover {{ background: #505050; }}"
         self._tab_keys_btn.setStyleSheet(sel if idx == 0 else off)
-        self._tab_macros_btn.setStyleSheet(sel if idx == 1 else off)
+        self._tab_mouse_btn.setStyleSheet(sel if idx == 1 else off)
+        self._tab_macros_btn.setStyleSheet(sel if idx == 2 else off)
+
+    def _build_mouse_palette(self, fn):
+        """构建鼠标操作 Tab: 分类标签 + 5 个鼠标按键 flow"""
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(10, 0, 10, 10)
+        lay.setSpacing(0)
+
+        cat_lbl = QLabel(f"── {t('key_cat.mouse_buttons')} ──")
+        cat_lbl.setFont(_make_font(fn, 14, bold=True))
+        cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+        lay.addWidget(cat_lbl)
+        lay.addSpacing(8)
+
+        mouse_display_names = [label for label, _ in MOUSE_KEYS]
+        mouse_tag_values = [tag for _, tag in MOUSE_KEYS]
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        flow = _FlowWidget(
+            mouse_display_names,
+            lambda name: self._on_mouse_key_clicked(name),
+            fn, container
+        )
+        c_lay = QVBoxLayout(container)
+        c_lay.setContentsMargins(0, 0, 0, 0)
+        c_lay.setSpacing(0)
+        c_lay.addWidget(flow)
+        lay.addWidget(container)
+
+        self._mouse_name_to_tag = dict(zip(mouse_display_names, mouse_tag_values))
+
+        lay.addStretch()
+        return page
+
+    def _on_mouse_key_clicked(self, display_name):
+        tag = self._mouse_name_to_tag.get(display_name, display_name)
+        self._on_key_clicked(tag)
 
     C_MACRO = "#8B5CF6"
     MAX_MACROS = 20
@@ -765,6 +812,13 @@ class VoiceSettingsDialog(QDialog):
         lay = QVBoxLayout(page)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
+
+        # 分类标题 (与常规按键分类标签风格一致)
+        cat_lbl = QLabel(f"── {t('macro.macro_list_label')} ──")
+        cat_lbl.setFont(_make_font(fn, 14, bold=True))
+        cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+        cat_lbl.setContentsMargins(10, 0, 0, 0)
+        lay.addWidget(cat_lbl)
 
         # 宏列表 (QListWidget)
         self._macro_list = QListWidget()

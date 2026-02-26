@@ -192,7 +192,8 @@
     "punctuation": "Punctuation",
     "other": "Other",
     "numpad": "Numpad",
-    "media": "Media Keys"
+    "media": "Media Keys",
+    "mouse_buttons": "Mouse Buttons"
   },
   "button_defaults": {
     "name": "Button",
@@ -241,7 +242,9 @@
   },
   "macro": {
     "tab_keys": "Keys",
+    "tab_mouse": "Mouse",
     "tab_macros": "Macros",
+    "macro_list_label": "Macro List",
     "manage": "Manage",
     "exit_manage": "Exit Manage",
     "new": "New",
