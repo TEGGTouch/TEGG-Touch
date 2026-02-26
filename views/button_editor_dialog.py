@@ -924,15 +924,10 @@ class ButtonEditorDialog(QDialog):
         lay.addWidget(self._macro_list, 1)
 
         # 底部「新建」按钮 (紫色, + icon)
-        _detect_icon_font()
-        plus_icon = "\uE710 " if _ICON_FONT else "+ "
-        new_btn = QPushButton(plus_icon + t("macro.new"))
+        new_btn = QPushButton("+ " + t("macro.new"))
         new_btn.setFixedHeight(40)
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        if _ICON_FONT:
-            new_btn.setFont(_make_font(_ICON_FONT, 16))
-        else:
-            new_btn.setFont(_make_font(fn, 16))
+        new_btn.setFont(_make_font(fn, 16))
         new_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {self.C_MACRO}; color: #FFF;

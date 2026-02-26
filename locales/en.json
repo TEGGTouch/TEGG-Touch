@@ -254,7 +254,7 @@
     "name_label": "Macro Name",
     "name_placeholder": "Enter macro name",
     "add_key_step": "+ Add Key Step",
-    "add_delay_step": "+ Add Delay",
+    "add_delay_step": "+ Add Delay Row",
     "save": "Save",
     "delete": "Delete Macro",
     "delay_label": "Delay",

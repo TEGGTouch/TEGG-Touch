@@ -24,7 +24,7 @@ from views.button_editor_dialog import (
 # 宏步骤强调色
 C_MACRO_KEY = "#8B5CF6"     # 紫色 — 指令步骤
 C_MACRO_DELAY = "#D97706"   # 琥珀色 — 延迟步骤
-C_MACRO_NAME = "#10B981"    # 绿色 — 宏名称
+C_MACRO_NAME = "#8B5CF6"    # 紫色 — 宏名称 (与 C_MACRO 统一)
 
 MAX_STEPS = 32
 MIN_DELAY = 10

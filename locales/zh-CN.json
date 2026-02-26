@@ -254,7 +254,7 @@
     "name_label": "宏名称",
     "name_placeholder": "输入宏名称",
     "add_key_step": "+ 新增指令",
-    "add_delay_step": "+ 新增延迟",
+    "add_delay_step": "+ 新增延迟行",
     "save": "保存",
     "delete": "删除宏",
     "delay_label": "延迟",
