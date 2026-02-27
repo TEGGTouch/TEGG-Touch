@@ -156,6 +156,7 @@ class OverlayWindow(QGraphicsView):
 
         # 连接场景信号
         self._scene.button_double_clicked.connect(self._open_button_editor)
+        self._scene.wheel_rebuilt.connect(lambda: self._apply_item_opacity(self._current_opacity))
 
         # ── 默认透明度 (与工具栏滑块初始值一致) ──
         self._apply_item_opacity(DEFAULT_TRANSPARENCY)
@@ -205,6 +206,8 @@ class OverlayWindow(QGraphicsView):
             self._wire_single_item(item)
         if self._scene.ring_item:
             self._wire_single_item(self._scene.ring_item)
+        if self._scene.inner_ring_item:
+            self._wire_single_item(self._scene.inner_ring_item)
 
     def _wire_single_item(self, item):
         """将单个 Item 的信号连接到运行控制器"""
@@ -280,10 +283,7 @@ class OverlayWindow(QGraphicsView):
         # 恢复轮盘可见性 (原版 toggle_buttons_visibility 隐藏的轮盘需要恢复)
         for item in self._scene.wheel_items:
             item.setVisible(self._scene.wheel_visible)
-        if self._scene.ring_item:
-            visible = (self._scene.wheel_visible and self._scene._wheel_enlarged
-                       and self._scene._wheel_center_ring_visible)
-            self._scene.ring_item.setVisible(visible)
+        self._scene._update_ring_visibility()
 
         self._run_toolbar.hide()
         self._edit_toolbar.show()
@@ -321,13 +321,13 @@ class OverlayWindow(QGraphicsView):
                 item.setVisible(False)
             else:
                 item.setVisible(self._scene.wheel_visible)
-        if self._scene.ring_item:
-            if self._buttons_hidden:
+        if self._buttons_hidden:
+            if self._scene.ring_item:
                 self._scene.ring_item.setVisible(False)
-            else:
-                visible = (self._scene.wheel_visible and self._scene._wheel_enlarged
-                           and self._scene._wheel_center_ring_visible)
-                self._scene.ring_item.setVisible(visible)
+            if self._scene.inner_ring_item:
+                self._scene.inner_ring_item.setVisible(False)
+        else:
+            self._scene._update_ring_visibility()
         self._run_toolbar.update_buttons_visibility(self._buttons_hidden)
 
     @staticmethod
@@ -456,6 +456,8 @@ class OverlayWindow(QGraphicsView):
             item.setOpacity(value)
         if self._scene.ring_item:
             self._scene.ring_item.setOpacity(value)
+        if self._scene.inner_ring_item:
+            self._scene.inner_ring_item.setOpacity(value)
 
     # ── 弹窗 ──
 
@@ -525,6 +527,9 @@ class OverlayWindow(QGraphicsView):
         if self._scene.ring_item:
             self._scene.removeItem(self._scene.ring_item)
             self._scene.ring_item = None
+        if self._scene.inner_ring_item:
+            self._scene.removeItem(self._scene.inner_ring_item)
+            self._scene.inner_ring_item = None
         # 加载新方案
         config = load_profile(name)
         self._profile_name = name

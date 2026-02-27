@@ -180,7 +180,22 @@
     "center_band_tip": "鼠标到这里就会回中",
     "wheel_hint": "⚠ 中心轮盘有两种大小，按需使用",
     "zoom_tooltip": "点击切换轮盘大/小模式",
-    "ring_tooltip": "点击启用/隐藏中心圆环按钮"
+    "ring_tooltip": "点击启用/隐藏中心圆环按钮",
+    "style_tooltip": "轮盘样式管理"
+  },
+  "wheel_style": {
+    "title": "轮盘样式管理",
+    "type_small": "小轮盘",
+    "type_large": "单环轮盘",
+    "type_double": "双环轮盘",
+    "desc_small": "8个方向扇面，紧凑型。\n适合只需要控制八方向移动，在移动时没有必须的额外操作的场景。\n例如在《深岩银河：幸存者》中移动角色。\n注：八方向键默认 WASD 的八个方向，也可更改为其他键值。",
+    "desc_large": "8个方向扇面 + 可选中心环。\n中心环可单独绑定按键，适合在移动视角的时候，有检查道具、拾取和开箱操作等场景。\n注：八方向键默认 WASD 的八个方向，也可更改为其他键值。",
+    "desc_double": "中心环 + 中二环 + 8个方向扇面。\n三层独立操作，适合需要更多按键的场景。\n注：八方向键默认 WASD 的八个方向，也可更改为其他键值。",
+    "show_center_ring": "显示中心环",
+    "show_middle_ring": "显示中二环",
+    "save": "确定",
+    "cancel": "取消",
+    "reset_sectors": "重置八方向键"
   },
   "key_cat": {
     "letters": "字母",
@@ -198,7 +213,8 @@
   "button_defaults": {
     "name": "按钮",
     "center_band": "回中带",
-    "center_ring": "中心环"
+    "center_ring": "中心环",
+    "inner_ring": "中二环"
   },
   "voice": {
     "status_loading": "正在加载语音模型...",

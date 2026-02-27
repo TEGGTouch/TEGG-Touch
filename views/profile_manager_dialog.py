@@ -772,7 +772,7 @@ class ProfileManagerDialog(QDialog):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             name = dlg.result_text()
             if name:
-                if create_profile(name, from_template=False):
+                if create_profile(name, from_template=True):
                     self.profile_switched.emit(name)
                     self._refresh()
                 else:

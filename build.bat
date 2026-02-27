@@ -7,6 +7,16 @@ echo.
 
 cd /d "%~dp0"
 
+:: ── 从 constants.py 读取版本号 ──
+for /f %%v in ('python _version.py') do set VER=%%v
+if "%VER%"=="" (
+    echo ✗ 无法读取版本号！请检查 core/constants.py
+    pause
+    exit /b 1
+)
+echo    版本号: v%VER%
+echo.
+
 echo [1/5] 安装依赖...
 python -m pip install -r requirements.txt pyinstaller >nul 2>&1
 echo      √ 依赖已就绪
@@ -53,6 +63,12 @@ xcopy /E /I /Y "profiles" "%OUT%\profiles" >nul
 echo      √ 数据文件已复制
 echo.
 
+:: ── 重命名为带版本号的文件夹 ──
+set VOUT=dist\TEGGTouch_v%VER%
+if exist "%VOUT%" rmdir /s /q "%VOUT%"
+rename "dist\TEGGTouch" "TEGGTouch_v%VER%"
+set OUT=%VOUT%
+
 echo [5/5] 验证产物...
 echo      - TEGGTouch.exe
 if exist "%OUT%\locales"        (echo      - locales        √) else (echo      - locales        ✗)
@@ -64,11 +80,11 @@ if exist "%OUT%\profiles"       (echo      - profiles       √) else (echo     
 echo.
 
 echo ==========================================
-echo         ★ 打包完成！★
+echo    ★ 打包完成！ v%VER% ★
 echo ==========================================
 echo.
-echo 发布目录: dist\TEGGTouch\
-echo 主程序:   dist\TEGGTouch\TEGGTouch.exe
+echo 发布目录: %OUT%\
+echo 主程序:   %OUT%\TEGGTouch.exe
 echo.
 echo 提示: 运行 pack_release.bat 可生成 ZIP 发布包
 echo.

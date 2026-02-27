@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt, QRectF, QTimer, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPainter, QPainterPath, QPen, QBrush, QColor, QFont
 
 from core.i18n import get_font
+from core.constants import WHEEL_VISUAL_INSET
 from models.wheel_model import WheelRingData
 from engine.hover_state_machine import HoverStateMachine
 from scene.tooltip_item import build_edit_tooltip
@@ -50,8 +51,13 @@ class WheelRingItem(QGraphicsObject):
         self._mode = 'edit'
         self._charge_progress = 0.0
 
-        # 预计算路径
-        self._path = self._build_ring_path()
+        # 视觉半径（碰撞半径各方向缩进 VISUAL_INSET）
+        self._v_inner = r_inner + WHEEL_VISUAL_INSET
+        self._v_outer = r_outer - WHEEL_VISUAL_INSET
+
+        # 预计算路径：碰撞路径(hit) + 视觉路径(visual)
+        self._hit_path = self._build_ring_path(r_inner, r_outer)
+        self._visual_path = self._build_ring_path(self._v_inner, self._v_outer)
 
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(
@@ -71,26 +77,26 @@ class WheelRingItem(QGraphicsObject):
         self._hover_sm.charge_progress.connect(self._on_charge_progress)
         self._hover_sm.release_progress.connect(self._on_release_progress)
 
-    def _build_ring_path(self) -> QPainterPath:
+    def _build_ring_path(self, r_inner, r_outer) -> QPainterPath:
         """圆环 = 外圆 - 内圆（布尔减法）"""
         outer = QPainterPath()
         outer.addEllipse(
-            self._cx - self._r_outer, self._cy - self._r_outer,
-            self._r_outer * 2, self._r_outer * 2)
+            self._cx - r_outer, self._cy - r_outer,
+            r_outer * 2, r_outer * 2)
 
         inner = QPainterPath()
         inner.addEllipse(
-            self._cx - self._r_inner, self._cy - self._r_inner,
-            self._r_inner * 2, self._r_inner * 2)
+            self._cx - r_inner, self._cy - r_inner,
+            r_inner * 2, r_inner * 2)
 
         return outer.subtracted(inner)
 
     def boundingRect(self) -> QRectF:
-        return self._path.boundingRect().adjusted(-2, -2, 2, 2)
+        return self._hit_path.boundingRect().adjusted(-2, -2, 2, 2)
 
     def shape(self) -> QPainterPath:
-        """精确碰撞检测 — 使用圆环路径"""
-        return self._path
+        """精确碰撞检测 — 使用碰撞路径（比视觉区域各方向大 VISUAL_INSET）"""
+        return self._hit_path
 
     def paint(self, painter: QPainter, option, widget=None):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -100,17 +106,17 @@ class WheelRingItem(QGraphicsObject):
 
         painter.setPen(QPen(QColor(border_str), 2))
         painter.setBrush(QBrush(QColor(fill_str)))
-        painter.drawPath(self._path)
+        painter.drawPath(self._visual_path)
 
-        # 充能进度 — 径向扩展（原版: 从内圆向外圆扩展的环形充能）
+        # 充能进度 — 径向扩展（在视觉区域内从内圆向外圆扩展）
         if self._charge_progress > 0.01:
-            charge_r = self._r_inner + (self._r_outer - self._r_inner) * self._charge_progress
+            charge_r = self._v_inner + (self._v_outer - self._v_inner) * self._charge_progress
             charge_outer = QPainterPath()
             charge_outer.addEllipse(
                 self._cx - charge_r, self._cy - charge_r,
                 charge_r * 2, charge_r * 2)
             charge_inner = QPainterPath()
-            r_in = self._r_inner + 2  # 略微内缩，避免覆盖内圆边框
+            r_in = self._v_inner + 2  # 略微内缩，避免覆盖内圆边框
             charge_inner.addEllipse(
                 self._cx - r_in, self._cy - r_in,
                 r_in * 2, r_in * 2)

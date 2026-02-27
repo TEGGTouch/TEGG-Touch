@@ -82,18 +82,33 @@ BTN_TYPE_NORMAL = "normal"
 BTN_TYPE_CENTER_BAND = "center_band"
 BTN_TYPE_WHEEL_SECTOR = "wheel_sector"
 BTN_TYPE_WHEEL_RING = "wheel_center_ring"
+BTN_TYPE_WHEEL_INNER_RING = "wheel_inner_ring"
 
 # === 中心轮盘配置 ===
-WHEEL_INNER_RADIUS = 60    # 内圆半径 (px) — 小版
-WHEEL_OUTER_RADIUS = 150   # 外圆半径 (px) — 小版
-WHEEL_INNER_RADIUS_LARGE = 105   # 内圆半径 (px) — 大版
-WHEEL_OUTER_RADIUS_LARGE = 195   # 外圆半径 (px) — 大版
-WHEEL_GAP_PX = 10           # 扇面间距 (像素)，内外圈等宽
+# 碰撞区域（hit test）— 相邻组件碰撞半径无缝衔接，无死区
+WHEEL_INNER_RADIUS = 60    # 碰撞内径 (px) — 小版
+WHEEL_OUTER_RADIUS = 150   # 碰撞外径 (px) — 小版
+WHEEL_INNER_RADIUS_LARGE = 110   # 碰撞内径 (px) — 大版
+WHEEL_OUTER_RADIUS_LARGE = 200   # 碰撞外径 (px) — 大版
+WHEEL_GAP_PX = 10           # 扇面视觉间距 (像素)
 WHEEL_SECTOR_COUNT = 8
+WHEEL_MAX_OFFSET = 300       # 轮盘缩放最大偏移 (px)
+WHEEL_RESIZE_BTN_SIZE = 30   # 缩放按钮尺寸
 
-# 中心圆环按钮 (仅大圆盘模式可见)
-WHEEL_RING_INNER = 60       # 圆环内半径 (px)
-WHEEL_RING_OUTER = 95       # 圆环外半径 (px)
+# 视觉偏移 — 视觉区域比碰撞区域各方向缩进，产生视觉间隔但交互无死区
+WHEEL_VISUAL_INSET = 5      # 视觉区域比碰撞区域各方向缩进 (px)
+
+# 中心圆环按钮 (单环/三环模式可见)
+WHEEL_RING_INNER = 70       # 碰撞内径 (px) — 单环模式
+WHEEL_RING_OUTER = 110      # 碰撞外径 (px) — 与大版扇面碰撞内径无缝衔接
+
+# 三环模式尺寸 (inner_ring + outer_ring + 8-sector)
+WHEEL_TRIPLE_INNER_RING_INNER = 80    # 内环碰撞内径 (px)
+WHEEL_TRIPLE_INNER_RING_OUTER = 120   # 内环碰撞外径 (px)
+WHEEL_TRIPLE_OUTER_RING_INNER = 120   # 中环碰撞内径 (px) — 与内环无缝衔接
+WHEEL_TRIPLE_OUTER_RING_OUTER = 160   # 中环碰撞外径 (px)
+WHEEL_TRIPLE_SECTOR_INNER = 160       # 八向环碰撞内径 (px) — 与中环无缝衔接
+WHEEL_TRIPLE_SECTOR_OUTER = 240       # 八向环碰撞外径 (px)
 
 # 8个扇面方向定义 (名称, 中心角度-tkinter角度, 默认hover键)
 # tkinter arc: 0°=右, 逆时针增加, 90°=上
@@ -125,10 +140,22 @@ def default_wheel_sectors():
     return sectors
 
 def default_wheel_center_ring():
-    """生成默认的中心圆环按钮配置（仅大圆盘模式可见）。"""
+    """生成默认的中心圆环按钮配置（单环/三环模式可见）。"""
     return {
         'name': t("button_defaults.center_ring"),
         'type': BTN_TYPE_WHEEL_RING,
+        'hover': '', 'hover_delay': 200,
+        'hover_release_delay': 0,
+        'lclick': '', 'rclick': '', 'mclick': '',
+        'wheelup': '', 'wheeldown': '',
+        'xbutton1': '', 'xbutton2': '',
+    }
+
+def default_wheel_inner_ring():
+    """生成默认的中二环按钮配置（双环模式的中间环）。"""
+    return {
+        'name': t("button_defaults.inner_ring"),
+        'type': BTN_TYPE_WHEEL_INNER_RING,
         'hover': '', 'hover_delay': 200,
         'hover_release_delay': 0,
         'lclick': '', 'rclick': '', 'mclick': '',

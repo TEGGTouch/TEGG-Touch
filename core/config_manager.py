@@ -161,9 +161,11 @@ def init_profiles():
         click_through=template.get('click_through', PT_ON),
         wheel_visible=template.get('wheel_visible', False),
         wheel_sectors=template.get('wheel_sectors', default_wheel_sectors()),
-        wheel_enlarged=template.get('wheel_enlarged', False),
+        wheel_enlarged=template.get('wheel_enlarged', True),
+        wheel_mode=template.get('wheel_mode', 'large'),
         wheel_center_ring=template.get('wheel_center_ring', default_wheel_center_ring()),
-        wheel_center_ring_visible=template.get('wheel_center_ring_visible', False),
+        wheel_center_ring_visible=template.get('wheel_center_ring_visible', True),
+        wheel_middle_ring_visible=template.get('wheel_middle_ring_visible', True),
     )
     _save_index({"active": DEFAULT_PROFILE_NAME, "profiles": [DEFAULT_PROFILE_NAME]})
     cfg = load_profile(DEFAULT_PROFILE_NAME)
@@ -190,7 +192,8 @@ def load_config_from_file(filepath: str) -> dict:
         'wheel_sectors': default_wheel_sectors(),
         'wheel_enlarged': False,
         'wheel_center_ring': default_wheel_center_ring(),
-        'wheel_center_ring_visible': False,
+        'wheel_center_ring_visible': True,
+        'wheel_middle_ring_visible': True,
         'run_toolbar_x': None,
         'run_toolbar_y': None,
         'grid_size': None,
@@ -244,7 +247,15 @@ def load_config_from_file(filepath: str) -> dict:
         raw_ring = data.get('wheel_center_ring', None)
         if raw_ring and isinstance(raw_ring, dict):
             result['wheel_center_ring'] = raw_ring
-        result['wheel_center_ring_visible'] = data.get('wheel_center_ring_visible', False)
+        result['wheel_center_ring_visible'] = data.get('wheel_center_ring_visible', True)
+        result['wheel_middle_ring_visible'] = data.get('wheel_middle_ring_visible', True)
+        # 轮盘模式与缩放
+        result['wheel_mode'] = data.get('wheel_mode', None)
+        result['wheel_offset'] = data.get('wheel_offset', 0)
+        # 内环按钮
+        raw_inner = data.get('wheel_inner_ring', None)
+        if raw_inner and isinstance(raw_inner, dict):
+            result['wheel_inner_ring'] = raw_inner
         # 运行工具栏位置（按方案记忆）
         result['run_toolbar_x'] = data.get('run_toolbar_x', None)
         result['run_toolbar_y'] = data.get('run_toolbar_y', None)
@@ -280,12 +291,17 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                         ball_x=None, ball_y=None, click_through=False,
                         wheel_visible=False, wheel_sectors=None,
                         wheel_enlarged=False,
+                        wheel_mode=None,
+                        wheel_offset=0,
                         wheel_center_ring=None,
-                        wheel_center_ring_visible=False,
+                        wheel_inner_ring=None,
+                        wheel_center_ring_visible=True,
+                        wheel_middle_ring_visible=True,
                          run_toolbar_x=None,
                          run_toolbar_y=None,
                          grid_size=None,
                          coord_format=None,
+                         coord_system=None,
                          voice_enabled=None,
                          voice_language=None,
                          voice_commands=None,
@@ -332,6 +348,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         'wheel_visible': wheel_visible,
         'wheel_enlarged': wheel_enlarged,
         'wheel_center_ring_visible': wheel_center_ring_visible,
+        'wheel_middle_ring_visible': wheel_middle_ring_visible,
         'run_toolbar_x': run_toolbar_x,
         'run_toolbar_y': run_toolbar_y,
     }
@@ -342,11 +359,23 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
     if clean_sectors:
         data['wheel_sectors'] = clean_sectors
 
+    # 轮盘模式与缩放
+    if wheel_mode is not None:
+        data['wheel_mode'] = wheel_mode
+    if wheel_offset:
+        data['wheel_offset'] = wheel_offset
+
     # 中心圆环按钮
     if wheel_center_ring:
         clean_ring = {k: v for k, v in wheel_center_ring.items()
                       if k not in RUNTIME_FIELDS and k != 'deleted'}
         data['wheel_center_ring'] = clean_ring
+
+    # 内环按钮
+    if wheel_inner_ring:
+        clean_inner = {k: v for k, v in wheel_inner_ring.items()
+                       if k not in RUNTIME_FIELDS and k != 'deleted'}
+        data['wheel_inner_ring'] = clean_inner
 
     # 语音识别
     if voice_enabled is not None:
@@ -456,9 +485,11 @@ def create_profile(name: str, from_template: bool = True) -> bool:
             click_through=template.get('click_through', PT_ON),
             wheel_visible=template.get('wheel_visible', False),
             wheel_sectors=template.get('wheel_sectors', default_wheel_sectors()),
-            wheel_enlarged=template.get('wheel_enlarged', False),
+            wheel_enlarged=template.get('wheel_enlarged', True),
+            wheel_mode=template.get('wheel_mode', 'large'),
             wheel_center_ring=template.get('wheel_center_ring', default_wheel_center_ring()),
-            wheel_center_ring_visible=template.get('wheel_center_ring_visible', False),
+            wheel_center_ring_visible=template.get('wheel_center_ring_visible', True),
+            wheel_middle_ring_visible=template.get('wheel_middle_ring_visible', True),
         )
     else:
         # from_template=False → 空白方案（无按钮，仅默认轮盘）
@@ -472,7 +503,7 @@ def create_profile(name: str, from_template: bool = True) -> bool:
             wheel_sectors=default_wheel_sectors(),
             wheel_enlarged=False,
             wheel_center_ring=default_wheel_center_ring(),
-            wheel_center_ring_visible=False,
+            wheel_center_ring_visible=True,
         )
 
     index.setdefault("profiles", []).append(name)

@@ -13,11 +13,14 @@ from PyQt6.QtGui import QPainter as _QPainter, QColor as _QColor, QFont as _QFon
 
 from core.constants import (
     DEFAULT_GRID_SIZE, BTN_TYPE_WHEEL_SECTOR, BTN_TYPE_WHEEL_RING,
-    BTN_TYPE_CENTER_BAND,
+    BTN_TYPE_WHEEL_INNER_RING, BTN_TYPE_CENTER_BAND,
     WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
     WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE,
     WHEEL_RING_INNER, WHEEL_RING_OUTER,
-    WHEEL_SECTOR_COUNT,
+    WHEEL_TRIPLE_INNER_RING_INNER, WHEEL_TRIPLE_INNER_RING_OUTER,
+    WHEEL_TRIPLE_OUTER_RING_INNER, WHEEL_TRIPLE_OUTER_RING_OUTER,
+    WHEEL_TRIPLE_SECTOR_INNER, WHEEL_TRIPLE_SECTOR_OUTER,
+    WHEEL_SECTOR_COUNT, WHEEL_MAX_OFFSET, WHEEL_RESIZE_BTN_SIZE,
 )
 from core.i18n import t
 
@@ -39,54 +42,44 @@ def _detect_icon_font():
         _ICON_FONT_NAME = ""
     return _ICON_FONT_NAME
 
-# 原版图标码点
-_ICON_ZOOM_IN  = "\uE8A3"   # ZoomIn  放大镜+  (当前为小版 → 点击放大)
-_ICON_ZOOM_OUT = "\uE71F"   # ZoomOut 放大镜−  (当前为大版 → 点击缩小)
-_ZOOM_ICON_SIZE = 14
-_BTN_SIZE = 30
+# 轮盘样式按钮
+_ICON_SETTINGS = "\uE713"   # Settings 齿轮
+_STYLE_BTN_SIZE = 30
+_STYLE_BTN_COLOR = "#F43F5E"      # 玫瑰红
+_STYLE_BTN_HOVER = "#FB7185"      # 玫瑰红 lighter
 
 
-class _WheelZoomBtn(QGraphicsObject):
-    """轮盘缩放切换按钮 — 匹配原版 draw_wheel_zoom_button
-    灰色圆角矩形底, Segoe Fluent Icons 放大镜图标, fallback +/−
-    """
+class _WheelStyleBtn(QGraphicsObject):
+    """轮盘样式管理按钮 — 玫瑰红圆角矩形 + 齿轮 icon"""
 
     def __init__(self, callback, parent=None):
         super().__init__(parent)
         self._callback = callback
-        self._enlarged = False
         self._hover = False
         self.setAcceptHoverEvents(True)
         self.setCursor(_Qt.CursorShape.PointingHandCursor)
         self.setZValue(50)
 
-    def set_enlarged(self, enlarged):
-        self._enlarged = enlarged
-        self.update()
-
     def boundingRect(self):
-        return QRectF(0, 0, _BTN_SIZE, _BTN_SIZE)
+        return QRectF(0, 0, _STYLE_BTN_SIZE, _STYLE_BTN_SIZE)
 
     def paint(self, painter: _QPainter, option, widget=None):
         painter.setRenderHint(_QPainter.RenderHint.Antialiasing)
-        bg = _QColor("#777777") if self._hover else _QColor("#666666")
+        bg = _QColor(_STYLE_BTN_HOVER) if self._hover else _QColor(_STYLE_BTN_COLOR)
         painter.setPen(_Qt.PenStyle.NoPen)
         painter.setBrush(bg)
         painter.drawRoundedRect(self.boundingRect(), 6, 6)
 
         ifont = _detect_icon_font()
         if ifont:
-            icon_ch = _ICON_ZOOM_OUT if self._enlarged else _ICON_ZOOM_IN
-            painter.setPen(_QColor("#E0E0E0"))
-            painter.setFont(_QFont(ifont, _ZOOM_ICON_SIZE))
-            painter.drawText(self.boundingRect(), _Qt.AlignmentFlag.AlignCenter, icon_ch)
+            painter.setPen(_QColor("#FFFFFF"))
+            painter.setFont(_QFont(ifont, 10))
+            painter.drawText(self.boundingRect(), _Qt.AlignmentFlag.AlignCenter, _ICON_SETTINGS)
         else:
-            # fallback: +/−
-            text = "\u2212" if self._enlarged else "+"
-            painter.setPen(_QColor("#E0E0E0"))
             from core.i18n import get_font as _gf
-            painter.setFont(_QFont(_gf(), 14, _QFont.Weight.Bold))
-            painter.drawText(self.boundingRect(), _Qt.AlignmentFlag.AlignCenter, text)
+            painter.setPen(_QColor("#FFFFFF"))
+            painter.setFont(_QFont(_gf(), 10, _QFont.Weight.Bold))
+            painter.drawText(self.boundingRect(), _Qt.AlignmentFlag.AlignCenter, "\u2699")
 
     def hoverEnterEvent(self, event):
         self._hover = True
@@ -110,67 +103,89 @@ class _WheelZoomBtn(QGraphicsObject):
             event.accept()
 
 
-class _WheelRingToggleBtn(QGraphicsObject):
-    """中心环开关按钮 — 匹配原版 draw_wheel_ring_toggle_button
-    圆角矩形底 (蓝/灰切换), 圆形 ⭕ 图标 (canvas.create_oval)
-    """
+# 轮盘缩放按钮
+_RESIZE_BTN_COLOR = "#555555"     # 灰色（与普通按钮拖动手柄一致）
+_RESIZE_BTN_HOVER = "#777777"
+_ICON_RESIZE = "\uE740"          # ResizeMouseSmall 对角双箭头
 
-    _COLOR_ON  = "#005A9E"
-    _COLOR_OFF = "#666666"
 
-    def __init__(self, callback, parent=None):
+class _WheelResizeBtn(QGraphicsObject):
+    """轮盘缩放拖拽按钮 — 灰色圆角矩形 + 缩放 icon，拖拽改变轮盘半径"""
+
+    def __init__(self, scene_ref, parent=None):
         super().__init__(parent)
-        self._callback = callback
-        self._ring_visible = False
+        self._scene_ref = scene_ref
         self._hover = False
+        self._dragging = False
+        self._drag_start_y = 0
+        self._drag_start_offset = 0
         self.setAcceptHoverEvents(True)
-        self.setCursor(_Qt.CursorShape.PointingHandCursor)
+        self.setCursor(_Qt.CursorShape.SizeFDiagCursor)
         self.setZValue(50)
 
-    def set_ring_visible(self, visible):
-        self._ring_visible = visible
-        self.update()
-
     def boundingRect(self):
-        return QRectF(0, 0, _BTN_SIZE, _BTN_SIZE)
+        s = WHEEL_RESIZE_BTN_SIZE
+        return QRectF(0, 0, s, s)
 
     def paint(self, painter: _QPainter, option, widget=None):
         painter.setRenderHint(_QPainter.RenderHint.Antialiasing)
-        base = self._COLOR_ON if self._ring_visible else self._COLOR_OFF
-        bg = _QColor(base).lighter(120) if self._hover else _QColor(base)
+        bg = _QColor(_RESIZE_BTN_HOVER) if self._hover else _QColor(_RESIZE_BTN_COLOR)
         painter.setPen(_Qt.PenStyle.NoPen)
         painter.setBrush(bg)
-        painter.drawRoundedRect(self.boundingRect(), 6, 6)
+        s = WHEEL_RESIZE_BTN_SIZE
+        painter.drawRoundedRect(QRectF(0, 0, s, s), 6, 6)
 
-        # ⭕ 图标: 空心圆, 半径 7, 描边 #E0E0E0 宽 2
-        icon_r = 7
-        cx = _BTN_SIZE / 2
-        cy = _BTN_SIZE / 2
-        painter.setPen(_QPen(_QColor("#E0E0E0"), 2))
-        painter.setBrush(_Qt.BrushStyle.NoBrush)
-        painter.drawEllipse(int(cx - icon_r), int(cy - icon_r),
-                            icon_r * 2, icon_r * 2)
+        ifont = _detect_icon_font()
+        if ifont:
+            painter.save()
+            painter.translate(s, 0)
+            painter.scale(-1, 1)  # 水平镜像翻转
+            painter.setPen(_QColor("#FFFFFF"))
+            painter.setFont(_QFont(ifont, 10))
+            painter.drawText(QRectF(0, 0, s, s), _Qt.AlignmentFlag.AlignCenter, _ICON_RESIZE)
+            painter.restore()
+        else:
+            from core.i18n import get_font as _gf
+            painter.setPen(_QColor("#FFFFFF"))
+            painter.setFont(_QFont(_gf(), 10, _QFont.Weight.Bold))
+            painter.drawText(self.boundingRect(), _Qt.AlignmentFlag.AlignCenter, "\u2922")
 
     def hoverEnterEvent(self, event):
         self._hover = True
         self.update()
-        scene = self.scene()
-        if scene and hasattr(scene, 'show_tooltip'):
-            tip = getattr(self, '_tooltip_text', '')
-            if tip:
-                scene.show_tooltip(tip, event.scenePos())
 
     def hoverLeaveEvent(self, event):
         self._hover = False
         self.update()
-        scene = self.scene()
-        if scene and hasattr(scene, 'hide_tooltip'):
-            scene.hide_tooltip()
 
     def mousePressEvent(self, event):
         if event.button() == _Qt.MouseButton.LeftButton:
-            self._callback()
+            self._dragging = True
+            self._drag_start_y = event.scenePos().y()
+            self._drag_start_offset = self._scene_ref._wheel_offset
             event.accept()
+
+    def mouseMoveEvent(self, event):
+        if not self._dragging:
+            return
+        scene = self._scene_ref
+        cx = scene.sceneRect().width() / 2
+        cy = scene.sceneRect().height() / 2
+        mouse = event.scenePos()
+        # 用鼠标到中心的最大单轴距离来决定新的 effective_r
+        dx = mouse.x() - cx
+        dy = mouse.y() - cy
+        # 取 max(dx, dy) 因为按钮在右下角
+        desired_r = max(dx, dy)
+        base_r = scene._get_base_r_outer()
+        new_offset = int(max(0, min(WHEEL_MAX_OFFSET, desired_r - base_r)))
+        if new_offset != scene._wheel_offset:
+            scene.set_wheel_offset(new_offset)
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._dragging = False
+        event.accept()
 
 
 class _AutoCenterBar(QGraphicsObject):
@@ -220,6 +235,7 @@ class OverlayScene(QGraphicsScene):
     # 信号
     button_double_clicked = pyqtSignal(object)  # TouchButtonItem
     toast_requested = pyqtSignal(str)           # toast 文字
+    wheel_rebuilt = pyqtSignal()                # 轮盘重建完成（需要重新设置透明度等）
 
     def __init__(self):
         super().__init__()
@@ -228,12 +244,16 @@ class OverlayScene(QGraphicsScene):
         self.button_items = []
         self.wheel_items = []
         self.ring_item = None
+        self.inner_ring_item = None
         self._config = {}           # 保存完整配置引用
         self._wheel_visible = False
-        self._wheel_enlarged = False
-        self._wheel_center_ring_visible = False
-        self._wheel_zoom_btn = None
-        self._wheel_ring_btn = None
+        self._wheel_mode = 'small'  # 'small' | 'large' | 'double'
+        self._wheel_enlarged = False  # 向后兼容
+        self._wheel_center_ring_visible = True
+        self._wheel_middle_ring_visible = True
+        self._wheel_offset = 0          # 轮盘缩放偏移 (px)
+        self._wheel_style_btn = None
+        self._wheel_resize_btn = None
 
         # 场景内自定义 Tooltip（替代 Qt 原生 setToolTip）
         from scene.tooltip_item import TooltipItem
@@ -303,7 +323,7 @@ class OverlayScene(QGraphicsScene):
                 continue
             # 跳过轮盘扇区和中心圆环（由 load_wheel 处理）
             btn_type = btn_dict.get('type', 'normal')
-            if btn_type in (BTN_TYPE_WHEEL_SECTOR, BTN_TYPE_WHEEL_RING):
+            if btn_type in (BTN_TYPE_WHEEL_SECTOR, BTN_TYPE_WHEEL_RING, BTN_TYPE_WHEEL_INNER_RING):
                 continue
 
             data = ButtonData.from_dict(btn_dict)
@@ -314,8 +334,17 @@ class OverlayScene(QGraphicsScene):
 
         # 加载轮盘
         self._wheel_visible = config.get('wheel_visible', False)
-        self._wheel_enlarged = config.get('wheel_enlarged', False)
-        self._wheel_center_ring_visible = config.get('wheel_center_ring_visible', False)
+        # wheel_mode: 优先读取新字段，向后兼容旧 wheel_enlarged
+        self._wheel_mode = config.get('wheel_mode', None)
+        if self._wheel_mode is None:
+            self._wheel_mode = 'large' if config.get('wheel_enlarged', False) else 'small'
+        # 兼容旧 'triple' → 'double'
+        if self._wheel_mode == 'triple':
+            self._wheel_mode = 'double'
+        self._wheel_enlarged = (self._wheel_mode in ('large', 'double'))
+        self._wheel_center_ring_visible = config.get('wheel_center_ring_visible', True)
+        self._wheel_middle_ring_visible = config.get('wheel_middle_ring_visible', True)
+        self._wheel_offset = int(config.get('wheel_offset', 0))
         self._load_wheel(config)
         self._update_wheel_controls()
 
@@ -332,13 +361,17 @@ class OverlayScene(QGraphicsScene):
         cx = self.sceneRect().width() / 2
         cy = self.sceneRect().height() / 2
 
-        # 根据大小模式选择半径
-        if self._wheel_enlarged:
-            r_inner = WHEEL_INNER_RADIUS_LARGE
-            r_outer = WHEEL_OUTER_RADIUS_LARGE
+        # 根据模式选择半径 + 应用缩放偏移
+        ofs = self._wheel_offset
+        if self._wheel_mode == 'double':
+            r_inner = WHEEL_TRIPLE_SECTOR_INNER + ofs
+            r_outer = WHEEL_TRIPLE_SECTOR_OUTER + ofs
+        elif self._wheel_mode == 'large':
+            r_inner = WHEEL_INNER_RADIUS_LARGE + ofs
+            r_outer = WHEEL_OUTER_RADIUS_LARGE + ofs
         else:
-            r_inner = WHEEL_INNER_RADIUS
-            r_outer = WHEEL_OUTER_RADIUS
+            r_inner = WHEEL_INNER_RADIUS + ofs
+            r_outer = WHEEL_OUTER_RADIUS + ofs
 
         # 扇面角度：360° / 扇面数
         sector_count = len(sectors)
@@ -359,19 +392,52 @@ class OverlayScene(QGraphicsScene):
             self.addItem(item)
             self.wheel_items.append(item)
 
-        # 中心圆环（仅大轮盘模式）
-        ring_dict = config.get('wheel_center_ring', {})
-        if ring_dict:
-            ring_data = WheelRingData.from_dict(ring_dict)
-            ring_r_inner = WHEEL_RING_INNER
-            ring_r_outer = WHEEL_RING_OUTER
-            self.ring_item = WheelRingItem(ring_data, cx, cy,
-                                           ring_r_inner, ring_r_outer)
+        # 中心圆环
+        # large 模式: ring_item = 中心环 ← wheel_center_ring
+        # double 模式: ring_item = 中二环位置 ← wheel_inner_ring 数据
+        #              inner_ring_item = 中心环位置 ← wheel_center_ring 数据
+        if self._wheel_mode == 'double':
+            # ── 双环: 中二环 (ring_item) ──
+            from core.constants import default_wheel_inner_ring
+            mid_dict = config.get('wheel_inner_ring', None)
+            if not mid_dict:
+                mid_dict = default_wheel_inner_ring()
+                config['wheel_inner_ring'] = mid_dict
+            mid_data = WheelRingData.from_dict(mid_dict)
+            self.ring_item = WheelRingItem(
+                mid_data, cx, cy,
+                WHEEL_TRIPLE_OUTER_RING_INNER + ofs,
+                WHEEL_TRIPLE_OUTER_RING_OUTER + ofs)
             self.ring_item.doubleClicked.connect(self._on_button_double_clicked)
-            visible = (self._wheel_visible and self._wheel_enlarged
-                       and self._wheel_center_ring_visible)
-            self.ring_item.setVisible(visible)
+            self.ring_item.setVisible(
+                self._wheel_visible and self._wheel_middle_ring_visible)
             self.addItem(self.ring_item)
+
+            # ── 双环: 中心环 (inner_ring_item) ──
+            center_dict = config.get('wheel_center_ring', {})
+            if center_dict:
+                center_data = WheelRingData.from_dict(center_dict)
+                self.inner_ring_item = WheelRingItem(
+                    center_data, cx, cy,
+                    WHEEL_TRIPLE_INNER_RING_INNER + ofs,
+                    WHEEL_TRIPLE_INNER_RING_OUTER + ofs)
+                self.inner_ring_item.doubleClicked.connect(self._on_button_double_clicked)
+                self.inner_ring_item.setVisible(
+                    self._wheel_visible and self._wheel_center_ring_visible)
+                self.addItem(self.inner_ring_item)
+
+        elif self._wheel_mode == 'large':
+            # ── 单环: ring_item = 中心环 ← wheel_center_ring ──
+            ring_dict = config.get('wheel_center_ring', {})
+            if ring_dict:
+                ring_data = WheelRingData.from_dict(ring_dict)
+                self.ring_item = WheelRingItem(
+                    ring_data, cx, cy,
+                    WHEEL_RING_INNER + ofs, WHEEL_RING_OUTER + ofs)
+                self.ring_item.doubleClicked.connect(self._on_button_double_clicked)
+                self.ring_item.setVisible(
+                    self._wheel_visible and self._wheel_center_ring_visible)
+                self.addItem(self.ring_item)
 
     def save_config(self):
         """将当前场景中的按钮状态保存回配置
@@ -400,14 +466,23 @@ class OverlayScene(QGraphicsScene):
                 wheel_sectors.append(item.data.to_dict())
             self._config['wheel_sectors'] = wheel_sectors
 
-        # 中心圆环数据
-        if self.ring_item:
-            self._config['wheel_center_ring'] = self.ring_item.data.to_dict()
+        # 圆环数据 — 双环模式下 ring_item=中二环, inner_ring_item=中心环
+        if self._wheel_mode == 'double':
+            if self.ring_item:
+                self._config['wheel_inner_ring'] = self.ring_item.data.to_dict()
+            if self.inner_ring_item:
+                self._config['wheel_center_ring'] = self.inner_ring_item.data.to_dict()
+        else:
+            if self.ring_item:
+                self._config['wheel_center_ring'] = self.ring_item.data.to_dict()
 
         # 轮盘显示状态
         self._config['wheel_visible'] = self._wheel_visible
+        self._config['wheel_mode'] = self._wheel_mode
         self._config['wheel_enlarged'] = self._wheel_enlarged
         self._config['wheel_center_ring_visible'] = self._wheel_center_ring_visible
+        self._config['wheel_middle_ring_visible'] = self._wheel_middle_ring_visible
+        self._config['wheel_offset'] = self._wheel_offset
         # 网格大小
         self._config['grid_size'] = self.grid_size
         # 语音配置透传（voice_commands 等字段已在 _config 中，无需额外处理）
@@ -482,50 +557,107 @@ class OverlayScene(QGraphicsScene):
     # ── 轮盘操作 ──
 
     def _update_wheel_controls(self):
-        """更新轮盘控制按钮的位置和可见性 (匹配原版 draw_wheel_zoom_button / ring_toggle_button)"""
+        """更新轮盘样式管理按钮的位置和可见性"""
         show = self._wheel_visible and self.mode == 'edit' and len(self.wheel_items) > 0
         cx = self.sceneRect().width() / 2
         cy = self.sceneRect().height() / 2
 
-        if self._wheel_zoom_btn is None:
-            self._wheel_zoom_btn = _WheelZoomBtn(self._on_wheel_zoom_clicked)
-            self._wheel_zoom_btn._tooltip_text = t("btn_tooltip.zoom_tooltip")
-            self.addItem(self._wheel_zoom_btn)
+        if self._wheel_style_btn is None:
+            self._wheel_style_btn = _WheelStyleBtn(self._on_wheel_style_clicked)
+            self._wheel_style_btn._tooltip_text = t("btn_tooltip.style_tooltip")
+            self.addItem(self._wheel_style_btn)
 
-        if self._wheel_ring_btn is None:
-            self._wheel_ring_btn = _WheelRingToggleBtn(self._on_wheel_ring_clicked)
-            self._wheel_ring_btn._tooltip_text = t("btn_tooltip.ring_tooltip")
-            self.addItem(self._wheel_ring_btn)
+        # 缩放按钮 — 懒创建
+        if self._wheel_resize_btn is None:
+            self._wheel_resize_btn = _WheelResizeBtn(self)
+            self.addItem(self._wheel_resize_btn)
 
-        # 同步状态
-        self._wheel_zoom_btn.set_enlarged(self._wheel_enlarged)
-        self._wheel_ring_btn.set_ring_visible(self._wheel_center_ring_visible)
+        # 按钮位置 — 基于外接正方形右下角
+        eff_r = self._get_base_r_outer() + self._wheel_offset
+        s = WHEEL_RESIZE_BTN_SIZE
+        resize_x = cx + eff_r - s
+        resize_y = cy + eff_r - s
+        style_x = resize_x - 10 - s   # 设置按钮在缩放按钮左侧，间距10px
+        style_y = resize_y            # 垂直对齐
 
-        # 位置: 原版 cx+165, cy+165 (zoom) 和 cx+130, cy+165 (ring)
-        self._wheel_zoom_btn.setPos(cx + 165, cy + 165)
-        self._wheel_ring_btn.setPos(cx + 130, cy + 165)
+        self._wheel_resize_btn.setPos(resize_x, resize_y)
+        self._wheel_resize_btn.setVisible(show)
+        self._wheel_style_btn.setPos(style_x, style_y)
+        self._wheel_style_btn.setVisible(show)
 
-        self._wheel_zoom_btn.setVisible(show)
-        # 圆环按钮仅在大轮盘模式下显示
-        self._wheel_ring_btn.setVisible(show and self._wheel_enlarged)
+    def _on_wheel_style_clicked(self):
+        """打开轮盘样式管理弹窗"""
+        from views.wheel_style_dialog import WheelStyleDialog
 
-    def _on_wheel_zoom_clicked(self):
-        self.toggle_wheel_size()
+        # 临时降低 overlay 的置顶，避免与弹窗的 z-order 争夺
+        overlay = None
+        saved_flags = None
+        views = self.views()
+        if views:
+            overlay = views[0].window()
+            if overlay:
+                saved_flags = overlay.windowFlags()
+                overlay.setWindowFlags(saved_flags & ~_Qt.WindowType.WindowStaysOnTopHint)
+                overlay.show()
+
+        dlg = WheelStyleDialog(self._wheel_mode, self._wheel_center_ring_visible,
+                               self._wheel_middle_ring_visible)
+        if dlg.exec():
+            result = dlg.get_result()
+            if result:
+                self.apply_wheel_style(result)
+
+        # 恢复 overlay 置顶
+        if overlay and saved_flags is not None:
+            overlay.setWindowFlags(saved_flags)
+            overlay.show()
+
+    def apply_wheel_style(self, settings: dict):
+        """应用轮盘样式设置（从弹窗返回的结果）"""
+        new_mode = settings.get('wheel_mode', self._wheel_mode)
+        new_ring_vis = settings.get('wheel_center_ring_visible', self._wheel_center_ring_visible)
+        new_mid_vis = settings.get('wheel_middle_ring_visible', self._wheel_middle_ring_visible)
+
+        # 重置八方向扇区键值
+        reset_sectors = settings.get('reset_sectors', None)
+        if reset_sectors and isinstance(reset_sectors, list):
+            self._config['wheel_sectors'] = reset_sectors
+
+        need_rebuild = (new_mode != self._wheel_mode) or (reset_sectors is not None)
+        self._wheel_mode = new_mode
+        self._wheel_enlarged = (new_mode in ('large', 'double'))
+        self._wheel_center_ring_visible = new_ring_vis
+        self._wheel_middle_ring_visible = new_mid_vis
+
+        if need_rebuild:
+            self._rebuild_wheel()
+
+        # 更新中心环可见性
+        self._update_ring_visibility()
         self._update_wheel_controls()
 
-    def _on_wheel_ring_clicked(self):
-        self.toggle_wheel_center_ring()
-        self._update_wheel_controls()
+    def _update_ring_visibility(self):
+        """更新中心环/内环的可见性"""
+        if self.ring_item:
+            if self._wheel_mode == 'double':
+                # 双环: ring_item = 中二环
+                visible = (self._wheel_visible and self._wheel_middle_ring_visible)
+            else:
+                # 单环: ring_item = 中心环
+                visible = (self._wheel_visible and self._wheel_center_ring_visible)
+            self.ring_item.setVisible(visible)
+        if self.inner_ring_item:
+            # 双环: inner_ring_item = 中心环（最内）
+            visible = (self._wheel_visible and self._wheel_mode == 'double'
+                       and self._wheel_center_ring_visible)
+            self.inner_ring_item.setVisible(visible)
 
     def toggle_wheel(self):
         """切换轮盘显示/隐藏"""
         self._wheel_visible = not self._wheel_visible
         for item in self.wheel_items:
             item.setVisible(self._wheel_visible)
-        if self.ring_item:
-            visible = (self._wheel_visible and self._wheel_enlarged
-                       and self._wheel_center_ring_visible)
-            self.ring_item.setVisible(visible)
+        self._update_ring_visibility()
         self._update_wheel_controls()
         return self._wheel_visible
 
@@ -547,7 +679,7 @@ class OverlayScene(QGraphicsScene):
         return self._wheel_center_ring_visible
 
     def _rebuild_wheel(self):
-        """清除并重建轮盘 Item（切换大小时调用）"""
+        """清除并重建轮盘 Item（切换模式时调用）"""
         # 移除旧 Item
         for item in self.wheel_items:
             self.removeItem(item)
@@ -555,8 +687,13 @@ class OverlayScene(QGraphicsScene):
         if self.ring_item:
             self.removeItem(self.ring_item)
             self.ring_item = None
+        if self.inner_ring_item:
+            self.removeItem(self.inner_ring_item)
+            self.inner_ring_item = None
         # 重新加载
         self._load_wheel(self._config)
+        # 通知外部重新应用透明度等属性
+        self.wheel_rebuilt.emit()
 
     @property
     def wheel_visible(self):
@@ -574,6 +711,8 @@ class OverlayScene(QGraphicsScene):
             item.set_mode(mode)
         if self.ring_item:
             self.ring_item.set_mode(mode)
+        if self.inner_ring_item:
+            self.inner_ring_item.set_mode(mode)
         self._update_wheel_controls()
         self.invalidate()  # 触发重绘（更新网格背景）
 
@@ -596,6 +735,24 @@ class OverlayScene(QGraphicsScene):
         self._ac_bar.update_progress(progress, x, y)
 
     # ── 内部方法 ──
+
+    def _get_base_r_outer(self):
+        """获取当前轮盘模式的基础最大外径（不含 offset）"""
+        if self._wheel_mode == 'double':
+            return WHEEL_TRIPLE_SECTOR_OUTER
+        elif self._wheel_mode == 'large':
+            return WHEEL_OUTER_RADIUS_LARGE
+        else:
+            return WHEEL_OUTER_RADIUS
+
+    def set_wheel_offset(self, new_offset):
+        """设置轮盘缩放偏移并重建轮盘"""
+        new_offset = max(0, min(WHEEL_MAX_OFFSET, int(new_offset)))
+        if new_offset == self._wheel_offset:
+            return
+        self._wheel_offset = new_offset
+        self._rebuild_wheel()
+        self._update_wheel_controls()
 
     def _on_button_double_clicked(self, item):
         """按钮双击 → 转发信号"""

@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt, QRectF, QTimer, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPainter, QPainterPath, QPen, QBrush, QColor, QFont
 
 from core.i18n import get_font
-from core.constants import WHEEL_GAP_PX
+from core.constants import WHEEL_GAP_PX, WHEEL_VISUAL_INSET
 from models.wheel_model import WheelSectorData
 from engine.hover_state_machine import HoverStateMachine
 from scene.tooltip_item import build_edit_tooltip
@@ -57,8 +57,13 @@ class WheelSectorItem(QGraphicsObject):
         self._mode = 'edit'
         self._charge_progress = 0.0
 
-        # 预计算路径
-        self._path = self._build_path()
+        # 视觉半径（碰撞半径各方向缩进 VISUAL_INSET）
+        self._v_inner = r_inner + WHEEL_VISUAL_INSET
+        self._v_outer = r_outer - WHEEL_VISUAL_INSET
+
+        # 预计算路径：碰撞路径(hit, 无间隙) + 视觉路径(visual, 有间隙+缩进半径)
+        self._hit_path = self._build_sector_path(r_inner, r_outer, gap_px=0)
+        self._visual_path = self._build_sector_path(self._v_inner, self._v_outer, gap_px=WHEEL_GAP_PX)
 
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(
@@ -77,18 +82,23 @@ class WheelSectorItem(QGraphicsObject):
         self._hover_sm.charge_progress.connect(self._on_charge_progress)
         self._hover_sm.release_progress.connect(self._on_release_progress)
 
-    def _gap_half_angle(self, radius):
+    @staticmethod
+    def _half_gap_angle(radius, gap_px):
         """将像素间隔转换为该半径处的角度偏移"""
-        if radius <= 0:
+        if radius <= 0 or gap_px <= 0:
             return 0
-        half_gap = WHEEL_GAP_PX / 2
-        return math.degrees(math.atan2(half_gap, radius))
+        return math.degrees(math.atan2(gap_px / 2, radius))
 
-    def _build_path(self) -> QPainterPath:
-        """构建环形扇区路径 — 考虑间隙"""
-        # 根据内外圆分别计算间隙角度
-        gap_outer = self._gap_half_angle(self._r_outer)
-        gap_inner = self._gap_half_angle(self._r_inner)
+    def _build_sector_path(self, r_inner, r_outer, gap_px=0) -> QPainterPath:
+        """构建环形扇区路径
+
+        Args:
+            r_inner: 内圆半径
+            r_outer: 外圆半径
+            gap_px: 扇面间视觉间距(像素), 0=无间隙(碰撞路径)
+        """
+        gap_outer = self._half_gap_angle(r_outer, gap_px)
+        gap_inner = self._half_gap_angle(r_inner, gap_px)
 
         outer_start = self._start_angle + gap_outer
         outer_span = self._span_angle - 2 * gap_outer
@@ -96,11 +106,11 @@ class WheelSectorItem(QGraphicsObject):
         inner_span = self._span_angle - 2 * gap_inner
 
         outer_rect = QRectF(
-            self._cx - self._r_outer, self._cy - self._r_outer,
-            self._r_outer * 2, self._r_outer * 2)
+            self._cx - r_outer, self._cy - r_outer,
+            r_outer * 2, r_outer * 2)
         inner_rect = QRectF(
-            self._cx - self._r_inner, self._cy - self._r_inner,
-            self._r_inner * 2, self._r_inner * 2)
+            self._cx - r_inner, self._cy - r_inner,
+            r_inner * 2, r_inner * 2)
 
         # 外弧
         path = QPainterPath()
@@ -109,8 +119,8 @@ class WheelSectorItem(QGraphicsObject):
 
         # 连接到内弧终点
         inner_end_angle = math.radians(inner_start + inner_span)
-        ix = self._cx + self._r_inner * math.cos(inner_end_angle)
-        iy = self._cy - self._r_inner * math.sin(inner_end_angle)
+        ix = self._cx + r_inner * math.cos(inner_end_angle)
+        iy = self._cy - r_inner * math.sin(inner_end_angle)
         path.lineTo(ix, iy)
 
         # 内弧（反向）
@@ -120,9 +130,9 @@ class WheelSectorItem(QGraphicsObject):
         return path
 
     def _build_charge_path(self, r_in, r_out) -> QPainterPath:
-        """构建充能层扇区路径 — 从 r_in 到 r_out 的环形扇区"""
-        gap_outer = self._gap_half_angle(r_out)
-        gap_inner = self._gap_half_angle(r_in)
+        """构建充能层扇区路径 — 从 r_in 到 r_out 的环形扇区（视觉间隙）"""
+        gap_outer = self._half_gap_angle(r_out, WHEEL_GAP_PX)
+        gap_inner = self._half_gap_angle(r_in, WHEEL_GAP_PX)
 
         outer_start = self._start_angle + gap_outer
         outer_span = self._span_angle - 2 * gap_outer
@@ -150,11 +160,11 @@ class WheelSectorItem(QGraphicsObject):
         return path
 
     def boundingRect(self) -> QRectF:
-        return self._path.boundingRect().adjusted(-2, -2, 2, 2)
+        return self._hit_path.boundingRect().adjusted(-2, -2, 2, 2)
 
     def shape(self) -> QPainterPath:
-        """精确碰撞检测 — 使用扇形路径而非矩形"""
-        return self._path
+        """精确碰撞检测 — 使用碰撞路径（无间隙，比视觉区域大 VISUAL_INSET）"""
+        return self._hit_path
 
     def paint(self, painter: QPainter, option, widget=None):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -164,20 +174,20 @@ class WheelSectorItem(QGraphicsObject):
 
         painter.setPen(QPen(QColor(border_str), 2))
         painter.setBrush(QBrush(QColor(fill_str)))
-        painter.drawPath(self._path)
+        painter.drawPath(self._visual_path)
 
-        # 充能进度 — 径向扩展（原版: 从内圆向外圆扩展的扇形充能）
+        # 充能进度 — 径向扩展（在视觉区域内从内圆向外圆扩展）
         if self._charge_progress > 0.01:
-            charge_r = self._r_inner + (self._r_outer - self._r_inner) * self._charge_progress
-            charge_path = self._build_charge_path(self._r_inner + 2, max(self._r_inner + 3, charge_r - 2))
+            charge_r = self._v_inner + (self._v_outer - self._v_inner) * self._charge_progress
+            charge_path = self._build_charge_path(self._v_inner + 2, max(self._v_inner + 3, charge_r - 2))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(QColor("#0284C7")))
             painter.drawPath(charge_path)
 
-        # 扇面文字（沿半径方向居中）
+        # 扇面文字（沿半径方向居中 — 基于视觉半径）
         mid_angle_deg = self._start_angle + self._span_angle / 2
         mid_angle = math.radians(mid_angle_deg)
-        mid_r = (self._r_inner + self._r_outer) / 2
+        mid_r = (self._v_inner + self._v_outer) / 2
         tx = self._cx + mid_r * math.cos(mid_angle)
         ty = self._cy - mid_r * math.sin(mid_angle)
 

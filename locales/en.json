@@ -180,7 +180,22 @@
     "center_band_tip": "Mouse returns to center here",
     "wheel_hint": "⚠ Center wheel has two sizes, use as needed",
     "zoom_tooltip": "Click to toggle wheel large/small",
-    "ring_tooltip": "Click to enable/hide center ring button"
+    "ring_tooltip": "Click to enable/hide center ring button",
+    "style_tooltip": "Wheel Style Manager"
+  },
+  "wheel_style": {
+    "title": "Wheel Style Manager",
+    "type_small": "Small",
+    "type_large": "Ring",
+    "type_double": "Double",
+    "desc_small": "8 directional sectors, compact.\nIdeal for scenarios that only require 8-way movement without extra actions during movement.\ne.g. moving character in Deep Rock Galactic: Survivor.\nNote: Defaults to WASD 8-way directions, but can be remapped.",
+    "desc_large": "8 directional sectors + optional center ring.\nCenter ring can bind separate keys, ideal for inspecting items, looting, and opening chests while moving the camera.\nNote: Defaults to WASD 8-way directions, but can be remapped.",
+    "desc_double": "Center ring + Middle ring + 8-way sectors.\nThree independent layers for complex setups.\nNote: Defaults to WASD 8-way directions, but can be remapped.",
+    "show_center_ring": "Show Center Ring",
+    "show_middle_ring": "Show Middle Ring",
+    "save": "OK",
+    "cancel": "Cancel",
+    "reset_sectors": "Reset 8-Way Keys"
   },
   "key_cat": {
     "letters": "Letters",
@@ -198,7 +213,8 @@
   "button_defaults": {
     "name": "Button",
     "center_band": "Center Band",
-    "center_ring": "Center Ring"
+    "center_ring": "Center Ring",
+    "inner_ring": "Middle Ring"
   },
   "voice": {
     "status_loading": "Loading voice model...",
