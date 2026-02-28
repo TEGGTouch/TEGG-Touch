@@ -191,11 +191,14 @@
     "desc_small": "8 directional sectors, compact.\nIdeal for scenarios that only require 8-way movement without extra actions during movement.\ne.g. moving character in Deep Rock Galactic: Survivor.\nNote: Defaults to WASD 8-way directions, but can be remapped.",
     "desc_large": "8 directional sectors + optional center ring.\nCenter ring can bind separate keys, ideal for inspecting items, looting, and opening chests while moving the camera.\nNote: Defaults to WASD 8-way directions, but can be remapped.",
     "desc_double": "Center ring + Middle ring + 8-way sectors.\nThree independent layers for complex setups.\nNote: Defaults to WASD 8-way directions, but can be remapped.",
+    "type_dual": "Dual Wheel",
+    "desc_dual": "Center ring + Inner 8-way (WASD) + Outer 8-way (Shift+WASD).\nTwo rings of directional keys, ideal for run/walk toggle scenarios.\nNote: Inner defaults to WASD, outer defaults to Shift+WASD, both remappable.",
     "show_center_ring": "Show Center Ring",
     "show_middle_ring": "Show Middle Ring",
     "save": "OK",
     "cancel": "Cancel",
-    "reset_sectors": "Reset 8-Way Keys"
+    "reset_sectors": "Reset 8-Way Keys",
+    "reset_sectors_dual": "Reset All 8-Way Keys"
   },
   "key_cat": {
     "letters": "Letters",

@@ -17,7 +17,7 @@ import time as _time
 
 from PyQt6.QtCore import QObject, QTimer, QPoint, pyqtSignal
 
-from core.input_engine import trigger, is_key_pressed, poll_wheel_events
+from core.input_engine import trigger, is_key_pressed, poll_wheel_events, release_all_keys
 from core.config_manager import load_hotkeys
 from core.constants import UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND
 
@@ -151,6 +151,8 @@ class RunController(QObject):
         for item in self._scene.button_items:
             if hasattr(item, '_hover_sm'):
                 item._hover_sm.reset()
+        # 兜底释放所有残留按键，防止卡键
+        release_all_keys()
 
     # ── 获取光标下的 item ──
 

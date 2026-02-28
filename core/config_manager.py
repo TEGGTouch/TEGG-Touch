@@ -256,6 +256,10 @@ def load_config_from_file(filepath: str) -> dict:
         raw_inner = data.get('wheel_inner_ring', None)
         if raw_inner and isinstance(raw_inner, dict):
             result['wheel_inner_ring'] = raw_inner
+        # 外八向扇面 (dual 模式)
+        raw_outer = data.get('wheel_outer_sectors', None)
+        if raw_outer and isinstance(raw_outer, list):
+            result['wheel_outer_sectors'] = raw_outer
         # 运行工具栏位置（按方案记忆）
         result['run_toolbar_x'] = data.get('run_toolbar_x', None)
         result['run_toolbar_y'] = data.get('run_toolbar_y', None)
@@ -295,8 +299,9 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                         wheel_offset=0,
                         wheel_center_ring=None,
                         wheel_inner_ring=None,
-                        wheel_center_ring_visible=True,
+                         wheel_center_ring_visible=True,
                         wheel_middle_ring_visible=True,
+                         wheel_outer_sectors=None,
                          run_toolbar_x=None,
                          run_toolbar_y=None,
                          grid_size=None,
@@ -376,6 +381,10 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         clean_inner = {k: v for k, v in wheel_inner_ring.items()
                        if k not in RUNTIME_FIELDS and k != 'deleted'}
         data['wheel_inner_ring'] = clean_inner
+
+    # 外八向扇面 (dual 模式)
+    if wheel_outer_sectors:
+        data['wheel_outer_sectors'] = [_clean_sector_for_save(s) for s in wheel_outer_sectors]
 
     # 语音识别
     if voice_enabled is not None:

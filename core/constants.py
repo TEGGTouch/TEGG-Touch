@@ -110,6 +110,14 @@ WHEEL_TRIPLE_OUTER_RING_OUTER = 160   # 中环碰撞外径 (px)
 WHEEL_TRIPLE_SECTOR_INNER = 160       # 八向环碰撞内径 (px) — 与中环无缝衔接
 WHEEL_TRIPLE_SECTOR_OUTER = 240       # 八向环碰撞外径 (px)
 
+# 单环双轮盘模式尺寸 (center_ring + inner_sectors + outer_sectors)
+WHEEL_DUAL_CENTER_RING_INNER = 80     # 中心环碰撞内径 (px) — 与双环相同
+WHEEL_DUAL_CENTER_RING_OUTER = 120    # 中心环碰撞外径 (px)
+WHEEL_DUAL_INNER_SECTOR_INNER = 120   # 内八向碰撞内径 (px) — 与中心环无缝衔接
+WHEEL_DUAL_INNER_SECTOR_OUTER = 200   # 内八向碰撞外径 (px)
+WHEEL_DUAL_OUTER_SECTOR_INNER = 200   # 外八向碰撞内径 (px) — 与内八向无缝衔接
+WHEEL_DUAL_OUTER_SECTOR_OUTER = 240   # 外八向碰撞外径 (px) — 与双环模式最外径一致
+
 # 8个扇面方向定义 (名称, 中心角度-tkinter角度, 默认hover键)
 # tkinter arc: 0°=右, 逆时针增加, 90°=上
 WHEEL_SECTORS_DEF = [
@@ -150,6 +158,25 @@ def default_wheel_center_ring():
         'wheelup': '', 'wheeldown': '',
         'xbutton1': '', 'xbutton2': '',
     }
+
+def default_wheel_outer_sectors():
+    """生成默认的外八向轮盘扇区配置（单环双轮盘模式），键值为 Shift+WASD。"""
+    sectors = []
+    for s in WHEEL_SECTORS_DEF:
+        # 给每个键加 shift+ 前缀
+        hover_keys = s['hover'].split('+')
+        shifted = '+'.join(['shift'] + hover_keys)
+        sectors.append({
+            'name': s['name'],
+            'type': BTN_TYPE_WHEEL_SECTOR,
+            'angle': s['angle'],
+            'hover': shifted,
+            'hover_delay': 200,
+            'hover_release_delay': 0,
+            'lclick': '', 'rclick': '', 'mclick': '',
+            'wheelup': '', 'wheeldown': '',
+        })
+    return sectors
 
 def default_wheel_inner_ring():
     """生成默认的中二环按钮配置（双环模式的中间环）。"""

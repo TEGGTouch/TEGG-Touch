@@ -15,7 +15,7 @@ from core.config_manager import (
     init_profiles, load_hotkeys, get_active_profile_name,
     load_profile, save_profile, set_active_profile,
 )
-from core.input_engine import install_wheel_hook, uninstall_wheel_hook
+from core.input_engine import install_wheel_hook, uninstall_wheel_hook, release_all_keys
 from scene.overlay_scene import OverlayScene
 from engine.run_controller import RunController
 from engine.passthrough_manager import PassthroughManager
@@ -204,6 +204,8 @@ class OverlayWindow(QGraphicsView):
         """将轮盘扇面和圆环的信号连接到运行控制器"""
         for item in self._scene.wheel_items:
             self._wire_single_item(item)
+        for item in self._scene.outer_wheel_items:
+            self._wire_single_item(item)
         if self._scene.ring_item:
             self._wire_single_item(self._scene.ring_item)
         if self._scene.inner_ring_item:
@@ -283,6 +285,8 @@ class OverlayWindow(QGraphicsView):
         # 恢复轮盘可见性 (原版 toggle_buttons_visibility 隐藏的轮盘需要恢复)
         for item in self._scene.wheel_items:
             item.setVisible(self._scene.wheel_visible)
+        for item in self._scene.outer_wheel_items:
+            item.setVisible(self._scene.wheel_visible)
         self._scene._update_ring_visibility()
 
         self._run_toolbar.hide()
@@ -317,6 +321,11 @@ class OverlayWindow(QGraphicsView):
             item.setVisible(not self._buttons_hidden)
         # 轮盘扇区也参与隐藏 (原版: self.buttons_hidden 影响整个 handle_run_interaction)
         for item in self._scene.wheel_items:
+            if self._buttons_hidden:
+                item.setVisible(False)
+            else:
+                item.setVisible(self._scene.wheel_visible)
+        for item in self._scene.outer_wheel_items:
             if self._buttons_hidden:
                 item.setVisible(False)
             else:
@@ -454,6 +463,8 @@ class OverlayWindow(QGraphicsView):
             item.setOpacity(value)
         for item in self._scene.wheel_items:
             item.setOpacity(value)
+        for item in self._scene.outer_wheel_items:
+            item.setOpacity(value)
         if self._scene.ring_item:
             self._scene.ring_item.setOpacity(value)
         if self._scene.inner_ring_item:
@@ -524,6 +535,9 @@ class OverlayWindow(QGraphicsView):
         for item in list(self._scene.wheel_items):
             self._scene.removeItem(item)
         self._scene.wheel_items.clear()
+        for item in list(self._scene.outer_wheel_items):
+            self._scene.removeItem(item)
+        self._scene.outer_wheel_items.clear()
         if self._scene.ring_item:
             self._scene.removeItem(self._scene.ring_item)
             self._scene.ring_item = None
@@ -667,6 +681,7 @@ class OverlayWindow(QGraphicsView):
         """关闭时保存配置并退出进程"""
         self._smart_pt_timer.stop()
         self._run_controller.stop()
+        release_all_keys()  # 兜底释放所有残留按键，防止卡键
         uninstall_wheel_hook()
         self._scene.save_config()
         # 关闭所有非模态弹窗

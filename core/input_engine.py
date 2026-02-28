@@ -21,6 +21,10 @@ _wheel_queue: deque = deque(maxlen=64)
 _hook_handle = None
 _hook_func_ref = None  # prevent GC
 
+# 追踪当前已按下的键 — 用于退出时兜底释放，防止卡键
+# 元素: (scan_code, extended: bool)
+_pressed_keys: set = set()
+
 # ─── ctypes 结构体定义 ───────────────────────────────────────
 
 PUL = ctypes.POINTER(ctypes.c_ulong)
@@ -121,6 +125,7 @@ def press_key(scan_code: int, extended: bool = False):
     ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
     x = Input(ctypes.c_ulong(1), ii_)
     _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+    _pressed_keys.add((scan_code, extended))
 
 
 def release_key(scan_code: int, extended: bool = False):
@@ -133,6 +138,21 @@ def release_key(scan_code: int, extended: bool = False):
     ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
     x = Input(ctypes.c_ulong(1), ii_)
     _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+    _pressed_keys.discard((scan_code, extended))
+
+
+def release_all_keys():
+    """释放所有当前被按下的键 — 退出/停止时兜底调用，防止卡键。"""
+    if not _pressed_keys:
+        return
+    keys_copy = list(_pressed_keys)
+    for sc, ext in keys_copy:
+        try:
+            release_key(sc, ext)
+        except Exception as e:
+            logger.error(f"释放按键失败: scan={sc}, ext={ext}, error={e}")
+    _pressed_keys.clear()
+    logger.info(f"兜底释放了 {len(keys_copy)} 个按键")
 
 
 def trigger(keys: str, action: str):

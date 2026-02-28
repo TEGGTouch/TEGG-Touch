@@ -20,6 +20,9 @@ from core.constants import (
     WHEEL_TRIPLE_INNER_RING_INNER, WHEEL_TRIPLE_INNER_RING_OUTER,
     WHEEL_TRIPLE_OUTER_RING_INNER, WHEEL_TRIPLE_OUTER_RING_OUTER,
     WHEEL_TRIPLE_SECTOR_INNER, WHEEL_TRIPLE_SECTOR_OUTER,
+    WHEEL_DUAL_CENTER_RING_INNER, WHEEL_DUAL_CENTER_RING_OUTER,
+    WHEEL_DUAL_INNER_SECTOR_INNER, WHEEL_DUAL_INNER_SECTOR_OUTER,
+    WHEEL_DUAL_OUTER_SECTOR_INNER, WHEEL_DUAL_OUTER_SECTOR_OUTER,
     WHEEL_SECTOR_COUNT, WHEEL_MAX_OFFSET, WHEEL_RESIZE_BTN_SIZE,
 )
 from core.i18n import t
@@ -243,11 +246,12 @@ class OverlayScene(QGraphicsScene):
         self.grid_size = DEFAULT_GRID_SIZE
         self.button_items = []
         self.wheel_items = []
+        self.outer_wheel_items = []  # 外八向扇面（dual 模式）
         self.ring_item = None
         self.inner_ring_item = None
         self._config = {}           # 保存完整配置引用
         self._wheel_visible = False
-        self._wheel_mode = 'small'  # 'small' | 'large' | 'double'
+        self._wheel_mode = 'small'  # 'small' | 'large' | 'double' | 'dual'
         self._wheel_enlarged = False  # 向后兼容
         self._wheel_center_ring_visible = True
         self._wheel_middle_ring_visible = True
@@ -363,7 +367,10 @@ class OverlayScene(QGraphicsScene):
 
         # 根据模式选择半径 + 应用缩放偏移
         ofs = self._wheel_offset
-        if self._wheel_mode == 'double':
+        if self._wheel_mode == 'dual':
+            r_inner = WHEEL_DUAL_INNER_SECTOR_INNER + ofs
+            r_outer = WHEEL_DUAL_INNER_SECTOR_OUTER + ofs
+        elif self._wheel_mode == 'double':
             r_inner = WHEEL_TRIPLE_SECTOR_INNER + ofs
             r_outer = WHEEL_TRIPLE_SECTOR_OUTER + ofs
         elif self._wheel_mode == 'large':
@@ -426,6 +433,44 @@ class OverlayScene(QGraphicsScene):
                     self._wheel_visible and self._wheel_center_ring_visible)
                 self.addItem(self.inner_ring_item)
 
+        elif self._wheel_mode == 'dual':
+            # ── 单环双轮盘: 外八向扇面 ──
+            from core.constants import default_wheel_outer_sectors
+            outer_sectors = config.get('wheel_outer_sectors', None)
+            if not outer_sectors:
+                outer_sectors = default_wheel_outer_sectors()
+                config['wheel_outer_sectors'] = outer_sectors
+            o_r_inner = WHEEL_DUAL_OUTER_SECTOR_INNER + ofs
+            o_r_outer = WHEEL_DUAL_OUTER_SECTOR_OUTER + ofs
+            o_count = len(outer_sectors)
+            o_span = 360.0 / o_count
+            for sec_dict in outer_sectors:
+                data = WheelSectorData.from_dict(sec_dict)
+                start_angle = data.angle - o_span / 2
+                item = WheelSectorItem(data, cx, cy, o_r_inner, o_r_outer,
+                                       start_angle, o_span)
+                item.doubleClicked.connect(self._on_button_double_clicked)
+                item.setZValue(5)
+                item.setVisible(self._wheel_visible)
+                self.addItem(item)
+                self.outer_wheel_items.append(item)
+
+            # ── 单环双轮盘: 中心环 (ring_item) ──
+            from core.constants import default_wheel_center_ring
+            center_dict = config.get('wheel_center_ring', None)
+            if not center_dict:
+                center_dict = default_wheel_center_ring()
+                config['wheel_center_ring'] = center_dict
+            center_data = WheelRingData.from_dict(center_dict)
+            self.ring_item = WheelRingItem(
+                center_data, cx, cy,
+                WHEEL_DUAL_CENTER_RING_INNER + ofs,
+                WHEEL_DUAL_CENTER_RING_OUTER + ofs)
+            self.ring_item.doubleClicked.connect(self._on_button_double_clicked)
+            self.ring_item.setVisible(
+                self._wheel_visible and self._wheel_center_ring_visible)
+            self.addItem(self.ring_item)
+
         elif self._wheel_mode == 'large':
             # ── 单环: ring_item = 中心环 ← wheel_center_ring ──
             ring_dict = config.get('wheel_center_ring', {})
@@ -465,6 +510,13 @@ class OverlayScene(QGraphicsScene):
             for item in self.wheel_items:
                 wheel_sectors.append(item.data.to_dict())
             self._config['wheel_sectors'] = wheel_sectors
+
+        # 外八向扇面数据（dual 模式）
+        if self.outer_wheel_items:
+            outer_sectors = []
+            for item in self.outer_wheel_items:
+                outer_sectors.append(item.data.to_dict())
+            self._config['wheel_outer_sectors'] = outer_sectors
 
         # 圆环数据 — 双环模式下 ring_item=中二环, inner_ring_item=中心环
         if self._wheel_mode == 'double':
@@ -589,28 +641,15 @@ class OverlayScene(QGraphicsScene):
         """打开轮盘样式管理弹窗"""
         from views.wheel_style_dialog import WheelStyleDialog
 
-        # 临时降低 overlay 的置顶，避免与弹窗的 z-order 争夺
-        overlay = None
-        saved_flags = None
-        views = self.views()
-        if views:
-            overlay = views[0].window()
-            if overlay:
-                saved_flags = overlay.windowFlags()
-                overlay.setWindowFlags(saved_flags & ~_Qt.WindowType.WindowStaysOnTopHint)
-                overlay.show()
-
+        # 弹窗自带 WindowStaysOnTopHint，无需修改 overlay 的 flags（避免闪动）
         dlg = WheelStyleDialog(self._wheel_mode, self._wheel_center_ring_visible,
                                self._wheel_middle_ring_visible)
+        dlg.raise_()
+        dlg.activateWindow()
         if dlg.exec():
             result = dlg.get_result()
             if result:
                 self.apply_wheel_style(result)
-
-        # 恢复 overlay 置顶
-        if overlay and saved_flags is not None:
-            overlay.setWindowFlags(saved_flags)
-            overlay.show()
 
     def apply_wheel_style(self, settings: dict):
         """应用轮盘样式设置（从弹窗返回的结果）"""
@@ -623,7 +662,12 @@ class OverlayScene(QGraphicsScene):
         if reset_sectors and isinstance(reset_sectors, list):
             self._config['wheel_sectors'] = reset_sectors
 
-        need_rebuild = (new_mode != self._wheel_mode) or (reset_sectors is not None)
+        # 重置外八向扇区键值（dual 模式）
+        reset_outer = settings.get('reset_outer_sectors', None)
+        if reset_outer and isinstance(reset_outer, list):
+            self._config['wheel_outer_sectors'] = reset_outer
+
+        need_rebuild = (new_mode != self._wheel_mode) or (reset_sectors is not None) or (reset_outer is not None)
         self._wheel_mode = new_mode
         self._wheel_enlarged = (new_mode in ('large', 'double'))
         self._wheel_center_ring_visible = new_ring_vis
@@ -657,6 +701,8 @@ class OverlayScene(QGraphicsScene):
         self._wheel_visible = not self._wheel_visible
         for item in self.wheel_items:
             item.setVisible(self._wheel_visible)
+        for item in self.outer_wheel_items:
+            item.setVisible(self._wheel_visible)
         self._update_ring_visibility()
         self._update_wheel_controls()
         return self._wheel_visible
@@ -684,6 +730,9 @@ class OverlayScene(QGraphicsScene):
         for item in self.wheel_items:
             self.removeItem(item)
         self.wheel_items.clear()
+        for item in self.outer_wheel_items:
+            self.removeItem(item)
+        self.outer_wheel_items.clear()
         if self.ring_item:
             self.removeItem(self.ring_item)
             self.ring_item = None
@@ -708,6 +757,8 @@ class OverlayScene(QGraphicsScene):
         for item in self.button_items:
             item.set_mode(mode)
         for item in self.wheel_items:
+            item.set_mode(mode)
+        for item in self.outer_wheel_items:
             item.set_mode(mode)
         if self.ring_item:
             self.ring_item.set_mode(mode)
@@ -738,7 +789,9 @@ class OverlayScene(QGraphicsScene):
 
     def _get_base_r_outer(self):
         """获取当前轮盘模式的基础最大外径（不含 offset）"""
-        if self._wheel_mode == 'double':
+        if self._wheel_mode == 'dual':
+            return WHEEL_DUAL_OUTER_SECTOR_OUTER
+        elif self._wheel_mode == 'double':
             return WHEEL_TRIPLE_SECTOR_OUTER
         elif self._wheel_mode == 'large':
             return WHEEL_OUTER_RADIUS_LARGE

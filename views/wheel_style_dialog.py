@@ -21,6 +21,9 @@ from core.constants import (
     WHEEL_TRIPLE_INNER_RING_INNER, WHEEL_TRIPLE_INNER_RING_OUTER,
     WHEEL_TRIPLE_OUTER_RING_INNER, WHEEL_TRIPLE_OUTER_RING_OUTER,
     WHEEL_TRIPLE_SECTOR_INNER, WHEEL_TRIPLE_SECTOR_OUTER,
+    WHEEL_DUAL_CENTER_RING_INNER, WHEEL_DUAL_CENTER_RING_OUTER,
+    WHEEL_DUAL_INNER_SECTOR_INNER, WHEEL_DUAL_INNER_SECTOR_OUTER,
+    WHEEL_DUAL_OUTER_SECTOR_INNER, WHEEL_DUAL_OUTER_SECTOR_OUTER,
     WHEEL_VISUAL_INSET, WHEEL_GAP_PX,
     WHEEL_SECTOR_COUNT, WHEEL_SECTORS_DEF,
 )
@@ -162,6 +165,20 @@ WHEEL_TYPES = [
         'inner_ring_inner': WHEEL_TRIPLE_INNER_RING_INNER,
         'inner_ring_outer': WHEEL_TRIPLE_INNER_RING_OUTER,
     },
+    {
+        'id': 'dual',
+        'r_inner': WHEEL_DUAL_INNER_SECTOR_INNER,
+        'r_outer': WHEEL_DUAL_OUTER_SECTOR_OUTER,   # 最外径用于确定预览大小
+        'has_ring': True,
+        'has_inner_ring': False,
+        'has_outer_sectors': True,                    # 标记有外八向
+        'ring_inner': WHEEL_DUAL_CENTER_RING_INNER,
+        'ring_outer': WHEEL_DUAL_CENTER_RING_OUTER,
+        'inner_sector_inner': WHEEL_DUAL_INNER_SECTOR_INNER,
+        'inner_sector_outer': WHEEL_DUAL_INNER_SECTOR_OUTER,
+        'outer_sector_inner': WHEEL_DUAL_OUTER_SECTOR_INNER,
+        'outer_sector_outer': WHEEL_DUAL_OUTER_SECTOR_OUTER,
+    },
 ]
 
 def _wheel_type_name(type_id):
@@ -274,11 +291,22 @@ class _WheelPreview(QWidget):
         if self._simplified:
             fill_color = QColor("#252525")
 
-        # 绘制8个扇面
+        # dual 模式: 内八向用 inner_sector 半径，外八向用 outer_sector 半径
+        is_dual = wt.get('has_outer_sectors', False)
+        if is_dual:
+            inner_vi = wt['inner_sector_inner'] * s + WHEEL_VISUAL_INSET * s
+            inner_vo = wt['inner_sector_outer'] * s - WHEEL_VISUAL_INSET * s
+            outer_vi = wt['outer_sector_inner'] * s + WHEEL_VISUAL_INSET * s
+            outer_vo = wt['outer_sector_outer'] * s - WHEEL_VISUAL_INSET * s
+        else:
+            inner_vi, inner_vo = vi, vo
+            outer_vi, outer_vo = None, None
+
+        # 绘制8个扇面 (内八向)
         span = 360.0 / WHEEL_SECTOR_COUNT
         for i, sd in enumerate(WHEEL_SECTORS_DEF):
             start = sd['angle'] - span / 2
-            path = _build_sector_path(cx, cy, vi, vo, start, span, gap)
+            path = _build_sector_path(cx, cy, inner_vi, inner_vo, start, span, gap)
 
             if self._simplified:
                 p.setPen(Qt.PenStyle.NoPen)
@@ -296,7 +324,7 @@ class _WheelPreview(QWidget):
             # 扇面文字 (简化模式不画)
             if not self._simplified:
                 mid_deg = sd['angle']
-                mid_r = (vi + vo) / 2
+                mid_r = (inner_vi + inner_vo) / 2
                 tx = cx + mid_r * math.cos(math.radians(mid_deg))
                 ty = cy - mid_r * math.sin(math.radians(mid_deg))
                 fn = get_font()
@@ -305,6 +333,36 @@ class _WheelPreview(QWidget):
                 ts = max(10, int(24 * s))
                 p.drawText(QRectF(tx - ts, ty - ts / 2, ts * 2, ts),
                            Qt.AlignmentFlag.AlignCenter, sd['name'])
+
+        # 绘制外八向扇面 (仅 dual 模式)
+        if is_dual and outer_vi is not None:
+            for i, sd in enumerate(WHEEL_SECTORS_DEF):
+                start = sd['angle'] - span / 2
+                path = _build_sector_path(cx, cy, outer_vi, outer_vo, start, span, gap)
+
+                if self._simplified:
+                    p.setPen(Qt.PenStyle.NoPen)
+                    p.setBrush(QBrush(fill_color))
+                else:
+                    area_id = f'outer_{i}'
+                    if self._hover_area == area_id:
+                        p.setBrush(QBrush(QColor("#0284C7")))
+                        p.setPen(QPen(QColor("#026AA2"), max(1, 2 * s)))
+                    else:
+                        p.setBrush(QBrush(QColor(C_SECTOR_FILL)))
+                        p.setPen(QPen(QColor(C_SECTOR_BORDER), max(1, 2 * s)))
+                p.drawPath(path)
+
+                if not self._simplified:
+                    mid_deg = sd['angle']
+                    mid_r = (outer_vi + outer_vo) / 2
+                    tx = cx + mid_r * math.cos(math.radians(mid_deg))
+                    ty = cy - mid_r * math.sin(math.radians(mid_deg))
+                    p.setFont(_make_font(fn, max(6, int(9 * s)), bold=True))
+                    p.setPen(QColor("#FFFFFF"))
+                    ts = max(10, int(24 * s))
+                    p.drawText(QRectF(tx - ts, ty - ts / 2, ts * 2, ts),
+                               Qt.AlignmentFlag.AlignCenter, sd['name'])
 
         # 绘制中心环 (单环/三环)
         if wt['has_ring']:
@@ -399,22 +457,56 @@ class _WheelPreview(QWidget):
             if rri <= dist <= rro:
                 return 'ring'
 
-        # 扇面
-        ri = wt['r_inner'] * s
-        ro = wt['r_outer'] * s
-        if ri <= dist <= ro:
-            angle = math.degrees(math.atan2(-dy, dx)) % 360
-            span = 360.0 / WHEEL_SECTOR_COUNT
-            for i, sd in enumerate(WHEEL_SECTORS_DEF):
-                center = sd['angle']
-                start = (center - span / 2) % 360
-                end = (center + span / 2) % 360
-                if start < end:
-                    if start <= angle < end:
-                        return f'sector_{i}'
-                else:
-                    if angle >= start or angle < end:
-                        return f'sector_{i}'
+        # 外八向扇面 (dual 模式 — 先检测外层再检测内层)
+        if wt.get('has_outer_sectors', False):
+            oi = wt['outer_sector_inner'] * s
+            oo = wt['outer_sector_outer'] * s
+            if oi <= dist <= oo:
+                angle = math.degrees(math.atan2(-dy, dx)) % 360
+                span = 360.0 / WHEEL_SECTOR_COUNT
+                for i, sd in enumerate(WHEEL_SECTORS_DEF):
+                    center = sd['angle']
+                    start = (center - span / 2) % 360
+                    end = (center + span / 2) % 360
+                    if start < end:
+                        if start <= angle < end:
+                            return f'outer_{i}'
+                    else:
+                        if angle >= start or angle < end:
+                            return f'outer_{i}'
+            # 内八向 (dual 模式用 inner_sector 半径)
+            ii = wt['inner_sector_inner'] * s
+            io = wt['inner_sector_outer'] * s
+            if ii <= dist <= io:
+                angle = math.degrees(math.atan2(-dy, dx)) % 360
+                span = 360.0 / WHEEL_SECTOR_COUNT
+                for i, sd in enumerate(WHEEL_SECTORS_DEF):
+                    center = sd['angle']
+                    start = (center - span / 2) % 360
+                    end = (center + span / 2) % 360
+                    if start < end:
+                        if start <= angle < end:
+                            return f'sector_{i}'
+                    else:
+                        if angle >= start or angle < end:
+                            return f'sector_{i}'
+        else:
+            # 普通扇面
+            ri = wt['r_inner'] * s
+            ro = wt['r_outer'] * s
+            if ri <= dist <= ro:
+                angle = math.degrees(math.atan2(-dy, dx)) % 360
+                span = 360.0 / WHEEL_SECTOR_COUNT
+                for i, sd in enumerate(WHEEL_SECTORS_DEF):
+                    center = sd['angle']
+                    start = (center - span / 2) % 360
+                    end = (center + span / 2) % 360
+                    if start < end:
+                        if start <= angle < end:
+                            return f'sector_{i}'
+                    else:
+                        if angle >= start or angle < end:
+                            return f'sector_{i}'
         return None
 
 
@@ -693,19 +785,19 @@ class WheelStyleDialog(QDialog):
         info_panel.addStretch()
 
         # 底部按钮 (从上到下: 重置八方向键 → 取消 → 确定)
-        reset_btn = QPushButton(t("wheel_style.reset_sectors"))
-        reset_btn.setFixedHeight(40)
-        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        reset_btn.setFont(_make_font(fn, 14))
-        reset_btn.setStyleSheet(f"""
+        self._reset_btn = QPushButton(t("wheel_style.reset_sectors"))
+        self._reset_btn.setFixedHeight(40)
+        self._reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._reset_btn.setFont(_make_font(fn, 14))
+        self._reset_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CARD_NORMAL}; color: #E0E0E0;
                 border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CARD_HOVER}; }}
         """)
-        reset_btn.clicked.connect(self._on_reset_sectors)
-        info_panel.addWidget(reset_btn)
+        self._reset_btn.clicked.connect(self._on_reset_sectors)
+        info_panel.addWidget(self._reset_btn)
 
         cancel_btn = QPushButton(t("wheel_style.cancel"))
         cancel_btn.setFixedHeight(40)
@@ -774,13 +866,21 @@ class WheelStyleDialog(QDialog):
             self._ring_cb.setChecked(self._center_ring_visible)
             self._middle_ring_cb.setVisible(True)
             self._middle_ring_cb.setChecked(self._middle_ring_visible)
+            self._reset_btn.setText(t("wheel_style.reset_sectors"))
         elif type_id == 'large':
             self._ring_cb.setVisible(True)
             self._ring_cb.setChecked(self._center_ring_visible)
             self._middle_ring_cb.setVisible(False)
+            self._reset_btn.setText(t("wheel_style.reset_sectors"))
+        elif type_id == 'dual':
+            self._ring_cb.setVisible(True)
+            self._ring_cb.setChecked(self._center_ring_visible)
+            self._middle_ring_cb.setVisible(False)
+            self._reset_btn.setText(t("wheel_style.reset_sectors_dual"))
         else:
             self._ring_cb.setVisible(False)
             self._middle_ring_cb.setVisible(False)
+            self._reset_btn.setText(t("wheel_style.reset_sectors"))
 
         # 防止 widget 重建导致弹窗掉到 overlay 后面
         self.raise_()
@@ -817,6 +917,10 @@ class WheelStyleDialog(QDialog):
             'wheel_middle_ring_visible': self._middle_ring_visible,
             'reset_sectors': default_wheel_sectors(),
         }
+        # dual 模式同时重置外八向
+        if self._selected_type == 'dual':
+            from core.constants import default_wheel_outer_sectors
+            self._result['reset_outer_sectors'] = default_wheel_outer_sectors()
         self.settings_changed.emit(self._result)
         self.accept()
 
