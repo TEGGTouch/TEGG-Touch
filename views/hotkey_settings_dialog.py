@@ -45,19 +45,25 @@ HOTKEY_COLORS = {
     'stop':           '#C42B1C',
 }
 
-# 键位面板分类 (与 button_editor 一致的部分 + 设置专用键)
-SETTINGS_KEY_CATEGORIES = [
-    (t("key_cat.modifiers"), ["ctrl", "shift", "alt", "windows"]),
-    (t("key_cat.fkeys"), [f"f{i}" for i in range(1, 13)]),
-    (t("key_cat.letters"), [chr(c) for c in range(ord('a'), ord('z') + 1)]),
-    (t("key_cat.numbers"), [str(i) for i in range(10)]),
-    (t("key_cat.punctuation"), [",", ".", "/", ";", "'", "[", "]", "\\", "-", "=", "`"]),
-    (t("key_cat.other"), ["home", "end", "pageup", "pagedown", "insert", "delete",
-                           "print screen", "scroll lock", "pause",
-                           "up", "down", "left", "right"]),
-    (t("key_cat.numpad"), [f"num {i}" for i in range(10)] + ["num lock",
-                            "num *", "num +", "num -", "num /", "num .", "num enter"]),
-]
+# 键位面板分类 — 惰性初始化，避免模块加载时 t() 未就绪
+_SETTINGS_KEY_CATEGORIES_CACHE = None
+
+def _get_settings_key_categories():
+    global _SETTINGS_KEY_CATEGORIES_CACHE
+    if _SETTINGS_KEY_CATEGORIES_CACHE is None:
+        _SETTINGS_KEY_CATEGORIES_CACHE = [
+            (t("key_cat.modifiers"), ["ctrl", "shift", "alt", "windows"]),
+            (t("key_cat.fkeys"), [f"f{i}" for i in range(1, 13)]),
+            (t("key_cat.letters"), [chr(c) for c in range(ord('a'), ord('z') + 1)]),
+            (t("key_cat.numbers"), [str(i) for i in range(10)]),
+            (t("key_cat.punctuation"), [",", ".", "/", ";", "'", "[", "]", "\\", "-", "=", "`"]),
+            (t("key_cat.other"), ["home", "end", "pageup", "pagedown", "insert", "delete",
+                                   "print screen", "scroll lock", "pause",
+                                   "up", "down", "left", "right"]),
+            (t("key_cat.numpad"), [f"num {i}" for i in range(10)] + ["num lock",
+                                    "num *", "num +", "num -", "num /", "num .", "num enter"]),
+        ]
+    return _SETTINGS_KEY_CATEGORIES_CACHE
 
 
 def _make_font(name, px, bold=False):
@@ -708,7 +714,7 @@ class HotkeySettingsDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
-        for i, (cat_name, keys) in enumerate(SETTINGS_KEY_CATEGORIES):
+        for i, (cat_name, keys) in enumerate(_get_settings_key_categories()):
             if i > 0:
                 layout.addSpacing(20)
             cat_lbl = QLabel(f"── {cat_name} ──")
@@ -808,7 +814,9 @@ class HotkeySettingsDialog(QDialog):
     # ── 定位 ──
 
     def _center_on_screen(self):
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         x = (screen.width() - self.width()) // 2
         y = (screen.height() - self.height()) // 2
         self.move(x, y)

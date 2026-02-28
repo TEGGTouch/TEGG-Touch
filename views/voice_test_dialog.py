@@ -297,7 +297,7 @@ class VoiceTestDialog(QDialog):
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
-        close_btn.clicked.connect(self._stop_and_close)
+        close_btn.clicked.connect(self.close)
         title_row.addWidget(close_btn)
         root.addLayout(title_row)
 
@@ -398,7 +398,7 @@ class VoiceTestDialog(QDialog):
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; color: #FFF; }}
         """)
-        stop_btn.clicked.connect(self._stop_and_close)
+        stop_btn.clicked.connect(self.close)
         bottom.addWidget(stop_btn)
         root.addLayout(bottom)
 
@@ -474,17 +474,19 @@ class VoiceTestDialog(QDialog):
             self._time_lbl.setText(
                 t("voice_test.runtime").replace("{time}", f"{mins:02d}:{secs:02d}"))
 
-    def _stop_and_close(self):
+    def _cleanup(self):
+        """清理资源（不调用 self.close()，由 closeEvent 调用）"""
         self._clock_timer.stop()
         if self._engine:
             self._engine.stop()
             self._engine = None
-        self.close()
 
     # ── 定位 ──
 
     def _center_on_screen(self):
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         x = (screen.width() - self.width()) // 2
         y = (screen.height() - self.height()) // 2
         self.move(x, y)
@@ -506,5 +508,5 @@ class VoiceTestDialog(QDialog):
         super().mouseReleaseEvent(event)
 
     def closeEvent(self, event):
-        self._stop_and_close()
+        self._cleanup()
         super().closeEvent(event)

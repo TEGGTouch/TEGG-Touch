@@ -610,13 +610,17 @@ class VirtualKeyboard(QWidget):
         tb = self._attached_toolbar
         if tb is None:
             # 无工具栏引用时 fallback 到屏幕居中偏下
-            screen = QApplication.primaryScreen().geometry()
+            from PyQt6.QtCore import QRect
+            _ps = QApplication.primaryScreen()
+            screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
             x = (screen.width() - self.width()) // 2
             y = screen.height() - self.height() - 160
             self.move(x, y)
             return
 
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         sw, sh = screen.width(), screen.height()
 
         # 获取工具栏的全局坐标和尺寸

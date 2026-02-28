@@ -122,7 +122,9 @@ class VoiceHudWidget:
         action_text = action_map.get(action, action)
         text = f"{phrase}  \u2192  {keys}  [{action_text}]"
 
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         # 用临时 QLabel 测量文字宽度
         tmp = QLabel(text)
         fn = get_font()

@@ -58,6 +58,8 @@ class WheelRingItem(QGraphicsObject):
         # 预计算路径：碰撞路径(hit) + 视觉路径(visual)
         self._hit_path = self._build_ring_path(r_inner, r_outer)
         self._visual_path = self._build_ring_path(self._v_inner, self._v_outer)
+        # 充能路径缓存 (key = (r_in, charge_r))
+        self._charge_path_cache = {}
 
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(
@@ -111,16 +113,20 @@ class WheelRingItem(QGraphicsObject):
         # 充能进度 — 径向扩展（在视觉区域内从内圆向外圆扩展）
         if self._charge_progress > 0.01:
             charge_r = self._v_inner + (self._v_outer - self._v_inner) * self._charge_progress
-            charge_outer = QPainterPath()
-            charge_outer.addEllipse(
-                self._cx - charge_r, self._cy - charge_r,
-                charge_r * 2, charge_r * 2)
-            charge_inner = QPainterPath()
             r_in = self._v_inner + 2  # 略微内缩，避免覆盖内圆边框
-            charge_inner.addEllipse(
-                self._cx - r_in, self._cy - r_in,
-                r_in * 2, r_in * 2)
-            charge_path = charge_outer.subtracted(charge_inner)
+            cache_key = (round(r_in, 1), round(charge_r, 1))
+            charge_path = self._charge_path_cache.get(cache_key)
+            if charge_path is None:
+                charge_outer = QPainterPath()
+                charge_outer.addEllipse(
+                    self._cx - charge_r, self._cy - charge_r,
+                    charge_r * 2, charge_r * 2)
+                charge_inner = QPainterPath()
+                charge_inner.addEllipse(
+                    self._cx - r_in, self._cy - r_in,
+                    r_in * 2, r_in * 2)
+                charge_path = charge_outer.subtracted(charge_inner)
+                self._charge_path_cache[cache_key] = charge_path
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(QColor("#0284C7")))
             painter.drawPath(charge_path)

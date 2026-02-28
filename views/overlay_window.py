@@ -72,7 +72,9 @@ class OverlayWindow(QGraphicsView):
         self.setFrameShape(QGraphicsView.Shape.NoFrame)
 
         # ── 全屏尺寸 ──
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         self.setGeometry(screen)
         self._scene.setSceneRect(0, 0, screen.width(), screen.height())
 

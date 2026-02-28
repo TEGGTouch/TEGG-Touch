@@ -17,6 +17,20 @@ from models.button_model import ButtonData
 from engine.hover_state_machine import HoverStateMachine
 from scene.tooltip_item import build_edit_tooltip
 
+# 字体缓存 (避免 paint() 每帧创建 QFont)
+_font_cache: dict = {}
+
+def _get_cached_font(font_name: str, px: int, bold: bool = True) -> QFont:
+    key = (font_name, px, bold)
+    f = _font_cache.get(key)
+    if f is None:
+        f = QFont(font_name)
+        f.setPixelSize(px)
+        if bold:
+            f.setWeight(QFont.Weight.Bold)
+        _font_cache[key] = f
+    return f
+
 
 # 回中带专用配色
 COLOR_CENTER_BAND = "#176F2C"
@@ -186,11 +200,7 @@ class TouchButtonItem(QGraphicsObject):
         font_name = get_font()
 
         def _make_px_font(px, bold=True):
-            f = QFont(font_name)
-            f.setPixelSize(px)
-            if bold:
-                f.setWeight(QFont.Weight.Bold)
-            return f
+            return _get_cached_font(font_name, px, bold)
 
         if is_band:
             display_text = t("canvas.center_band_label")
@@ -337,9 +347,12 @@ class TouchButtonItem(QGraphicsObject):
             # 回中带：立即回中 (匹配原版 handle_run_interaction: center_band → SetCursorPos)
             if self.data.btn_type == BTN_TYPE_CENTER_BAND:
                 import ctypes
-                screen = self.scene().sceneRect()
-                cx = int(screen.width()) // 2
-                cy = int(screen.height()) // 2
+                from PyQt6.QtWidgets import QApplication
+                from PyQt6.QtCore import QRect
+                _ps = QApplication.primaryScreen()
+                screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
+                cx = screen.x() + screen.width() // 2
+                cy = screen.y() + screen.height() // 2
                 ctypes.windll.user32.SetCursorPos(cx, cy)
             elif self.data.hover:
                 self._hover_sm.enter()

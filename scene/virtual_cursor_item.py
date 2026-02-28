@@ -88,6 +88,15 @@ class VirtualCursorItem(QGraphicsItem):
         self.setVisible(False)
 
     def _update_pos(self):
-        """更新位置到当前鼠标坐标"""
-        pos = QCursor.pos()
-        self.setPos(pos.x(), pos.y())
+        """更新位置到当前鼠标坐标（通过 view 做 global→scene 坐标变换）"""
+        scene = self.scene()
+        if scene is None:
+            return
+        views = scene.views()
+        if not views:
+            return
+        view = views[0]
+        global_pos = QCursor.pos()
+        view_pos = view.mapFromGlobal(global_pos)
+        scene_pos = view.mapToScene(view_pos)
+        self.setPos(scene_pos.x(), scene_pos.y())

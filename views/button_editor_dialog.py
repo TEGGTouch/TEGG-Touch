@@ -50,31 +50,43 @@ ACTION_COLORS = {
     'xbutton2':  '#8B5CF6',
 }
 
-# 鼠标按键 (mouse: 前缀, 与 macro: 前缀对齐)
-MOUSE_KEYS = [
-    (t("editor.lclick"), "mouse:left"),
-    (t("editor.rclick"), "mouse:right"),
-    (t("editor.mclick"), "mouse:middle"),
-    (t("editor.xbutton1"), "mouse:x1"),
-    (t("editor.xbutton2"), "mouse:x2"),
-]
+# 鼠标按键 (mouse: 前缀, 与 macro: 前缀对齐) — 惰性初始化，避免模块加载时 t() 未就绪
+_MOUSE_KEYS_CACHE = None
 
-# 键位面板分类
-KEY_CATEGORIES = [
-    (t("key_cat.letters"), [chr(c) for c in range(ord('a'), ord('z') + 1)]),
-    (t("key_cat.numbers"), [str(i) for i in range(10)]),
-    (t("key_cat.fkeys"), [f"f{i}" for i in range(1, 13)]),
-    (t("key_cat.arrows"), ["up", "down", "left", "right"]),
-    (t("key_cat.modifiers"), ["ctrl", "shift", "alt", "windows", "caps lock", "menu"]),
-    (t("key_cat.functions"), ["space", "enter", "esc", "tab", "backspace"]),
-    (t("key_cat.punctuation"), [",", ".", "/", ";", "'", "[", "]", "\\", "-", "=", "`"]),
-    (t("key_cat.other"), ["home", "end", "pageup", "pagedown", "insert", "delete",
-                           "print screen", "scroll lock", "pause"]),
-    (t("key_cat.numpad"), [f"num {i}" for i in range(10)] + ["num lock",
-                            "num *", "num +", "num -", "num /", "num .", "num enter"]),
-    (t("key_cat.media"), ["play/pause media", "stop media", "next track", "previous track",
-                           "volume up", "volume down", "volume mute"]),
-]
+def _get_mouse_keys():
+    global _MOUSE_KEYS_CACHE
+    if _MOUSE_KEYS_CACHE is None:
+        _MOUSE_KEYS_CACHE = [
+            (t("editor.lclick"), "mouse:left"),
+            (t("editor.rclick"), "mouse:right"),
+            (t("editor.mclick"), "mouse:middle"),
+            (t("editor.xbutton1"), "mouse:x1"),
+            (t("editor.xbutton2"), "mouse:x2"),
+        ]
+    return _MOUSE_KEYS_CACHE
+
+# 键位面板分类 — 惰性初始化
+_KEY_CATEGORIES_CACHE = None
+
+def _get_key_categories():
+    global _KEY_CATEGORIES_CACHE
+    if _KEY_CATEGORIES_CACHE is None:
+        _KEY_CATEGORIES_CACHE = [
+            (t("key_cat.letters"), [chr(c) for c in range(ord('a'), ord('z') + 1)]),
+            (t("key_cat.numbers"), [str(i) for i in range(10)]),
+            (t("key_cat.fkeys"), [f"f{i}" for i in range(1, 13)]),
+            (t("key_cat.arrows"), ["up", "down", "left", "right"]),
+            (t("key_cat.modifiers"), ["ctrl", "shift", "alt", "windows", "caps lock", "menu"]),
+            (t("key_cat.functions"), ["space", "enter", "esc", "tab", "backspace"]),
+            (t("key_cat.punctuation"), [",", ".", "/", ";", "'", "[", "]", "\\", "-", "=", "`"]),
+            (t("key_cat.other"), ["home", "end", "pageup", "pagedown", "insert", "delete",
+                                   "print screen", "scroll lock", "pause"]),
+            (t("key_cat.numpad"), [f"num {i}" for i in range(10)] + ["num lock",
+                                    "num *", "num +", "num -", "num /", "num .", "num enter"]),
+            (t("key_cat.media"), ["play/pause media", "stop media", "next track", "previous track",
+                                   "volume up", "volume down", "volume mute"]),
+        ]
+    return _KEY_CATEGORIES_CACHE
 
 
 def _make_font(name, px, bold=False):
@@ -617,7 +629,7 @@ class ButtonEditorDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
-        for i, (cat_name, keys) in enumerate(KEY_CATEGORIES):
+        for i, (cat_name, keys) in enumerate(_get_key_categories()):
             # 分类标签
             if i > 0:
                 layout.addSpacing(20)
@@ -856,8 +868,9 @@ class ButtonEditorDialog(QDialog):
         lay.addSpacing(8)
 
         # 鼠标按键 flow (显示名称, 点击插入 mouse:xxx tag)
-        mouse_display_names = [label for label, _ in MOUSE_KEYS]
-        mouse_tag_values = [tag for _, tag in MOUSE_KEYS]
+        mouse_keys = _get_mouse_keys()
+        mouse_display_names = [label for label, _ in mouse_keys]
+        mouse_tag_values = [tag for _, tag in mouse_keys]
         container = QWidget()
         container.setStyleSheet("background: transparent;")
         flow = _FlowWidget(
@@ -1103,7 +1116,9 @@ class ButtonEditorDialog(QDialog):
     # ── 定位 ──────────────────────────────────────────────────
 
     def _center_on_screen(self):
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         x = (screen.width() - self.width()) // 2
         y = (screen.height() - self.height()) // 2
         self.move(x, y)

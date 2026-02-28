@@ -17,7 +17,7 @@ from core.i18n import t, get_font, get_lang
 
 # Reuse shared components from existing dialogs
 from views.button_editor_dialog import (
-    TagInput, _FlowWidget, KEY_CATEGORIES, MOUSE_KEYS,
+    TagInput, _FlowWidget, _get_key_categories, _get_mouse_keys,
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL,
@@ -774,7 +774,7 @@ class VoiceSettingsDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
-        for i, (cat_name, keys) in enumerate(KEY_CATEGORIES):
+        for i, (cat_name, keys) in enumerate(_get_key_categories()):
             if i > 0:
                 layout.addSpacing(20)
             cat_lbl = QLabel(f"── {cat_name} ──")
@@ -861,8 +861,9 @@ class VoiceSettingsDialog(QDialog):
         lay.addWidget(cat_lbl)
         lay.addSpacing(8)
 
-        mouse_display_names = [label for label, _ in MOUSE_KEYS]
-        mouse_tag_values = [tag for _, tag in MOUSE_KEYS]
+        mouse_keys = _get_mouse_keys()
+        mouse_display_names = [label for label, _ in mouse_keys]
+        mouse_tag_values = [tag for _, tag in mouse_keys]
         container = QWidget()
         container.setStyleSheet("background: transparent;")
         flow = _FlowWidget(
@@ -1152,7 +1153,9 @@ class VoiceSettingsDialog(QDialog):
     # ── Positioning ──
 
     def _center_on_screen(self):
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         x = (screen.width() - self.width()) // 2
         y = (screen.height() - self.height()) // 2
         self.move(x, y)

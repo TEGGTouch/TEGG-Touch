@@ -16,7 +16,7 @@ from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
 
 from core.i18n import t, get_font
 from views.button_editor_dialog import (
-    KEY_CATEGORIES, _FlowWidget, _make_font, _detect_icon_font, _ICON_FONT,
+    _get_key_categories, _FlowWidget, _make_font, _detect_icon_font,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
     C_INPUT_BG, C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL, C_DELAY,
     TagInput,
@@ -55,7 +55,7 @@ class _StepRow(QWidget):
         lay.setSpacing(6)
 
         # 序号 + 拖动手柄 (Segoe icon + 数字双 label)
-        _detect_icon_font()
+        _ifont = _detect_icon_font()
         handle_box = QWidget()
         handle_box.setFixedWidth(42)
         handle_box.setCursor(Qt.CursorShape.OpenHandCursor)
@@ -63,9 +63,9 @@ class _StepRow(QWidget):
         h_lay = QHBoxLayout(handle_box)
         h_lay.setContentsMargins(0, 0, 0, 0)
         h_lay.setSpacing(2)
-        if _ICON_FONT:
+        if _ifont:
             h_icon = QLabel("\uE700")
-            h_icon.setFont(_make_font(_ICON_FONT, 14))
+            h_icon.setFont(_make_font(_ifont, 14))
         else:
             h_icon = QLabel("☰")
             h_icon.setFont(_make_font(fn, 14))
@@ -86,13 +86,13 @@ class _StepRow(QWidget):
             self._build_key_row(lay, fn)
 
         # 移除按钮
-        _detect_icon_font()
-        rm_icon = "\uE711" if _ICON_FONT else "✕"
+        _ifont2 = _detect_icon_font()
+        rm_icon = "\uE711" if _ifont2 else "✕"
         rm_btn = QPushButton(rm_icon)
         rm_btn.setFixedSize(32, 32)
         rm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        if _ICON_FONT:
-            rm_btn.setFont(_make_font(_ICON_FONT, 14))
+        if _ifont2:
+            rm_btn.setFont(_make_font(_ifont2, 14))
         else:
             rm_btn.setFont(_make_font(fn, 14, bold=True))
         rm_btn.setStyleSheet(f"""
@@ -335,12 +335,13 @@ class MacroEditorDialog(QDialog):
         title_row.addWidget(title_lbl)
         title_row.addStretch()
 
-        close_icon = "\uE711" if _ICON_FONT else "\u2715"
+        _ifont = _detect_icon_font()
+        close_icon = "\uE711" if _ifont else "\u2715"
         close_btn = QPushButton(close_icon)
         close_btn.setFixedSize(40, 40)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        if _ICON_FONT:
-            close_btn.setFont(_make_font(_ICON_FONT, 20))
+        if _ifont:
+            close_btn.setFont(_make_font(_ifont, 20))
         else:
             close_btn.setFont(_make_font(fn, 18, bold=True))
         close_btn.setStyleSheet(f"""
@@ -537,7 +538,7 @@ class MacroEditorDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
-        for i, (cat_name, keys) in enumerate(KEY_CATEGORIES):
+        for i, (cat_name, keys) in enumerate(_get_key_categories()):
             if i > 0:
                 layout.addSpacing(16)
             cat_lbl = QLabel(f"── {cat_name} ──")
@@ -707,7 +708,9 @@ class MacroEditorDialog(QDialog):
     # ── 定位 + 拖拽 ──
 
     def _center_on_screen(self):
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         x = (screen.width() - self.width()) // 2
         y = (screen.height() - self.height()) // 2
         self.move(x, y)

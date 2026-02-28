@@ -586,6 +586,8 @@ class OverlayScene(QGraphicsScene):
 
     def delete_button(self, item):
         """删除按钮"""
+        if hasattr(item, '_hover_sm'):
+            item._hover_sm.reset()
         if item in self.button_items:
             self.button_items.remove(item)
         self.removeItem(item)
@@ -726,17 +728,25 @@ class OverlayScene(QGraphicsScene):
 
     def _rebuild_wheel(self):
         """清除并重建轮盘 Item（切换模式时调用）"""
-        # 移除旧 Item
+        # 移除旧 Item — 先重置状态机，防止定时器在删除后回调
         for item in self.wheel_items:
+            if hasattr(item, '_hover_sm'):
+                item._hover_sm.reset()
             self.removeItem(item)
         self.wheel_items.clear()
         for item in self.outer_wheel_items:
+            if hasattr(item, '_hover_sm'):
+                item._hover_sm.reset()
             self.removeItem(item)
         self.outer_wheel_items.clear()
         if self.ring_item:
+            if hasattr(self.ring_item, '_hover_sm'):
+                self.ring_item._hover_sm.reset()
             self.removeItem(self.ring_item)
             self.ring_item = None
         if self.inner_ring_item:
+            if hasattr(self.inner_ring_item, '_hover_sm'):
+                self.inner_ring_item._hover_sm.reset()
             self.removeItem(self.inner_ring_item)
             self.inner_ring_item = None
         # 重新加载

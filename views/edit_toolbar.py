@@ -576,7 +576,9 @@ class EditToolbar(QWidget):
 
     def _position_toolbar(self):
         from PyQt6.QtWidgets import QApplication
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         # 宽度取内容自适应与原版 TOOLBAR_WIDTH 的较大值，但不超出屏幕
         self.adjustSize()
         w = min(max(TOOLBAR_WIDTH, self.sizeHint().width()), screen.width() - 40)
@@ -639,7 +641,9 @@ class EditToolbar(QWidget):
             new_pos = event.globalPosition().toPoint() - self._drag_pos
             # 屏幕边缘保护：不允许拖出屏幕
             from PyQt6.QtWidgets import QApplication
-            screen = QApplication.primaryScreen().geometry()
+            from PyQt6.QtCore import QRect
+            _ps = QApplication.primaryScreen()
+            screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
             x = max(screen.left(), min(new_pos.x(), screen.right() - self.width() + 1))
             y = max(screen.top(), min(new_pos.y(), screen.bottom() - self.height() + 1))
             self.move(x, y)

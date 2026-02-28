@@ -86,6 +86,9 @@ class TooltipItem(QGraphicsObject):
         super().__init__()
         self._lines = []
         self._rect = QRectF(0, 0, 0, 0)
+        self._cached_font = None
+        self._cached_fm = None
+        self._cached_font_name = None
 
         self.setZValue(10000)
         self.setVisible(False)
@@ -93,6 +96,15 @@ class TooltipItem(QGraphicsObject):
         self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
 
     # ── 公开接口 ──
+
+    def _get_font_and_fm(self):
+        """获取缓存的 QFont/QFontMetricsF（字体名变化时重建）"""
+        fn = get_font()
+        if fn != self._cached_font_name:
+            self._cached_font_name = fn
+            self._cached_font = QFont(fn, self.FONT_SIZE)
+            self._cached_fm = QFontMetricsF(self._cached_font)
+        return self._cached_font, self._cached_fm
 
     def show_text(self, text: str, scene_pos):
         """在 scene_pos 附近显示 tooltip 文本"""
@@ -103,8 +115,7 @@ class TooltipItem(QGraphicsObject):
         self._lines = text.split('\n')
 
         # 计算尺寸
-        font = QFont(get_font(), self.FONT_SIZE)
-        fm = QFontMetricsF(font)
+        font, fm = self._get_font_and_fm()
         def _line_width(line):
             if line.startswith("\u26A0"):
                 ifont = _detect_icon_font()
@@ -175,11 +186,9 @@ class TooltipItem(QGraphicsObject):
         painter.drawRoundedRect(self._rect, 6, 6)
 
         # 文字
-        font = QFont(get_font(), self.FONT_SIZE)
+        font, fm = self._get_font_and_fm()
         painter.setFont(font)
         painter.setPen(QColor("#E0E0E0"))
-
-        fm = QFontMetricsF(font)
         line_h = fm.height()
         y = self.PADDING_Y + fm.ascent()
 

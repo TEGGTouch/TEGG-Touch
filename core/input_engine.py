@@ -24,6 +24,7 @@ _hook_func_ref = None  # prevent GC
 # 追踪当前已按下的键 — 用于退出时兜底释放，防止卡键
 # 元素: (scan_code, extended: bool)
 _pressed_keys: set = set()
+_pressed_keys_lock = threading.Lock()
 
 # ─── ctypes 结构体定义 ───────────────────────────────────────
 
@@ -75,6 +76,8 @@ class Input(ctypes.Structure):
 
 
 _SendInput = ctypes.windll.user32.SendInput
+_SendInput.argtypes = [ctypes.c_uint, ctypes.POINTER(Input), ctypes.c_int]
+_SendInput.restype = ctypes.c_uint
 
 # ─── 扩展键扫描码集合 ────────────────────────────────────────
 # 这些按键与小键盘共享扫描码，必须加 KEYEVENTF_EXTENDEDKEY 标志才能正确识别
@@ -125,7 +128,8 @@ def press_key(scan_code: int, extended: bool = False):
     ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
     x = Input(ctypes.c_ulong(1), ii_)
     _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
-    _pressed_keys.add((scan_code, extended))
+    with _pressed_keys_lock:
+        _pressed_keys.add((scan_code, extended))
 
 
 def release_key(scan_code: int, extended: bool = False):
@@ -138,20 +142,30 @@ def release_key(scan_code: int, extended: bool = False):
     ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
     x = Input(ctypes.c_ulong(1), ii_)
     _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
-    _pressed_keys.discard((scan_code, extended))
+    with _pressed_keys_lock:
+        _pressed_keys.discard((scan_code, extended))
 
 
 def release_all_keys():
     """释放所有当前被按下的键 — 退出/停止时兜底调用，防止卡键。"""
-    if not _pressed_keys:
-        return
-    keys_copy = list(_pressed_keys)
+    with _pressed_keys_lock:
+        if not _pressed_keys:
+            return
+        keys_copy = list(_pressed_keys)
+        _pressed_keys.clear()
+    # 在锁外执行 Win32 API 调用，避免锁内阻塞
     for sc, ext in keys_copy:
         try:
-            release_key(sc, ext)
+            flags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
+            if ext:
+                flags |= KEYEVENTF_EXTENDEDKEY
+            extra = ctypes.c_ulong(0)
+            ii_ = Input_I()
+            ii_.ki = KeyBdInput(0, sc, flags, 0, ctypes.pointer(extra))
+            x = Input(ctypes.c_ulong(1), ii_)
+            _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
         except Exception as e:
             logger.error(f"释放按键失败: scan={sc}, ext={ext}, error={e}")
-    _pressed_keys.clear()
     logger.info(f"兜底释放了 {len(keys_copy)} 个按键")
 
 
@@ -209,11 +223,25 @@ class _MSLLHOOKSTRUCT(ctypes.Structure):
         ('dwExtraInfo', ctypes.POINTER(ctypes.c_ulong)),
     ]
 
-_HOOKPROC = ctypes.CFUNCTYPE(ctypes.c_long, ctypes.c_int, ctypes.c_uint, ctypes.POINTER(_MSLLHOOKSTRUCT))
+_HOOKPROC = ctypes.CFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int, ctypes.c_size_t, ctypes.POINTER(_MSLLHOOKSTRUCT))
 
 
 # mouse_event 比 SendInput 快得多（无需创建 ctypes 结构体）
 _mouse_event = ctypes.windll.user32.mouse_event
+_mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.POINTER(ctypes.c_ulong)]
+_mouse_event.restype = None
+
+_CallNextHookEx = ctypes.windll.user32.CallNextHookEx
+_CallNextHookEx.argtypes = [wintypes.HHOOK, ctypes.c_int, ctypes.c_size_t, ctypes.POINTER(_MSLLHOOKSTRUCT)]
+_CallNextHookEx.restype = ctypes.c_ssize_t
+
+_SetWindowsHookExW = ctypes.windll.user32.SetWindowsHookExW
+_SetWindowsHookExW.argtypes = [ctypes.c_int, _HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD]
+_SetWindowsHookExW.restype = wintypes.HHOOK
+
+_UnhookWindowsHookEx = ctypes.windll.user32.UnhookWindowsHookEx
+_UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
+_UnhookWindowsHookEx.restype = wintypes.BOOL
 MOUSEEVENTF_MOVE = 0x0001
 
 
@@ -228,7 +256,7 @@ def _mouse_hook_proc(nCode, wParam, lParam):
             direction = 'up' if delta > 0 else 'down'
             _wheel_queue.append((direction, data.pt.x, data.pt.y))
 
-    return ctypes.windll.user32.CallNextHookEx(None, nCode, wParam, lParam)
+    return _CallNextHookEx(None, nCode, wParam, lParam)
 
 
 def install_wheel_hook():
@@ -237,7 +265,7 @@ def install_wheel_hook():
     if _hook_handle is not None:
         return  # 已安装
     _hook_func_ref = _HOOKPROC(_mouse_hook_proc)
-    _hook_handle = ctypes.windll.user32.SetWindowsHookExW(
+    _hook_handle = _SetWindowsHookExW(
         WH_MOUSE_LL, _hook_func_ref, None, 0
     )
     if _hook_handle == 0:
@@ -249,7 +277,7 @@ def uninstall_wheel_hook():
     """卸载全局鼠标滚轮钩子。"""
     global _hook_handle, _hook_func_ref
     if _hook_handle:
-        ctypes.windll.user32.UnhookWindowsHookEx(_hook_handle)
+        _UnhookWindowsHookEx(_hook_handle)
         _hook_handle = None
         _hook_func_ref = None
 

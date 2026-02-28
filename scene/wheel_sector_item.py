@@ -65,6 +65,12 @@ class WheelSectorItem(QGraphicsObject):
         self._hit_path = self._build_sector_path(r_inner, r_outer, gap_px=0)
         self._visual_path = self._build_sector_path(self._v_inner, self._v_outer, gap_px=WHEEL_GAP_PX)
 
+        # 充能路径缓存 (key = (r_in, r_out))
+        self._charge_path_cache = {}
+        # 文字 QFont 缓存
+        self._text_font_cache = None
+        self._text_font_name = None
+
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(
             Qt.MouseButton.LeftButton |
@@ -179,7 +185,13 @@ class WheelSectorItem(QGraphicsObject):
         # 充能进度 — 径向扩展（在视觉区域内从内圆向外圆扩展）
         if self._charge_progress > 0.01:
             charge_r = self._v_inner + (self._v_outer - self._v_inner) * self._charge_progress
-            charge_path = self._build_charge_path(self._v_inner + 2, max(self._v_inner + 3, charge_r - 2))
+            r_in = self._v_inner + 2
+            r_out = max(self._v_inner + 3, charge_r - 2)
+            cache_key = (round(r_in, 1), round(r_out, 1))
+            charge_path = self._charge_path_cache.get(cache_key)
+            if charge_path is None:
+                charge_path = self._build_charge_path(r_in, r_out)
+                self._charge_path_cache[cache_key] = charge_path
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(QColor("#0284C7")))
             painter.drawPath(charge_path)
@@ -192,7 +204,10 @@ class WheelSectorItem(QGraphicsObject):
         ty = self._cy - mid_r * math.sin(mid_angle)
 
         font_name = get_font()
-        painter.setFont(QFont(font_name, 10, QFont.Weight.Bold))
+        if font_name != self._text_font_name:
+            self._text_font_name = font_name
+            self._text_font_cache = QFont(font_name, 10, QFont.Weight.Bold)
+        painter.setFont(self._text_font_cache)
         painter.setPen(QColor("#FFFFFF"))
         text_rect = QRectF(tx - 24, ty - 12, 48, 24)
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter,

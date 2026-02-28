@@ -17,6 +17,28 @@ from core.constants import PT_ON, PT_OFF, PT_BLOCK
 user32 = ctypes.windll.user32
 logger = logging.getLogger(__name__)
 
+# ── ctypes 类型声明 ──
+user32.GetWindowLongW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
+user32.GetWindowLongW.restype = ctypes.c_long
+
+user32.SetWindowLongW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int, ctypes.c_long]
+user32.SetWindowLongW.restype = ctypes.c_long
+
+user32.mouse_event.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD, ctypes.POINTER(ctypes.c_ulong)]
+user32.mouse_event.restype = None
+
+user32.GetCursorPos.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
+user32.GetCursorPos.restype = ctypes.wintypes.BOOL
+
+user32.WindowFromPoint.argtypes = [ctypes.wintypes.POINT]
+user32.WindowFromPoint.restype = ctypes.wintypes.HWND
+
+user32.GetForegroundWindow.argtypes = []
+user32.GetForegroundWindow.restype = ctypes.wintypes.HWND
+
+user32.SetForegroundWindow.argtypes = [ctypes.wintypes.HWND]
+user32.SetForegroundWindow.restype = ctypes.wintypes.BOOL
+
 GWL_EXSTYLE = -20
 WS_EX_TRANSPARENT = 0x20
 WS_EX_NOACTIVATE = 0x08000000

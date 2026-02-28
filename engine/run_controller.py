@@ -24,10 +24,29 @@ from core.constants import UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND
 user32 = ctypes.windll.user32
 logger = logging.getLogger(__name__)
 
+# ── ctypes 类型声明 ──
+user32.GetCursorPos.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
+user32.GetCursorPos.restype = ctypes.wintypes.BOOL
+
+user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+user32.GetAsyncKeyState.restype = ctypes.c_short
+
+user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+user32.SetCursorPos.restype = ctypes.wintypes.BOOL
+
 # VK 常量
 VK_LBUTTON = 0x01
 VK_RBUTTON = 0x02
 VK_MBUTTON = 0x04
+
+
+def _is_alive(item) -> bool:
+    """检查 QGraphicsItem 是否仍然有效（未被 C++ 侧删除）"""
+    try:
+        from PyQt6 import sip
+        return not sip.isdeleted(item)
+    except (ImportError, RuntimeError):
+        return True
 
 
 class RunController(QObject):
@@ -142,7 +161,8 @@ class RunController(QObject):
         for holding in (self._holding_lclick, self._holding_rclick, self._holding_mclick):
             if holding:
                 _item, _key = holding
-                self.on_action_triggered(_item.data, _key, 'r')
+                if _is_alive(_item):
+                    self.on_action_triggered(_item.data, _key, 'r')
         self._holding_lclick = None
         self._holding_rclick = None
         self._holding_mclick = None
@@ -214,7 +234,9 @@ class RunController(QObject):
         if (active_item is not None
                 and getattr(active_item.data, 'btn_type', '') == BTN_TYPE_CENTER_BAND):
             from PyQt6.QtWidgets import QApplication
-            screen = QApplication.primaryScreen().geometry()
+            from PyQt6.QtCore import QRect
+            _ps = QApplication.primaryScreen()
+            screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
             cx = screen.x() + screen.width() // 2
             cy = screen.y() + screen.height() // 2
             user32.SetCursorPos(cx, cy)
@@ -285,23 +307,26 @@ class RunController(QObject):
         # ── 释放检测: 用存储的 holding 按钮（光标可能已移走）→ trigger 'r' ──
         if not lmb and self._prev_lmb and self._holding_lclick:
             h_item, h_key = self._holding_lclick
-            self.on_action_triggered(h_item.data, h_key, 'r')
-            if hasattr(h_item, '_hover_sm') and h_item._hover_sm.is_active:
-                h_item.set_visual_state('hover')
-            else:
-                h_item.set_visual_state('normal')
+            if _is_alive(h_item):
+                self.on_action_triggered(h_item.data, h_key, 'r')
+                if hasattr(h_item, '_hover_sm') and h_item._hover_sm.is_active:
+                    h_item.set_visual_state('hover')
+                else:
+                    h_item.set_visual_state('normal')
             self._holding_lclick = None
         if not rmb and self._prev_rmb and self._holding_rclick:
             h_item, h_key = self._holding_rclick
-            self.on_action_triggered(h_item.data, h_key, 'r')
-            if hasattr(h_item, 'set_visual_state'):
-                h_item.set_visual_state('hover' if (hasattr(h_item, '_hover_sm') and h_item._hover_sm.is_active) else 'normal')
+            if _is_alive(h_item):
+                self.on_action_triggered(h_item.data, h_key, 'r')
+                if hasattr(h_item, 'set_visual_state'):
+                    h_item.set_visual_state('hover' if (hasattr(h_item, '_hover_sm') and h_item._hover_sm.is_active) else 'normal')
             self._holding_rclick = None
         if not mmb and self._prev_mmb and self._holding_mclick:
             h_item, h_key = self._holding_mclick
-            self.on_action_triggered(h_item.data, h_key, 'r')
-            if hasattr(h_item, 'set_visual_state'):
-                h_item.set_visual_state('hover' if (hasattr(h_item, '_hover_sm') and h_item._hover_sm.is_active) else 'normal')
+            if _is_alive(h_item):
+                self.on_action_triggered(h_item.data, h_key, 'r')
+                if hasattr(h_item, 'set_visual_state'):
+                    h_item.set_visual_state('hover' if (hasattr(h_item, '_hover_sm') and h_item._hover_sm.is_active) else 'normal')
             self._holding_mclick = None
 
         self._prev_lmb = lmb
@@ -444,7 +469,9 @@ class RunController(QObject):
         if not self._active or not self._auto_center:
             return
         from PyQt6.QtWidgets import QApplication
-        screen = QApplication.primaryScreen().geometry()
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         cx = screen.x() + screen.width() // 2
         cy = screen.y() + screen.height() // 2
         user32.SetCursorPos(cx, cy)
