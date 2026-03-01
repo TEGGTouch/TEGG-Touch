@@ -1,7 +1,10 @@
 <p align="center">
-  <h1 align="center">🎮 TEGG Touch 蛋挞 — PyQt6 重构版</h1>
+  <h1 align="center">🎮 TEGG Touch 蛋挞</h1>
   <p align="center">
-    <strong>免费开源的触屏按键映射工具 | Free & Open-Source Touch-to-Key Mapper</strong>
+    <strong>让每个人都能享受游戏的乐趣</strong>
+  </p>
+  <p align="center">
+    <strong>Free & Open-Source PC Gaming Accessibility Tool</strong>
   </p>
   <p align="center">
     <a href="#-快速开始--quick-start">快速开始</a> · <a href="#-功能特性--features">功能特性</a> · <a href="#-项目结构--project-structure">项目结构</a> · <a href="#-联系方式--contact">联系方式</a>
@@ -20,60 +23,90 @@
 
 > **中文** ｜ [English](#english)
 
-## 🥮 简介
+## 🥮 TEGG Touch 蛋挞 — 让每个人都能享受游戏的乐趣
 
-**TEGG Touch 蛋挞 PyQt6** 是原版 [TEGG Touch](https://github.com/TEGGTouch/TEGG-Touch)（Tkinter）的完整重构版本，基于 **PyQt6 QGraphicsView/QGraphicsScene** 架构重写。
+**TEGG Touch 蛋挞** 是一款专为 PC 环境设计的无障碍辅助软件，永久免费、完全开源。
 
-仅用鼠标简单的移动和点击，就能替代大部分游戏操作。我们希望帮到有需求的用户，让大家都能体会到游戏的乐趣。
+在 PC 游戏中，传统的操作方式通常需要左手控制键盘（WASD 移动、快捷键释放技能），右手控制鼠标（视角转动、瞄准射击）——这意味着双手缺一不可。对于单手用户、手部受伤或存在肢体障碍的玩家来说，这道门槛将他们拒之门外。
 
-适用场景：触屏玩 PC 游戏、远程桌面操控、辅助操作、游戏直播等。
+**蛋挞的解决思路很简单：只用鼠标，替代一切。**
 
-### 🆕 相比原版的改进
+蛋挞在屏幕上创建一层透明的覆盖层，用户可以自由放置各种虚拟按钮和控件。当鼠标悬停或点击这些区域时，蛋挞会自动模拟对应的键盘和鼠标操作。这意味着：
 
-| 改进 | 说明 |
-|------|------|
-| 🏗️ **PyQt6 架构** | 从 Tkinter Canvas Mixin 重构为 QGraphicsView/Scene，渲染更流畅、扩展性更强 |
-| 🎤 **语音识别** | 集成 Vosk 离线语音引擎，支持语音指令触发按键/宏 |
-| 🔄 **宏系统** | 支持录制和编辑宏序列（按键+延迟），可绑定到按钮或语音指令 |
-| 🎡 **多种轮盘模式** | small / large / double / dual 四种轮盘布局，内外双圈可独立配置 |
-| 🛡️ **按键卡住防护** | 退出运行模式或关闭程序时自动释放所有残留按键，防止卡键 |
-| ⏱️ **Hover 状态机** | 按钮悬停支持延迟激活和充能进度条，防误触 |
-| 🖱️ **虚拟光标** | 运行模式下显示虚拟光标，实时指示穿透状态 |
+- **八向轮盘**：鼠标滑向不同方向，即可模拟 WASD 组合键实现角色移动
+- **自定义按钮**：在屏幕任意位置放置按钮，悬停或点击触发技能、交互、跳跃等操作
+- **回中带**：鼠标触碰即自动回到屏幕中心，解决单手操作时视角控制的难题
+- **语音指令**：说出预设的语音口令即可触发按键操作，进一步解放双手
+- **软键盘**：运行时可随时呼出虚拟键盘，应对临时的文字输入需求
+- **智能穿透**：按钮区域拦截操作，空白区域的点击直接穿透到游戏，完全不影响正常的鼠标操作
+
+### 谁可以使用蛋挞？
+
+🦾 **单手用户** — 无论是先天的肢体差异，还是后天的受伤、术后恢复，只要能操作鼠标，就能玩转需要键鼠配合的游戏。
+
+🎮 **手部不便的玩家** — 手指灵活度受限、握力不足、关节疼痛等情况下，蛋挞将复杂的多键操作简化为简单的鼠标移动和点击。
+
+♿ **需要无障碍支持的用户** — 蛋挞为 PC 游戏提供了一种全新的无障碍交互方式，让更多人有机会体验游戏的乐趣。
+
+🖱️ **所有想要简化操作的玩家** — 即使你双手健全，蛋挞也可以作为辅助工具，简化某些游戏中繁琐的键位操作。
+
+### 设计理念
+
+蛋挞的名字来自 **TEGG Touch**（Touch-Enabled Game Gateway），寓意「触碰即可通往游戏世界的大门」。我们相信，游戏的快乐不应该被身体条件所限制。一个简单的鼠标，加上蛋挞，就足够了。
 
 ---
 
 ## ✨ 功能特性 | Features
 
+### 核心功能
+
 | 功能 | 说明 |
 |------|------|
 | 🎮 **触摸按键映射** | 全屏透明覆盖层，任意位置放置触摸按钮，支持悬停 / 左右键 / 中键 / 滚轮 / 侧键，支持组合键 |
-| 🎡 **中心轮盘** | 8方向虚拟摇杆 + 中心环，多种布局模式（small/large/double/dual），每个扇区可自定义 |
+| 🎡 **中心轮盘** | 8方向虚拟摇杆 + 中心环，5种布局模式（small/large/double/triple/dual），每个扇区可自定义 |
 | 📐 **回中带** | 鼠标进入后自动归位屏幕中心，零延迟，配合轮盘模拟摇杆回中 |
 | 🔀 **三态穿透模式** | 穿透ON（完全穿透）/ 穿透OFF（智能穿透）/ 不穿透（全部拦截） |
+| 🎤 **语音指令** | 离线语音识别（Vosk），支持中英文，自定义语音指令触发按键或宏 |
+| 🔄 **宏系统** | 录制/编辑按键宏（多步骤 + 延迟 + 重复次数），可绑定到按钮或语音指令 |
+
+### 辅助功能
+
+| 功能 | 说明 |
+|------|------|
 | 📋 **多方案管理** | 为不同游戏保存独立配置，支持新建 / 复制 / 重命名 / 导入导出 |
 | ⌨️ **浮动软键盘** | 108键标准布局，快速输入按键映射，支持粘滞键和组合键 |
-| 🎤 **语音指令** | 离线语音识别（Vosk），自定义语音指令触发按键或宏 |
-| 🔄 **宏序列** | 录制/编辑按键宏（多步骤 + 延迟 + 重复次数），可绑定到按钮或语音 |
 | ⚙️ **自定义快捷键** | 所有功能键均可在设置面板中自定义，支持自定义回中延迟 |
 | 🌐 **多语言支持** | 中文 / English 双语切换 |
+| 🎡 **轮盘样式管理** | 5种轮盘样式一键切换：小轮盘 / 大轮盘 / 双环 / 三环 / 单环双轮盘 |
+| 🎙️ **语音测试** | 实时声波可视化 + 识别日志，测试语音指令效果 |
+| 🎤 **麦克风选择** | 支持指定麦克风设备，WASAPI 优先，自动检测可用设备 |
+| 🖱️ **虚拟光标** | 运行模式下显示虚拟光标，实时指示穿透状态 |
+| 🛡️ **按键卡住防护** | 退出运行模式或关闭程序时自动释放所有残留按键 |
+| ⏱️ **Hover 状态机** | 按钮悬停支持延迟激活和充能进度条，防误触 |
 
 ---
 
 ## 🚀 快速开始 | Quick Start
 
-### 环境要求
+### 方式一：下载即用（推荐）
+
+前往 [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases) 下载最新版 `TEGGTouch_v0.2.0.zip`，解压后右键以管理员身份运行 `TEGGTouch.exe` 即可。
+
+### 方式二：源码运行
+
+#### 环境要求
 
 - **操作系统**：Windows 10 / 11
 - **Python**：3.10+
 - **核心依赖**：`PyQt6`（UI 框架）、`keyboard`（全局键盘钩子）
 - **可选依赖**：`vosk`（离线语音识别）、`sounddevice`（麦克风输入）
 
-### 安装运行
+#### 安装运行
 
 ```bash
 # 克隆项目
-git clone <repo-url>
-cd TEGGTouch-PyQt6
+git clone https://github.com/TEGGTouch/TEGG-Touch.git
+cd TEGG-Touch
 
 # 安装依赖
 pip install -r requirements.txt
@@ -93,8 +126,9 @@ python main.py
 3. **编辑按钮** → 双击按钮打开编辑面板，设置按键映射
 4. **拖拽/缩放** → 拖拽移动，右下角三角手柄缩放
 5. **轮盘** → 工具栏切换轮盘显示，双击扇区自定义按键
-6. **启动运行** → 点击「▶ 启动」进入运行模式
-7. **停止** → 按 F12 返回编辑模式
+6. **语音** → 工具栏打开语音设置，添加语音指令
+7. **启动运行** → 点击「▶ 启动」进入运行模式
+8. **停止** → 按 F12 返回编辑模式
 
 ---
 
@@ -149,11 +183,16 @@ TEGGTouch-PyQt6/
 │   ├── edit_toolbar.py     # 编辑工具栏 / Edit toolbar
 │   ├── run_toolbar.py      # 运行工具栏 / Run toolbar
 │   ├── button_editor_dialog.py  # 按钮编辑弹窗 / Button editor
+│   ├── center_band_dialog.py    # 回中带编辑 / Center band editor
 │   ├── macro_editor_dialog.py   # 宏编辑器 / Macro editor
 │   ├── voice_settings_dialog.py # 语音设置 / Voice settings
+│   ├── voice_test_dialog.py     # 语音测试 / Voice test
+│   ├── wheel_style_dialog.py    # 轮盘样式 / Wheel style manager
 │   ├── profile_manager_dialog.py  # 方案管理 / Profile manager
 │   ├── hotkey_settings_dialog.py  # 快捷键设置 / Hotkey settings
 │   ├── virtual_keyboard.py # 浮动软键盘 / Soft keyboard
+│   ├── voice_hud_widget.py # 语音指令HUD / Voice command HUD
+│   ├── toast_widget.py     # Toast通知 / Toast notification
 │   └── about_dialog.py     # 关于对话框 / About dialog
 │
 ├── models/                 # 数据模型 / Data models
@@ -163,6 +202,7 @@ TEGGTouch-PyQt6/
 │   ├── en.json             # English
 │   └── zh-CN.json          # 简体中文
 │
+├── models/vosk/            # 语音模型 / Voice models (Vosk)
 ├── profiles/               # 用户方案 / User profiles (JSON)
 ├── assets/                 # 静态资源 / Static assets
 ├── settings/               # 设置 / Settings
@@ -175,24 +215,20 @@ TEGGTouch-PyQt6/
 
 ## 🏗️ 架构设计 | Architecture
 
-### PyQt6 分层架构（替代原版 Tkinter Mixin）
+### PyQt6 分层架构
 
 ```
 OverlayWindow (QGraphicsView)
   ├── OverlayScene (QGraphicsScene)
-  │     ├── ButtonItem (QGraphicsRectItem)     → 触摸按钮
-  │     ├── WheelSectorItem (QGraphicsPathItem) → 轮盘扇区
+  │     ├── ButtonItem (QGraphicsRectItem)       → 触摸按钮
+  │     ├── WheelSectorItem (QGraphicsPathItem)  → 轮盘扇区
   │     ├── WheelRingItem (QGraphicsEllipseItem) → 中心环
-  │     └── VirtualCursorItem                   → 虚拟光标
-  ├── RunController (QObject)                   → 运行模式控制器
-  │     ├── HoverStateMachine                   → 按钮悬停状态机
-  │     └── VoiceEngine                         → 语音识别引擎
-  └── PassthroughManager                        → 窗口穿透管理
+  │     └── VirtualCursorItem                    → 虚拟光标
+  ├── RunController (QObject)                    → 运行模式控制器
+  │     ├── HoverStateMachine                    → 按钮悬停状态机
+  │     └── VoiceEngine (QThread)                → 语音识别引擎
+  └── PassthroughManager                         → 窗口穿透管理
 ```
-
-### 坐标系 | Coordinate System
-
-采用**中心原点坐标系**：原点 `(0,0)` 在屏幕正中心，方便按钮在不同分辨率下保持相对位置。
 
 ### 两种模式 | Two Modes
 
@@ -243,6 +279,7 @@ pack_release.bat
 |------|------|
 | 💬 **微信 WeChat** | `teggwx` |
 | 📧 **邮箱 Email** | `life.is.like.a.boat@gmail.com` |
+| 🔗 **GitHub** | [TEGGTouch/TEGG-Touch](https://github.com/TEGGTouch/TEGG-Touch) |
 
 欢迎提问、建议、反馈，看到一定会解答 :)
 
@@ -252,24 +289,43 @@ pack_release.bat
 
 ## 🇬🇧 English
 
-### What is TEGG Touch PyQt6?
+### What is TEGG Touch?
 
-**TEGG Touch PyQt6** is a complete rewrite of the original [TEGG Touch](https://github.com/TEGGTouch/TEGG-Touch) (Tkinter) using the **PyQt6 QGraphicsView/Scene** framework. It's a free, open-source accessibility tool for Windows that maps touch/mouse input to keyboard actions.
+**TEGG Touch** (蛋挞) is a free, open-source **PC gaming accessibility tool** designed to help users who can only use one hand, have limited hand mobility, or face other physical challenges play PC games that normally require both keyboard and mouse.
 
-### Key Improvements over v0.1 (Tkinter)
+**The idea is simple: replace everything with just a mouse.**
 
-- **PyQt6 Architecture** — QGraphicsView/Scene replaces Tkinter Canvas Mixin for smoother rendering
-- **Voice Recognition** — Offline voice commands via Vosk engine
+TEGG Touch creates a transparent overlay on your screen where you can place virtual buttons and controls. When you hover over or click these areas, TEGG Touch automatically simulates the corresponding keyboard and mouse inputs.
+
+### Who is it for?
+
+- 🦾 **One-handed gamers** — Whether from a congenital condition, injury, or post-surgery recovery, if you can use a mouse, you can play games that require keyboard + mouse
+- 🎮 **Players with hand difficulties** — Limited finger dexterity, weak grip, joint pain — TEGG Touch simplifies complex multi-key operations into simple mouse movements and clicks
+- ♿ **Accessibility users** — A new way to interact with PC games without barriers
+- 🖱️ **Anyone who wants simpler controls** — Even with two healthy hands, TEGG Touch can simplify tedious key bindings
+
+### Key Features
+
+- **8-Direction Wheel** — Move mouse in different directions to simulate WASD combinations
+- **Custom Buttons** — Place buttons anywhere, trigger actions on hover or click
+- **Center Band** — Mouse auto-returns to screen center on contact
+- **Voice Commands** — Offline voice recognition (Vosk), supports Chinese & English
 - **Macro System** — Record/edit key sequences with delays, bind to buttons or voice
-- **Multiple Wheel Layouts** — small / large / double / dual with independent inner/outer rings
-- **Key Stuck Protection** — Auto-releases all held keys when stopping or closing
-- **Hover State Machine** — Configurable activation delay with charge progress bar
+- **5 Wheel Layouts** — Small / Large / Double / Triple / Dual ring configurations
+- **Smart Passthrough** — Buttons intercept input, empty areas pass clicks through to the game
+- **Soft Keyboard** — On-screen 108-key keyboard for quick text input
+- **Profile Manager** — Save/load/import/export configurations for different games
+- **Bilingual** — Chinese / English UI
 
 ### Quick Start
 
+Download from [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases) — extract and run `TEGGTouch.exe` as Administrator.
+
+Or build from source:
+
 ```bash
-git clone <repo-url>
-cd TEGGTouch-PyQt6
+git clone https://github.com/TEGGTouch/TEGG-Touch.git
+cd TEGG-Touch
 pip install -r requirements.txt
 python main.py    # Run as Administrator
 ```
@@ -282,3 +338,4 @@ python main.py    # Run as Administrator
 
 - **WeChat**: `teggwx`
 - **Email**: `life.is.like.a.boat@gmail.com`
+- **GitHub**: [TEGGTouch/TEGG-Touch](https://github.com/TEGGTouch/TEGG-Touch)
