@@ -1045,6 +1045,25 @@ class ButtonEditorDialog(QDialog):
             edit_btn.clicked.connect(lambda _, idx=i: self._edit_macro(idx))
             row_lay.addWidget(edit_btn)
 
+            # 复制 icon
+            copy_btn = QPushButton()
+            copy_btn.setFixedSize(btn_size, btn_size)
+            copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if _ICON_FONT:
+                copy_btn.setText("\uE8C8")
+                copy_btn.setFont(_make_font(_ICON_FONT, 14))
+            else:
+                copy_btn.setText("\u2398")
+                copy_btn.setFont(_make_font(fn, 14))
+            copy_btn.setStyleSheet(f"""
+                QPushButton {{
+                    color: white; background: transparent; border: none;
+                }}
+                QPushButton:hover {{ background: rgba(255,255,255,0.15); border-radius: 6px; }}
+            """)
+            copy_btn.clicked.connect(lambda _, idx=i: self._copy_macro(idx))
+            row_lay.addWidget(copy_btn)
+
             # 删除 icon
             del_btn = QPushButton()
             del_btn.setFixedSize(btn_size, btn_size)
@@ -1092,6 +1111,23 @@ class ButtonEditorDialog(QDialog):
         dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self)
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
         dlg.exec()
+
+    def _copy_macro(self, idx):
+        """复制宏 — deep copy + 名称加 _copy 后缀，直接追加"""
+        src = self._macros[idx]
+        new_macro = copy.deepcopy(src)
+        base_name = src.get('name', f'Macro {idx+1}')
+        existing = {m.get('name', '') for m in self._macros}
+        # 生成不重复的名称
+        candidate = f"{base_name}_copy"
+        n = 2
+        while candidate in existing:
+            candidate = f"{base_name}_copy{n}"
+            n += 1
+        new_macro['name'] = candidate
+        self._macros.append(new_macro)
+        self._rebuild_macro_list()
+        self.macros_changed.emit(self._macros)
 
     def _delete_macro(self, idx):
         from views.profile_manager_dialog import _StyledConfirmDialog

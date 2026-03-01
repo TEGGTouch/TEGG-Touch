@@ -49,7 +49,11 @@ def _detect_icon_font():
 
 def _make_font(name, px, bold=False):
     f = QFont(name)
-    f.setPixelSize(px)
+    # 使用 pointSizeF 替代 pixelSize，避免 Qt 内部组件
+    # 复制字体时调用 setPointSize(font.pointSize()) 产生 -1 警告
+    screen = QApplication.primaryScreen()
+    dpi = screen.logicalDotsPerInch() if screen else 96.0
+    f.setPointSizeF(px * 72.0 / dpi)
     if bold:
         f.setWeight(QFont.Weight.Bold)
     return f
@@ -204,10 +208,11 @@ class VoiceTestDialog(QDialog):
     WIN_H = 600
     PAD = 20
 
-    def __init__(self, commands, language, parent=None):
+    def __init__(self, commands, language, parent=None, mic_device=None):
         super().__init__(parent)
         self._commands = commands
         self._language = language
+        self._mic_device = mic_device
         self._engine = None
         self._count = 0
         self._elapsed = QElapsedTimer()
@@ -416,7 +421,7 @@ class VoiceTestDialog(QDialog):
         self._engine.audio_data_ready.connect(self._waveform.feed_audio)
         self._engine.status_changed.connect(self._on_status)
         self._engine.error_occurred.connect(self._on_error)
-        self._engine.start(self._commands, self._language)
+        self._engine.start(self._commands, self._language, mic_device=self._mic_device)
         self._elapsed.start()
         self._clock_timer.start()
 
@@ -475,11 +480,27 @@ class VoiceTestDialog(QDialog):
                 t("voice_test.runtime").replace("{time}", f"{mins:02d}:{secs:02d}"))
 
     def _cleanup(self):
-        """清理资源（不调用 self.close()，由 closeEvent 调用）"""
+        """清理资源 — 必须在 dialog 销毁前同步完成。
+
+        顺序很重要:
+        1. 停止计时器
+        2. 断开音频可视化信号（防止延迟信号到达已销毁的 _waveform）
+        3. 停止引擎（内部会断开线程信号 + 等待线程结束）
+        4. 清空引擎引用
+        """
         self._clock_timer.stop()
         if self._engine:
+            # 先断开 audio_data_ready → waveform 的连接
+            # 防止排队中的信号在 dialog 销毁后被 dispatch
+            try:
+                self._engine.audio_data_ready.disconnect(self._waveform.feed_audio)
+            except (TypeError, RuntimeError):
+                pass
             self._engine.stop()
             self._engine = None
+        # 停止波形动画定时器
+        if hasattr(self, '_waveform'):
+            self._waveform._anim_timer.stop()
 
     # ── 定位 ──
 

@@ -56,7 +56,7 @@
     "voice_run": "语音识别: 开启后用语音触发按键"
   },
   "hotkey": {
-    "title": "快捷键设置",
+    "title": "设置",
     "voice": "语音识别",
     "auto_center": "自动回中",
     "toggle_buttons": "显示/隐藏按键",
@@ -178,7 +178,7 @@
     "xbutton1": "侧键1",
     "xbutton2": "侧键2",
     "center_band_tip": "鼠标到这里就会回中",
-    "wheel_hint": "⚠ 中心轮盘有两种大小，按需使用",
+    "wheel_hint": "⚠ 中心轮盘可以通过玫红色设置按钮调整多种样式",
     "zoom_tooltip": "点击切换轮盘大/小模式",
     "ring_tooltip": "点击启用/隐藏中心圆环按钮",
     "style_tooltip": "轮盘样式管理"

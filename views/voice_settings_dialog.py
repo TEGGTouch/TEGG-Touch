@@ -47,7 +47,11 @@ def _detect_icon_font():
 
 def _make_font(name, px, bold=False):
     f = QFont(name)
-    f.setPixelSize(px)
+    # 使用 pointSizeF 替代 pixelSize，避免 Qt 内部组件（如 QComboBox）
+    # 复制字体时调用 setPointSize(font.pointSize()) 产生 -1 警告
+    screen = QApplication.primaryScreen()
+    dpi = screen.logicalDotsPerInch() if screen else 96.0
+    f.setPointSizeF(px * 72.0 / dpi)
     if bold:
         f.setWeight(QFont.Weight.Bold)
     return f
@@ -724,7 +728,7 @@ class VoiceSettingsDialog(QDialog):
                 self._mic_dot.setStyleSheet("color: #EF4444; background: transparent;")
                 self._mic_lbl.setText(t("voice_dialog.mic_not_found"))
                 self._test_btn.setEnabled(False)
-        except ImportError:
+        except (ImportError, OSError):
             self._mic_dot.setStyleSheet("color: #EF4444; background: transparent;")
             self._mic_lbl.setText(t("voice_dialog.mic_dep_missing"))
             self._test_btn.setEnabled(False)
@@ -734,14 +738,33 @@ class VoiceSettingsDialog(QDialog):
             self._test_btn.setEnabled(False)
 
     def _on_test_commands(self):
-        """收集当前指令列表，打开语音指令测试弹窗"""
+        """收集当前指令列表，打开语音指令测试弹窗。
+
+        测试弹窗以 self 为 parent，确保:
+        - 设置弹窗关闭时，测试弹窗也会被正确清理
+        - 不会出现孤立的测试弹窗持有已销毁引擎的引用
+        """
+        # 关闭已有的测试弹窗
+        if hasattr(self, '_test_dlg') and self._test_dlg is not None:
+            try:
+                self._test_dlg.close()
+            except RuntimeError:
+                pass
+            self._test_dlg = None
+
         commands = []
         for row in self._command_rows:
             data = row.get_data()
             if data['phrase']:
                 commands.append(data)
+        if not commands:
+            return
+
         from views.voice_test_dialog import VoiceTestDialog
-        self._test_dlg = VoiceTestDialog(commands, self._language, parent=None)
+        mic = self.get_selected_mic()
+        self._test_dlg = VoiceTestDialog(commands, self._language, parent=self, mic_device=mic)
+        self._test_dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self._test_dlg.destroyed.connect(lambda: setattr(self, '_test_dlg', None))
         self._test_dlg.show()
 
     def get_selected_mic(self):

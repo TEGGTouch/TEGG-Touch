@@ -50,6 +50,12 @@ class OverlayWindow(QGraphicsView):
         self._profile_name = ''
         self._current_opacity = DEFAULT_TRANSPARENCY
 
+        # 弹窗单例引用 — 防止重复打开
+        self._dlg_profile = None
+        self._dlg_voice = None
+        self._dlg_hotkey = None
+        self._dlg_about = None
+
         # ── 窗口属性 ──
         self.setWindowTitle(f"{t('app.title')} v{APP_VERSION}")
 
@@ -254,6 +260,7 @@ class OverlayWindow(QGraphicsView):
                     'voice_enabled': True,
                     'voice_commands': cfg_voice['voice_commands'],
                     'voice_language': cfg_voice.get('voice_language', 'zh-CN'),
+                    'voice_mic_device': cfg_voice.get('voice_mic_device', None),
                 }
                 self._run_controller._start_voice(voice_config)
                 self._voice_active = True
@@ -389,6 +396,7 @@ class OverlayWindow(QGraphicsView):
                 'voice_enabled': True,
                 'voice_commands': commands,
                 'voice_language': language,
+                'voice_mic_device': config.get('voice_mic_device', None),
             }
             self._run_controller._start_voice(voice_config)
             self._voice_active = True
@@ -518,9 +526,15 @@ class OverlayWindow(QGraphicsView):
 
     def _open_profile_manager(self):
         """打开方案管理弹窗"""
+        if self._dlg_profile and self._dlg_profile.isVisible():
+            self._dlg_profile.raise_()
+            self._dlg_profile.activateWindow()
+            return
         dialog = ProfileManagerDialog(self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(lambda: setattr(self, '_dlg_profile', None))
         dialog.profile_switched.connect(self._on_profile_switched)
+        self._dlg_profile = dialog
         dialog.show()
 
     def _on_profile_switched(self, name):
@@ -575,6 +589,10 @@ class OverlayWindow(QGraphicsView):
 
     def _open_voice_settings(self):
         """打开语音指令设置弹窗"""
+        if self._dlg_voice and self._dlg_voice.isVisible():
+            self._dlg_voice.raise_()
+            self._dlg_voice.activateWindow()
+            return
         config = self._scene._config or {}
         voice_commands = config.get('voice_commands', [])
         voice_language = config.get('voice_language', None)
@@ -583,7 +601,9 @@ class OverlayWindow(QGraphicsView):
         macros = config.get('macros', [])
         dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, macros=macros, voice_auto_start=voice_auto_start)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(lambda: setattr(self, '_dlg_voice', None))
         dialog.settings_saved.connect(self._on_voice_settings_saved)
+        self._dlg_voice = dialog
         dialog.show()
 
     def _on_voice_settings_saved(self):
@@ -602,11 +622,17 @@ class OverlayWindow(QGraphicsView):
 
     def _open_hotkey_settings(self):
         """打开快捷键设置弹窗"""
+        if self._dlg_hotkey and self._dlg_hotkey.isVisible():
+            self._dlg_hotkey.raise_()
+            self._dlg_hotkey.activateWindow()
+            return
         dialog = HotkeySettingsDialog(self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(lambda: setattr(self, '_dlg_hotkey', None))
         dialog.settings_saved.connect(self._on_settings_saved)
         dialog.defaults_reset.connect(self._on_defaults_reset)
         dialog.language_changed.connect(self._on_language_changed)
+        self._dlg_hotkey = dialog
         dialog.show()
 
     def _on_settings_saved(self):
@@ -644,8 +670,14 @@ class OverlayWindow(QGraphicsView):
 
     def _open_about(self):
         """打开关于弹窗"""
+        if self._dlg_about and self._dlg_about.isVisible():
+            self._dlg_about.raise_()
+            self._dlg_about.activateWindow()
+            return
         dialog = AboutDialog(self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(lambda: setattr(self, '_dlg_about', None))
+        self._dlg_about = dialog
         dialog.show()
 
     # ── 事件处理 ──

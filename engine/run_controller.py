@@ -612,6 +612,7 @@ class RunController(QObject):
             return
         commands = voice_config.get('voice_commands', [])
         language = voice_config.get('voice_language', 'zh-CN')
+        mic_device = voice_config.get('voice_mic_device', None)
         if not commands:
             return
 
@@ -621,7 +622,7 @@ class RunController(QObject):
             self._voice_engine.command_recognized.connect(self._on_voice_command)
             self._voice_engine.error_occurred.connect(
                 lambda e: logger.warning(f"语音引擎错误: {e}"))
-            self._voice_engine.start(commands, language)
+            self._voice_engine.start(commands, language, mic_device=mic_device)
         except Exception as e:
             logger.warning(f"语音引擎启动失败: {e}")
             self._voice_engine = None

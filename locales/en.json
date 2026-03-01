@@ -56,7 +56,7 @@
     "voice_run": "Voice recognition: trigger keys by speaking"
   },
   "hotkey": {
-    "title": "Hotkey Settings",
+    "title": "Settings",
     "voice": "Voice",
     "auto_center": "Auto Center",
     "toggle_buttons": "Show/Hide Btns",
@@ -178,7 +178,7 @@
     "xbutton1": "Back Btn",
     "xbutton2": "Fwd Btn",
     "center_band_tip": "Mouse returns to center here",
-    "wheel_hint": "⚠ Center wheel has two sizes, use as needed",
+    "wheel_hint": "⚠ Use the pink settings button to adjust wheel styles",
     "zoom_tooltip": "Click to toggle wheel large/small",
     "ring_tooltip": "Click to enable/hide center ring button",
     "style_tooltip": "Wheel Style Manager"
