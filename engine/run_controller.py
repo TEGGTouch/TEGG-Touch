@@ -15,11 +15,12 @@ import logging
 import threading
 import time as _time
 
-from PyQt6.QtCore import QObject, QTimer, QPoint, pyqtSignal
+from PyQt6.QtCore import QObject, QTimer, QPoint, QRect, pyqtSignal
+from PyQt6.QtWidgets import QApplication
 
 from core.input_engine import trigger, is_key_pressed, poll_wheel_events, release_all_keys
 from core.config_manager import load_hotkeys
-from core.constants import UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND
+from core.constants import UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC
 
 user32 = ctypes.windll.user32
 logger = logging.getLogger(__name__)
@@ -73,6 +74,8 @@ class RunController(QObject):
         self._prev_xb2 = False
 
         # Bug 4 fix: 使用计数器替代布尔值，正确追踪多个同时激活的按键
+        # 线程安全说明: 所有修改 _active_key_count 的 slot 均在主线程中
+        # 通过 DirectConnection 或同线程 QueuedConnection 调用，不存在跨线程竞态。
         self._active_key_count = 0
 
         # 轮询式 hover 检测状态 (解决 WS_EX_TRANSPARENT 下 Qt 事件丢失)
@@ -233,8 +236,6 @@ class RunController(QObject):
         # ── 回中带每帧检测 (匹配原版: 每帧 in_rect → SetCursorPos + continue) ──
         if (active_item is not None
                 and getattr(active_item.data, 'btn_type', '') == BTN_TYPE_CENTER_BAND):
-            from PyQt6.QtWidgets import QApplication
-            from PyQt6.QtCore import QRect
             _ps = QApplication.primaryScreen()
             screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
             cx = screen.x() + screen.width() // 2
@@ -337,7 +338,6 @@ class RunController(QObject):
 
     def _poll_auto_center(self):
         """自动回中管理 (匹配原版 elapsed-time 模型 + 倒计时进度条)"""
-        import time
         if self._auto_center and self._active_key_count <= 0:
             _on_btn = False
             try:
@@ -357,7 +357,7 @@ class RunController(QObject):
                 self._ac_start_time = None
                 self.auto_center_progress.emit(-1, 0, 0)
             else:
-                now = time.time()
+                now = _time.time()
                 if self._ac_start_time is None:
                     self._ac_start_time = now
                 elapsed_ms = (now - self._ac_start_time) * 1000
@@ -379,13 +379,12 @@ class RunController(QObject):
 
     def _check_hotkeys(self, hk):
         """检测快捷键，带防抖"""
-        import time
-        now = time.time()
+        now = _time.time()
 
         def _debounced(name, key_name):
             if is_key_pressed(key_name):
                 last = self._debounce.get(name, 0)
-                if now - last > 0.3:
+                if now - last > HOTKEY_DEBOUNCE_SEC:
                     self._debounce[name] = now
                     return True
             return False
@@ -458,7 +457,6 @@ class RunController(QObject):
                 if action == 'p':
                     item.set_visual_state(state_name)
                 else:
-                    from engine.hover_state_machine import HoverState
                     if hasattr(item, '_hover_sm') and item._hover_sm.is_active:
                         item.set_visual_state('hover')
                     else:
@@ -468,8 +466,6 @@ class RunController(QObject):
         """执行自动回中 — 使用实际屏幕尺寸（与原版一致）"""
         if not self._active or not self._auto_center:
             return
-        from PyQt6.QtWidgets import QApplication
-        from PyQt6.QtCore import QRect
         _ps = QApplication.primaryScreen()
         screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         cx = screen.x() + screen.width() // 2
@@ -530,7 +526,7 @@ class RunController(QObject):
 
     def _find_macro(self, name: str):
         """从当前 config 中查找宏"""
-        config = getattr(self._scene, '_config', None) or {}
+        config = self._scene.get_config() if hasattr(self._scene, 'get_config') else {}
         for m in config.get('macros', []):
             if m.get('name') == name:
                 return m

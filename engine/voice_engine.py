@@ -100,14 +100,15 @@ class _VoiceThread(QThread):
         self._commands = commands
         self._language = language
         self._mic_device_index = mic_device_index  # int or None
-        self._running = False
+        self._running = threading.Event()       # 线程安全的运行标志
+        self._emit_audio = threading.Event()    # 线程安全的音频信号发射标志
+        self._emit_audio.set()                  # 默认允许发射
         self._audio_queue = queue.Queue()
-        self._emit_audio = True  # 控制音频信号发射，stop 时置 False
 
     def request_stop(self):
         """请求停止（线程安全）"""
-        self._emit_audio = False
-        self._running = False
+        self._emit_audio.clear()
+        self._running.clear()
 
     def run(self):
         """线程主函数 — 阻塞执行，返回即线程结束"""
@@ -142,7 +143,7 @@ class _VoiceThread(QThread):
             return
 
         # 检查是否已在加载前被要求停止
-        if not self._emit_audio:
+        if not self._emit_audio.is_set():
             return
 
         try:
@@ -153,7 +154,7 @@ class _VoiceThread(QThread):
             return
 
         # 再次检查（模型加载可能耗时数秒）
-        if not self._emit_audio:
+        if not self._emit_audio.is_set():
             return
 
         grammar_json = json.dumps(grammar_words, ensure_ascii=False)
@@ -177,34 +178,54 @@ class _VoiceThread(QThread):
             self.error_occurred.emit(f"voice.error_no_mic:{e}")
             return
 
-        self._running = True
+        self._running.set()
         self.status_changed.emit("voice.status_listening")
 
+        # Partial result 防重复: 记录上一次已触发的 partial 文本
+        last_partial_fired = ''
+
         try:
-            while self._running:
+            while self._running.is_set():
                 try:
-                    chunk_ts, data = self._audio_queue.get(timeout=0.2)
+                    chunk_ts, data = self._audio_queue.get(timeout=0.05)
                 except queue.Empty:
                     continue
 
-                if not self._running:
+                if not self._running.is_set():
                     break
 
                 if rec.AcceptWaveform(data):
+                    # Final result — 高置信度，直接触发
                     result = json.loads(rec.Result())
                     text = result.get('text', '').strip().lower()
                     if text and text in cmd_map:
                         latency_ms = int((_time.perf_counter() - chunk_ts) * 1000)
                         keys, action = cmd_map[text]
-                        if self._running:
+                        if self._running.is_set():
+                            self.command_recognized.emit(text, keys, action, latency_ms)
+                    # Final result 出来后重置 partial 状态，允许同一指令再次触发
+                    last_partial_fired = ''
+                else:
+                    # Partial result — 低延迟提前触发
+                    # grammar mode 下 partial 已被约束在指令词表内，误匹配率低
+                    partial = json.loads(rec.PartialResult())
+                    text = partial.get('partial', '').strip().lower()
+                    if text and text in cmd_map and text != last_partial_fired:
+                        last_partial_fired = text
+                        latency_ms = int((_time.perf_counter() - chunk_ts) * 1000)
+                        keys, action = cmd_map[text]
+                        if self._running.is_set():
                             self.command_recognized.emit(text, keys, action, latency_ms)
         finally:
             # 先停掉音频信号发射，再关闭流
-            self._emit_audio = False
-            self._running = False
-            if stream:
+            self._emit_audio.clear()
+            self._running.clear()
+            if stream is not None:
                 try:
                     stream.stop()
+                except Exception:
+                    pass
+                try:
                     stream.close()
                 except Exception:
                     pass
@@ -222,17 +243,17 @@ class _VoiceThread(QThread):
         注意: 必须检查 _emit_audio 标志，因为在 stop 过程中
         PortAudio 可能仍在调用此回调，而 Qt 对象可能已被销毁。
         """
-        if not self._emit_audio:
+        if not self._emit_audio.is_set():
             return
         raw = bytes(indata)
         self._audio_queue.put((_time.perf_counter(), raw))
         # 仅在安全时发射信号（避免向已销毁的 widget 发送数据）
-        if self._emit_audio:
+        if self._emit_audio.is_set():
             try:
                 self.audio_data_ready.emit(raw)
             except RuntimeError:
                 # Qt 对象已被删除
-                self._emit_audio = False
+                self._emit_audio.clear()
 
 
 class VoiceEngine(QObject):
@@ -299,14 +320,25 @@ class VoiceEngine(QObject):
                      f"mic={mic_device}→idx={mic_index}")
 
     def stop(self):
-        """停止语音识别 — 安全地清理线程和信号"""
+        """停止语音识别 — 安全地清理线程和信号
+
+        时序: request_stop() → 等待线程结束 → 再断开信号
+        先等线程结束确保已入队的信号能被正常投递，避免 RuntimeError。
+        """
         if not self._thread:
             return
 
         # 1. 请求停止 + 阻止信号发射
         self._thread.request_stop()
 
-        # 2. 断开所有信号连接，防止延迟信号到达已销毁的接收端
+        # 2. 等待线程结束（run() 返回即结束，不需要 quit()）
+        if self._thread.isRunning():
+            if not self._thread.wait(5000):
+                logger.warning("VoiceEngine: thread timeout, terminating")
+                self._thread.terminate()
+                self._thread.wait(2000)
+
+        # 3. 线程已结束，安全断开所有信号连接
         try:
             self._thread.command_recognized.disconnect()
             self._thread.status_changed.disconnect()
@@ -314,13 +346,6 @@ class VoiceEngine(QObject):
             self._thread.audio_data_ready.disconnect()
         except (TypeError, RuntimeError):
             pass  # 信号可能未连接
-
-        # 3. 等待线程结束（run() 返回即结束，不需要 quit()）
-        if self._thread.isRunning():
-            if not self._thread.wait(5000):
-                logger.warning("VoiceEngine: thread timeout, terminating")
-                self._thread.terminate()
-                self._thread.wait(2000)
 
         self._thread = None
         logger.info("VoiceEngine stopped")

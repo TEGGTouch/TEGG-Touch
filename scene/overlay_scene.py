@@ -268,6 +268,10 @@ class OverlayScene(QGraphicsScene):
         self._ac_bar = _AutoCenterBar()
         self.addItem(self._ac_bar)
 
+    def get_config(self) -> dict:
+        """公开访问当前配置引用（替代直接访问 _config）"""
+        return self._config
+
     # ── 背景绘制 ──
 
     def drawBackground(self, painter: QPainter, rect: QRectF):

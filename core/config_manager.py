@@ -78,9 +78,11 @@ def _validate_geometry(geo: str) -> str:
         wh = geo.split('+')[0].split('x')
         w, h = int(wh[0]), int(wh[1])
         if w < MIN_WINDOW_SIZE or h < MIN_WINDOW_SIZE:
+            logger.debug(f"geometry 尺寸过小: {geo} ({w}x{h} < {MIN_WINDOW_SIZE})")
             return None
         return geo
-    except Exception:
+    except (ValueError, IndexError, AttributeError) as e:
+        logger.debug(f"geometry 格式无效: {geo!r}: {e}")
         return None
 
 
@@ -118,8 +120,12 @@ def _load_index() -> dict:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             return data
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.error(f"索引文件格式错误: {e}")
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            logger.error(f"索引文件读取失败: {e}")
         except Exception as e:
-            logger.error(f"索引加载失败: {e}")
+            logger.warning(f"索引加载未知错误: {e}")
     return {"active": DEFAULT_PROFILE_NAME, "profiles": [DEFAULT_PROFILE_NAME]}
 
 
@@ -236,17 +242,28 @@ def load_config_from_file(filepath: str) -> dict:
             result['click_through'] = PT_ON
         buttons = data.get('buttons', None)
         if buttons is not None:
-            result['buttons'] = [_ensure_button_fields(b) for b in buttons]
+            if not isinstance(buttons, list):
+                logger.warning(f"buttons 字段类型错误 (expected list, got {type(buttons).__name__})，使用默认空列表")
+                buttons = []
+            result['buttons'] = [_ensure_button_fields(b) for b in buttons if isinstance(b, dict)]
         # 中心轮盘
         result['wheel_visible'] = data.get('wheel_visible', False)
         result['wheel_enlarged'] = data.get('wheel_enlarged', False)
         raw_sectors = data.get('wheel_sectors', None)
         if raw_sectors and isinstance(raw_sectors, list) and len(raw_sectors) == 8:
             result['wheel_sectors'] = raw_sectors
+        elif raw_sectors is not None:
+            logger.warning(f"wheel_sectors 无效 (type={type(raw_sectors).__name__}, "
+                          f"len={len(raw_sectors) if isinstance(raw_sectors, list) else 'N/A'})，使用默认值")
         # 中心圆环按钮
         raw_ring = data.get('wheel_center_ring', None)
         if raw_ring and isinstance(raw_ring, dict):
+            # 校验必要字段存在
+            if 'type' not in raw_ring:
+                raw_ring['type'] = 'wheel_center_ring'
             result['wheel_center_ring'] = raw_ring
+        elif raw_ring is not None:
+            logger.warning(f"wheel_center_ring 类型无效 (type={type(raw_ring).__name__})，使用默认值")
         result['wheel_center_ring_visible'] = data.get('wheel_center_ring_visible', True)
         result['wheel_middle_ring_visible'] = data.get('wheel_middle_ring_visible', True)
         # 轮盘模式与缩放
@@ -280,8 +297,14 @@ def load_config_from_file(filepath: str) -> dict:
         if isinstance(raw_macros, list):
             result['macros'] = raw_macros
         logger.info(f"配置加载成功: {filepath}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        logger.error(f"配置文件格式错误: {filepath}: {e}")
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        logger.error(f"配置文件读取失败: {filepath}: {e}")
+    except (ValueError, KeyError, IndexError) as e:
+        logger.error(f"配置数据解析错误: {filepath}: {e}")
     except Exception as e:
-        logger.error(f"配置加载失败: {e}")
+        logger.warning(f"配置加载未知错误: {filepath}: {e}")
     return result
 
 
@@ -317,10 +340,13 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
     # Bug 5 fix: geometry 为 None 时使用当前屏幕尺寸作为 fallback
     if geometry is None:
         try:
-            import ctypes
-            user32 = ctypes.windll.user32
-            sw = user32.GetSystemMetrics(0)
-            sh = user32.GetSystemMetrics(1)
+            from PyQt6.QtWidgets import QApplication
+            _ps = QApplication.primaryScreen()
+            if _ps:
+                _geo = _ps.geometry()
+                sw, sh = _geo.width(), _geo.height()
+            else:
+                raise RuntimeError("no primary screen")
             geometry = f"{sw}x{sh}+0+0"
         except Exception:
             geometry = "1920x1080+0+0"
@@ -408,8 +434,14 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
             json.dump(data, f, ensure_ascii=False, indent=2)
         logger.info(f"配置保存成功: {filepath}")
         return True
+    except (PermissionError, OSError) as e:
+        logger.error(f"配置文件写入失败: {filepath}: {e}")
+        return False
+    except (TypeError, ValueError) as e:
+        logger.error(f"配置数据序列化失败: {filepath}: {e}")
+        return False
     except Exception as e:
-        logger.error(f"配置保存失败: {e}")
+        logger.warning(f"配置保存未知错误: {filepath}: {e}")
         return False
 
 
@@ -463,8 +495,10 @@ def _load_default_template() -> dict:
             data = json.load(f)
         logger.info(f"默认方案模板加载成功: {DEFAULT_PROFILE_TEMPLATE}")
         return data
-    except Exception as e:
-        raise RuntimeError(f"默认方案模板加载失败: {e}")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"默认方案模板 JSON 格式错误: {e}")
+    except (PermissionError, OSError) as e:
+        raise RuntimeError(f"默认方案模板读取失败: {e}")
 
 
 def create_profile(name: str, from_template: bool = True) -> bool:
@@ -663,8 +697,12 @@ def load_hotkeys() -> dict:
         if 'language' in data:
             result['language'] = data['language']
         logger.info(f"快捷键配置加载成功: {HOTKEYS_FILE}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        logger.error(f"快捷键配置格式错误: {e}")
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        logger.error(f"快捷键配置读取失败: {e}")
     except Exception as e:
-        logger.error(f"快捷键配置加载失败: {e}")
+        logger.warning(f"快捷键配置加载未知错误: {e}")
     return result
 
 

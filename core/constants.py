@@ -216,6 +216,9 @@ BTN_RADIUS = 10               # 按钮圆角半径
 # 轮询间隔 (ms) — 约 120fps，兼顾流畅与 CPU 占用
 UPDATE_INTERVAL = 8
 
+# 快捷键防抖间隔 (秒)
+HOTKEY_DEBOUNCE_SEC = 0.3
+
 
 
 # 按钮运行时字段 (保存时需要剔除)
@@ -237,10 +240,39 @@ PT_CYCLE = [PT_ON, PT_OFF, PT_BLOCK]  # 循环顺序
 # 不穿透模式覆盖色（半透明黑，提示用户当前处于拦截状态）
 COLOR_BLOCK_OVERLAY = "#1A1A1A"
 
+# === 编辑弹窗 UI 颜色 ===
+C_PM_BG = "#2D2D2D"
+C_GRAY = "#3A3A3A"
+C_GRAY_H = "#505050"
+C_AMBER = "#F59E0B"
+C_CYBER = "#0C4A6E"
+C_CYBER_H = "#0284C7"
+C_CLOSE = "#6E1E1E"
+C_CLOSE_H = "#8B2020"
+C_INPUT_BG = "#3A3A3A"
+C_TAG_BG = "#404040"
+C_TAG_HOVER = "#555555"
+C_TAG_TEXT = "#E0E0E0"
+C_CAT_LABEL = "#888888"
+C_DELAY = "#0284C7"
+
+# 字段对应的强调色（按钮编辑器 + 触控按钮状态共用）
+ACTION_COLORS = {
+    'name':      '#F59E0B',
+    'hover':     '#0284C7',
+    'lclick':    '#F59E0B',
+    'rclick':    '#10B981',
+    'mclick':    '#A855F7',
+    'wheelup':   '#EC4899',
+    'wheeldown': '#F43F5E',
+    'xbutton1':  '#06B6D4',
+    'xbutton2':  '#8B5CF6',
+}
+
 # === 语音识别配置 ===
 VOICE_MODELS_DIR = os.path.join(APP_DIR, "models", "vosk")
 VOICE_SAMPLE_RATE = 16000       # Vosk 推荐采样率
-VOICE_CHUNK_SIZE = 4000         # 每次读取的采样数 (~250ms @16kHz)
+VOICE_CHUNK_SIZE = 1600         # 每次读取的采样数 (~100ms @16kHz)，低延迟优化
 VOICE_MODEL_MAP = {
     "zh-CN": "vosk-model-small-cn-0.22",
     "en":    "vosk-model-small-en-us-0.15",

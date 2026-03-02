@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # ─── 全局滚轮事件队列 ───────────────────────────────────────
 
 _wheel_queue: deque = deque(maxlen=64)
+_wheel_lock = threading.Lock()  # 保护 _wheel_queue 的跨线程访问（钩子线程 vs 主线程）
 _hook_handle = None
 _hook_func_ref = None  # prevent GC
 
@@ -119,7 +120,10 @@ def get_scan_code(key_name: str) -> int:
 
 
 def press_key(scan_code: int, extended: bool = False):
-    """按下按键（硬件扫描码）。extended=True 为方向键等扩展键。"""
+    """按下按键（硬件扫描码）。extended=True 为方向键等扩展键。
+
+    先执行 SendInput（可能耗时），再在锁内更新集合，避免锁内阻塞。
+    """
     flags = KEYEVENTF_SCANCODE
     if extended:
         flags |= KEYEVENTF_EXTENDEDKEY
@@ -133,7 +137,10 @@ def press_key(scan_code: int, extended: bool = False):
 
 
 def release_key(scan_code: int, extended: bool = False):
-    """释放按键（硬件扫描码）。extended=True 为方向键等扩展键。"""
+    """释放按键（硬件扫描码）。extended=True 为方向键等扩展键。
+
+    先执行 SendInput（可能耗时），再在锁内更新集合，避免锁内阻塞。
+    """
     flags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
     if extended:
         flags |= KEYEVENTF_EXTENDEDKEY
@@ -254,7 +261,8 @@ def _mouse_hook_proc(nCode, wParam, lParam):
             # mouseData 高16位是滚轮 delta (signed short)
             delta = ctypes.c_short(data.mouseData >> 16).value
             direction = 'up' if delta > 0 else 'down'
-            _wheel_queue.append((direction, data.pt.x, data.pt.y))
+            with _wheel_lock:
+                _wheel_queue.append((direction, data.pt.x, data.pt.y))
 
     return _CallNextHookEx(None, nCode, wParam, lParam)
 
@@ -284,9 +292,9 @@ def uninstall_wheel_hook():
 
 def poll_wheel_events():
     """取出所有待处理的滚轮事件。返回 list of (direction, abs_x, abs_y)。"""
-    events = []
-    while _wheel_queue:
-        events.append(_wheel_queue.popleft())
+    with _wheel_lock:
+        events = list(_wheel_queue)
+        _wheel_queue.clear()
     return events
 
 

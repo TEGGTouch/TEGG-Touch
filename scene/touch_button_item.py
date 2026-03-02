@@ -19,11 +19,14 @@ from scene.tooltip_item import build_edit_tooltip
 
 # 字体缓存 (避免 paint() 每帧创建 QFont)
 _font_cache: dict = {}
+_FONT_CACHE_MAX = 128  # 缓存上限，超过时清空重建
 
 def _get_cached_font(font_name: str, px: int, bold: bool = True) -> QFont:
     key = (font_name, px, bold)
     f = _font_cache.get(key)
     if f is None:
+        if len(_font_cache) >= _FONT_CACHE_MAX:
+            _font_cache.clear()
         f = QFont(font_name)
         f.setPixelSize(px)
         if bold:

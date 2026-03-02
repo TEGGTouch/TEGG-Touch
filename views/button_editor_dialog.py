@@ -18,37 +18,12 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font
+from core.constants import (
+    C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
+    C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
+    C_TAG_TEXT, C_CAT_LABEL, C_DELAY, ACTION_COLORS,
+)
 from models.button_model import ButtonData
-
-# ── 颜色常量 ──
-C_PM_BG = "#2D2D2D"
-C_GRAY = "#3A3A3A"
-C_GRAY_H = "#505050"
-C_AMBER = "#F59E0B"
-C_CYBER = "#0C4A6E"
-C_CYBER_H = "#0284C7"
-C_CLOSE = "#6E1E1E"
-C_CLOSE_H = "#8B2020"
-
-C_INPUT_BG = "#3A3A3A"
-C_TAG_BG = "#404040"
-C_TAG_HOVER = "#555555"
-C_TAG_TEXT = "#E0E0E0"
-C_CAT_LABEL = "#888888"
-C_DELAY = "#0284C7"
-
-# 字段对应的强调色
-ACTION_COLORS = {
-    'name':      '#F59E0B',
-    'hover':     '#0284C7',
-    'lclick':    '#F59E0B',
-    'rclick':    '#10B981',
-    'mclick':    '#A855F7',
-    'wheelup':   '#EC4899',
-    'wheeldown': '#F43F5E',
-    'xbutton1':  '#06B6D4',
-    'xbutton2':  '#8B5CF6',
-}
 
 # 鼠标按键 (mouse: 前缀, 与 macro: 前缀对齐) — 惰性初始化，避免模块加载时 t() 未就绪
 _MOUSE_KEYS_CACHE = None
@@ -746,12 +721,19 @@ class ButtonEditorDialog(QDialog):
         if isinstance(name_w, _FocusLineEdit):
             self.data.name = name_w.text()
 
-        # 键位字段
-        for field in ('hover', 'lclick', 'rclick', 'mclick',
-                      'xbutton1', 'xbutton2', 'wheelup', 'wheeldown'):
-            w = self._fields.get(field)
-            if isinstance(w, TagInput):
-                setattr(self.data, field, w.get_value())
+        # 键位字段 — 直接赋值，保持类型可追踪性
+        def _read_tag(field_name):
+            w = self._fields.get(field_name)
+            return w.get_value() if isinstance(w, TagInput) else getattr(self.data, field_name, '')
+
+        self.data.hover = _read_tag('hover')
+        self.data.lclick = _read_tag('lclick')
+        self.data.rclick = _read_tag('rclick')
+        self.data.mclick = _read_tag('mclick')
+        self.data.xbutton1 = _read_tag('xbutton1')
+        self.data.xbutton2 = _read_tag('xbutton2')
+        self.data.wheelup = _read_tag('wheelup')
+        self.data.wheeldown = _read_tag('wheeldown')
 
         # 延迟 — 从 entry 读取，允许超过 slider 上限 1000
         try:

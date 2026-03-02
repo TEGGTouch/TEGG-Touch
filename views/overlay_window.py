@@ -243,7 +243,7 @@ class OverlayWindow(QGraphicsView):
 
         self._edit_toolbar.hide()
         # 恢复运行工具栏保存的位置
-        cfg = self._scene._config
+        cfg = self._scene.get_config()
         saved_x = cfg.get('run_toolbar_x') if cfg else None
         saved_y = cfg.get('run_toolbar_y') if cfg else None
         self._run_toolbar.set_saved_position(saved_x, saved_y)
@@ -252,7 +252,7 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar.update_voice_state(False)
 
         # 自动启用语音（如果用户在设置中勾选了"运行时启用音频"）
-        cfg_voice = self._scene._config or {}
+        cfg_voice = self._scene.get_config() or {}
         if (cfg_voice.get('voice_auto_start', True)
                 and cfg_voice.get('voice_commands')):
             if self._check_microphone():
@@ -371,7 +371,7 @@ class OverlayWindow(QGraphicsView):
 
     def _toggle_voice(self):
         """运行模式中切换语音识别开关"""
-        config = self._scene._config or {}
+        config = self._scene.get_config() or {}
         commands = config.get('voice_commands', [])
         language = config.get('voice_language', 'zh-CN')
 
@@ -426,9 +426,9 @@ class OverlayWindow(QGraphicsView):
 
     def _on_run_toolbar_moved(self, x, y):
         """运行工具栏拖拽结束 → 将位置持久化到 config"""
-        if self._scene._config:
-            self._scene._config['run_toolbar_x'] = x
-            self._scene._config['run_toolbar_y'] = y
+        if self._scene.get_config():
+            self._scene.get_config()['run_toolbar_x'] = x
+            self._scene.get_config()['run_toolbar_y'] = y
 
     # ── 编辑操作 ──
 
@@ -455,16 +455,16 @@ class OverlayWindow(QGraphicsView):
     def _on_grid_changed(self, gs):
         """网格滑块回调 — 缩放按钮并持久化"""
         self._scene.set_grid_size(gs)
-        if self._scene._config:
-            self._scene._config['grid_size'] = gs
+        if self._scene.get_config():
+            self._scene.get_config()['grid_size'] = gs
 
     def _on_opacity_changed(self, value):
         """编辑模式背景透明度调整 — 仅影响按钮/轮盘，不影响虚拟光标"""
         # value: 0.1 ~ 0.9 (来自滑块 10%-90%)
         self._apply_item_opacity(value)
         # 持久化到 config（下次 save_config 时写入文件）
-        if self._scene._config:
-            self._scene._config['transparency'] = value
+        if self._scene.get_config():
+            self._scene.get_config()['transparency'] = value
 
     def _apply_item_opacity(self, value):
         """对按钮和轮盘设置透明度，虚拟光标和进度条保持完全不透明"""
@@ -491,7 +491,7 @@ class OverlayWindow(QGraphicsView):
             dialog.copied.connect(lambda it: self._on_button_copied(it))
             dialog.show()
             return
-        macros = self._scene._config.get('macros', [])
+        macros = self._scene.get_config().get('macros', [])
         dialog = ButtonEditorDialog(item, self, macros=macros)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.macros_changed.connect(self._on_macros_changed)
@@ -519,10 +519,14 @@ class OverlayWindow(QGraphicsView):
 
     def _on_macros_changed(self, macros_list):
         """宏列表变更 → 写入 config 并保存"""
-        if self._scene._config is not None:
-            self._scene._config['macros'] = macros_list
+        if self._scene.get_config() is not None:
+            self._scene.get_config()['macros'] = macros_list
             self._scene.save_config()
             logger.info("Macros updated: %d macros", len(macros_list))
+
+    def _on_dialog_destroyed(self, attr_name):
+        """弹窗销毁时清理引用的统一槽方法"""
+        setattr(self, attr_name, None)
 
     def _open_profile_manager(self):
         """打开方案管理弹窗"""
@@ -532,7 +536,7 @@ class OverlayWindow(QGraphicsView):
             return
         dialog = ProfileManagerDialog(self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.destroyed.connect(lambda: setattr(self, '_dlg_profile', None))
+        dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_profile'))
         dialog.profile_switched.connect(self._on_profile_switched)
         self._dlg_profile = dialog
         dialog.show()
@@ -593,7 +597,7 @@ class OverlayWindow(QGraphicsView):
             self._dlg_voice.raise_()
             self._dlg_voice.activateWindow()
             return
-        config = self._scene._config or {}
+        config = self._scene.get_config() or {}
         voice_commands = config.get('voice_commands', [])
         voice_language = config.get('voice_language', None)
         voice_mic_device = config.get('voice_mic_device', None)
@@ -601,7 +605,7 @@ class OverlayWindow(QGraphicsView):
         macros = config.get('macros', [])
         dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, macros=macros, voice_auto_start=voice_auto_start)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.destroyed.connect(lambda: setattr(self, '_dlg_voice', None))
+        dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_voice'))
         dialog.settings_saved.connect(self._on_voice_settings_saved)
         self._dlg_voice = dialog
         dialog.show()
@@ -611,12 +615,12 @@ class OverlayWindow(QGraphicsView):
         dialog = self.sender()
         if dialog and hasattr(dialog, 'get_result'):
             result = dialog.get_result()
-            if self._scene._config:
-                self._scene._config['voice_commands'] = result.get('voice_commands', [])
-                self._scene._config['voice_language'] = result.get('voice_language', 'zh-CN')
-                self._scene._config['voice_enabled'] = result.get('voice_enabled', False)
-                self._scene._config['voice_mic_device'] = result.get('voice_mic_device')
-                self._scene._config['voice_auto_start'] = result.get('voice_auto_start', True)
+            if self._scene.get_config():
+                self._scene.get_config()['voice_commands'] = result.get('voice_commands', [])
+                self._scene.get_config()['voice_language'] = result.get('voice_language', 'zh-CN')
+                self._scene.get_config()['voice_enabled'] = result.get('voice_enabled', False)
+                self._scene.get_config()['voice_mic_device'] = result.get('voice_mic_device')
+                self._scene.get_config()['voice_auto_start'] = result.get('voice_auto_start', True)
             self._scene.save_config()
             logger.info("Voice settings saved: %d commands", len(result.get('voice_commands', [])))
 
@@ -628,7 +632,7 @@ class OverlayWindow(QGraphicsView):
             return
         dialog = HotkeySettingsDialog(self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.destroyed.connect(lambda: setattr(self, '_dlg_hotkey', None))
+        dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_hotkey'))
         dialog.settings_saved.connect(self._on_settings_saved)
         dialog.defaults_reset.connect(self._on_defaults_reset)
         dialog.language_changed.connect(self._on_language_changed)
@@ -646,17 +650,17 @@ class OverlayWindow(QGraphicsView):
         # 重置透明度
         self._apply_item_opacity(default_opacity)
         self._edit_toolbar.set_opacity(default_opacity)
-        if self._scene._config:
-            self._scene._config['transparency'] = default_opacity
+        if self._scene.get_config():
+            self._scene.get_config()['transparency'] = default_opacity
         # 清除运行工具栏位置（下次进入运行模式将使用居中默认位置）
-        if self._scene._config:
-            self._scene._config['run_toolbar_x'] = None
-            self._scene._config['run_toolbar_y'] = None
+        if self._scene.get_config():
+            self._scene.get_config()['run_toolbar_x'] = None
+            self._scene.get_config()['run_toolbar_y'] = None
         # 重置网格大小
         self._scene.set_grid_size(DEFAULT_GRID_SIZE)
         self._edit_toolbar.set_grid_size(DEFAULT_GRID_SIZE)
-        if self._scene._config:
-            self._scene._config['grid_size'] = DEFAULT_GRID_SIZE
+        if self._scene.get_config():
+            self._scene.get_config()['grid_size'] = DEFAULT_GRID_SIZE
         # 重置运行工具栏到默认居中位置
         self._run_toolbar._position_toolbar()
         logger.info("Defaults reset: transparency=%.2f, grid=%d, run_toolbar position cleared",
@@ -676,7 +680,7 @@ class OverlayWindow(QGraphicsView):
             return
         dialog = AboutDialog(self)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.destroyed.connect(lambda: setattr(self, '_dlg_about', None))
+        dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_about'))
         self._dlg_about = dialog
         dialog.show()
 
@@ -722,6 +726,11 @@ class OverlayWindow(QGraphicsView):
         from PyQt6.QtWidgets import QDialog
         for child in self.findChildren(QDialog):
             child.close()
+        # 显式清理弹窗引用
+        self._dlg_profile = None
+        self._dlg_voice = None
+        self._dlg_hotkey = None
+        self._dlg_about = None
         self._edit_toolbar.close()
         self._run_toolbar.close()
         self._virtual_keyboard.close()
