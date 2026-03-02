@@ -217,6 +217,7 @@ class VoiceTestDialog(QDialog):
         self._count = 0
         self._elapsed = QElapsedTimer()
         self._drag_pos = None
+        self._has_error = False  # 标记是否已显示错误（防止被 stopped 覆盖）
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -453,21 +454,25 @@ class VoiceTestDialog(QDialog):
 
     def _on_status(self, status_key):
         if status_key == "voice.status_listening":
+            self._has_error = False
             self._status_dot.setStyleSheet(f"color: {C_GREEN}; background: transparent;")
             self._status_lbl.setText(t("voice_test.listening"))
         elif status_key == "voice.status_loading":
             self._status_dot.setStyleSheet(f"color: {C_AMBER}; background: transparent;")
             self._status_lbl.setText(t("voice_test.loading"))
         elif status_key == "voice.status_stopped":
-            self._status_dot.setStyleSheet("color: #666; background: transparent;")
-            self._status_lbl.setText(t("voice_test.stopped"))
+            # 如果已经显示了错误信息，不要用"已停止"覆盖
+            if not self._has_error:
+                self._status_dot.setStyleSheet("color: #666; background: transparent;")
+                self._status_lbl.setText(t("voice_test.stopped"))
 
     def _on_error(self, error_key):
+        self._has_error = True
         self._status_dot.setStyleSheet("color: #EF4444; background: transparent;")
         # 简化错误显示
         if ":" in error_key:
             _, detail = error_key.split(":", 1)
-            self._status_lbl.setText(detail[:30])
+            self._status_lbl.setText(detail[:50])
         else:
             self._status_lbl.setText(t("voice_test.error"))
 

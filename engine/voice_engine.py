@@ -155,9 +155,11 @@ class _VoiceThread(QThread):
         stream = None
         try:
             self.status_changed.emit("voice.status_loading")
+            logger.info(f"VoiceThread: loading model from {model_dir}")
 
             _vosk.SetLogLevel(-1)  # 静默 Vosk 内部日志
             model = _vosk.Model(model_dir)
+            logger.info("VoiceThread: model loaded OK")
 
             # grammar 约束: 只识别配置的指令词
             grammar_list = list(raw_phrases) + ["[unk]"]
@@ -176,8 +178,11 @@ class _VoiceThread(QThread):
             if self._mic_device_index is not None:
                 sd_kwargs['device'] = self._mic_device_index
 
+            logger.info(f"VoiceThread: opening mic stream, device={self._mic_device_index}, "
+                        f"rate={VOICE_SAMPLE_RATE}, chunk={VOICE_CHUNK_SIZE}")
             stream = _sd.RawInputStream(**sd_kwargs)
             stream.start()
+            logger.info("VoiceThread: mic stream started OK")
 
             self._running.set()
             self.status_changed.emit("voice.status_listening")
@@ -219,8 +224,9 @@ class _VoiceThread(QThread):
                             rec.SetWords(True)
 
         except Exception as e:
+            logger.error(f"VoiceThread exception: {type(e).__name__}: {e}", exc_info=True)
             if self._running.is_set() or self._emit_audio.is_set():
-                self.error_occurred.emit(f"voice.error_model_load:{e}")
+                self.error_occurred.emit(f"voice.error_runtime:{type(e).__name__}: {e}")
         finally:
             # 先停掉音频信号发射，再关闭流
             self._emit_audio.clear()
