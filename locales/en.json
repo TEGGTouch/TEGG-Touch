@@ -305,5 +305,12 @@
     "count": "Recognized: {n}",
     "runtime": "Runtime: {time}",
     "stop": "Stop Test"
+  },
+  "update": {
+    "title": "Update Available",
+    "new_version": "v{version} Released",
+    "current_version": "Current: v{version}",
+    "download": "Download",
+    "skip": "Later"
   }
 }

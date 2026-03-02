@@ -50,7 +50,25 @@ except ImportError:
     sys.exit(1)
 
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QTimer
 from views.overlay_window import OverlayWindow
+
+
+def _check_for_updates(parent):
+    """启动后台更新检查，有新版本时弹窗提示。"""
+    from core.update_checker import UpdateChecker
+    from views.update_dialog import UpdateDialog
+
+    checker = UpdateChecker(parent)
+
+    def _on_update(version, url, body):
+        dlg = UpdateDialog(version, url, body, parent)
+        dlg.show()
+
+    checker.update_available.connect(_on_update)
+    checker.start()
+    # 保持引用防止被 GC
+    parent._update_checker = checker
 
 
 def main():
@@ -65,6 +83,9 @@ def main():
 
         window = OverlayWindow()
         window.show()
+
+        # 启动 3 秒后检查更新（避免阻塞启动流程）
+        QTimer.singleShot(3000, lambda: _check_for_updates(window))
 
         sys.exit(app.exec())
     except Exception as e:
