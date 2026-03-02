@@ -14,6 +14,7 @@ TEGG Touch (PyQt6) - voice_engine.py
 
 import json
 import os
+import sys
 import logging
 import queue
 import threading
@@ -43,6 +44,16 @@ def _ensure_imports():
     errors = []
     if _vosk is None:
         try:
+            # 打包环境下，vosk DLL 可能在 _internal/ 或 _internal/vosk/
+            # 需要将其加入 DLL 搜索路径以确保伴生 DLL 可被找到
+            if getattr(sys, 'frozen', False) and sys.platform == 'win32':
+                _internal = os.path.join(os.path.dirname(sys.executable), '_internal')
+                for dll_dir in [_internal, os.path.join(_internal, 'vosk')]:
+                    if os.path.isdir(dll_dir):
+                        try:
+                            os.add_dll_directory(dll_dir)
+                        except (OSError, AttributeError):
+                            pass
             import vosk
             _vosk = vosk
         except Exception as e:

@@ -14,7 +14,12 @@ from PyInstaller.utils.hooks import collect_dynamic_libs
 # vosk 包内含 kaldi 等原生库，
 # hiddenimports 只嵌入 Python 代码到 PYZ，不会自动收集这些原生库。
 # 缺少时 import vosk 会抛出 OSError 导致闪退。
-vosk_binaries = collect_dynamic_libs('vosk')
+# 必须将 vosk DLLs 放到 _internal/ 根目录（dest='.'），
+# 否则 libvosk.dll 的伴生 DLL (libgcc, libstdc++, libwinpthread)
+# 在 _internal/vosk/ 子目录中无法被 Windows DLL 加载器找到，
+# 导致 vosk.Model() 抛出 "Failed to create a model"。
+_vosk_raw = collect_dynamic_libs('vosk')
+vosk_binaries = [(src, '.') for src, _ in _vosk_raw]
 
 # sounddevice 依赖 _sounddevice_data 包中的 libportaudio*.dll (PortAudio)。
 # hiddenimports 只引入 Python 代码，不会收集 PortAudio 原生 DLL。
