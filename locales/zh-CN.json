@@ -228,6 +228,7 @@
     "error_unknown_language": "不支持的语音语言: {lang}",
     "error_model_missing": "语音模型缺失: {model}\n请下载并放入 models/vosk/ 目录",
     "error_model_load": "语音模型加载失败: {error}",
+    "error_tokenize": "关键词分词失败: {error}",
     "error_no_mic": "无法打开麦克风: {error}",
     "command_triggered": "语音触发: {phrase}"
   },

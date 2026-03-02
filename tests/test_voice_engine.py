@@ -67,7 +67,7 @@ def test_dependency_check():
 
     try:
         import vosk
-        print(f"  vosk: OK (version may vary)")
+        print(f"  vosk: OK")
     except ImportError:
         print("  vosk: NOT INSTALLED")
         print("  请运行: pip install vosk")
@@ -101,7 +101,7 @@ def test_model_files():
     from core.constants import VOICE_MODELS_DIR, VOICE_MODEL_MAP
 
     print("=" * 50)
-    print("[TEST] Vosk 模型文件检查")
+    print("[TEST] Vosk 语音模型文件检查")
     print("=" * 50)
     print(f"  模型目录: {VOICE_MODELS_DIR}")
 

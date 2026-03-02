@@ -269,14 +269,14 @@ ACTION_COLORS = {
     'xbutton2':  '#8B5CF6',
 }
 
-# === 语音识别配置 ===
+# === 语音识别配置 (Vosk) ===
 VOICE_MODELS_DIR = os.path.join(APP_DIR, "models", "vosk")
-VOICE_SAMPLE_RATE = 16000       # Vosk 推荐采样率
-VOICE_CHUNK_SIZE = 1600         # 每次读取的采样数 (~100ms @16kHz)，低延迟优化
 VOICE_MODEL_MAP = {
     "zh-CN": "vosk-model-small-cn-0.22",
     "en":    "vosk-model-small-en-us-0.15",
 }
+VOICE_SAMPLE_RATE = 16000       # 推荐采样率
+VOICE_CHUNK_SIZE = 1600         # 每次读取的采样数 (~100ms @16kHz)
 
 # 按钮可选字段及默认值 (兼容旧配置)
 BUTTON_OPTIONAL_DEFAULTS = {

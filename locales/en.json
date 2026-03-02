@@ -228,6 +228,7 @@
     "error_unknown_language": "Unsupported voice language: {lang}",
     "error_model_missing": "Voice model missing: {model}\nDownload and place in models/vosk/",
     "error_model_load": "Voice model load failed: {error}",
+    "error_tokenize": "Keyword tokenization failed: {error}",
     "error_no_mic": "Cannot open microphone: {error}",
     "command_triggered": "Voice triggered: {phrase}"
   },

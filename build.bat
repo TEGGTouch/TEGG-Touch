@@ -74,7 +74,7 @@ echo      - TEGGTouch.exe
 if exist "%OUT%\locales"        (echo      - locales        √) else (echo      - locales        ✗)
 if exist "%OUT%\assets"         (echo      - assets         √) else (echo      - assets         ✗)
 if exist "%OUT%\settings"       (echo      - settings       √) else (echo      - settings       ✗)
-if exist "%OUT%\models\vosk"    (echo      - models/vosk    √) else (echo      - models/vosk    ✗)
+if exist "%OUT%\models\vosk"       (echo      - models/vosk       √) else (echo      - models/vosk       ✗)
 if exist "%OUT%\core\default_profile.json" (echo      - default_profile √) else (echo      - default_profile ✗)
 if exist "%OUT%\profiles"       (echo      - profiles       √) else (echo      - profiles       ✗)
 echo.

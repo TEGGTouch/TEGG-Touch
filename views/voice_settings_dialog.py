@@ -773,7 +773,7 @@ class VoiceSettingsDialog(QDialog):
             return None
         data = self._mic_combo.currentData()
         if data == self._MIC_DEFAULT_TAG:
-            return None  # 系统默认 → voice_engine 不指定 device
+            return None  # 系统默认 → 不指定 device
         return self._mic_combo.currentText()
 
     def _build_key_palette(self, fn):

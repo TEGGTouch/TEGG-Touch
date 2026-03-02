@@ -1,6 +1,6 @@
 """
 TEGG Touch (PyQt6) - voice_engine.py
-语音识别引擎 — 使用 Vosk + sounddevice 实现离线语音指令识别。
+语音识别引擎 — 使用 Vosk + grammar 约束 + partial 提前触发实现离线语音指令检测。
 
 架构:
   VoiceEngine(QObject)  — 主线程 API，管理线程生命周期
@@ -21,7 +21,10 @@ import time as _time
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
-from core.constants import VOICE_MODELS_DIR, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE, VOICE_MODEL_MAP
+from core.constants import (
+    VOICE_MODELS_DIR, VOICE_MODEL_MAP,
+    VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +34,10 @@ _sd = None
 
 
 def _ensure_imports():
-    """延迟导入 vosk 和 sounddevice，缺失时返回错误列表。
+    """延迟导入 vosk + sounddevice，缺失时返回错误列表。
 
     使用 except Exception 而非 ImportError，因为打包环境下
-    vosk DLL 缺失会抛 OSError 而非 ImportError。
+    原生 DLL 缺失会抛 OSError 而非 ImportError。
     """
     global _vosk, _sd
     errors = []
@@ -42,7 +45,6 @@ def _ensure_imports():
         try:
             import vosk
             _vosk = vosk
-            _vosk.SetLogLevel(-1)
         except Exception as e:
             logger.warning(f"Failed to import vosk: {e}")
             errors.append("vosk")
@@ -111,7 +113,7 @@ class _VoiceThread(QThread):
         self._running.clear()
 
     def run(self):
-        """线程主函数 — 阻塞执行，返回即线程结束"""
+        """Vosk 语音识别: grammar 约束 + partial 提前触发"""
         missing = _ensure_imports()
         if missing:
             self.error_occurred.emit(
@@ -120,49 +122,50 @@ class _VoiceThread(QThread):
 
         # 构建指令查找表
         cmd_map = {}
-        grammar_words = []
+        raw_phrases = []
         for cmd in self._commands:
-            phrase = cmd.get('phrase', '').strip().lower()
+            phrase = cmd.get('phrase', '').strip()
             if phrase:
-                cmd_map[phrase] = (cmd.get('keys', ''), cmd.get('action', 'click'))
-                grammar_words.append(phrase)
+                label = phrase.lower().replace(' ', '_')
+                cmd_map[label] = (
+                    phrase,
+                    cmd.get('keys', ''),
+                    cmd.get('action', 'click'),
+                )
+                raw_phrases.append(phrase)
 
         if not cmd_map:
             self.error_occurred.emit("voice.error_no_commands")
             return
 
-        # 加载 Vosk 模型
+        # 定位模型目录
         model_name = VOICE_MODEL_MAP.get(self._language)
         if not model_name:
             self.error_occurred.emit(f"voice.error_unknown_language:{self._language}")
             return
 
-        model_path = os.path.join(VOICE_MODELS_DIR, model_name)
-        if not os.path.isdir(model_path):
+        model_dir = os.path.join(VOICE_MODELS_DIR, model_name)
+        if not os.path.isdir(model_dir):
             self.error_occurred.emit(f"voice.error_model_missing:{model_name}")
             return
 
-        # 检查是否已在加载前被要求停止
         if not self._emit_audio.is_set():
             return
 
-        try:
-            self.status_changed.emit("voice.status_loading")
-            model = _vosk.Model(model_path)
-        except Exception as e:
-            self.error_occurred.emit(f"voice.error_model_load:{e}")
-            return
-
-        # 再次检查（模型加载可能耗时数秒）
-        if not self._emit_audio.is_set():
-            return
-
-        grammar_json = json.dumps(grammar_words, ensure_ascii=False)
-        rec = _vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE, grammar_json)
-
-        # 打开麦克风流
         stream = None
         try:
+            self.status_changed.emit("voice.status_loading")
+
+            _vosk.SetLogLevel(-1)  # 静默 Vosk 内部日志
+            model = _vosk.Model(model_dir)
+
+            # grammar 约束: 只识别配置的指令词
+            grammar_list = list(raw_phrases) + ["[unk]"]
+            grammar_json = json.dumps(grammar_list, ensure_ascii=False)
+            rec = _vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE, grammar_json)
+            rec.SetWords(True)
+
+            # 打开麦克风流
             sd_kwargs = dict(
                 samplerate=VOICE_SAMPLE_RATE,
                 blocksize=VOICE_CHUNK_SIZE,
@@ -172,19 +175,14 @@ class _VoiceThread(QThread):
             )
             if self._mic_device_index is not None:
                 sd_kwargs['device'] = self._mic_device_index
+
             stream = _sd.RawInputStream(**sd_kwargs)
             stream.start()
-        except Exception as e:
-            self.error_occurred.emit(f"voice.error_no_mic:{e}")
-            return
 
-        self._running.set()
-        self.status_changed.emit("voice.status_listening")
+            self._running.set()
+            self.status_changed.emit("voice.status_listening")
 
-        # Partial result 防重复: 记录上一次已触发的 partial 文本
-        last_partial_fired = ''
-
-        try:
+            # 识别循环
             while self._running.is_set():
                 try:
                     chunk_ts, data = self._audio_queue.get(timeout=0.05)
@@ -195,27 +193,34 @@ class _VoiceThread(QThread):
                     break
 
                 if rec.AcceptWaveform(data):
-                    # Final result — 高置信度，直接触发
+                    # Final result
                     result = json.loads(rec.Result())
-                    text = result.get('text', '').strip().lower()
-                    if text and text in cmd_map:
-                        latency_ms = int((_time.perf_counter() - chunk_ts) * 1000)
-                        keys, action = cmd_map[text]
-                        if self._running.is_set():
-                            self.command_recognized.emit(text, keys, action, latency_ms)
-                    # Final result 出来后重置 partial 状态，允许同一指令再次触发
-                    last_partial_fired = ''
+                    text = result.get('text', '').strip()
+                    if text:
+                        label = text.lower().replace(' ', '_')
+                        if label in cmd_map:
+                            phrase, keys, action = cmd_map[label]
+                            latency_ms = int((_time.perf_counter() - chunk_ts) * 1000)
+                            if self._running.is_set():
+                                self.command_recognized.emit(phrase, keys, action, latency_ms)
                 else:
-                    # Partial result — 低延迟提前触发
-                    # grammar mode 下 partial 已被约束在指令词表内，误匹配率低
+                    # Partial result — 提前触发 (低延迟)
                     partial = json.loads(rec.PartialResult())
-                    text = partial.get('partial', '').strip().lower()
-                    if text and text in cmd_map and text != last_partial_fired:
-                        last_partial_fired = text
-                        latency_ms = int((_time.perf_counter() - chunk_ts) * 1000)
-                        keys, action = cmd_map[text]
-                        if self._running.is_set():
-                            self.command_recognized.emit(text, keys, action, latency_ms)
+                    text = partial.get('partial', '').strip()
+                    if text:
+                        label = text.lower().replace(' ', '_')
+                        if label in cmd_map:
+                            phrase, keys, action = cmd_map[label]
+                            latency_ms = int((_time.perf_counter() - chunk_ts) * 1000)
+                            if self._running.is_set():
+                                self.command_recognized.emit(phrase, keys, action, latency_ms)
+                            # 重置识别器以防重复触发
+                            rec = _vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE, grammar_json)
+                            rec.SetWords(True)
+
+        except Exception as e:
+            if self._running.is_set() or self._emit_audio.is_set():
+                self.error_occurred.emit(f"voice.error_model_load:{e}")
         finally:
             # 先停掉音频信号发射，再关闭流
             self._emit_audio.clear()
