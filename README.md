@@ -65,7 +65,7 @@ TEGG Touch creates a transparent overlay on your screen where you can freely pla
 
 | 功能 Feature | 说明 Description |
 |------|------|
-| 🎮 **触摸按键映射 Touch-to-Key** | 全屏透明覆盖层，任意位置放置按钮，支持悬停/左右键/中键/滚轮/侧键/组合键 — Full-screen transparent overlay, place buttons anywhere, supports hover/click/scroll/combos |
+| 🎮 **悬浮按键映射 Overlay-to-Key** | 全屏透明覆盖层，任意位置放置按钮，支持悬停/左右键/中键/滚轮/侧键/组合键 — Full-screen transparent overlay, place buttons anywhere, supports hover/click/scroll/combos |
 | 🎡 **中心轮盘 Wheel** | 8方向虚拟摇杆 + 中心环，5种布局（small/large/double/triple/dual）— 8-direction virtual joystick + center ring, 5 layout modes |
 | 📐 **回中带 Center Band** | 鼠标触碰自动归位屏幕中心，配合轮盘模拟摇杆回中 — Auto-return to screen center on contact |
 | 🔀 **三态穿透 Passthrough** | 穿透ON / 智能穿透 / 不穿透 三种模式 — ON / Smart / OFF three passthrough modes |
@@ -109,7 +109,7 @@ python main.py    # 以管理员运行 / Run as Administrator
 ### 基本流程 | Basic Workflow
 
 1. **启动 Launch** → 全屏透明覆盖层 + 底部工具栏 / Full-screen overlay + bottom toolbar
-2. **添加按钮 Add Buttons** → 点击「按键」创建触摸区域 / Click "Button" to create touch zones
+2. **添加按钮 Add Buttons** → 点击「按键」创建悬浮按钮区域 / Click "Button" to create overlay button zones
 3. **编辑 Edit** → 双击按钮设置按键映射 / Double-click to set key mapping
 4. **轮盘 Wheel** → 工具栏切换轮盘，双击扇区自定义 / Toggle wheel, double-click sectors to customize
 5. **语音 Voice** → 打开语音设置，添加语音指令 / Open voice settings, add voice commands
