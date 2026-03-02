@@ -44,16 +44,16 @@ def _ensure_imports():
     errors = []
     if _vosk is None:
         try:
-            # 打包环境下，vosk DLL 可能在 _internal/ 或 _internal/vosk/
-            # 需要将其加入 DLL 搜索路径以确保伴生 DLL 可被找到
+            # 打包环境下，vosk 的伴生 DLL (libgcc, libstdc++, libwinpthread)
+            # 与 libvosk.dll 一起在 _internal/vosk/ 目录中。
+            # 但 Windows DLL 加载器默认不搜索该子目录，
+            # 需要将其加入 PATH 以确保伴生 DLL 可被找到。
             if getattr(sys, 'frozen', False) and sys.platform == 'win32':
-                _internal = os.path.join(os.path.dirname(sys.executable), '_internal')
-                for dll_dir in [_internal, os.path.join(_internal, 'vosk')]:
-                    if os.path.isdir(dll_dir):
-                        try:
-                            os.add_dll_directory(dll_dir)
-                        except (OSError, AttributeError):
-                            pass
+                vosk_dll_dir = os.path.join(
+                    os.path.dirname(sys.executable), '_internal', 'vosk')
+                if os.path.isdir(vosk_dll_dir):
+                    os.environ['PATH'] = (
+                        vosk_dll_dir + os.pathsep + os.environ.get('PATH', ''))
             import vosk
             _vosk = vosk
         except Exception as e:
