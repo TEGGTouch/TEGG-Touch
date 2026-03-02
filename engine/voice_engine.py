@@ -12,6 +12,7 @@ TEGG Touch (PyQt6) - voice_engine.py
   - 更简单的生命周期管理
 """
 
+import ctypes
 import json
 import os
 import sys
@@ -22,12 +23,64 @@ import time as _time
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
-from core.constants import (
-    VOICE_MODELS_DIR, VOICE_MODEL_MAP,
-    VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE,
-)
+from core.constants import VOICE_MODELS_DIR, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE, VOICE_MODEL_MAP
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_model_path(path: str) -> str:
+    """确保模型路径对 vosk C 库可用 — 解决中文/非 ASCII 路径问题。
+
+    vosk (Kaldi C++) 用 fopen() 读模型，Windows fopen() 按 ANSI(GBK) 解读 char*，
+    而 vosk 传的是 UTF-8。路径含中文 → 乱码 → "Failed to create a model"。
+
+    策略:
+      1. 纯 ASCII 路径 → 直接用
+      2. GetShortPathNameW 转 8.3 短路径 → 结果全 ASCII 就用
+      3. DefineDosDeviceW 创建虚拟盘符 (= subst) → 纯 ASCII
+    """
+    if sys.platform != 'win32':
+        return path
+    try:
+        path.encode('ascii')
+        return path
+    except UnicodeEncodeError:
+        pass
+
+    # 策略 2: 8.3 短路径
+    try:
+        buf = ctypes.create_unicode_buffer(512)
+        n = ctypes.windll.kernel32.GetShortPathNameW(path, buf, 512)
+        if n > 0 and buf.value:
+            buf.value.encode('ascii')  # 检查是否全 ASCII
+            logger.info(f"Using 8.3 short path for model: {buf.value}")
+            return buf.value
+    except (UnicodeEncodeError, Exception):
+        pass
+
+    # 策略 3: 虚拟盘符 (subst)
+    parent = os.path.dirname(path)
+    basename = os.path.basename(path)
+    for letter in 'ZYXWVUTSRQ':
+        drive = f"{letter}:"
+        if os.path.exists(f"{drive}\\"):
+            continue
+        try:
+            ret = ctypes.windll.kernel32.DefineDosDeviceW(0, drive, parent)
+            if ret:
+                result = f"{drive}\\{basename}"
+                logger.info(f"Virtual drive {drive} -> {parent}")
+                # 注册清理（进程退出时移除映射）
+                import atexit
+                atexit.register(
+                    ctypes.windll.kernel32.DefineDosDeviceW,
+                    0x00000002, drive, parent)
+                return result
+        except Exception:
+            continue
+
+    logger.warning(f"Cannot make safe path for: {path}")
+    return path
 
 # 延迟导入
 _vosk = None
@@ -35,27 +88,18 @@ _sd = None
 
 
 def _ensure_imports():
-    """延迟导入 vosk + sounddevice，缺失时返回错误列表。
+    """延迟导入 vosk 和 sounddevice，缺失时返回错误列表。
 
     使用 except Exception 而非 ImportError，因为打包环境下
-    原生 DLL 缺失会抛 OSError 而非 ImportError。
+    vosk DLL 缺失会抛 OSError 而非 ImportError。
     """
     global _vosk, _sd
     errors = []
     if _vosk is None:
         try:
-            # 打包环境下，vosk 的伴生 DLL (libgcc, libstdc++, libwinpthread)
-            # 与 libvosk.dll 一起在 _internal/vosk/ 目录中。
-            # 但 Windows DLL 加载器默认不搜索该子目录，
-            # 需要将其加入 PATH 以确保伴生 DLL 可被找到。
-            if getattr(sys, 'frozen', False) and sys.platform == 'win32':
-                vosk_dll_dir = os.path.join(
-                    os.path.dirname(sys.executable), '_internal', 'vosk')
-                if os.path.isdir(vosk_dll_dir):
-                    os.environ['PATH'] = (
-                        vosk_dll_dir + os.pathsep + os.environ.get('PATH', ''))
             import vosk
             _vosk = vosk
+            _vosk.SetLogLevel(-1)
         except Exception as e:
             logger.warning(f"Failed to import vosk: {e}")
             errors.append("vosk")
@@ -113,15 +157,14 @@ class _VoiceThread(QThread):
         self._commands = commands
         self._language = language
         self._mic_device_index = mic_device_index  # int or None
-        self._running = threading.Event()       # 线程安全的运行标志
-        self._emit_audio = threading.Event()    # 线程安全的音频信号发射标志
-        self._emit_audio.set()                  # 默认允许发射
+        self._running = False
         self._audio_queue = queue.Queue()
+        self._emit_audio = True  # 控制音频信号发射，stop 时置 False
 
     def request_stop(self):
         """请求停止（线程安全）"""
-        self._emit_audio.clear()
-        self._running.clear()
+        self._emit_audio = False
+        self._running = False
 
     def run(self):
         """Vosk 语音识别: grammar 约束 + partial 提前触发"""
@@ -149,36 +192,43 @@ class _VoiceThread(QThread):
             self.error_occurred.emit("voice.error_no_commands")
             return
 
-        # 定位模型目录
+        # 加载 Vosk 模型
         model_name = VOICE_MODEL_MAP.get(self._language)
         if not model_name:
             self.error_occurred.emit(f"voice.error_unknown_language:{self._language}")
             return
 
-        model_dir = os.path.join(VOICE_MODELS_DIR, model_name)
-        if not os.path.isdir(model_dir):
+        model_path = os.path.join(VOICE_MODELS_DIR, model_name)
+        if not os.path.isdir(model_path):
             self.error_occurred.emit(f"voice.error_model_missing:{model_name}")
             return
 
-        if not self._emit_audio.is_set():
+        # 检查是否已在加载前被要求停止
+        if not self._emit_audio:
             return
 
-        stream = None
         try:
             self.status_changed.emit("voice.status_loading")
-            logger.info(f"VoiceThread: loading model from {model_dir}")
+            # 中文路径处理: vosk C 库无法打开含非 ASCII 字符的路径
+            model_path = _safe_model_path(model_path)
+            model = _vosk.Model(model_path)
+        except Exception as e:
+            self.error_occurred.emit(f"voice.error_model_load:{e}")
+            return
 
-            _vosk.SetLogLevel(-1)  # 静默 Vosk 内部日志
-            model = _vosk.Model(model_dir)
-            logger.info("VoiceThread: model loaded OK")
+        # 再次检查（模型加载可能耗时数秒）
+        if not self._emit_audio:
+            return
 
-            # grammar 约束: 只识别配置的指令词
-            grammar_list = list(raw_phrases) + ["[unk]"]
-            grammar_json = json.dumps(grammar_list, ensure_ascii=False)
-            rec = _vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE, grammar_json)
-            rec.SetWords(True)
+        # grammar 约束: 只识别配置的指令词
+        grammar_list = list(raw_phrases) + ["[unk]"]
+        grammar_json = json.dumps(grammar_list, ensure_ascii=False)
+        rec = _vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE, grammar_json)
+        rec.SetWords(True)
 
-            # 打开麦克风流
+        # 打开麦克风流
+        stream = None
+        try:
             sd_kwargs = dict(
                 samplerate=VOICE_SAMPLE_RATE,
                 blocksize=VOICE_CHUNK_SIZE,
@@ -188,24 +238,23 @@ class _VoiceThread(QThread):
             )
             if self._mic_device_index is not None:
                 sd_kwargs['device'] = self._mic_device_index
-
-            logger.info(f"VoiceThread: opening mic stream, device={self._mic_device_index}, "
-                        f"rate={VOICE_SAMPLE_RATE}, chunk={VOICE_CHUNK_SIZE}")
             stream = _sd.RawInputStream(**sd_kwargs)
             stream.start()
-            logger.info("VoiceThread: mic stream started OK")
+        except Exception as e:
+            self.error_occurred.emit(f"voice.error_no_mic:{e}")
+            return
 
-            self._running.set()
-            self.status_changed.emit("voice.status_listening")
+        self._running = True
+        self.status_changed.emit("voice.status_listening")
 
-            # 识别循环
-            while self._running.is_set():
+        try:
+            while self._running:
                 try:
-                    chunk_ts, data = self._audio_queue.get(timeout=0.05)
+                    chunk_ts, data = self._audio_queue.get(timeout=0.2)
                 except queue.Empty:
                     continue
 
-                if not self._running.is_set():
+                if not self._running:
                     break
 
                 if rec.AcceptWaveform(data):
@@ -217,7 +266,7 @@ class _VoiceThread(QThread):
                         if label in cmd_map:
                             phrase, keys, action = cmd_map[label]
                             latency_ms = int((_time.perf_counter() - chunk_ts) * 1000)
-                            if self._running.is_set():
+                            if self._running:
                                 self.command_recognized.emit(phrase, keys, action, latency_ms)
                 else:
                     # Partial result — 提前触发 (低延迟)
@@ -228,26 +277,18 @@ class _VoiceThread(QThread):
                         if label in cmd_map:
                             phrase, keys, action = cmd_map[label]
                             latency_ms = int((_time.perf_counter() - chunk_ts) * 1000)
-                            if self._running.is_set():
+                            if self._running:
                                 self.command_recognized.emit(phrase, keys, action, latency_ms)
                             # 重置识别器以防重复触发
                             rec = _vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE, grammar_json)
                             rec.SetWords(True)
-
-        except Exception as e:
-            logger.error(f"VoiceThread exception: {type(e).__name__}: {e}", exc_info=True)
-            if self._running.is_set() or self._emit_audio.is_set():
-                self.error_occurred.emit(f"voice.error_runtime:{type(e).__name__}: {e}")
         finally:
             # 先停掉音频信号发射，再关闭流
-            self._emit_audio.clear()
-            self._running.clear()
-            if stream is not None:
+            self._emit_audio = False
+            self._running = False
+            if stream:
                 try:
                     stream.stop()
-                except Exception:
-                    pass
-                try:
                     stream.close()
                 except Exception:
                     pass
@@ -265,17 +306,17 @@ class _VoiceThread(QThread):
         注意: 必须检查 _emit_audio 标志，因为在 stop 过程中
         PortAudio 可能仍在调用此回调，而 Qt 对象可能已被销毁。
         """
-        if not self._emit_audio.is_set():
+        if not self._emit_audio:
             return
         raw = bytes(indata)
         self._audio_queue.put((_time.perf_counter(), raw))
         # 仅在安全时发射信号（避免向已销毁的 widget 发送数据）
-        if self._emit_audio.is_set():
+        if self._emit_audio:
             try:
                 self.audio_data_ready.emit(raw)
             except RuntimeError:
                 # Qt 对象已被删除
-                self._emit_audio.clear()
+                self._emit_audio = False
 
 
 class VoiceEngine(QObject):
@@ -342,25 +383,14 @@ class VoiceEngine(QObject):
                      f"mic={mic_device}→idx={mic_index}")
 
     def stop(self):
-        """停止语音识别 — 安全地清理线程和信号
-
-        时序: request_stop() → 等待线程结束 → 再断开信号
-        先等线程结束确保已入队的信号能被正常投递，避免 RuntimeError。
-        """
+        """停止语音识别 — 安全地清理线程和信号"""
         if not self._thread:
             return
 
         # 1. 请求停止 + 阻止信号发射
         self._thread.request_stop()
 
-        # 2. 等待线程结束（run() 返回即结束，不需要 quit()）
-        if self._thread.isRunning():
-            if not self._thread.wait(5000):
-                logger.warning("VoiceEngine: thread timeout, terminating")
-                self._thread.terminate()
-                self._thread.wait(2000)
-
-        # 3. 线程已结束，安全断开所有信号连接
+        # 2. 断开所有信号连接，防止延迟信号到达已销毁的接收端
         try:
             self._thread.command_recognized.disconnect()
             self._thread.status_changed.disconnect()
@@ -368,6 +398,13 @@ class VoiceEngine(QObject):
             self._thread.audio_data_ready.disconnect()
         except (TypeError, RuntimeError):
             pass  # 信号可能未连接
+
+        # 3. 等待线程结束（run() 返回即结束，不需要 quit()）
+        if self._thread.isRunning():
+            if not self._thread.wait(5000):
+                logger.warning("VoiceEngine: thread timeout, terminating")
+                self._thread.terminate()
+                self._thread.wait(2000)
 
         self._thread = None
         logger.info("VoiceEngine stopped")
