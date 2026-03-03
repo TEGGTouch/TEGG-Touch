@@ -37,6 +37,8 @@ def _get_mouse_keys():
             (t("editor.mclick"), "mouse:middle"),
             (t("editor.xbutton1"), "mouse:x1"),
             (t("editor.xbutton2"), "mouse:x2"),
+            (t("editor.wheelup"), "mouse:wheelup"),
+            (t("editor.wheeldown"), "mouse:wheeldown"),
         ]
     return _MOUSE_KEYS_CACHE
 

@@ -16,7 +16,7 @@ from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
 
 from core.i18n import t, get_font
 from views.button_editor_dialog import (
-    _get_key_categories, _FlowWidget, _make_font, _detect_icon_font,
+    _get_key_categories, _get_mouse_keys, _FlowWidget, _make_font, _detect_icon_font,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
     C_INPUT_BG, C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL, C_DELAY,
     TagInput,
@@ -516,7 +516,7 @@ class MacroEditorDialog(QDialog):
         self._update_limit_label()
 
     def _build_key_palette(self, fn):
-        """复用 KEY_CATEGORIES 构建键位面板"""
+        """复用 KEY_CATEGORIES 构建键位面板，顶部增加鼠标操作分类"""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -538,9 +538,35 @@ class MacroEditorDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
+        # ── 鼠标操作 (最顶部) ──
+        from core.i18n import t as _t
+        mouse_keys = _get_mouse_keys()
+        mouse_display_names = [label for label, _ in mouse_keys]
+        mouse_tag_values = [tag for _, tag in mouse_keys]
+        self._mouse_name_to_tag = dict(zip(mouse_display_names, mouse_tag_values))
+
+        cat_lbl_mouse = QLabel(f"── {_t('key_cat.mouse_buttons')} ──")
+        cat_lbl_mouse.setFont(_make_font(fn, 13, bold=True))
+        cat_lbl_mouse.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+        layout.addWidget(cat_lbl_mouse)
+        layout.addSpacing(6)
+
+        mouse_container = QWidget()
+        mouse_container.setStyleSheet("background: transparent;")
+        mouse_flow = _FlowWidget(
+            mouse_display_names,
+            lambda name: self._on_mouse_key_clicked(name),
+            fn, mouse_container
+        )
+        mc_lay = QVBoxLayout(mouse_container)
+        mc_lay.setContentsMargins(0, 0, 0, 0)
+        mc_lay.setSpacing(0)
+        mc_lay.addWidget(mouse_flow)
+        layout.addWidget(mouse_container)
+
+        # ── 键盘按键分类 ──
         for i, (cat_name, keys) in enumerate(_get_key_categories()):
-            if i > 0:
-                layout.addSpacing(16)
+            layout.addSpacing(16)
             cat_lbl = QLabel(f"── {cat_name} ──")
             cat_lbl.setFont(_make_font(fn, 13, bold=True))
             cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
@@ -564,6 +590,11 @@ class MacroEditorDialog(QDialog):
         """键位面板点击 → 填入当前聚焦的 TagInput"""
         if self._focus_widget and isinstance(self._focus_widget, TagInput):
             self._focus_widget.add_tag(key_name)
+
+    def _on_mouse_key_clicked(self, display_name):
+        """鼠标面板点击 → 将 display_name 映射为 mouse:xxx tag 后填入 TagInput"""
+        tag = self._mouse_name_to_tag.get(display_name, display_name)
+        self._on_key_clicked(tag)
 
     def _add_step_row(self, step_data: dict):
         """添加一个步骤行到列表"""

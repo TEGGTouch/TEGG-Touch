@@ -18,7 +18,10 @@ import time as _time
 from PyQt6.QtCore import QObject, QTimer, QPoint, QRect, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
-from core.input_engine import trigger, is_key_pressed, poll_wheel_events, release_all_keys
+from core.input_engine import (
+    trigger, is_key_pressed, poll_wheel_events, release_all_keys,
+    mouse_press, mouse_release, mouse_wheel,
+)
 from core.config_manager import load_hotkeys
 from core.constants import UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC
 
@@ -499,21 +502,42 @@ class RunController(QObject):
     # ── 宏感知的智能触发 ──
 
     def _smart_trigger(self, key_str: str, action: str):
-        """解析 key_str, 分离普通键和 macro:name 标签, 分别执行"""
+        """解析 key_str, 分离普通键、mouse:xxx 和 macro:name 标签, 分别执行"""
         if not key_str:
             return
         parts = [p.strip() for p in key_str.split('+')]
         normal_keys = []
         macro_names = []
+        mouse_buttons = []   # mouse:left, mouse:right, mouse:middle, mouse:x1, mouse:x2
+        mouse_wheels = []    # mouse:wheelup, mouse:wheeldown
         for p in parts:
             if p.startswith('macro:'):
                 macro_names.append(p[6:])
+            elif p.startswith('mouse:'):
+                mouse_val = p[6:]  # "left", "right", "middle", "x1", "x2", "wheelup", "wheeldown"
+                if mouse_val in ('wheelup', 'wheeldown'):
+                    mouse_wheels.append(mouse_val)
+                else:
+                    mouse_buttons.append(mouse_val)
             else:
                 normal_keys.append(p)
 
         # 普通键照常触发
         if normal_keys:
             trigger('+'.join(normal_keys), action)
+
+        # 鼠标按钮: press → mouse_press, release → mouse_release
+        for mb in mouse_buttons:
+            if action == 'p':
+                mouse_press(mb)
+            elif action == 'r':
+                mouse_release(mb)
+
+        # 鼠标滚轮: 仅在 press/click 时触发一次 (release 忽略)
+        if mouse_wheels and action in ('p', 'click'):
+            for mw in mouse_wheels:
+                direction = 'up' if mw == 'wheelup' else 'down'
+                mouse_wheel(direction)
 
         # 宏: 仅在 press / click 时触发 (release 忽略, 避免重复)
         if macro_names and action in ('p', 'click'):
@@ -562,16 +586,17 @@ class RunController(QObject):
                     elif step_type == 'key':
                         # 按键步骤: {"type":"key", "key":"a+b", "action":"click"}
                         # 兼容旧格式 "keys" 字段
+                        # 使用 _smart_trigger 以支持 mouse: 和 macro: 前缀
                         keys = step.get('key', '') or step.get('keys', '')
                         act = step.get('action', 'click')
                         if keys:
                             if act == 'click':
-                                trigger(keys, 'p')
-                                trigger(keys, 'r')
+                                self._smart_trigger(keys, 'p')
+                                self._smart_trigger(keys, 'r')
                             elif act == 'press':
-                                trigger(keys, 'p')
+                                self._smart_trigger(keys, 'p')
                             elif act == 'release':
-                                trigger(keys, 'r')
+                                self._smart_trigger(keys, 'r')
                         # 旧格式可能有内嵌 delay
                         delay = step.get('delay', 0)
                         if delay > 0:
@@ -584,12 +609,12 @@ class RunController(QObject):
                         delay = step.get('delay', 50)
                         if keys:
                             if act == 'click':
-                                trigger(keys, 'p')
-                                trigger(keys, 'r')
+                                self._smart_trigger(keys, 'p')
+                                self._smart_trigger(keys, 'r')
                             elif act == 'press':
-                                trigger(keys, 'p')
+                                self._smart_trigger(keys, 'p')
                             elif act == 'release':
-                                trigger(keys, 'r')
+                                self._smart_trigger(keys, 'r')
                         if delay > 0:
                             _time.sleep(delay / 1000.0)
 

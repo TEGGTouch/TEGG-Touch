@@ -116,7 +116,7 @@ WHEEL_DUAL_CENTER_RING_OUTER = 120    # 中心环碰撞外径 (px)
 WHEEL_DUAL_INNER_SECTOR_INNER = 120   # 内八向碰撞内径 (px) — 与中心环无缝衔接
 WHEEL_DUAL_INNER_SECTOR_OUTER = 200   # 内八向碰撞外径 (px)
 WHEEL_DUAL_OUTER_SECTOR_INNER = 200   # 外八向碰撞内径 (px) — 与内八向无缝衔接
-WHEEL_DUAL_OUTER_SECTOR_OUTER = 240   # 外八向碰撞外径 (px) — 与双环模式最外径一致
+WHEEL_DUAL_OUTER_SECTOR_OUTER = 280   # 外八向碰撞外径 (px) — 扩大至280，与内八向同厚(80px)
 
 # 8个扇面方向定义 (名称, 中心角度-tkinter角度, 默认hover键)
 # tkinter arc: 0°=右, 逆时针增加, 90°=上

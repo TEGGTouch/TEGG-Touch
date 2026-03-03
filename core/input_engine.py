@@ -251,6 +251,58 @@ _UnhookWindowsHookEx.argtypes = [wintypes.HHOOK]
 _UnhookWindowsHookEx.restype = wintypes.BOOL
 MOUSEEVENTF_MOVE = 0x0001
 
+# ─── 鼠标按钮模拟常量 ─────────────────────────────────────────
+MOUSEEVENTF_LEFTDOWN   = 0x0002
+MOUSEEVENTF_LEFTUP     = 0x0004
+MOUSEEVENTF_RIGHTDOWN  = 0x0008
+MOUSEEVENTF_RIGHTUP    = 0x0010
+MOUSEEVENTF_MIDDLEDOWN = 0x0020
+MOUSEEVENTF_MIDDLEUP   = 0x0040
+MOUSEEVENTF_XDOWN      = 0x0080
+MOUSEEVENTF_XUP        = 0x0100
+MOUSEEVENTF_WHEEL      = 0x0800
+XBUTTON1               = 0x0001
+XBUTTON2               = 0x0002
+WHEEL_DELTA            = 120
+
+# 按钮名 → (down_flag, up_flag, mouseData)
+_MOUSE_BUTTON_MAP = {
+    'left':   (MOUSEEVENTF_LEFTDOWN,   MOUSEEVENTF_LEFTUP,   0),
+    'right':  (MOUSEEVENTF_RIGHTDOWN,  MOUSEEVENTF_RIGHTUP,  0),
+    'middle': (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0),
+    'x1':     (MOUSEEVENTF_XDOWN,      MOUSEEVENTF_XUP,      XBUTTON1),
+    'x2':     (MOUSEEVENTF_XDOWN,      MOUSEEVENTF_XUP,      XBUTTON2),
+}
+
+
+def mouse_press(button: str):
+    """按下鼠标按钮。button: 'left', 'right', 'middle', 'x1', 'x2'"""
+    entry = _MOUSE_BUTTON_MAP.get(button.lower())
+    if not entry:
+        logger.debug(f"未知鼠标按钮: '{button}'")
+        return
+    down_flag, _, mouse_data = entry
+    extra = ctypes.c_ulong(0)
+    _mouse_event(down_flag, 0, 0, mouse_data, ctypes.pointer(extra))
+
+
+def mouse_release(button: str):
+    """释放鼠标按钮。button: 'left', 'right', 'middle', 'x1', 'x2'"""
+    entry = _MOUSE_BUTTON_MAP.get(button.lower())
+    if not entry:
+        logger.debug(f"未知鼠标按钮: '{button}'")
+        return
+    _, up_flag, mouse_data = entry
+    extra = ctypes.c_ulong(0)
+    _mouse_event(up_flag, 0, 0, mouse_data, ctypes.pointer(extra))
+
+
+def mouse_wheel(direction: str):
+    """模拟鼠标滚轮。direction: 'up' 或 'down'"""
+    delta = WHEEL_DELTA if direction.lower() == 'up' else -WHEEL_DELTA
+    extra = ctypes.c_ulong(0)
+    _mouse_event(MOUSEEVENTF_WHEEL, 0, 0, ctypes.c_ulong(delta & 0xFFFFFFFF), ctypes.pointer(extra))
+
 
 def _mouse_hook_proc(nCode, wParam, lParam):
     """低级鼠标钩子回调。处理全局滚轮捕获。"""

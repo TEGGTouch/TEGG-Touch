@@ -518,9 +518,9 @@ class _TypeCard(QFrame):
     """轮盘类型选择卡片 — 方形 icon + 下方文字标签"""
     clicked = pyqtSignal(str)  # type_id
 
-    ICON_SIZE = 96       # 方形图标区
-    CARD_W = 110         # 总宽
-    CARD_H = 126         # 总高（icon + label）
+    ICON_SIZE = 120      # 方形图标区 (扩大以容纳 dual 280 缩略图)
+    CARD_W = 134         # 总宽
+    CARD_H = 150         # 总高（icon + label）
 
     def __init__(self, wtype, parent=None):
         super().__init__(parent)
@@ -604,8 +604,8 @@ class WheelStyleDialog(QDialog):
 
     settings_changed = pyqtSignal(dict)
 
-    WIN_W = 920
-    WIN_H = 650
+    WIN_W = 1060
+    WIN_H = 720
     PAD = 20
     INFO_W = 220
 
@@ -717,7 +717,7 @@ class WheelStyleDialog(QDialog):
 
         left_widget = QWidget()
         left_widget.setLayout(left)
-        left_widget.setFixedWidth(130)
+        left_widget.setFixedWidth(154)
         left_widget.setContentsMargins(0, 0, 0, 0)
         left_widget.setStyleSheet("background: transparent;")
         body.addWidget(left_widget)
