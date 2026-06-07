@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/python-3.10%2B-green" alt="Python">
     <img src="https://img.shields.io/badge/framework-PyQt6-41CD52" alt="PyQt6">
     <img src="https://img.shields.io/badge/license-CC%20BY--NC%204.0-orange" alt="License">
-    <img src="https://img.shields.io/badge/version-v0.2.0-brightgreen" alt="Version">
+    <img src="https://img.shields.io/badge/version-v0.2.1-brightgreen" alt="Version">
     <img src="https://img.shields.io/badge/i18n-中文%20%7C%20English-blueviolet" alt="i18n">
   </p>
 </p>
@@ -91,9 +91,9 @@ TEGG Touch creates a transparent overlay on your screen where you can freely pla
 
 ### 下载即用（推荐）| Download & Run (Recommended)
 
-前往 [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases) 下载最新版 `TEGGTouch_v0.2.0.zip`，解压后右键以管理员身份运行 `TEGGTouch.exe`。
+前往 [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases) 下载最新版 `TEGGTouch_v0.2.1.zip`，解压后右键以管理员身份运行 `TEGGTouch.exe`。
 
-Download `TEGGTouch_v0.2.0.zip` from [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases), extract and run `TEGGTouch.exe` as Administrator.
+Download `TEGGTouch_v0.2.1.zip` from [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases), extract and run `TEGGTouch.exe` as Administrator.
 
 ### 源码运行 | Build from Source
 
