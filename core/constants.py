@@ -15,7 +15,7 @@ else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # === 应用信息 ===
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 CONFIG_FILE = "config.json"
 PROFILES_DIR = "profiles"
 PROFILES_INDEX = "_index.json"
@@ -28,6 +28,7 @@ def get_app_title():
 
 # === 默认快捷键映射 ===
 DEFAULT_HOTKEYS = {
+    "collapse":       "f4",
     "voice":          "f5",
     "auto_center":    "f6",
     "toggle_buttons": "f7",
@@ -39,9 +40,20 @@ DEFAULT_HOTKEYS = {
     "auto_center_delay": 1500,
 }
 
+# === 光标配色 (虚拟光标 SVG 渲染参数) ===
+# scale 离散档位 (与设置 UI 下拉一致)
+CURSOR_SCALE_OPTIONS = [1.0, 1.5, 2.0, 3.0, 4.0]
+CURSOR_BASE_SIZE = 30   # 1x 对应的像素 (SVG viewBox 是 32×32, 绘制时按 scale 放大)
+DEFAULT_CURSOR_STYLES = {
+    "cursor":       {"stroke": "#FFFFFF", "fill": "#000000", "scale": 1.0},
+    "cursor_off":   {"stroke": "#FFFFFF", "fill": "#005291", "scale": 1.0},
+    "cursor_block": {"stroke": "#FFFFFF", "fill": "#E69318", "scale": 1.0},
+}
+
 def get_hotkey_labels():
     """返回本地化的快捷键显示名称（运行时求值）。"""
     return {
+        "collapse":       t("hotkey.collapse"),
         "voice":          t("hotkey.voice"),
         "auto_center":    t("hotkey.auto_center"),
         "toggle_buttons": t("hotkey.toggle_buttons"),
@@ -260,6 +272,7 @@ C_DELAY = "#0284C7"
 ACTION_COLORS = {
     'name':      '#F59E0B',
     'hover':     '#0284C7',
+    'hover_toggle': '#0284C7',
     'lclick':    '#F59E0B',
     'rclick':    '#10B981',
     'mclick':    '#A855F7',

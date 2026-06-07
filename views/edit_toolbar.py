@@ -183,7 +183,7 @@ class EditToolbar(QWidget):
     grid_changed = pyqtSignal(int)
     profile_clicked = pyqtSignal()
     settings_clicked = pyqtSignal()
-    about_clicked = pyqtSignal()
+    minimize_clicked = pyqtSignal()
     quit_clicked = pyqtSignal()
     moved = pyqtSignal()  # 工具栏被拖拽移动时发出，用于同步软键盘位置
 
@@ -307,14 +307,14 @@ class EditToolbar(QWidget):
         # 弹簧 → 将右侧按钮推到最右
         r1.addStretch()
 
-        # 右上角: 关于 | 设置 | 关闭
+        # 右上角: 最小化 | 设置 | 关闭 (关于已合并到设置内)
         r1_right = QHBoxLayout()
         r1_right.setSpacing(6)
-        about_btn = self._build_sq_btn(
-            "\uE946", "\u24d8", C_TOOL, C_TOOL_H, "#CCC", self.about_clicked)
-        about_btn.setToolTip(t("tooltip.about"))
-        self._install_tip(about_btn)
-        r1_right.addWidget(about_btn)
+        minimize_btn = self._build_sq_btn(
+            "\uE921", "_", C_TOOL, C_TOOL_H, "#CCC", self.minimize_clicked)
+        minimize_btn.setToolTip(t("tooltip.minimize"))
+        self._install_tip(minimize_btn)
+        r1_right.addWidget(minimize_btn)
         settings_btn = self._build_sq_btn(
             "\uE713", "\u2699", C_TOOL, C_TOOL_H, "#CCC", self.settings_clicked)
         settings_btn.setToolTip(t("tooltip.settings"))

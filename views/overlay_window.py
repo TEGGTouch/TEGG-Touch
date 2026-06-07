@@ -4,13 +4,14 @@ TEGG Touch 蛋挞 (PyQt6) - overlay_window.py
 """
 
 import logging
+import os
 
 from PyQt6.QtWidgets import QGraphicsView, QApplication
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPainter
+from PyQt6.QtCore import Qt, QTimer, QEvent
+from PyQt6.QtGui import QPainter, QIcon
 
 from core.i18n import t, load_locale
-from core.constants import APP_VERSION, PT_ON, PT_OFF, PT_BLOCK, DEFAULT_TRANSPARENCY, DEFAULT_GRID_SIZE
+from core.constants import APP_VERSION, APP_DIR, PT_ON, PT_OFF, PT_BLOCK, DEFAULT_TRANSPARENCY, DEFAULT_GRID_SIZE
 from core.config_manager import (
     init_profiles, load_hotkeys, get_active_profile_name,
     load_profile, save_profile, set_active_profile,
@@ -21,12 +22,11 @@ from engine.run_controller import RunController
 from engine.passthrough_manager import PassthroughManager
 
 from views.edit_toolbar import EditToolbar
-from views.run_toolbar import RunToolbar
+from views.run_toolbar import RunToolbar, CollapsedBubble
 from views.button_editor_dialog import ButtonEditorDialog
 from views.center_band_dialog import CenterBandDialog
 from views.profile_manager_dialog import ProfileManagerDialog
 from views.hotkey_settings_dialog import HotkeySettingsDialog
-from views.about_dialog import AboutDialog
 from views.virtual_keyboard import VirtualKeyboard
 from views.voice_settings_dialog import VoiceSettingsDialog
 from views.toast_widget import ToastWidget
@@ -54,15 +54,17 @@ class OverlayWindow(QGraphicsView):
         self._dlg_profile = None
         self._dlg_voice = None
         self._dlg_hotkey = None
-        self._dlg_about = None
 
         # ── 窗口属性 ──
         self.setWindowTitle(f"{t('app.title')} v{APP_VERSION}")
+        _icon_path = os.path.join(APP_DIR, "assets", "icon.ico")
+        if os.path.exists(_icon_path):
+            self.setWindowIcon(QIcon(_icon_path))
 
+        # 不含 Qt.WindowType.Tool: 让窗口在任务栏出现, 可被最小化
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool
+            Qt.WindowType.WindowStaysOnTopHint
         )
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -100,6 +102,7 @@ class OverlayWindow(QGraphicsView):
         self._run_controller.cursor_on_ui.connect(
             self._pt_manager.update_smart_passthrough)
         self._run_controller.request_toggle_voice.connect(self._toggle_voice)
+        self._run_controller.request_toggle_collapse.connect(self._toggle_collapse_run_toolbar)
 
         # ── 工具栏 (parent=self ensures Z-order above overlay) ──
         self._edit_toolbar = EditToolbar(parent=self)
@@ -117,8 +120,8 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.grid_changed.connect(self._on_grid_changed)
         self._edit_toolbar.profile_clicked.connect(self._open_profile_manager)
         self._edit_toolbar.settings_clicked.connect(self._open_hotkey_settings)
-        self._edit_toolbar.about_clicked.connect(self._open_about)
         self._edit_toolbar.quit_clicked.connect(self.close)
+        self._edit_toolbar.minimize_clicked.connect(self.minimize_to_taskbar)
 
         # 连接运行工具栏信号
         self._run_toolbar.stop_clicked.connect(self.to_edit)
@@ -127,6 +130,13 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar.toggle_buttons_clicked.connect(self._toggle_buttons_visibility)
         self._run_toolbar.soft_keyboard_clicked.connect(self._toggle_soft_keyboard)
         self._run_toolbar.pt_clicked.connect(self._on_pt_clicked)
+        self._run_toolbar.collapse_clicked.connect(self._collapse_run_toolbar)
+
+        # 折叠悬浮方块
+        self._collapsed_bubble = CollapsedBubble(parent=self)
+        self._collapsed_bubble.hide()
+        self._collapsed_bubble.expand_requested.connect(self._expand_run_toolbar)
+        self._run_collapsed = False
 
         # 工具栏拖拽时同步软键盘位置 (匹配原版 _dm 中的 _position_above_toolbar 调用)
         self._edit_toolbar.moved.connect(self._sync_keyboard_to_toolbar)
@@ -153,7 +163,12 @@ class OverlayWindow(QGraphicsView):
             self._voice_hud.show_command)
 
         # ── 虚拟光标 ──
-        self._virtual_cursor = VirtualCursorItem()
+        from core.constants import DEFAULT_CURSOR_STYLES
+        self._cursor_styles = (load_hotkeys() or {}).get(
+            'cursor_styles', None) or dict(DEFAULT_CURSOR_STYLES)
+        _initial_style = self._cursor_styles.get(
+            'cursor', DEFAULT_CURSOR_STYLES['cursor'])
+        self._virtual_cursor = VirtualCursorItem('cursor', _initial_style)
         self._virtual_cursor.setVisible(False)
         self._scene.addItem(self._virtual_cursor)
 
@@ -299,6 +314,8 @@ class OverlayWindow(QGraphicsView):
         self._scene._update_ring_visibility()
 
         self._run_toolbar.hide()
+        self._collapsed_bubble.hide()
+        self._run_collapsed = False
         self._edit_toolbar.show()
         self._smart_pt_timer.start()
 
@@ -315,13 +332,43 @@ class OverlayWindow(QGraphicsView):
         PT_BLOCK: 'cursor_block',
     }
 
+    def _collapse_run_toolbar(self):
+        """折叠运行工具栏为悬浮方块"""
+        if self._current_mode != 'run' or self._run_collapsed:
+            return
+        tb_geo = self._run_toolbar.frameGeometry()
+        # 把方块放在原工具栏的左上角附近
+        bx = tb_geo.x() + max(0, (tb_geo.width() - CollapsedBubble.SIZE) // 2)
+        by = tb_geo.y()
+        self._run_toolbar.hide()
+        self._collapsed_bubble.show_at(bx, by)
+        self._run_collapsed = True
+
+    def _expand_run_toolbar(self):
+        """展开运行工具栏"""
+        if not self._run_collapsed:
+            return
+        self._collapsed_bubble.hide()
+        self._run_toolbar.show()
+        self._run_toolbar.raise_()
+        self._run_collapsed = False
+
+    def _toggle_collapse_run_toolbar(self):
+        """F10: 折叠/展开切换"""
+        if self._current_mode != 'run':
+            return
+        if self._run_collapsed:
+            self._expand_run_toolbar()
+        else:
+            self._collapse_run_toolbar()
+
     def _on_pt_clicked(self, mode):
         """工具栏穿透按钮点击 → 同步 manager + toolbar + 光标"""
         self._pt_manager.set_mode(mode)
         self._run_toolbar.update_pt_mode(mode)
-        # 同步虚拟光标类型
+        # 同步虚拟光标类型 + 应用对应类型的 style
         cursor_type = self._PT_CURSOR_MAP.get(mode, 'cursor')
-        self._virtual_cursor.set_cursor_type(cursor_type)
+        self._virtual_cursor.apply_styles_map(self._cursor_styles, cursor_type)
 
     def _toggle_buttons_visibility(self):
         """隐藏/显示所有按钮（含轮盘扇区和圆环 — 匹配原版 toggle_buttons_visibility）"""
@@ -643,9 +690,23 @@ class OverlayWindow(QGraphicsView):
         """设置保存后"""
         # 运行控制器重新读取热键
         self._run_controller.reload_hotkeys()
+        # 重新加载 cursor_styles 并应用到当前光标
+        from core.constants import DEFAULT_CURSOR_STYLES
+        from scene.virtual_cursor_item import clear_cursor_render_cache
+        self._cursor_styles = (load_hotkeys() or {}).get(
+            'cursor_styles', None) or dict(DEFAULT_CURSOR_STYLES)
+        clear_cursor_render_cache()
+        cur_type = getattr(self._virtual_cursor, '_cursor_type', 'cursor')
+        self._virtual_cursor.apply_styles_map(self._cursor_styles, cur_type)
 
     def _on_defaults_reset(self):
         """设置面板重置默认 → 重置透明度 + 清除运行工具栏保存的位置"""
+        from core.constants import DEFAULT_CURSOR_STYLES
+        from scene.virtual_cursor_item import clear_cursor_render_cache
+        self._cursor_styles = dict(DEFAULT_CURSOR_STYLES)
+        clear_cursor_render_cache()
+        cur_type = getattr(self._virtual_cursor, '_cursor_type', 'cursor')
+        self._virtual_cursor.apply_styles_map(self._cursor_styles, cur_type)
         default_opacity = DEFAULT_TRANSPARENCY
         # 重置透明度
         self._apply_item_opacity(default_opacity)
@@ -672,23 +733,63 @@ class OverlayWindow(QGraphicsView):
         # 简单方式：关闭重新打开
         logger.info(f"Language changed to {lang}")
 
-    def _open_about(self):
-        """打开关于弹窗"""
-        if self._dlg_about and self._dlg_about.isVisible():
-            self._dlg_about.raise_()
-            self._dlg_about.activateWindow()
-            return
-        dialog = AboutDialog(self)
-        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_about'))
-        self._dlg_about = dialog
-        dialog.show()
+    # ── 最小化 / 恢复 ──
+
+    def minimize_to_taskbar(self):
+        """最小化到任务栏: 隐藏所有独立工具栏窗口 + 主窗口最小化"""
+        for w in (self._edit_toolbar, self._run_toolbar, self._virtual_keyboard):
+            if w and w.isVisible():
+                w.hide()
+        for attr in ('_dlg_profile', '_dlg_voice', '_dlg_hotkey'):
+            dlg = getattr(self, attr, None)
+            if dlg and dlg.isVisible():
+                dlg.hide()
+        self.showMinimized()
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.WindowStateChange:
+            # 从最小化恢复 → 重新显示当前模式的工具栏
+            if not (self.windowState() & Qt.WindowState.WindowMinimized):
+                if self._current_mode == 'edit':
+                    self._edit_toolbar.show()
+                else:
+                    self._run_toolbar.show()
+        super().changeEvent(event)
 
     # ── 事件处理 ──
+
+    def _force_taskbar_visible(self):
+        """强制让窗口在 Windows 任务栏显示 (透明 frameless 窗口默认会被识别为 layered, 不进任务栏)"""
+        import sys
+        if sys.platform != 'win32':
+            return
+        try:
+            import ctypes
+            GWL_EXSTYLE = -20
+            WS_EX_APPWINDOW = 0x00040000
+            WS_EX_TOOLWINDOW = 0x00000080
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOZORDER = 0x0004
+            SWP_FRAMECHANGED = 0x0020
+            SWP_NOACTIVATE = 0x0010
+            user32 = ctypes.windll.user32
+            hwnd = int(self.winId())
+            ex = user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE)
+            new_ex = (ex & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW
+            if new_ex != ex:
+                user32.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex)
+                user32.SetWindowPos(
+                    hwnd, 0, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+                    | SWP_FRAMECHANGED | SWP_NOACTIVATE)
+        except Exception as e:
+            logger.warning("Force taskbar visible failed: %s", e)
 
     def showEvent(self, event):
         super().showEvent(event)
         self._pt_manager.init_hwnd()
+        self._force_taskbar_visible()
         self._edit_toolbar.show()
         if self._current_mode == 'edit':
             self._smart_pt_timer.start()
@@ -730,7 +831,6 @@ class OverlayWindow(QGraphicsView):
         self._dlg_profile = None
         self._dlg_voice = None
         self._dlg_hotkey = None
-        self._dlg_about = None
         self._edit_toolbar.close()
         self._run_toolbar.close()
         self._virtual_keyboard.close()

@@ -10,14 +10,24 @@ TEGG Touch 蛋挞 (PyQt6) - hotkey_settings_dialog.py
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLineEdit, QLabel, QSlider, QPushButton, QWidget,
-    QScrollArea, QFrame, QApplication,
+    QScrollArea, QFrame, QApplication, QStackedWidget,
+    QComboBox, QColorDialog,
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal
-from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
+from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QPixmap
+
+import os
+import webbrowser
 
 from core.i18n import t, get_font, load_locale, get_lang
-from core.constants import DEFAULT_HOTKEYS, get_hotkey_labels
+from core.constants import (
+    DEFAULT_HOTKEYS, get_hotkey_labels, APP_VERSION, get_app_title, APP_DIR,
+    DEFAULT_CURSOR_STYLES, CURSOR_SCALE_OPTIONS, CURSOR_BASE_SIZE,
+)
 from core.config_manager import load_hotkeys, save_hotkeys
+from scene.virtual_cursor_item import render_cursor_pixmap, clear_cursor_render_cache
+
+_ABOUT_LAST_UPDATE = "2026.06.07"
 
 # ── 颜色 ──
 C_PM_BG = "#2D2D2D"
@@ -35,6 +45,7 @@ C_CAT_LABEL = "#888888"
 
 # 各热键字段的强调色
 HOTKEY_COLORS = {
+    'collapse':       '#9333EA',
     'voice':          '#10B981',
     'auto_center':    '#176F2C',
     'toggle_buttons': '#6B7280',
@@ -274,11 +285,18 @@ class HotkeySettingsDialog(QDialog):
     defaults_reset = pyqtSignal()   # 重置默认时发出，通知主窗口重置透明度和工具栏位置
     language_changed = pyqtSignal(str)
 
-    LEFT_W = 380
-    RIGHT_W = 500
+    SIDEBAR_W = 130
+    CONTENT_W = 400                                # 中间内容区 (快捷键/语言页)
+    LEFT_W = SIDEBAR_W + 10 + 1 + 10 + CONTENT_W   # = 551 (sidebar+spacing+divider+spacing+content)
     PADDING = 20
-    WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20
-    WIN_H = 980
+    WIN_W = 1200
+    WIN_H = 960
+    # 右侧 wrapper = 剩余宽度 (含 divider + spacing + palette)
+    RIGHT_PANEL_W = WIN_W - LEFT_W - 20 - PADDING * 2   # = 589
+    RIGHT_W = RIGHT_PANEL_W - 1 - 10                    # = 578 (palette 实际宽度)
+    # 关于页撑满: left_wrapper 占满 columns 内部 (sidebar 仍贴左, content 撑剩余)
+    WIDE_LEFT_W = WIN_W - PADDING * 2                                # = 1160
+    WIDE_CONTENT_W = WIDE_LEFT_W - SIDEBAR_W - 10 - 1 - 10           # = 1009
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -355,26 +373,36 @@ class HotkeySettingsDialog(QDialog):
         title_row.addWidget(close_btn)
         root.addLayout(title_row)
 
-        # 提示
-        tip = QLabel(t("hotkey.tip"))
-        tip.setFont(_make_font(fn, 14))
-        tip.setStyleSheet("color: #888; background: transparent;")
-        tip.setWordWrap(True)
-        root.addWidget(tip)
+        # title 行与下方 columns 之间的间距 (tip 已挪到右栏顶部)
+        root.addSpacing(12)
 
-        root.addSpacing(20)
-
-        # ── 双栏 ──
+        # ── 左 wrapper(固定) + 右 wrapper(可隐藏) + addStretch ──
+        # 左 wrapper 固定宽度, 保证 sidebar 永远在最左; 右 wrapper 在语言页时整体隐藏
         columns = QHBoxLayout()
         columns.setSpacing(0)
 
-        # ════ 左栏 ════
-        left = QVBoxLayout()
-        left.setSpacing(0)
-        left.setContentsMargins(0, 0, 0, 0)
+        # ════ 左侧 wrapper: sidebar | 分隔线 | stack ════
+        # 关于页时会被 _select_page 拉宽到 WIDE_LEFT_W
+        self._left_wrapper = QWidget()
+        self._left_wrapper.setFixedWidth(self.LEFT_W)
+        ll = QHBoxLayout(self._left_wrapper)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(0)
 
+        sidebar = self._build_sidebar(fn)
+        ll.addWidget(sidebar)
+        ll.addSpacing(10)
+
+        sb_divider = QFrame()
+        sb_divider.setFixedWidth(1)
+        sb_divider.setStyleSheet("background: #444;")
+        ll.addWidget(sb_divider)
+        ll.addSpacing(10)
+
+        # 中间内容 (Stacked)
         labels = get_hotkey_labels()
         descriptions = {
+            'collapse': t("hotkey.desc_collapse"),
             'voice': t("hotkey.desc_voice"),
             'auto_center': t("hotkey.desc_auto_center"),
             'toggle_buttons': t("hotkey.desc_toggle_buttons"),
@@ -387,126 +415,164 @@ class HotkeySettingsDialog(QDialog):
 
         self._key_edits = {}
 
+        self._stack = QStackedWidget()
+        self._stack.setFixedWidth(self.CONTENT_W)
+        self._stack.setStyleSheet("background: transparent;")
+
+        # 页 0: 快捷键设置
+        self._hotkey_page = self._build_hotkey_page(fn, labels, descriptions)
+        self._stack.addWidget(self._hotkey_page)
+
+        # 页 1: 光标配色
+        self._cursor_page = self._build_cursor_page(fn)
+        self._stack.addWidget(self._cursor_page)
+
+        # 页 2: 语言设置
+        self._language_page = self._build_language_page(fn)
+        self._stack.addWidget(self._language_page)
+
+        # 页 3: 关于蛋挞
+        self._about_page = self._build_about_page(fn)
+        self._stack.addWidget(self._about_page)
+
+        ll.addWidget(self._stack)
+
+        columns.addWidget(self._left_wrapper)
+        columns.addSpacing(20)
+
+        # ════ 右侧 wrapper: 分隔线 | (tip + 细线 + 键位面板) ════
+        # 语言/关于页时整体隐藏 → 两列布局
+        self._right_wrapper = QWidget()
+        self._right_wrapper.setFixedWidth(self.RIGHT_PANEL_W)
+        rl = QHBoxLayout(self._right_wrapper)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(0)
+
+        divider = QFrame()
+        divider.setFixedWidth(1)
+        divider.setStyleSheet("background: #444;")
+        rl.addWidget(divider)
+        rl.addSpacing(10)
+
+        # 右栏内部: tip + 细线 + 键位面板 (常驻顶部, 不随键位面板滚动)
+        right_inner = QVBoxLayout()
+        right_inner.setContentsMargins(0, 0, 0, 0)
+        right_inner.setSpacing(0)
+
+        tip = QLabel(t("hotkey.tip"))
+        tip.setFont(_make_font(fn, 14))
+        tip.setStyleSheet("color: #888; background: transparent;")
+        tip.setWordWrap(True)
+        tip.setContentsMargins(10, 0, 10, 0)
+        right_inner.addWidget(tip)
+        right_inner.addSpacing(8)
+
+        tip_sep = QFrame()
+        tip_sep.setFixedHeight(1)
+        tip_sep.setStyleSheet("background: #444;")
+        right_inner.addWidget(tip_sep)
+        right_inner.addSpacing(8)
+
+        self._right_palette = self._build_key_palette(fn)
+        right_inner.addWidget(self._right_palette, 1)
+
+        rl.addLayout(right_inner, 1)
+
+        columns.addWidget(self._right_wrapper)
+        columns.addStretch()   # 关键: right_wrapper 隐藏时余量在末尾, sidebar 不偏移
+
+        root.addLayout(columns, 1)
+
+        # 默认显示快捷键页
+        self._select_page(0)
+
+    # ── 侧边菜单 ──
+
+    def _build_sidebar(self, fn):
+        sb = QWidget()
+        sb.setFixedWidth(self.SIDEBAR_W)
+        sb.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(sb)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(6)
+
+        self._sidebar_btns = []
+        items = [
+            (t("hotkey.menu_hotkeys"), 0),
+            (t("hotkey.menu_cursor"), 1),
+            (t("hotkey.menu_language"), 2),
+            (t("hotkey.menu_about"), 3),
+        ]
+        for label_text, idx in items:
+            b = QPushButton(label_text)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFixedHeight(40)
+            b.setFont(_make_font(fn, 15, bold=True))
+            b.clicked.connect(lambda _, i=idx: self._select_page(i))
+            v.addWidget(b)
+            self._sidebar_btns.append(b)
+
+        v.addStretch()
+        return sb
+
+    def _select_page(self, idx):
+        self._stack.setCurrentIndex(idx)
+        # 高亮选中项
+        for i, b in enumerate(self._sidebar_btns):
+            selected = (i == idx)
+            bg = C_CYBER if selected else "transparent"
+            bg_h = C_CYBER_H if selected else C_GRAY_H
+            fg = "#FFF" if selected else "#CCC"
+            b.setStyleSheet(f"""
+                QPushButton {{
+                    background: {bg}; color: {fg};
+                    border: none; border-radius: 6px;
+                    text-align: left; padding: 0 12px;
+                }}
+                QPushButton:hover {{ background: {bg_h}; color: #FFF; }}
+            """)
+        # 仅快捷键页(0)显示右侧键位面板; 光标(1)/语言(2)/关于(3) 隐藏 right_wrapper → 两列
+        if hasattr(self, '_right_wrapper'):
+            self._right_wrapper.setVisible(idx == 0)
+        # 光标(1) 和 关于(3) 页拉宽 left_wrapper 和 stack, 让内容撑满
+        if hasattr(self, '_left_wrapper'):
+            if idx in (1, 3):
+                self._stack.setFixedWidth(self.WIDE_CONTENT_W)
+                self._left_wrapper.setFixedWidth(self.WIDE_LEFT_W)
+            else:
+                self._stack.setFixedWidth(self.CONTENT_W)
+                self._left_wrapper.setFixedWidth(self.LEFT_W)
+
+    # ── 快捷键页 ──
+
+    def _build_hotkey_page(self, fn, labels, descriptions):
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
         hotkey_fields = [
-            'voice', 'auto_center', 'toggle_buttons', 'soft_keyboard',
+            'collapse', 'voice', 'auto_center', 'toggle_buttons', 'soft_keyboard',
             'pt_on', 'pt_off', 'pt_block', 'stop',
         ]
 
-        # 语音识别字段
-        left.addLayout(self._build_hotkey_row(
-            fn, 'voice', labels, descriptions))
-        left.addSpacing(10)
-
-        # 自动回中字段 + 延迟滑块
-        left.addLayout(self._build_hotkey_row(
-            fn, 'auto_center', labels, descriptions))
-        left.addSpacing(4)
-        left.addLayout(self._build_delay_slider(
+        v.addLayout(self._build_hotkey_row(fn, 'collapse', labels, descriptions))
+        v.addSpacing(10)
+        v.addLayout(self._build_hotkey_row(fn, 'voice', labels, descriptions))
+        v.addSpacing(10)
+        v.addLayout(self._build_hotkey_row(fn, 'auto_center', labels, descriptions))
+        v.addSpacing(4)
+        v.addLayout(self._build_delay_slider(
             fn, t("hotkey.auto_center_delay"), HOTKEY_COLORS['auto_center']))
-        left.addSpacing(14)
+        v.addSpacing(14)
+        for field in hotkey_fields[3:]:
+            v.addLayout(self._build_hotkey_row(fn, field, labels, descriptions))
+            v.addSpacing(10)
 
-        # 其余热键字段 (skip voice + auto_center already added above)
-        for field in hotkey_fields[2:]:
-            left.addLayout(self._build_hotkey_row(fn, field, labels, descriptions))
-            left.addSpacing(10)
+        v.addStretch()
 
-        left.addSpacing(20)
-
-        # ── 分隔线 ──
-        lang_divider = QFrame()
-        lang_divider.setFixedHeight(1)
-        lang_divider.setStyleSheet("background: #444;")
-        left.addWidget(lang_divider)
-
-        left.addSpacing(20)
-
-        # ── 语言切换 ──
-        lang_row = QHBoxLayout()
-
-        _detect_icon_font()
-        lang_icon = QLabel("\uE774" if _ICON_FONT else "\U0001F310")
-        if _ICON_FONT:
-            lang_icon.setFont(_make_font(_ICON_FONT, 18))
-        else:
-            lang_icon.setFont(_make_font(fn, 18))
-        lang_icon.setStyleSheet("color: #CCC; background: transparent;")
-        lang_row.addWidget(lang_icon)
-        lang_row.addSpacing(6)
-
-        lang_lbl = QLabel("Language / 语言:")
-        lang_lbl.setFont(_make_font(fn, 16))
-        lang_lbl.setStyleSheet("color: #CCC; background: transparent;")
-        lang_row.addWidget(lang_lbl)
-        lang_row.addSpacing(12)
-
-        current_lang = get_lang()
-
-        self._lang_zh_btn = _LangBtn()
-        self._lang_zh_btn.setFixedHeight(36)
-        self._lang_zh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._lang_zh_btn.clicked.connect(lambda: self._set_lang("zh-CN"))
-        zh_lay = QHBoxLayout(self._lang_zh_btn)
-        zh_lay.setContentsMargins(10, 0, 10, 0)
-        zh_lay.setSpacing(4)
-        self._zh_icon_lbl = QLabel("\uE73E" if _ICON_FONT else "\u2713")
-        if _ICON_FONT:
-            self._zh_icon_lbl.setFont(_make_font(_ICON_FONT, 16))
-        else:
-            self._zh_icon_lbl.setFont(_make_font(fn, 16, bold=True))
-        self._zh_icon_lbl.setStyleSheet("color: #FFF; background: transparent;")
-        self._zh_icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        zh_lay.addWidget(self._zh_icon_lbl)
-        self._zh_text_lbl = QLabel("中文")
-        self._zh_text_lbl.setFont(_make_font(fn, 16, bold=True))
-        self._zh_text_lbl.setStyleSheet("color: #FFF; background: transparent;")
-        self._zh_text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        zh_lay.addWidget(self._zh_text_lbl)
-        lang_row.addWidget(self._lang_zh_btn)
-
-        lang_row.addSpacing(10)
-
-        self._lang_en_btn = _LangBtn()
-        self._lang_en_btn.setFixedHeight(36)
-        self._lang_en_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._lang_en_btn.clicked.connect(lambda: self._set_lang("en"))
-        en_lay = QHBoxLayout(self._lang_en_btn)
-        en_lay.setContentsMargins(10, 0, 10, 0)
-        en_lay.setSpacing(4)
-        self._en_icon_lbl = QLabel("\uE73E" if _ICON_FONT else "\u2713")
-        if _ICON_FONT:
-            self._en_icon_lbl.setFont(_make_font(_ICON_FONT, 16))
-        else:
-            self._en_icon_lbl.setFont(_make_font(fn, 16, bold=True))
-        self._en_icon_lbl.setStyleSheet("color: #FFF; background: transparent;")
-        self._en_icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        en_lay.addWidget(self._en_icon_lbl)
-        self._en_text_lbl = QLabel("English")
-        self._en_text_lbl.setFont(_make_font(fn, 16, bold=True))
-        self._en_text_lbl.setStyleSheet("color: #FFF; background: transparent;")
-        self._en_text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        en_lay.addWidget(self._en_text_lbl)
-        lang_row.addWidget(self._lang_en_btn)
-
-        self._selected_lang = current_lang
-        self._update_lang_buttons()
-
-        lang_row.addStretch()
-        left.addLayout(lang_row)
-
-        # ── 重启提示（中英双语，硬编码，不走 i18n）──
-        left.addSpacing(8)
-        restart_hint = QLabel(
-            "切换语言需要重启应用才能生效\n"
-            "Language change requires restart to take effect")
-        restart_hint.setFont(_make_font(fn, 13))
-        restart_hint.setStyleSheet("color: #888; background: transparent;")
-        restart_hint.setWordWrap(True)
-        restart_hint.setContentsMargins(26, 0, 0, 0)
-        left.addWidget(restart_hint)
-
-        left.addStretch()
-
-        # ── 底部按钮: Reset | Save ──
+        # 底部按钮: Reset | Save
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
@@ -538,28 +604,485 @@ class HotkeySettingsDialog(QDialog):
         save_btn.clicked.connect(self._on_save)
         btn_row.addWidget(save_btn)
 
-        left.addLayout(btn_row)
+        v.addLayout(btn_row)
+        return page
 
-        left_widget = QWidget()
-        left_widget.setLayout(left)
-        left_widget.setFixedWidth(self.LEFT_W)
-        left_widget.setStyleSheet("background: transparent;")
-        columns.addWidget(left_widget)
-        columns.addSpacing(20)
+    # ── 光标配色页 ──
 
-        # ── 分隔线 ──
-        divider = QFrame()
-        divider.setFixedWidth(1)
-        divider.setStyleSheet("background: #444;")
-        columns.addWidget(divider)
+    # 当前编辑中的 styles (保存按钮才写盘)
+    def _ensure_cursor_buf(self):
+        if not hasattr(self, '_cursor_buf'):
+            existing = (load_hotkeys() or {}).get('cursor_styles') or {}
+            # 默认值兜底
+            self._cursor_buf = {}
+            for ct in ('cursor', 'cursor_off', 'cursor_block'):
+                d = dict(DEFAULT_CURSOR_STYLES[ct])
+                d.update(existing.get(ct, {}))
+                self._cursor_buf[ct] = d
 
-        columns.addSpacing(10)
+    def _build_cursor_page(self, fn):
+        self._ensure_cursor_buf()
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
 
-        # ════ 右栏: 键位面板 ════
-        right = self._build_key_palette(fn)
-        columns.addWidget(right, 1)
+        tip = QLabel(t("hotkey.cursor_page_tip"))
+        tip.setFont(_make_font(fn, 13))
+        tip.setStyleSheet("color: #888; background: transparent;")
+        tip.setWordWrap(True)
+        v.addWidget(tip)
+        v.addSpacing(20)
 
-        root.addLayout(columns, 1)
+        # 三栏并列
+        cols = QHBoxLayout()
+        cols.setSpacing(24)
+
+        self._cursor_widgets = {}   # ct → {'preview': QLabel, 'fill_btn': ..., 'stroke_btn': ..., 'scale_combo': ...}
+
+        items = [
+            ('cursor',       t("hotkey.cursor_default")),
+            ('cursor_off',   t("hotkey.cursor_off_label")),
+            ('cursor_block', t("hotkey.cursor_block_label")),
+        ]
+        for ct, label_text in items:
+            cols.addWidget(self._build_cursor_column(fn, ct, label_text), 1)
+
+        v.addLayout(cols)
+        v.addStretch()
+
+        # 底部: 重置全部 + 保存
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        reset_btn = QPushButton(t("hotkey.cursor_reset_all"))
+        reset_btn.setFixedHeight(40)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setFont(_make_font(fn, 14, bold=True))
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 18px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        reset_btn.clicked.connect(self._on_cursor_reset_all)
+        bottom.addWidget(reset_btn)
+        bottom.addSpacing(10)
+        save_btn = QPushButton(t("hotkey.save"))
+        save_btn.setFixedHeight(40)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setFont(_make_font(fn, 14, bold=True))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CYBER}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 24px;
+            }}
+            QPushButton:hover {{ background: {C_CYBER_H}; }}
+        """)
+        save_btn.clicked.connect(self._on_save)
+        bottom.addWidget(save_btn)
+        v.addLayout(bottom)
+
+        return page
+
+    def _build_cursor_column(self, fn, ct: str, label_text: str):
+        col = QFrame()
+        col.setStyleSheet(
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+        cl = QVBoxLayout(col)
+        cl.setContentsMargins(20, 18, 20, 18)
+        cl.setSpacing(12)
+
+        # 标签
+        title = QLabel(label_text)
+        title.setFont(_make_font(fn, 15, bold=True))
+        title.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cl.addWidget(title)
+
+        # 预览 (160×160 容器, 居中显示当前 scale 下的实际尺寸)
+        preview = QLabel()
+        preview.setFixedSize(160, 160)
+        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview.setStyleSheet(
+            "background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 6px;")
+        cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        # 底色行
+        fill_row = self._build_color_row(fn, ct, 'fill', t("hotkey.cursor_fill"))
+        cl.addLayout(fill_row)
+
+        # 描边行
+        stroke_row = self._build_color_row(fn, ct, 'stroke', t("hotkey.cursor_stroke"))
+        cl.addLayout(stroke_row)
+
+        # 大小行: 标签 + 当前值 + 滑块 (参考延迟滑块样式)
+        scale_top = QHBoxLayout()
+        scale_lbl = QLabel(t("hotkey.cursor_scale"))
+        scale_lbl.setFont(_make_font(fn, 14))
+        scale_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        scale_top.addWidget(scale_lbl)
+        scale_top.addStretch()
+        cur_scale = float(self._cursor_buf[ct].get('scale', 1.0))
+        scale_value_lbl = QLabel(f"{int(round(cur_scale * 100))}%")
+        scale_value_lbl.setFont(_make_font(fn, 13, bold=True))
+        scale_value_lbl.setStyleSheet(f"color: {C_CYBER_H}; background: transparent; border: none;")
+        scale_value_lbl.setFixedWidth(50)
+        scale_value_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        scale_top.addWidget(scale_value_lbl)
+        cl.addLayout(scale_top)
+
+        scale_slider = QSlider(Qt.Orientation.Horizontal)
+        scale_slider.setRange(100, 400)          # 100% - 400%
+        scale_slider.setSingleStep(10)
+        scale_slider.setPageStep(50)
+        scale_slider.setValue(int(round(cur_scale * 100)))
+        scale_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{
+                background: #404040; height: 8px; border-radius: 4px;
+            }}
+            QSlider::sub-page:horizontal {{
+                background: {C_CYBER_H}; border-radius: 4px;
+            }}
+            QSlider::add-page:horizontal {{
+                background: #404040; border-radius: 4px;
+            }}
+            QSlider::handle:horizontal {{
+                background: #DDD; border: none;
+                width: 16px; height: 16px; margin: -4px 0; border-radius: 8px;
+            }}
+            QSlider::handle:horizontal:hover {{
+                background: {C_CYBER_H};
+            }}
+        """)
+        scale_slider.valueChanged.connect(
+            lambda v, c=ct: self._on_cursor_scale_changed(c, v))
+        cl.addWidget(scale_slider)
+
+        # 存引用 + 初始预览
+        self._cursor_widgets[ct] = {
+            'preview': preview, 'scale_slider': scale_slider,
+            'scale_value_lbl': scale_value_lbl,
+        }
+        self._refresh_cursor_preview(ct)
+        return col
+
+    def _build_color_row(self, fn, ct: str, key: str, label_text: str):
+        row = QHBoxLayout()
+        lbl = QLabel(label_text)
+        lbl.setFont(_make_font(fn, 14))
+        lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        row.addWidget(lbl)
+        row.addStretch()
+
+        # 色块按钮
+        btn = QPushButton()
+        btn.setFixedSize(96, 28)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cur_color = self._cursor_buf[ct].get(key, '#FFFFFF')
+        self._apply_color_btn_style(btn, cur_color)
+        btn.clicked.connect(lambda _, c=ct, k=key, b=btn: self._on_pick_color(c, k, b))
+        row.addWidget(btn)
+
+        # 存按钮引用便于 reset
+        if ct not in getattr(self, '_cursor_color_btns', {}):
+            if not hasattr(self, '_cursor_color_btns'):
+                self._cursor_color_btns = {}
+            self._cursor_color_btns[ct] = {}
+        self._cursor_color_btns[ct][key] = btn
+        return row
+
+    def _apply_color_btn_style(self, btn: QPushButton, color_hex: str):
+        btn.setText(color_hex.upper())
+        # 选个对比色文字: 暗色背景白字, 亮色背景黑字
+        c = QColor(color_hex)
+        # luminance
+        lum = 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()
+        fg = "#000" if lum > 140 else "#FFF"
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {color_hex}; color: {fg};
+                border: 1px solid #555; border-radius: 4px;
+                font-family: monospace; font-size: 12px;
+            }}
+            QPushButton:hover {{ border-color: #888; }}
+        """)
+
+    def _on_pick_color(self, ct: str, key: str, btn: QPushButton):
+        initial = QColor(self._cursor_buf[ct].get(key, '#FFFFFF'))
+        color = QColorDialog.getColor(
+            initial, self, t(f"hotkey.cursor_{key}"),
+            QColorDialog.ColorDialogOption.DontUseNativeDialog)
+        if not color.isValid():
+            return
+        hex_val = color.name(QColor.NameFormat.HexRgb).upper()  # #RRGGBB
+        self._cursor_buf[ct][key] = hex_val
+        self._apply_color_btn_style(btn, hex_val)
+        self._refresh_cursor_preview(ct)
+
+    def _on_cursor_scale_changed(self, ct: str, value: int):
+        # value 是 100-400 (百分比)
+        self._cursor_buf[ct]['scale'] = value / 100.0
+        widgets = self._cursor_widgets.get(ct, {})
+        lbl = widgets.get('scale_value_lbl')
+        if lbl:
+            lbl.setText(f"{value}%")
+        self._refresh_cursor_preview(ct)
+
+    def _refresh_cursor_preview(self, ct: str):
+        # 预览不缓存 (使用临时 base_size, 不污染主缓存)
+        from PyQt6.QtGui import QPixmap
+        style = self._cursor_buf[ct]
+        pm = render_cursor_pixmap(ct, style)
+        widgets = self._cursor_widgets.get(ct, {})
+        preview = widgets.get('preview')
+        if preview:
+            if pm and not pm.isNull():
+                preview.setPixmap(pm)
+            else:
+                preview.setText("(SVG 缺失)")
+                preview.setStyleSheet(
+                    "background: #1A1A1A; color: #888; "
+                    "border: 1px solid #2A2A2A; border-radius: 6px;")
+
+    def _on_cursor_reset_all(self):
+        self._cursor_buf = {ct: dict(DEFAULT_CURSOR_STYLES[ct])
+                            for ct in ('cursor', 'cursor_off', 'cursor_block')}
+        for ct, style in self._cursor_buf.items():
+            # 同步色块按钮 + 滑块 + 数值标签
+            for k in ('fill', 'stroke'):
+                btn = self._cursor_color_btns.get(ct, {}).get(k)
+                if btn:
+                    self._apply_color_btn_style(btn, style[k])
+            widgets = self._cursor_widgets.get(ct, {})
+            slider = widgets.get('scale_slider')
+            if slider:
+                slider.setValue(int(round(float(style.get('scale', 1.0)) * 100)))
+            self._refresh_cursor_preview(ct)
+
+    # ── 语言页 ──
+
+    def _build_language_page(self, fn):
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        _detect_icon_font()
+
+        # 标题行
+        title_row = QHBoxLayout()
+        lang_icon = QLabel("" if _ICON_FONT else "\U0001F310")
+        if _ICON_FONT:
+            lang_icon.setFont(_make_font(_ICON_FONT, 20))
+        else:
+            lang_icon.setFont(_make_font(fn, 20))
+        lang_icon.setStyleSheet("color: #CCC; background: transparent;")
+        title_row.addWidget(lang_icon)
+        title_row.addSpacing(8)
+        lang_lbl = QLabel("Language / 语言")
+        lang_lbl.setFont(_make_font(fn, 17, bold=True))
+        lang_lbl.setStyleSheet("color: #FFF; background: transparent;")
+        title_row.addWidget(lang_lbl)
+        title_row.addStretch()
+        v.addLayout(title_row)
+
+        v.addSpacing(20)
+
+        # 切换按钮行
+        btn_row = QHBoxLayout()
+
+        self._lang_zh_btn = _LangBtn()
+        self._lang_zh_btn.setFixedHeight(40)
+        self._lang_zh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._lang_zh_btn.clicked.connect(lambda: self._set_lang("zh-CN"))
+        zh_lay = QHBoxLayout(self._lang_zh_btn)
+        zh_lay.setContentsMargins(12, 0, 12, 0)
+        zh_lay.setSpacing(6)
+        self._zh_icon_lbl = QLabel("" if _ICON_FONT else "✓")
+        if _ICON_FONT:
+            self._zh_icon_lbl.setFont(_make_font(_ICON_FONT, 16))
+        else:
+            self._zh_icon_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._zh_icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        zh_lay.addWidget(self._zh_icon_lbl)
+        self._zh_text_lbl = QLabel("中文")
+        self._zh_text_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._zh_text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        zh_lay.addWidget(self._zh_text_lbl)
+        btn_row.addWidget(self._lang_zh_btn)
+
+        btn_row.addSpacing(10)
+
+        self._lang_en_btn = _LangBtn()
+        self._lang_en_btn.setFixedHeight(40)
+        self._lang_en_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._lang_en_btn.clicked.connect(lambda: self._set_lang("en"))
+        en_lay = QHBoxLayout(self._lang_en_btn)
+        en_lay.setContentsMargins(12, 0, 12, 0)
+        en_lay.setSpacing(6)
+        self._en_icon_lbl = QLabel("" if _ICON_FONT else "✓")
+        if _ICON_FONT:
+            self._en_icon_lbl.setFont(_make_font(_ICON_FONT, 16))
+        else:
+            self._en_icon_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._en_icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        en_lay.addWidget(self._en_icon_lbl)
+        self._en_text_lbl = QLabel("English")
+        self._en_text_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._en_text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        en_lay.addWidget(self._en_text_lbl)
+        btn_row.addWidget(self._lang_en_btn)
+
+        btn_row.addStretch()
+        v.addLayout(btn_row)
+
+        v.addSpacing(20)
+        restart_hint = QLabel(
+            "切换语言需要重启应用才能生效\n"
+            "Language change requires restart to take effect")
+        restart_hint.setFont(_make_font(fn, 13))
+        restart_hint.setStyleSheet("color: #888; background: transparent;")
+        restart_hint.setWordWrap(True)
+        v.addWidget(restart_hint)
+
+        v.addStretch()
+
+        self._selected_lang = get_lang()
+        self._update_lang_buttons()
+        return page
+
+    # ── 关于页 ──
+
+    def _build_about_page(self, fn):
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        # ── 应用图标 (居中, 100x100, 用 PNG 源缩放更清晰) ──
+        icon_path = os.path.join(APP_DIR, "assets", "icon_source.png")
+        if os.path.exists(icon_path):
+            icon_lbl = QLabel()
+            pm = QPixmap(icon_path)
+            icon_lbl.setPixmap(pm.scaled(
+                100, 100,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+            icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            icon_lbl.setStyleSheet("background: transparent;")
+            v.addWidget(icon_lbl)
+            v.addSpacing(8)
+
+        # ── 标题 + 版本 (居中) ──
+        title = QLabel(get_app_title())
+        title.setStyleSheet(
+            f"color: #F59E0B; font-size: 28px; font-weight: bold; "
+            f"font-family: '{fn}'; background: transparent;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(title)
+
+        v.addSpacing(6)
+
+        version = QLabel(f"v{APP_VERSION}")
+        version.setStyleSheet("color: #888; font-size: 14px; background: transparent;")
+        version.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(version)
+
+        v.addSpacing(2)
+
+        update = QLabel(t("about.last_update", date=_ABOUT_LAST_UPDATE))
+        update.setStyleSheet("color: #666; font-size: 12px; background: transparent;")
+        update.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(update)
+
+        v.addSpacing(16)
+
+        sep1 = QFrame()
+        sep1.setFixedHeight(1)
+        sep1.setStyleSheet("background: #444;")
+        v.addWidget(sep1)
+
+        v.addSpacing(16)
+
+        # ── 产品介绍 ──
+        desc = QLabel(t("about.description"))
+        desc.setStyleSheet(
+            f"color: #CCC; font-size: 16px; font-family: '{fn}'; background: transparent;")
+        desc.setWordWrap(True)
+        v.addWidget(desc)
+
+        v.addSpacing(16)
+
+        sep2 = QFrame()
+        sep2.setFixedHeight(1)
+        sep2.setStyleSheet("background: #444;")
+        v.addWidget(sep2)
+
+        v.addSpacing(24)
+
+        # ── QR 码 + 右侧文字 ──
+        qr_row = QHBoxLayout()
+        qr_row.setSpacing(24)
+
+        qr_path = os.path.join(APP_DIR, "assets", "wechat_qr.png")
+        qr_label = QLabel()
+        qr_size = 180
+        if os.path.exists(qr_path):
+            pixmap = QPixmap(qr_path)
+            qr_label.setPixmap(pixmap.scaled(
+                qr_size, qr_size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+            qr_label.setFixedSize(qr_size, qr_size)
+        else:
+            qr_label.setText(t("about.qr_missing"))
+            qr_label.setStyleSheet(
+                "background: #3A3A3A; color: #888; "
+                "border: 1px solid #555; border-radius: 8px; font-size: 14px;")
+            qr_label.setFixedSize(qr_size, qr_size)
+            qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        qr_row.addWidget(qr_label, 0, Qt.AlignmentFlag.AlignTop)
+
+        # 右侧 hint + email + github
+        right_col = QVBoxLayout()
+        right_col.setSpacing(10)
+        right_col.setContentsMargins(0, 4, 0, 0)
+
+        hint = QLabel(t("about.qr_hint"))
+        hint.setStyleSheet(
+            f"color: #AAA; font-size: 16px; font-family: '{fn}'; background: transparent;")
+        hint.setWordWrap(True)
+        right_col.addWidget(hint)
+
+        right_col.addSpacing(16)
+
+        email = QLabel(t("about.email"))
+        email.setStyleSheet(
+            f"color: #888; font-size: 16px; font-family: '{fn}'; background: transparent;")
+        email.setCursor(Qt.CursorShape.PointingHandCursor)
+        email.mousePressEvent = lambda e: webbrowser.open(
+            "mailto:life.is.like.a.boat@gmail.com")
+        right_col.addWidget(email)
+
+        github = QLabel(t("about.github"))
+        github.setStyleSheet(
+            f"color: #888; font-size: 16px; font-family: '{fn}'; background: transparent;")
+        github.setCursor(Qt.CursorShape.PointingHandCursor)
+        github.mousePressEvent = lambda e: webbrowser.open(
+            "https://github.com/TEGGTouch/TEGG-Touch/releases")
+        right_col.addWidget(github)
+
+        right_col.addStretch()
+        qr_row.addLayout(right_col, 1)
+
+        v.addLayout(qr_row)
+
+        v.addStretch()
+        return page
 
     # ── 热键行 ──
 
@@ -747,8 +1270,16 @@ class HotkeySettingsDialog(QDialog):
     # ── 语言切换 ──
 
     def _set_lang(self, lang):
+        if lang == self._selected_lang:
+            return
         self._selected_lang = lang
         self._update_lang_buttons()
+        # 立即保存到磁盘（合并到现有 hotkeys 配置）
+        current = load_hotkeys() or {}
+        current['language'] = lang
+        save_hotkeys(current)
+        load_locale(lang)
+        self.language_changed.emit(lang)
 
     def _update_lang_buttons(self):
         is_zh = self._selected_lang.startswith("zh")
@@ -790,13 +1321,14 @@ class HotkeySettingsDialog(QDialog):
         for field, edit in self._key_edits.items():
             data[field] = edit.get_value()
         data['auto_center_delay'] = self._ac_delay_slider.value()
+        # 语言已在切换时即时保存，这里只保留当前值
         data['language'] = self._selected_lang
+        # 光标配色 (用户在 cursor 页改动的 buffer)
+        if hasattr(self, '_cursor_buf'):
+            data['cursor_styles'] = self._cursor_buf
+            clear_cursor_render_cache()
 
         save_hotkeys(data)
-
-        if self._selected_lang != get_lang():
-            load_locale(self._selected_lang)
-            self.language_changed.emit(self._selected_lang)
 
         self.settings_saved.emit()
         self.accept()

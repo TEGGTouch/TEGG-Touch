@@ -46,6 +46,7 @@ class RunToolbar(QWidget):
     toggle_buttons_clicked = pyqtSignal()
     soft_keyboard_clicked = pyqtSignal()
     pt_clicked = pyqtSignal(str)
+    collapse_clicked = pyqtSignal()
     moved = pyqtSignal()  # 工具栏被拖拽移动时发出，用于同步软键盘位置
     position_changed = pyqtSignal(int, int)  # 拖拽结束后发出 (x, y)，用于持久化
 
@@ -83,6 +84,7 @@ class RunToolbar(QWidget):
         except Exception:
             pass
 
+        _K_COLLAPSE = hotkeys.get('collapse', 'F4').upper()
         _K_VOICE = hotkeys.get('voice', 'F5').upper()
         _K_AC = hotkeys.get('auto_center', 'F6').upper()
         _K_VIS = hotkeys.get('toggle_buttons', 'F7').upper()
@@ -150,6 +152,16 @@ class RunToolbar(QWidget):
 
         # 分隔线
         row.addWidget(_VSep())
+
+        # 收起 [F4] (折叠成悬浮方块)
+        collapse_btn = _IconTextBtn(
+            "", "⤓",
+            t("run.collapse", key=_K_COLLAPSE),
+            C_GRAY, C_GRAY_H)
+        collapse_btn.setToolTip(t("tooltip.collapse"))
+        self._install_tip(collapse_btn)
+        collapse_btn.clicked.connect(self.collapse_clicked.emit)
+        row.addWidget(collapse_btn)
 
         # 语音 [F5] (绿/灰 toggle, 默认灰色-关闭)
         self._voice_btn = _IconTextBtn(
@@ -385,3 +397,90 @@ class RunToolbar(QWidget):
             self.position_changed.emit(pos.x(), pos.y())
         self._drag_pos = None
         super().mouseReleaseEvent(event)
+
+
+class CollapsedBubble(QWidget):
+    """折叠后的悬浮方块 — 显示"蛋挞"，可拖动，双击展开。"""
+
+    expand_requested = pyqtSignal()
+
+    SIZE = 56
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setToolTip("双击或 F10 展开工具栏")
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        frame = QFrame(self)
+        frame.setObjectName("bubble")
+        frame.setStyleSheet(f"""
+            QFrame#bubble {{
+                background: {C_PANEL};
+                border-radius: 10px;
+                border: 1px solid #444;
+            }}
+        """)
+        outer.addWidget(frame)
+
+        inner = QHBoxLayout(frame)
+        inner.setContentsMargins(0, 0, 0, 0)
+        lbl = QLabel("蛋挞")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setFont(_make_font(get_font(), 14, bold=True))
+        lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
+        inner.addWidget(lbl)
+
+        self._drag_pos = None
+        self._moved = False
+
+    def show_at(self, x, y):
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import QRect
+        _ps = QApplication.primaryScreen()
+        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
+        x = max(screen.left(), min(x, screen.right() - self.width() + 1))
+        y = max(screen.top(), min(y, screen.bottom() - self.height() + 1))
+        self.move(x, y)
+        self.show()
+        self.raise_()
+
+    def mousePressEvent(self, event):
+        self.raise_()
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
+            self._moved = False
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos and event.buttons() & Qt.MouseButton.LeftButton:
+            from PyQt6.QtWidgets import QApplication
+            from PyQt6.QtCore import QRect
+            new_pos = event.globalPosition().toPoint() - self._drag_pos
+            _ps = QApplication.primaryScreen()
+            screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
+            x = max(screen.left(), min(new_pos.x(), screen.right() - self.width() + 1))
+            y = max(screen.top(), min(new_pos.y(), screen.bottom() - self.height() + 1))
+            self.move(x, y)
+            self._moved = True
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.expand_requested.emit()
+        super().mouseDoubleClickEvent(event)

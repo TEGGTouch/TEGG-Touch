@@ -18,7 +18,7 @@ from core.constants import APP_VERSION, get_app_title, APP_DIR
 from views.edit_toolbar import _detect_icon_font, _make_font, C_CLOSE, C_CLOSE_H
 
 
-_LAST_UPDATE = "2026.02.28"
+_LAST_UPDATE = "2026.03.08"
 
 
 class AboutDialog(QDialog):

@@ -696,6 +696,9 @@ def load_hotkeys() -> dict:
         # 保留 language 字段（不在 DEFAULT_HOTKEYS 中）
         if 'language' in data:
             result['language'] = data['language']
+        # 保留 cursor_styles 字段
+        if 'cursor_styles' in data:
+            result['cursor_styles'] = data['cursor_styles']
         logger.info(f"快捷键配置加载成功: {HOTKEYS_FILE}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"快捷键配置格式错误: {e}")

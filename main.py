@@ -51,6 +51,7 @@ except ImportError:
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QIcon
 from views.overlay_window import OverlayWindow
 
 
@@ -77,9 +78,23 @@ def main():
         # matching the original Tkinter app's coordinate system.
         os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
 
+        # Windows 任务栏图标分组: 不把 python.exe 当作图标来源
+        if sys.platform == 'win32':
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                    'TEGGTouch.Egg.Touch.1')
+            except Exception:
+                pass
+
         app = QApplication(sys.argv)
         app.setApplicationName("TEGG Touch")
-        app.setApplicationVersion("0.2.0")
+        app.setApplicationVersion("0.2.1")
+
+        # 应用级图标 (任务栏 / Alt+Tab / 标题栏)
+        _icon_path = os.path.join(os.getcwd(), "assets", "icon.ico")
+        if os.path.exists(_icon_path):
+            app.setWindowIcon(QIcon(_icon_path))
 
         window = OverlayWindow()
         window.show()
