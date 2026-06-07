@@ -35,11 +35,16 @@ class HoverStateMachine(QObject):
 
     _TICK_INTERVAL = 16  # ~60fps
 
-    def __init__(self, hover_delay_ms: int = 200, release_delay_ms: int = 0):
+    def __init__(self, hover_delay_ms: int = 200, release_delay_ms: int = 0,
+                 mode: str = 'trigger'):
         super().__init__()
         self._state = HoverState.IDLE
         self._hover_delay = hover_delay_ms
         self._release_delay = release_delay_ms
+        self._mode = mode   # 'trigger' (按住型) | 'toggle' (开关型)
+        # toggle 模式: 必须真正离开过按钮再回来才允许 toggle off
+        # (防边缘抖动: 轮询光标坐标时边缘可能瞬间判定为离开+回来)
+        self._toggle_has_left = False
 
         # 充能定时器
         self._charge_timer = QTimer(self)
@@ -63,6 +68,40 @@ class HoverStateMachine(QObject):
 
     def enter(self):
         """鼠标进入 hover 区域"""
+        # toggle 模式: 必须先真正 leave 过再 enter 才能 toggle off
+        if self._mode == 'toggle':
+            if self._state == HoverState.RELEASING:
+                # 关闭倒计时中, 忽略 enter (含抖动 leave→enter)
+                return
+            if self._state == HoverState.ACTIVE:
+                if not self._toggle_has_left:
+                    # 边缘抖动等场景: 还没真正离开过, 忽略此次 enter
+                    return
+                # 真正再次进入 → 走关闭流程 (按 release_delay 决定立即/延迟松开)
+                self._toggle_has_left = False
+                if self._release_delay <= 0:
+                    self._state = HoverState.IDLE
+                    self.deactivated.emit()
+                else:
+                    self._state = HoverState.RELEASING
+                    self._release_elapsed = 0
+                    self._release_timer.start()
+                return
+            if self._state == HoverState.CHARGING:
+                # 充能中再次 enter (理论上不会发生, 抖动也只会 leave→enter→leave→enter)
+                return
+            # IDLE → 走充能 / 激活
+            self._toggle_has_left = False
+            if self._hover_delay <= 0:
+                self._state = HoverState.ACTIVE
+                self.activated.emit()
+            else:
+                self._state = HoverState.CHARGING
+                self._charge_elapsed = 0
+                self._charge_timer.start()
+            return
+
+        # trigger 模式: 原有逻辑
         if self._state == HoverState.RELEASING:
             # 重入：取消释放倒计时，直接恢复 ACTIVE
             self._release_timer.stop()
@@ -85,6 +124,20 @@ class HoverStateMachine(QObject):
 
     def leave(self):
         """鼠标离开 hover 区域"""
+        # toggle 模式: 充能中离开 → 取消; ACTIVE 离开 → 按键持续触发, 但标记可被下次 enter 关闭
+        # RELEASING 离开 → 继续倒计时关闭, 忽略
+        if self._mode == 'toggle':
+            if self._state == HoverState.CHARGING:
+                self._charge_timer.stop()
+                self._state = HoverState.IDLE
+                self.charge_progress.emit(0.0)
+                self._toggle_has_left = False
+                return
+            if self._state == HoverState.ACTIVE:
+                self._toggle_has_left = True
+            return
+
+        # trigger 模式: 原有逻辑
         if self._state == HoverState.CHARGING:
             # 充能中离开 → 取消充能，回到 IDLE
             self._charge_timer.stop()
@@ -113,11 +166,20 @@ class HoverStateMachine(QObject):
         self._state = HoverState.IDLE
         self._charge_elapsed = 0
         self._release_elapsed = 0
+        self._toggle_has_left = False
         if was_active:
             self.deactivated.emit()
 
     def update_delays(self, hover_delay_ms: int, release_delay_ms: int):
         """动态更新延迟配置"""
+        self._hover_delay = hover_delay_ms
+        self._release_delay = release_delay_ms
+
+    def update_config(self, mode: str, hover_delay_ms: int, release_delay_ms: int):
+        """切换模式 + 更新延迟。切换模式时强制 reset 到 IDLE 避免漏松按键。"""
+        if mode != self._mode:
+            self.reset()
+            self._mode = mode
         self._hover_delay = hover_delay_ms
         self._release_delay = release_delay_ms
 

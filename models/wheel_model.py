@@ -14,6 +14,10 @@ class WheelSectorData:
     hover: str = ""
     hover_delay: int = 200
     hover_release_delay: int = 0
+    hover_mode: str = "trigger"
+    hover_toggle: str = ""
+    hover_toggle_delay: int = 200
+    hover_toggle_release_delay: int = 0
     lclick: str = ""
     rclick: str = ""
     mclick: str = ""
@@ -38,6 +42,10 @@ class WheelRingData:
     hover: str = ""
     hover_delay: int = 200
     hover_release_delay: int = 0
+    hover_mode: str = "trigger"
+    hover_toggle: str = ""
+    hover_toggle_delay: int = 200
+    hover_toggle_release_delay: int = 0
     lclick: str = ""
     rclick: str = ""
     mclick: str = ""

@@ -362,48 +362,38 @@ class ButtonEditorDialog(QDialog):
         columns = QHBoxLayout()
         columns.setSpacing(0)
 
-        # ════ 左栏: 表单 ════
-        left = QVBoxLayout()
-        left.setSpacing(0)
-        left.setContentsMargins(0, 0, 0, 0)
-
+        # ════ 左栏: 上部 ScrollArea + 底部固定按钮 ════
         self._fields = {}
+        # 当前悬停模式 (读自 data, 兼容老档默认 'trigger')
+        self._hover_mode = getattr(self.data, 'hover_mode', 'trigger') or 'trigger'
 
-        # -- Block 1: 名称 (Entry, 无色点) --
-        left.addLayout(self._build_field_row(
+        # ── 滚动内容 ──
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        sc_lay = QVBoxLayout(scroll_content)
+        sc_lay.setSpacing(0)
+        sc_lay.setContentsMargins(0, 0, 8, 0)   # 右侧留 8px 给滚动条
+
+        # 名称
+        sc_lay.addLayout(self._build_field_row(
             fn, 'name', t("editor.name"), self.data.name, is_tag=False, show_dot=False))
 
-        # ── 分割线: 名称 / 悬停 ──
-        left.addSpacing(20)
-        sep1 = QFrame()
-        sep1.setFixedHeight(1)
-        sep1.setStyleSheet("background: #444;")
-        left.addWidget(sep1)
-        left.addSpacing(20)
+        # 分割线: 名称 / 悬停
+        sc_lay.addSpacing(20)
+        sep1 = QFrame(); sep1.setFixedHeight(1); sep1.setStyleSheet("background: #444;")
+        sc_lay.addWidget(sep1)
+        sc_lay.addSpacing(16)
 
-        # -- Block 2: Hover (TagInput) --
-        left.addLayout(self._build_field_row(
-            fn, 'hover', t("editor.hover"), self.data.hover, is_tag=True))
-        left.addSpacing(14)
+        # 悬停区块 (切换器 + 说明 + 字段 Stack)
+        sc_lay.addLayout(self._build_hover_block(fn))
 
-        # -- 延迟滑块: hover_delay --
-        left.addLayout(self._build_delay_slider(
-            fn, t("editor.hover_delay"), self.data.hover_delay, 'hover_delay'))
-        left.addSpacing(14)
+        # 分割线: 悬停 / 鼠标键位
+        sc_lay.addSpacing(20)
+        sep2 = QFrame(); sep2.setFixedHeight(1); sep2.setStyleSheet("background: #444;")
+        sc_lay.addWidget(sep2)
+        sc_lay.addSpacing(20)
 
-        # -- 延迟滑块: hover_release_delay --
-        left.addLayout(self._build_delay_slider(
-            fn, t("editor.hover_release_delay"), self.data.hover_release_delay, 'release_delay'))
-
-        # ── 分割线: 延迟 / 鼠标键位 ──
-        left.addSpacing(20)
-        sep2 = QFrame()
-        sep2.setFixedHeight(1)
-        sep2.setStyleSheet("background: #444;")
-        left.addWidget(sep2)
-        left.addSpacing(20)
-
-        # -- Block 3: 鼠标键位 (7 fields, all TagInput) --
+        # 鼠标键位
         mouse_fields = [
             ('lclick', t("editor.lclick")),
             ('rclick', t("editor.rclick")),
@@ -414,18 +404,48 @@ class ButtonEditorDialog(QDialog):
             ('wheeldown', t("editor.wheeldown")),
         ]
         for i, (field, label) in enumerate(mouse_fields):
-            left.addLayout(self._build_field_row(
+            sc_lay.addLayout(self._build_field_row(
                 fn, field, label, getattr(self.data, field, ''), is_tag=True))
             if i < len(mouse_fields) - 1:
-                left.addSpacing(8)
+                sc_lay.addSpacing(8)
 
-        left.addStretch()
+        sc_lay.addStretch()
 
-        # -- 底部按钮 --
-        left.addLayout(self._build_bottom_buttons(fn))
+        # ScrollArea
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("""
+            QScrollArea { background: transparent; border: none; }
+            QScrollBar:vertical {
+                background: transparent; width: 8px; border: none;
+            }
+            QScrollBar::handle:vertical {
+                background: #404040; border-radius: 4px; min-height: 30px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: transparent;
+            }
+        """)
+        scroll.setWidget(scroll_content)
+
+        # 左栏外层: scroll (拉伸) + 底部分隔线 + 底部按钮 (贴底)
+        left_outer = QVBoxLayout()
+        left_outer.setSpacing(0)
+        left_outer.setContentsMargins(0, 0, 0, 0)
+        left_outer.addWidget(scroll, 1)
+        left_outer.addSpacing(10)
+        bottom_sep = QFrame()
+        bottom_sep.setFixedHeight(1)
+        bottom_sep.setStyleSheet("background: #444;")
+        left_outer.addWidget(bottom_sep)
+        left_outer.addSpacing(12)
+        left_outer.addLayout(self._build_bottom_buttons(fn))
 
         left_widget = QWidget()
-        left_widget.setLayout(left)
+        left_widget.setLayout(left_outer)
         left_widget.setFixedWidth(self.LEFT_W)
         left_widget.setStyleSheet("background: transparent;")
         columns.addWidget(left_widget)
@@ -444,6 +464,117 @@ class ButtonEditorDialog(QDialog):
         columns.addWidget(right, 1)
 
         root.addLayout(columns, 1)
+
+    # ── 悬停区块 (切换器 + 说明 + 字段 Stack) ─────────────────
+
+    def _build_hover_block(self, fn):
+        block = QVBoxLayout()
+        block.setSpacing(0)
+        block.setContentsMargins(0, 0, 0, 0)
+
+        # 切换器: [悬停触发] [悬停开关]
+        sw_row = QHBoxLayout()
+        sw_row.setSpacing(8)
+        self._mode_trigger_btn = QPushButton(t("editor.hover_mode_trigger"))
+        self._mode_trigger_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mode_trigger_btn.setFixedHeight(36)
+        self._mode_trigger_btn.setFont(_make_font(fn, 14, bold=True))
+        self._mode_trigger_btn.clicked.connect(lambda: self._set_hover_mode('trigger'))
+        sw_row.addWidget(self._mode_trigger_btn, 1)
+
+        self._mode_toggle_btn = QPushButton(t("editor.hover_mode_toggle"))
+        self._mode_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mode_toggle_btn.setFixedHeight(36)
+        self._mode_toggle_btn.setFont(_make_font(fn, 14, bold=True))
+        self._mode_toggle_btn.clicked.connect(lambda: self._set_hover_mode('toggle'))
+        sw_row.addWidget(self._mode_toggle_btn, 1)
+        block.addLayout(sw_row)
+
+        block.addSpacing(10)
+
+        # 说明文字 (根据模式动态)
+        self._hover_desc_lbl = QLabel("")
+        self._hover_desc_lbl.setFont(_make_font(fn, 13))
+        self._hover_desc_lbl.setStyleSheet("color: #888; background: transparent;")
+        self._hover_desc_lbl.setWordWrap(True)
+        block.addWidget(self._hover_desc_lbl)
+
+        block.addSpacing(14)
+
+        # 字段 Stack
+        self._hover_stack = QStackedWidget()
+        self._hover_stack.setStyleSheet("background: transparent;")
+
+        # 页 0: 触发模式 = hover key + hover_delay + hover_release_delay
+        trigger_page = QWidget()
+        trigger_page.setStyleSheet("background: transparent;")
+        tv = QVBoxLayout(trigger_page)
+        tv.setContentsMargins(0, 0, 0, 0)
+        tv.setSpacing(0)
+        tv.addLayout(self._build_field_row(
+            fn, 'hover', t("editor.hover"), self.data.hover, is_tag=True))
+        tv.addSpacing(14)
+        tv.addLayout(self._build_delay_slider(
+            fn, t("editor.hover_delay"), self.data.hover_delay, 'hover_delay'))
+        tv.addSpacing(14)
+        tv.addLayout(self._build_delay_slider(
+            fn, t("editor.hover_release_delay"),
+            self.data.hover_release_delay, 'release_delay'))
+        self._hover_stack.addWidget(trigger_page)
+
+        # 页 1: 开关模式 = hover_toggle + 开启延迟 + 关闭延迟
+        toggle_page = QWidget()
+        toggle_page.setStyleSheet("background: transparent;")
+        gv = QVBoxLayout(toggle_page)
+        gv.setContentsMargins(0, 0, 0, 0)
+        gv.setSpacing(0)
+        gv.addLayout(self._build_field_row(
+            fn, 'hover_toggle', t("editor.hover_toggle_label"),
+            getattr(self.data, 'hover_toggle', ''), is_tag=True))
+        gv.addSpacing(14)
+        gv.addLayout(self._build_delay_slider(
+            fn, t("editor.hover_toggle_delay"),
+            getattr(self.data, 'hover_toggle_delay', 200), 'hover_toggle_delay'))
+        gv.addSpacing(14)
+        gv.addLayout(self._build_delay_slider(
+            fn, t("editor.hover_toggle_release_delay"),
+            getattr(self.data, 'hover_toggle_release_delay', 0),
+            'hover_toggle_release_delay'))
+        self._hover_stack.addWidget(toggle_page)
+
+        block.addWidget(self._hover_stack)
+
+        # 初始化状态
+        self._set_hover_mode(self._hover_mode, init=True)
+        return block
+
+    def _set_hover_mode(self, mode: str, init: bool = False):
+        self._hover_mode = mode
+        idx = 0 if mode == 'trigger' else 1
+        self._hover_stack.setCurrentIndex(idx)
+        # 说明文字
+        self._hover_desc_lbl.setText(
+            t("editor.hover_trigger_desc") if mode == 'trigger'
+            else t("editor.hover_toggle_desc"))
+        # 高亮按钮
+        sel_bg, sel_fg = C_CYBER, "#FFF"
+        unsel_bg, unsel_fg = C_GRAY, "#CCC"
+        for btn, btn_mode in (
+                (self._mode_trigger_btn, 'trigger'),
+                (self._mode_toggle_btn, 'toggle')):
+            selected = (btn_mode == mode)
+            bg = sel_bg if selected else unsel_bg
+            fg = sel_fg if selected else unsel_fg
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {bg}; color: {fg};
+                    border: none; border-radius: 6px;
+                }}
+                QPushButton:hover {{
+                    background: {C_CYBER_H if selected else C_GRAY_H};
+                    color: #FFF;
+                }}
+            """)
 
     # ── 表单行构建 ────────────────────────────────────────────
 
@@ -569,9 +700,15 @@ class ButtonEditorDialog(QDialog):
         if key == 'hover_delay':
             self._hover_delay_slider = slider
             self._hover_delay_entry = entry
-        else:
+        elif key == 'release_delay':
             self._release_delay_slider = slider
             self._release_delay_entry = entry
+        elif key == 'hover_toggle_delay':
+            self._hover_toggle_delay_slider = slider
+            self._hover_toggle_delay_entry = entry
+        elif key == 'hover_toggle_release_delay':
+            self._hover_toggle_release_delay_slider = slider
+            self._hover_toggle_release_delay_entry = entry
 
         return col
 
@@ -729,6 +866,7 @@ class ButtonEditorDialog(QDialog):
             return w.get_value() if isinstance(w, TagInput) else getattr(self.data, field_name, '')
 
         self.data.hover = _read_tag('hover')
+        self.data.hover_toggle = _read_tag('hover_toggle')
         self.data.lclick = _read_tag('lclick')
         self.data.rclick = _read_tag('rclick')
         self.data.mclick = _read_tag('mclick')
@@ -736,6 +874,9 @@ class ButtonEditorDialog(QDialog):
         self.data.xbutton2 = _read_tag('xbutton2')
         self.data.wheelup = _read_tag('wheelup')
         self.data.wheeldown = _read_tag('wheeldown')
+
+        # 模式
+        self.data.hover_mode = self._hover_mode
 
         # 延迟 — 从 entry 读取，允许超过 slider 上限 1000
         try:
@@ -746,11 +887,28 @@ class ButtonEditorDialog(QDialog):
             self.data.hover_release_delay = max(0, int(self._release_delay_entry.text()))
         except ValueError:
             self.data.hover_release_delay = self._release_delay_slider.value()
+        try:
+            self.data.hover_toggle_delay = max(
+                0, int(self._hover_toggle_delay_entry.text()))
+        except ValueError:
+            self.data.hover_toggle_delay = self._hover_toggle_delay_slider.value()
+        try:
+            self.data.hover_toggle_release_delay = max(
+                0, int(self._hover_toggle_release_delay_entry.text()))
+        except ValueError:
+            self.data.hover_toggle_release_delay = (
+                self._hover_toggle_release_delay_slider.value())
 
-        # 更新状态机
+        # 更新状态机 (按当前 mode 选 delay)
         if hasattr(self._item, '_hover_sm'):
-            self._item._hover_sm.update_delays(
-                self.data.hover_delay, self.data.hover_release_delay)
+            if self.data.hover_mode == 'toggle':
+                _active_delay = self.data.hover_toggle_delay
+                _release_delay = self.data.hover_toggle_release_delay
+            else:
+                _active_delay = self.data.hover_delay
+                _release_delay = self.data.hover_release_delay
+            self._item._hover_sm.update_config(
+                self.data.hover_mode, _active_delay, _release_delay)
 
         self._item.update()
         self.saved.emit(self.data)

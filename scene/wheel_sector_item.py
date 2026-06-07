@@ -81,8 +81,13 @@ class WheelSectorItem(QGraphicsObject):
         # 编辑模式持久化光标（不依赖 hover enter/leave）
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
-        # 悬停状态机
-        self._hover_sm = HoverStateMachine(data.hover_delay, data.hover_release_delay)
+        # 悬停状态机 — 按 hover_mode 选 delay 字段
+        _is_toggle = getattr(data, 'hover_mode', 'trigger') == 'toggle'
+        _hd = data.hover_toggle_delay if _is_toggle else data.hover_delay
+        _rd = (getattr(data, 'hover_toggle_release_delay', 0) if _is_toggle
+               else data.hover_release_delay)
+        self._hover_sm = HoverStateMachine(
+            _hd, _rd, mode=getattr(data, 'hover_mode', 'trigger'))
         self._hover_sm.activated.connect(self._on_hover_activated)
         self._hover_sm.deactivated.connect(self._on_hover_deactivated)
         self._hover_sm.charge_progress.connect(self._on_charge_progress)
@@ -288,8 +293,12 @@ class WheelSectorItem(QGraphicsObject):
             scene = self.scene()
             if scene:
                 scene.show_tooltip(build_edit_tooltip(self.data), event.scenePos())
-        elif self._mode == 'run' and self.data.hover:
-            self._hover_sm.enter()
+        elif self._mode == 'run':
+            _key = (self.data.hover_toggle
+                    if getattr(self.data, 'hover_mode', 'trigger') == 'toggle'
+                    else self.data.hover)
+            if _key:
+                self._hover_sm.enter()
         super().hoverEnterEvent(event)
 
     def hoverMoveEvent(self, event):

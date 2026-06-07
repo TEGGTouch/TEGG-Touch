@@ -30,9 +30,16 @@ class ButtonData:
     xbutton1: str = ""
     xbutton2: str = ""
 
-    # 延迟配置
+    # 延迟配置 (悬停触发模式)
     hover_delay: int = 200         # ms, 0 = 立即触发
     hover_release_delay: int = 0   # ms, 0 = 立即释放
+
+    # 悬停模式: 'trigger' (按住型, 离开即松) | 'toggle' (开关型, 再次 hover 才松)
+    hover_mode: str = "trigger"
+    # 悬停开关模式独立字段 (与 hover/hover_delay 互不覆盖)
+    hover_toggle: str = ""
+    hover_toggle_delay: int = 200          # 开启时触发延迟
+    hover_toggle_release_delay: int = 0    # 关闭时触发延迟 (第二次 hover 到松开)
 
     def to_dict(self) -> dict:
         """序列化为 JSON dict（与旧格式完全兼容）"""

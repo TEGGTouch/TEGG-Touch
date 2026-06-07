@@ -132,8 +132,13 @@ class TouchButtonItem(QGraphicsObject):
         self._resize_handle = ResizeHandleItem(self)
         self._update_handle_pos()
 
-        # 悬停状态机
-        self._hover_sm = HoverStateMachine(data.hover_delay, data.hover_release_delay)
+        # 悬停状态机 — 按 hover_mode 选 delay 字段
+        _is_toggle = getattr(data, 'hover_mode', 'trigger') == 'toggle'
+        _hd = data.hover_toggle_delay if _is_toggle else data.hover_delay
+        _rd = (getattr(data, 'hover_toggle_release_delay', 0) if _is_toggle
+               else data.hover_release_delay)
+        self._hover_sm = HoverStateMachine(
+            _hd, _rd, mode=getattr(data, 'hover_mode', 'trigger'))
         self._hover_sm.activated.connect(self._on_hover_activated)
         self._hover_sm.deactivated.connect(self._on_hover_deactivated)
         self._hover_sm.charge_progress.connect(self._on_charge_progress)
@@ -211,6 +216,9 @@ class TouchButtonItem(QGraphicsObject):
         elif self._visual_state != 'normal':
             # 运行时有状态：显示键值
             key_field = STATE_TO_KEY.get(self._visual_state)
+            # hover 状态: 按 hover_mode 选 hover / hover_toggle 字段
+            if key_field == 'hover' and getattr(self.data, 'hover_mode', 'trigger') == 'toggle':
+                key_field = 'hover_toggle'
             key_val = getattr(self.data, key_field, '') if key_field else ''
             if key_val:
                 display_text = key_val if len(key_val) <= 3 else key_val[:2] + '..'
@@ -357,8 +365,12 @@ class TouchButtonItem(QGraphicsObject):
                 cx = screen.x() + screen.width() // 2
                 cy = screen.y() + screen.height() // 2
                 ctypes.windll.user32.SetCursorPos(cx, cy)
-            elif self.data.hover:
-                self._hover_sm.enter()
+            else:
+                _key = (self.data.hover_toggle
+                        if getattr(self.data, 'hover_mode', 'trigger') == 'toggle'
+                        else self.data.hover)
+                if _key:
+                    self._hover_sm.enter()
         super().hoverEnterEvent(event)
 
     def hoverMoveEvent(self, event):

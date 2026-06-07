@@ -65,6 +65,7 @@ class RunController(QObject):
     cursor_on_ui = pyqtSignal(bool)         # 每帧: 光标是否在 UI 元素上
     auto_center_progress = pyqtSignal(float, float, float)  # progress, x, y
     voice_command_triggered = pyqtSignal(str, str, str)  # phrase, keys, action
+    request_toggle_collapse = pyqtSignal()  # F10: 折叠/展开运行工具栏
 
     def __init__(self, scene, window):
         super().__init__()
@@ -258,9 +259,13 @@ class RunController(QObject):
                 if hasattr(prev_item, '_hover_sm'):
                     prev_item._hover_sm.leave()
                 if hasattr(prev_item, 'set_visual_state'):
-                    # RELEASING 时也设 normal — 蓝色充能条在深色背景上递减可见
-                    # （原版: 光标离开后 target_state='normal', charge_bar 画在深色背景上）
-                    prev_item.set_visual_state('normal')
+                    # toggle 模式下 ACTIVE 状态: 按键持续按住, 视觉保持 hover 蓝
+                    # 其他情况(trigger 模式 leave 后立即/延迟松开): 设 normal
+                    if (hasattr(prev_item, '_hover_sm')
+                            and prev_item._hover_sm.is_active):
+                        prev_item.set_visual_state('hover')
+                    else:
+                        prev_item.set_visual_state('normal')
 
             # 进入新 item
             if active_item is not None:
@@ -409,6 +414,10 @@ class RunController(QObject):
         if _debounced('auto_center', hk.get('auto_center', 'f6')):
             self.request_toggle_auto_center.emit()
 
+        # 收起/展开 (默认 F4)
+        if _debounced('collapse', hk.get('collapse', 'f4')):
+            self.request_toggle_collapse.emit()
+
         # 穿透模式快捷键
         if _debounced('pt_on', hk.get('pt_on', 'f9')):
             self.passthrough_changed.emit('pt_on')
@@ -481,14 +490,20 @@ class RunController(QObject):
         """按钮 hover 激活 → 按下按键"""
         self._active_key_count += 1
         self._ac_start_time = None
-        if data.hover:
-            self._smart_trigger(data.hover, 'p')
+        key = (data.hover_toggle
+               if getattr(data, 'hover_mode', 'trigger') == 'toggle'
+               else data.hover)
+        if key:
+            self._smart_trigger(key, 'p')
 
     def on_hover_deactivated(self, data):
         """按钮 hover 释放 → 释放按键"""
         self._active_key_count = max(0, self._active_key_count - 1)
-        if data.hover:
-            self._smart_trigger(data.hover, 'r')
+        key = (data.hover_toggle
+               if getattr(data, 'hover_mode', 'trigger') == 'toggle'
+               else data.hover)
+        if key:
+            self._smart_trigger(key, 'r')
 
     def on_action_triggered(self, data, key_str, action):
         """按钮点击/滚轮 → 触发按键"""
