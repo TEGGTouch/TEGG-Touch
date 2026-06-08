@@ -26,6 +26,7 @@ from core.constants import (
     WHEEL_DUAL_OUTER_SECTOR_INNER, WHEEL_DUAL_OUTER_SECTOR_OUTER,
     WHEEL_VISUAL_INSET, WHEEL_GAP_PX,
     WHEEL_SECTOR_COUNT, WHEEL_SECTORS_DEF,
+    RING_MODES,
 )
 
 # ── 颜色 ──
@@ -250,6 +251,8 @@ class _WheelPreview(QWidget):
         self._accent = False
         self._center_ring_visible = True
         self._middle_ring_visible = True
+        self._center_ring_mode = 'whole'
+        self._middle_ring_mode = 'whole'
         self._hover_area = None
 
         ri = wtype['r_inner']
@@ -267,6 +270,14 @@ class _WheelPreview(QWidget):
 
     def set_middle_ring_visible(self, visible):
         self._middle_ring_visible = visible
+        self.update()
+
+    def set_center_ring_mode(self, mode: str):
+        self._center_ring_mode = mode
+        self.update()
+
+    def set_middle_ring_mode(self, mode: str):
+        self._middle_ring_mode = mode
         self.update()
 
     def set_accent(self, on: bool):
@@ -364,53 +375,74 @@ class _WheelPreview(QWidget):
                     p.drawText(QRectF(tx - ts, ty - ts / 2, ts * 2, ts),
                                Qt.AlignmentFlag.AlignCenter, sd['name'])
 
-        # 绘制中心环 (单环/三环)
+        # 绘制中心环 (单环/三环) — 按 mode 画 1 环或 N 个扇区
         if wt['has_ring']:
-            # 外环(中环): 从 wtype 取半径，large 用默认常量
             r_ring_i = wt.get('ring_inner', WHEEL_RING_INNER)
             r_ring_o = wt.get('ring_outer', WHEEL_RING_OUTER)
             rri = r_ring_i * s + WHEEL_VISUAL_INSET * s
             rro = r_ring_o * s - WHEEL_VISUAL_INSET * s
-            ring_path = _build_ring_path(cx, cy, rri, rro)
-
-            if self._simplified:
-                p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(QBrush(fill_color))
-                p.drawPath(ring_path)
+            # 双环模式下 ring 位置 = 中二环 → 用 middle 的 visible/mode
+            # 单环模式下 ring 位置 = 中心环 → 用 center 的 visible/mode
+            is_double = wt.get('has_inner_ring', False)
+            if is_double:
+                vis = self._middle_ring_visible
+                mode = self._middle_ring_mode
             else:
-                # 双环: ring 位置 = 中二环 → _middle_ring_visible
-                # 单环: ring 位置 = 中心环 → _center_ring_visible
-                is_double = wt.get('has_inner_ring', False)
-                ring_vis = self._middle_ring_visible if is_double else self._center_ring_visible
-                if ring_vis:
-                    if self._hover_area == 'ring':
-                        p.setBrush(QBrush(QColor("#0284C7")))
-                        p.setPen(QPen(QColor("#026AA2"), max(1, 2 * s)))
-                    else:
-                        p.setBrush(QBrush(QColor(C_RING_FILL)))
-                        p.setPen(QPen(QColor(C_RING_BORDER), max(1, 2 * s)))
-                    p.drawPath(ring_path)
+                vis = self._center_ring_visible
+                mode = self._center_ring_mode
+            self._paint_ring_mode(p, cx, cy, rri, rro, mode, vis, 'ring',
+                                   gap, simplified_fill=fill_color if self._simplified else None)
 
         # 绘制内环 (仅双环模式) — 最内位置 = 中心环
         if wt.get('has_inner_ring'):
             ir_i = wt['inner_ring_inner'] * s + WHEEL_VISUAL_INSET * s
             ir_o = wt['inner_ring_outer'] * s - WHEEL_VISUAL_INSET * s
-            inner_path = _build_ring_path(cx, cy, ir_i, ir_o)
-
-            if self._simplified:
-                p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(QBrush(fill_color))
-                p.drawPath(inner_path)
-            elif self._center_ring_visible:
-                if self._hover_area == 'inner_ring':
-                    p.setBrush(QBrush(QColor("#0284C7")))
-                    p.setPen(QPen(QColor("#026AA2"), max(1, 2 * s)))
-                else:
-                    p.setBrush(QBrush(QColor(C_RING_FILL)))
-                    p.setPen(QPen(QColor(C_RING_BORDER), max(1, 2 * s)))
-                p.drawPath(inner_path)
+            self._paint_ring_mode(
+                p, cx, cy, ir_i, ir_o,
+                self._center_ring_mode, self._center_ring_visible, 'inner_ring',
+                gap, simplified_fill=fill_color if self._simplified else None)
 
         p.end()
+
+    def _paint_ring_mode(self, p, cx, cy, rri, rro, mode: str, visible: bool,
+                          hover_id: str, gap: float, simplified_fill=None):
+        """按 mode 画环 (whole) 或 N 个扇区 (half_h/half_v/quad/octa)。
+
+        simplified_fill 非 None 时走简化样式 (缩略图, 始终深灰填充, 无 hover)。
+        """
+        if not visible and simplified_fill is None:
+            return
+        s = self._scale
+        from core.constants import RING_MODE_SECTORS
+
+        def _set_color(area_id):
+            if simplified_fill is not None:
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QBrush(simplified_fill))
+                return
+            # 切分模式下命中父 ring 区域时, 所有子扇区一起高亮
+            matched = (self._hover_area == area_id
+                       or (mode != 'whole' and self._hover_area == hover_id))
+            if matched:
+                p.setBrush(QBrush(QColor("#0284C7")))
+                p.setPen(QPen(QColor("#026AA2"), max(1, 2 * s)))
+            else:
+                p.setBrush(QBrush(QColor(C_RING_FILL)))
+                p.setPen(QPen(QColor(C_RING_BORDER), max(1, 2 * s)))
+
+        if mode == 'whole':
+            _set_color(hover_id)
+            p.drawPath(_build_ring_path(cx, cy, rri, rro))
+            return
+        # 切分模式: N 个扇区
+        sec_def = RING_MODE_SECTORS.get(mode, [])
+        n = max(1, len(sec_def))
+        span = 360.0 / n
+        for idx, (name, angle) in enumerate(sec_def):
+            start = angle - span / 2
+            path = _build_sector_path(cx, cy, rri, rro, start, span, gap)
+            _set_color(f"{hover_id}_{idx}")   # 子扇区有独立 hover id
+            p.drawPath(path)
 
     def mouseMoveEvent(self, event):
         if not self._interactive:
@@ -610,7 +642,9 @@ class WheelStyleDialog(QDialog):
     INFO_W = 220
 
     def __init__(self, wheel_mode='small', center_ring_visible=True,
-                 middle_ring_visible=True, parent=None):
+                 middle_ring_visible=True,
+                 center_ring_mode='whole', middle_ring_mode='whole',
+                 parent=None):
         super().__init__(parent)
         # 兼容旧调用: 如果传入 bool 则转换
         if isinstance(wheel_mode, bool):
@@ -621,6 +655,8 @@ class WheelStyleDialog(QDialog):
         self._selected_type = wheel_mode
         self._center_ring_visible = center_ring_visible
         self._middle_ring_visible = middle_ring_visible
+        self._center_ring_mode = center_ring_mode
+        self._middle_ring_mode = middle_ring_mode
         self._result = None
 
         self.setWindowFlags(
@@ -775,12 +811,24 @@ class WheelStyleDialog(QDialog):
         self._ring_cb.toggled.connect(self._on_ring_toggled)
         info_panel.addWidget(self._ring_cb)
 
+        # 中心环 mode 按钮组 (整环 / 上下 / 左右 / 四分 / 八分)
+        self._center_mode_btns, self._center_mode_wrap = self._build_ring_mode_row(
+            fn, self._center_ring_mode, self._on_center_mode_clicked)
+        info_panel.addWidget(self._center_mode_wrap)
+
+        info_panel.addSpacing(6)
+
         # 中二环复选框 (仅双环模式)
         self._middle_ring_cb = _CheckToggle(
             t("wheel_style.show_middle_ring"), fn,
             checked=self._middle_ring_visible)
         self._middle_ring_cb.toggled.connect(self._on_middle_ring_toggled)
         info_panel.addWidget(self._middle_ring_cb)
+
+        # 中二环 mode 按钮组
+        self._middle_mode_btns, self._middle_mode_wrap = self._build_ring_mode_row(
+            fn, self._middle_ring_mode, self._on_middle_mode_clicked)
+        info_panel.addWidget(self._middle_mode_wrap)
 
         info_panel.addStretch()
 
@@ -849,6 +897,8 @@ class WheelStyleDialog(QDialog):
         preview = _WheelPreview(wtype, scale=1.0, interactive=True)
         preview.set_center_ring_visible(self._center_ring_visible)
         preview.set_middle_ring_visible(self._middle_ring_visible)
+        preview.set_center_ring_mode(self._center_ring_mode)
+        preview.set_middle_ring_mode(self._middle_ring_mode)
         preview.area_clicked.connect(self._on_area_clicked)
         self._preview_container.addWidget(preview, 0, Qt.AlignmentFlag.AlignCenter)
         self._current_preview = preview
@@ -864,23 +914,33 @@ class WheelStyleDialog(QDialog):
         if type_id == 'double':
             self._ring_cb.setVisible(True)
             self._ring_cb.setChecked(self._center_ring_visible)
+            self._center_mode_wrap.setVisible(True)
             self._middle_ring_cb.setVisible(True)
             self._middle_ring_cb.setChecked(self._middle_ring_visible)
+            self._middle_mode_wrap.setVisible(True)
             self._reset_btn.setText(t("wheel_style.reset_sectors"))
         elif type_id == 'large':
             self._ring_cb.setVisible(True)
             self._ring_cb.setChecked(self._center_ring_visible)
+            self._center_mode_wrap.setVisible(True)
             self._middle_ring_cb.setVisible(False)
+            self._middle_mode_wrap.setVisible(False)
             self._reset_btn.setText(t("wheel_style.reset_sectors"))
         elif type_id == 'dual':
             self._ring_cb.setVisible(True)
             self._ring_cb.setChecked(self._center_ring_visible)
+            self._center_mode_wrap.setVisible(True)
             self._middle_ring_cb.setVisible(False)
+            self._middle_mode_wrap.setVisible(False)
             self._reset_btn.setText(t("wheel_style.reset_sectors_dual"))
         else:
             self._ring_cb.setVisible(False)
+            self._center_mode_wrap.setVisible(False)
             self._middle_ring_cb.setVisible(False)
+            self._middle_mode_wrap.setVisible(False)
             self._reset_btn.setText(t("wheel_style.reset_sectors"))
+        # 更新 mode 按钮 enabled (依赖勾选状态)
+        self._update_mode_btns_enabled()
 
         # 防止 widget 重建导致弹窗掉到 overlay 后面
         self.raise_()
@@ -890,11 +950,90 @@ class WheelStyleDialog(QDialog):
         self._center_ring_visible = checked
         if self._current_preview:
             self._current_preview.set_center_ring_visible(checked)
+        self._update_mode_btns_enabled()
 
     def _on_middle_ring_toggled(self, checked):
         self._middle_ring_visible = checked
         if self._current_preview:
             self._current_preview.set_middle_ring_visible(checked)
+        self._update_mode_btns_enabled()
+
+    # ── 中心环 / 中二环 mode 按钮 ──
+
+    def _build_ring_mode_row(self, fn, current_mode: str, on_click):
+        """生成 5 个 mode 按钮容器 widget (两行: 上 3 下 2)。
+
+        返回 (btns_dict, container_widget)。btns_dict: mode_id → QPushButton
+        """
+        wrap = QWidget()
+        wrap.setStyleSheet("background: transparent;")
+        col = QVBoxLayout(wrap)
+        col.setContentsMargins(28, 4, 0, 0)
+        col.setSpacing(4)
+
+        rows = [RING_MODES[:3], RING_MODES[3:]]   # 上: whole/half_h/half_v, 下: quad/octa
+        btns = {}
+        for row_modes in rows:
+            row = QHBoxLayout()
+            row.setSpacing(4)
+            for mode in row_modes:
+                label = t(f"wheel_style.ring_mode_{mode}")
+                btn = QPushButton(label)
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.setFixedHeight(24)
+                btn.setFont(_make_font(fn, 11))
+                btn.setToolTip(t(f"wheel_style.ring_mode_tip_{mode}"))
+                btn.clicked.connect(lambda _, m=mode: on_click(m))
+                row.addWidget(btn)
+                btns[mode] = btn
+            row.addStretch()
+            col.addLayout(row)
+        self._apply_mode_btns_style(btns, current_mode, enabled=True)
+        return btns, wrap
+
+    def _apply_mode_btns_style(self, btns: dict, current: str, enabled: bool):
+        # 选中色: 玫红 (Tailwind pink-600 / pink-500 悬浮)
+        SEL_BG, SEL_BG_H = "#DB2777", "#EC4899"
+        for mode, btn in btns.items():
+            selected = (mode == current)
+            if not enabled:
+                bg, fg = "#222", "#555"
+                bg_h = bg
+            else:
+                bg = SEL_BG if selected else "#333"
+                fg = "#FFF" if selected else "#CCC"
+                bg_h = SEL_BG_H if selected else "#444"
+            btn.setEnabled(enabled)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {bg}; color: {fg};
+                    border: none; border-radius: 4px; padding: 0 8px;
+                }}
+                QPushButton:hover {{ background: {bg_h}; color: #FFF; }}
+            """)
+
+    def _on_center_mode_clicked(self, mode: str):
+        self._center_ring_mode = mode
+        self._apply_mode_btns_style(
+            self._center_mode_btns, mode, enabled=self._center_ring_visible)
+        if self._current_preview:
+            self._current_preview.set_center_ring_mode(mode)
+
+    def _on_middle_mode_clicked(self, mode: str):
+        self._middle_ring_mode = mode
+        self._apply_mode_btns_style(
+            self._middle_mode_btns, mode, enabled=self._middle_ring_visible)
+        if self._current_preview:
+            self._current_preview.set_middle_ring_mode(mode)
+
+    def _update_mode_btns_enabled(self):
+        """根据 _ring_cb / _middle_ring_cb 的勾选状态启用/禁用 mode 按钮。"""
+        self._apply_mode_btns_style(
+            self._center_mode_btns, self._center_ring_mode,
+            enabled=self._center_ring_visible)
+        self._apply_mode_btns_style(
+            self._middle_mode_btns, self._middle_ring_mode,
+            enabled=self._middle_ring_visible)
 
     def _on_area_clicked(self, area):
         if area == 'ring':
@@ -915,6 +1054,8 @@ class WheelStyleDialog(QDialog):
             'wheel_enlarged': self._selected_type in ('large', 'double'),
             'wheel_center_ring_visible': self._center_ring_visible,
             'wheel_middle_ring_visible': self._middle_ring_visible,
+            'wheel_center_ring_mode': self._center_ring_mode,
+            'wheel_inner_ring_mode': self._middle_ring_mode,
             'reset_sectors': default_wheel_sectors(),
         }
         # dual 模式同时重置外八向
@@ -930,6 +1071,8 @@ class WheelStyleDialog(QDialog):
             'wheel_enlarged': self._selected_type in ('large', 'double'),  # 向后兼容
             'wheel_center_ring_visible': self._center_ring_visible,
             'wheel_middle_ring_visible': self._middle_ring_visible,
+            'wheel_center_ring_mode': self._center_ring_mode,
+            'wheel_inner_ring_mode': self._middle_ring_mode,
         }
         self.settings_changed.emit(self._result)
         self.accept()

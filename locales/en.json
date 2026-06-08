@@ -222,7 +222,17 @@
     "save": "OK",
     "cancel": "Cancel",
     "reset_sectors": "Reset 8-Way Keys",
-    "reset_sectors_dual": "Reset All 8-Way Keys"
+    "reset_sectors_dual": "Reset All 8-Way Keys",
+    "ring_mode_whole": "Whole",
+    "ring_mode_half_h": "Top/Bottom",
+    "ring_mode_half_v": "Left/Right",
+    "ring_mode_quad": "Quad",
+    "ring_mode_octa": "Octa",
+    "ring_mode_tip_whole": "Whole ring: a single circular button",
+    "ring_mode_tip_half_h": "Horizontal split: top / bottom halves",
+    "ring_mode_tip_half_v": "Vertical split: left / right halves",
+    "ring_mode_tip_quad": "Diagonal quad split: top / right / bottom / left",
+    "ring_mode_tip_octa": "8 directional sectors, same as the outer ring"
   },
   "key_cat": {
     "letters": "Letters",

@@ -222,7 +222,17 @@
     "save": "确定",
     "cancel": "取消",
     "reset_sectors": "重置八方向键",
-    "reset_sectors_dual": "重置内外八方向键"
+    "reset_sectors_dual": "重置内外八方向键",
+    "ring_mode_whole": "整环",
+    "ring_mode_half_h": "上下",
+    "ring_mode_half_v": "左右",
+    "ring_mode_quad": "四分",
+    "ring_mode_octa": "八分",
+    "ring_mode_tip_whole": "整环：一个完整圆环，一个按键",
+    "ring_mode_tip_half_h": "上下二分：水平分割成上半 / 下半两个扇区",
+    "ring_mode_tip_half_v": "左右二分：垂直分割成左半 / 右半两个扇区",
+    "ring_mode_tip_quad": "四分：对角线分割成上 / 右 / 下 / 左四个扇区",
+    "ring_mode_tip_octa": "八分：与外环一致的 8 个方向扇区"
   },
   "key_cat": {
     "letters": "字母",

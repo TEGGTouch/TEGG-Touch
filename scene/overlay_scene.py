@@ -249,6 +249,9 @@ class OverlayScene(QGraphicsScene):
         self.outer_wheel_items = []  # 外八向扇面（dual 模式）
         self.ring_item = None
         self.inner_ring_item = None
+        # ring 切分模式 (mode != 'whole') 时, 中心环/中二环各自创建 N 个 sector item
+        self.center_ring_sector_items = []
+        self.inner_ring_sector_items = []
         self._config = {}           # 保存完整配置引用
         self._wheel_visible = False
         self._wheel_mode = 'small'  # 'small' | 'large' | 'double' | 'dual'
@@ -403,42 +406,29 @@ class OverlayScene(QGraphicsScene):
             self.addItem(item)
             self.wheel_items.append(item)
 
-        # 中心圆环
-        # large 模式: ring_item = 中心环 ← wheel_center_ring
-        # double 模式: ring_item = 中二环位置 ← wheel_inner_ring 数据
-        #              inner_ring_item = 中心环位置 ← wheel_center_ring 数据
+        # 中心圆环 / 中二环 — 支持 5 种 mode (whole/half_h/half_v/quad/octa)
+        # large 模式:   中心环 = wheel_center_ring (大单环)
+        # dual 模式:    中心环 = wheel_center_ring (双轮盘的中心)
+        # double 模式:  中二环 = wheel_inner_ring  +  中心环 = wheel_center_ring
         if self._wheel_mode == 'double':
-            # ── 双环: 中二环 (ring_item) ──
-            from core.constants import default_wheel_inner_ring
-            mid_dict = config.get('wheel_inner_ring', None)
-            if not mid_dict:
-                mid_dict = default_wheel_inner_ring()
-                config['wheel_inner_ring'] = mid_dict
-            mid_data = WheelRingData.from_dict(mid_dict)
-            self.ring_item = WheelRingItem(
-                mid_data, cx, cy,
+            # ── 中二环 (ring_item / inner_ring_sector_items) ──
+            self._create_ring_by_mode(
+                config, 'wheel_inner_ring',
                 WHEEL_TRIPLE_OUTER_RING_INNER + ofs,
-                WHEEL_TRIPLE_OUTER_RING_OUTER + ofs)
-            self.ring_item.doubleClicked.connect(self._on_button_double_clicked)
-            self.ring_item.setVisible(
-                self._wheel_visible and self._wheel_middle_ring_visible)
-            self.addItem(self.ring_item)
+                WHEEL_TRIPLE_OUTER_RING_OUTER + ofs,
+                cx, cy, is_inner=False,
+                visible=self._wheel_visible and self._wheel_middle_ring_visible)
 
-            # ── 双环: 中心环 (inner_ring_item) ──
-            center_dict = config.get('wheel_center_ring', {})
-            if center_dict:
-                center_data = WheelRingData.from_dict(center_dict)
-                self.inner_ring_item = WheelRingItem(
-                    center_data, cx, cy,
-                    WHEEL_TRIPLE_INNER_RING_INNER + ofs,
-                    WHEEL_TRIPLE_INNER_RING_OUTER + ofs)
-                self.inner_ring_item.doubleClicked.connect(self._on_button_double_clicked)
-                self.inner_ring_item.setVisible(
-                    self._wheel_visible and self._wheel_center_ring_visible)
-                self.addItem(self.inner_ring_item)
+            # ── 中心环 (inner_ring_item / center_ring_sector_items) ──
+            self._create_ring_by_mode(
+                config, 'wheel_center_ring',
+                WHEEL_TRIPLE_INNER_RING_INNER + ofs,
+                WHEEL_TRIPLE_INNER_RING_OUTER + ofs,
+                cx, cy, is_inner=True,
+                visible=self._wheel_visible and self._wheel_center_ring_visible)
 
         elif self._wheel_mode == 'dual':
-            # ── 单环双轮盘: 外八向扇面 ──
+            # ── 外八向扇面 ──
             from core.constants import default_wheel_outer_sectors
             outer_sectors = config.get('wheel_outer_sectors', None)
             if not outer_sectors:
@@ -459,34 +449,101 @@ class OverlayScene(QGraphicsScene):
                 self.addItem(item)
                 self.outer_wheel_items.append(item)
 
-            # ── 单环双轮盘: 中心环 (ring_item) ──
-            from core.constants import default_wheel_center_ring
-            center_dict = config.get('wheel_center_ring', None)
-            if not center_dict:
-                center_dict = default_wheel_center_ring()
-                config['wheel_center_ring'] = center_dict
-            center_data = WheelRingData.from_dict(center_dict)
-            self.ring_item = WheelRingItem(
-                center_data, cx, cy,
+            # ── 中心环 ──
+            self._create_ring_by_mode(
+                config, 'wheel_center_ring',
                 WHEEL_DUAL_CENTER_RING_INNER + ofs,
-                WHEEL_DUAL_CENTER_RING_OUTER + ofs)
-            self.ring_item.doubleClicked.connect(self._on_button_double_clicked)
-            self.ring_item.setVisible(
-                self._wheel_visible and self._wheel_center_ring_visible)
-            self.addItem(self.ring_item)
+                WHEEL_DUAL_CENTER_RING_OUTER + ofs,
+                cx, cy, is_inner=False,
+                visible=self._wheel_visible and self._wheel_center_ring_visible)
 
         elif self._wheel_mode == 'large':
-            # ── 单环: ring_item = 中心环 ← wheel_center_ring ──
-            ring_dict = config.get('wheel_center_ring', {})
-            if ring_dict:
-                ring_data = WheelRingData.from_dict(ring_dict)
-                self.ring_item = WheelRingItem(
-                    ring_data, cx, cy,
-                    WHEEL_RING_INNER + ofs, WHEEL_RING_OUTER + ofs)
-                self.ring_item.doubleClicked.connect(self._on_button_double_clicked)
-                self.ring_item.setVisible(
-                    self._wheel_visible and self._wheel_center_ring_visible)
-                self.addItem(self.ring_item)
+            # ── 中心环 ──
+            self._create_ring_by_mode(
+                config, 'wheel_center_ring',
+                WHEEL_RING_INNER + ofs, WHEEL_RING_OUTER + ofs,
+                cx, cy, is_inner=False,
+                visible=self._wheel_visible and self._wheel_center_ring_visible)
+
+    def _writeback_ring_config(self, key: str, ring_item, sector_items: list):
+        """根据当前 mode 把 ring 数据写回 config[key] 的对应 mode 槽位。
+
+        mode='whole' → ring_item.data; 其他 → 每个 sector_item.data 列表
+        """
+        existing = self._config.get(key) or {}
+        if 'mode' not in existing:
+            # 兼容: 旧的平铺 dict 已被 normalize 时升级过, 这里防御性补默认
+            from core.constants import (
+                default_wheel_center_ring, default_wheel_inner_ring,
+                normalize_ring_config,
+            )
+            factory = default_wheel_inner_ring if key == 'wheel_inner_ring' else default_wheel_center_ring
+            existing = normalize_ring_config(existing, factory)
+
+        mode = existing.get('mode', 'whole')
+        if mode == 'whole':
+            if ring_item:
+                existing['whole'] = ring_item.data.to_dict()
+        else:
+            existing[mode] = [it.data.to_dict() for it in sector_items]
+        self._config[key] = existing
+
+    def _create_ring_by_mode(self, config: dict, key: str,
+                              r_inner: float, r_outer: float,
+                              cx: float, cy: float,
+                              is_inner: bool, visible: bool):
+        """按 ring config 的 mode 字段, 创建 1 个 WheelRingItem (whole) 或 N 个 WheelSectorItem。
+
+        ring config (key='wheel_center_ring' 或 'wheel_inner_ring') 格式:
+          { 'mode': 'whole'|'half_h'|'half_v'|'quad'|'octa',
+            'whole': WheelRingData dict,
+            'half_h': [WheelSectorData...], ... }
+        老格式 (无 mode 字段的平铺 dict) 自动迁移到 mode='whole'。
+        """
+        from models.wheel_model import WheelSectorData, WheelRingData
+        from scene.wheel_sector_item import WheelSectorItem
+        from scene.wheel_ring_item import WheelRingItem
+        from core.constants import (
+            default_wheel_center_ring, default_wheel_inner_ring,
+            normalize_ring_config,
+        )
+
+        factory = default_wheel_inner_ring if key == 'wheel_inner_ring' else default_wheel_center_ring
+        cfg = normalize_ring_config(config.get(key), factory)
+        config[key] = cfg   # 写回标准化后的结构
+
+        mode = cfg.get('mode', 'whole')
+        # sector 列表按 config key 选 (与 ring_item / inner_ring_item 的对应关系一致)
+        target_list = (self.center_ring_sector_items if key == 'wheel_center_ring'
+                       else self.inner_ring_sector_items)
+
+        if mode == 'whole':
+            ring_dict = cfg.get('whole', {})
+            ring_data = WheelRingData.from_dict(ring_dict)
+            item = WheelRingItem(ring_data, cx, cy, r_inner, r_outer)
+            item.doubleClicked.connect(self._on_button_double_clicked)
+            item.setVisible(visible)
+            self.addItem(item)
+            # 兼容旧引用: 设 ring_item / inner_ring_item
+            if is_inner:
+                self.inner_ring_item = item
+            else:
+                self.ring_item = item
+        else:
+            # N 个 sector
+            sec_list = cfg.get(mode, [])
+            n = max(1, len(sec_list))
+            span = 360.0 / n
+            for sec_dict in sec_list:
+                data = WheelSectorData.from_dict(sec_dict)
+                start = data.angle - span / 2
+                sec_item = WheelSectorItem(
+                    data, cx, cy, r_inner, r_outer, start, span)
+                sec_item.doubleClicked.connect(self._on_button_double_clicked)
+                sec_item.setZValue(8)   # 高于外环扇面(5), 低于 ring(10)
+                sec_item.setVisible(visible)
+                self.addItem(sec_item)
+                target_list.append(sec_item)
 
     def save_config(self):
         """将当前场景中的按钮状态保存回配置
@@ -522,15 +579,22 @@ class OverlayScene(QGraphicsScene):
                 outer_sectors.append(item.data.to_dict())
             self._config['wheel_outer_sectors'] = outer_sectors
 
-        # 圆环数据 — 双环模式下 ring_item=中二环, inner_ring_item=中心环
+        # 圆环数据 — 按 mode 写回到对应嵌套 key (whole / half_h / ...)
+        # double 模式: ring_item/center_ring_sector_items 属于中二环 (wheel_inner_ring);
+        #              inner_ring_item/inner_ring_sector_items 属于中心环 (wheel_center_ring) ?
+        # 注意: _create_ring_by_mode 调用时, key='wheel_inner_ring' is_inner=False (中二环),
+        #       key='wheel_center_ring' is_inner=True (中心环);
+        #       双环模式下 ring_item=中二环 (因为 key='wheel_inner_ring' 时 is_inner=False),
+        #       inner_ring_item=中心环 (因为 key='wheel_center_ring' 时 is_inner=True)
+        #       sector 列表按 key 分: wheel_center_ring → center_ring_sector_items
         if self._wheel_mode == 'double':
-            if self.ring_item:
-                self._config['wheel_inner_ring'] = self.ring_item.data.to_dict()
-            if self.inner_ring_item:
-                self._config['wheel_center_ring'] = self.inner_ring_item.data.to_dict()
+            self._writeback_ring_config('wheel_inner_ring',
+                                        self.ring_item, self.inner_ring_sector_items)
+            self._writeback_ring_config('wheel_center_ring',
+                                        self.inner_ring_item, self.center_ring_sector_items)
         else:
-            if self.ring_item:
-                self._config['wheel_center_ring'] = self.ring_item.data.to_dict()
+            self._writeback_ring_config('wheel_center_ring',
+                                        self.ring_item, self.center_ring_sector_items)
 
         # 轮盘显示状态
         self._config['wheel_visible'] = self._wheel_visible
@@ -647,9 +711,16 @@ class OverlayScene(QGraphicsScene):
         """打开轮盘样式管理弹窗"""
         from views.wheel_style_dialog import WheelStyleDialog
 
+        # 读取当前 ring mode (新嵌套结构 / 老平铺数据兜底)
+        center_mode = ((self._config.get('wheel_center_ring') or {})
+                       .get('mode', 'whole'))
+        middle_mode = ((self._config.get('wheel_inner_ring') or {})
+                       .get('mode', 'whole'))
         # 弹窗自带 WindowStaysOnTopHint，无需修改 overlay 的 flags（避免闪动）
         dlg = WheelStyleDialog(self._wheel_mode, self._wheel_center_ring_visible,
-                               self._wheel_middle_ring_visible)
+                               self._wheel_middle_ring_visible,
+                               center_ring_mode=center_mode,
+                               middle_ring_mode=middle_mode)
         dlg.raise_()
         dlg.activateWindow()
         if dlg.exec():
@@ -659,6 +730,10 @@ class OverlayScene(QGraphicsScene):
 
     def apply_wheel_style(self, settings: dict):
         """应用轮盘样式设置（从弹窗返回的结果）"""
+        from core.constants import (
+            default_wheel_center_ring, default_wheel_inner_ring,
+            normalize_ring_config,
+        )
         new_mode = settings.get('wheel_mode', self._wheel_mode)
         new_ring_vis = settings.get('wheel_center_ring_visible', self._wheel_center_ring_visible)
         new_mid_vis = settings.get('wheel_middle_ring_visible', self._wheel_middle_ring_visible)
@@ -673,7 +748,29 @@ class OverlayScene(QGraphicsScene):
         if reset_outer and isinstance(reset_outer, list):
             self._config['wheel_outer_sectors'] = reset_outer
 
-        need_rebuild = (new_mode != self._wheel_mode) or (reset_sectors is not None) or (reset_outer is not None)
+        # 中心环 / 中二环 mode 切换
+        center_mode = settings.get('wheel_center_ring_mode', None)
+        middle_mode = settings.get('wheel_inner_ring_mode', None)
+        ring_mode_changed = False
+        if center_mode is not None:
+            cfg = normalize_ring_config(
+                self._config.get('wheel_center_ring'), default_wheel_center_ring)
+            if cfg.get('mode') != center_mode:
+                cfg['mode'] = center_mode
+                ring_mode_changed = True
+            self._config['wheel_center_ring'] = cfg
+        if middle_mode is not None:
+            cfg = normalize_ring_config(
+                self._config.get('wheel_inner_ring'), default_wheel_inner_ring)
+            if cfg.get('mode') != middle_mode:
+                cfg['mode'] = middle_mode
+                ring_mode_changed = True
+            self._config['wheel_inner_ring'] = cfg
+
+        need_rebuild = ((new_mode != self._wheel_mode) or
+                        (reset_sectors is not None) or
+                        (reset_outer is not None) or
+                        ring_mode_changed)
         self._wheel_mode = new_mode
         self._wheel_enlarged = (new_mode in ('large', 'double'))
         self._wheel_center_ring_visible = new_ring_vis
@@ -687,20 +784,26 @@ class OverlayScene(QGraphicsScene):
         self._update_wheel_controls()
 
     def _update_ring_visibility(self):
-        """更新中心环/内环的可见性"""
+        """更新中心环/中二环 (含切分模式下的扇区) 的可见性"""
+        # 中二环 visible
+        middle_vis = (self._wheel_visible and self._wheel_mode == 'double'
+                      and self._wheel_middle_ring_visible)
+        # 中心环 visible (large/dual/double 都用同一开关)
+        center_vis = self._wheel_visible and self._wheel_center_ring_visible
+
         if self.ring_item:
             if self._wheel_mode == 'double':
-                # 双环: ring_item = 中二环
-                visible = (self._wheel_visible and self._wheel_middle_ring_visible)
+                self.ring_item.setVisible(middle_vis)
             else:
-                # 单环: ring_item = 中心环
-                visible = (self._wheel_visible and self._wheel_center_ring_visible)
-            self.ring_item.setVisible(visible)
+                self.ring_item.setVisible(center_vis)
         if self.inner_ring_item:
-            # 双环: inner_ring_item = 中心环（最内）
-            visible = (self._wheel_visible and self._wheel_mode == 'double'
-                       and self._wheel_center_ring_visible)
-            self.inner_ring_item.setVisible(visible)
+            self.inner_ring_item.setVisible(center_vis)
+        # 切分模式的扇区
+        for it in self.center_ring_sector_items:
+            it.setVisible(center_vis)
+        for it in self.inner_ring_sector_items:
+            # inner_ring_sector_items 仅 double 模式存在, 对应中二环
+            it.setVisible(middle_vis if self._wheel_mode == 'double' else False)
 
     def toggle_wheel(self):
         """切换轮盘显示/隐藏"""
@@ -723,10 +826,7 @@ class OverlayScene(QGraphicsScene):
     def toggle_wheel_center_ring(self):
         """切换中心圆环显示"""
         self._wheel_center_ring_visible = not self._wheel_center_ring_visible
-        if self.ring_item:
-            visible = (self._wheel_visible and self._wheel_enlarged
-                       and self._wheel_center_ring_visible)
-            self.ring_item.setVisible(visible)
+        self._update_ring_visibility()
         self._update_wheel_controls()
         return self._wheel_center_ring_visible
 
@@ -753,6 +853,17 @@ class OverlayScene(QGraphicsScene):
                 self.inner_ring_item._hover_sm.reset()
             self.removeItem(self.inner_ring_item)
             self.inner_ring_item = None
+        # 中心环 / 中二环切分模式下的扇区
+        for it in self.center_ring_sector_items:
+            if hasattr(it, '_hover_sm'):
+                it._hover_sm.reset()
+            self.removeItem(it)
+        self.center_ring_sector_items.clear()
+        for it in self.inner_ring_sector_items:
+            if hasattr(it, '_hover_sm'):
+                it._hover_sm.reset()
+            self.removeItem(it)
+        self.inner_ring_sector_items.clear()
         # 重新加载
         self._load_wheel(self._config)
         # 通知外部重新应用透明度等属性
@@ -778,6 +889,10 @@ class OverlayScene(QGraphicsScene):
             self.ring_item.set_mode(mode)
         if self.inner_ring_item:
             self.inner_ring_item.set_mode(mode)
+        for it in self.center_ring_sector_items:
+            it.set_mode(mode)
+        for it in self.inner_ring_sector_items:
+            it.set_mode(mode)
         self._update_wheel_controls()
         self.invalidate()  # 触发重绘（更新网格背景）
 

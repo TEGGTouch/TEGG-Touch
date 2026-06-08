@@ -160,7 +160,7 @@ def default_wheel_sectors():
     return sectors
 
 def default_wheel_center_ring():
-    """生成默认的中心圆环按钮配置（单环/三环模式可见）。"""
+    """生成默认的中心圆环按钮配置（mode='whole' 时使用的 ring 数据）。"""
     return {
         'name': t("button_defaults.center_ring"),
         'type': BTN_TYPE_WHEEL_RING,
@@ -170,6 +170,76 @@ def default_wheel_center_ring():
         'wheelup': '', 'wheeldown': '',
         'xbutton1': '', 'xbutton2': '',
     }
+
+
+# ── 环样式 5 种 mode ─────────────────────────────────────
+# whole = 整环 (单 ring); 其他 4 种用 N 个扇区切分
+RING_MODES = ('whole', 'half_h', 'half_v', 'quad', 'octa')
+
+# 各 mode 下扇区的 (name, angle) 列表; angle 0°=右, 90°=上 (与 WHEEL_SECTORS_DEF 一致)
+RING_MODE_SECTORS = {
+    'half_h': [('↑', 90), ('↓', 270)],
+    'half_v': [('←', 180), ('→', 0)],
+    'quad':   [('↑', 90), ('→', 0), ('↓', 270), ('←', 180)],
+    'octa':   [(s['name'], s['angle']) for s in WHEEL_SECTORS_DEF],
+}
+
+
+def _make_default_ring_sector(name: str, angle: int) -> dict:
+    """生成一个空白扇区配置 (用于 ring 切分模式)。"""
+    return {
+        'name': name,
+        'type': BTN_TYPE_WHEEL_SECTOR,
+        'angle': angle,
+        'hover': '',
+        'hover_delay': 200,
+        'hover_release_delay': 0,
+        'lclick': '', 'rclick': '', 'mclick': '',
+        'wheelup': '', 'wheeldown': '',
+        'xbutton1': '', 'xbutton2': '',
+    }
+
+
+def default_ring_styles(whole_default: dict | None = None) -> dict:
+    """生成完整的 5-mode 嵌套结构 (中心环 / 中二环共用)。
+
+    返回:
+      {
+        'mode': 'whole',
+        'whole':  <WheelRingData dict>,
+        'half_h': [...2 sec], 'half_v': [...2 sec],
+        'quad':   [...4 sec], 'octa':   [...8 sec]
+      }
+    """
+    out = {
+        'mode': 'whole',
+        'whole': whole_default if whole_default is not None else default_wheel_center_ring(),
+    }
+    for m, sec_list in RING_MODE_SECTORS.items():
+        out[m] = [_make_default_ring_sector(n, a) for n, a in sec_list]
+    return out
+
+
+def normalize_ring_config(cfg: dict | None, whole_factory) -> dict:
+    """把任意格式的 ring 配置 (老平铺 / 缺字段) 标准化为完整 5-mode 结构。
+
+    - cfg 为空 → 全默认
+    - cfg 已含 'mode' 字段 → 视为新格式, 补全缺失的 mode 数据
+    - cfg 是旧 WheelRingData 平铺字典 → 视为 mode='whole', 旧 dict 作为 whole 数据
+    """
+    base = default_ring_styles(whole_factory())
+    if not cfg:
+        return base
+    if 'mode' in cfg:
+        # 新格式: 仅补全缺失的 mode 键
+        for k in ('whole',) + tuple(RING_MODE_SECTORS.keys()):
+            if k not in cfg:
+                cfg[k] = base[k]
+        return cfg
+    # 老格式: 整个 dict 当 whole 数据
+    base['whole'] = cfg
+    base['mode'] = 'whole'
+    return base
 
 def default_wheel_outer_sectors():
     """生成默认的外八向轮盘扇区配置（单环双轮盘模式），键值为 Shift+WASD。"""

@@ -233,6 +233,11 @@ class OverlayWindow(QGraphicsView):
             self._wire_single_item(self._scene.ring_item)
         if self._scene.inner_ring_item:
             self._wire_single_item(self._scene.inner_ring_item)
+        # 中心环/中二环切分模式下的扇区
+        for item in self._scene.center_ring_sector_items:
+            self._wire_single_item(item)
+        for item in self._scene.inner_ring_sector_items:
+            self._wire_single_item(item)
 
     def _wire_single_item(self, item):
         """将单个 Item 的信号连接到运行控制器"""
@@ -391,6 +396,10 @@ class OverlayWindow(QGraphicsView):
                 self._scene.ring_item.setVisible(False)
             if self._scene.inner_ring_item:
                 self._scene.inner_ring_item.setVisible(False)
+            for it in self._scene.center_ring_sector_items:
+                it.setVisible(False)
+            for it in self._scene.inner_ring_sector_items:
+                it.setVisible(False)
         else:
             self._scene._update_ring_visibility()
         self._run_toolbar.update_buttons_visibility(self._buttons_hidden)
@@ -526,6 +535,10 @@ class OverlayWindow(QGraphicsView):
             self._scene.ring_item.setOpacity(value)
         if self._scene.inner_ring_item:
             self._scene.inner_ring_item.setOpacity(value)
+        for it in self._scene.center_ring_sector_items:
+            it.setOpacity(value)
+        for it in self._scene.inner_ring_sector_items:
+            it.setOpacity(value)
 
     # ── 弹窗 ──
 
@@ -611,6 +624,12 @@ class OverlayWindow(QGraphicsView):
         if self._scene.inner_ring_item:
             self._scene.removeItem(self._scene.inner_ring_item)
             self._scene.inner_ring_item = None
+        for it in list(self._scene.center_ring_sector_items):
+            self._scene.removeItem(it)
+        self._scene.center_ring_sector_items.clear()
+        for it in list(self._scene.inner_ring_sector_items):
+            self._scene.removeItem(it)
+        self._scene.inner_ring_sector_items.clear()
         # 加载新方案
         config = load_profile(name)
         self._profile_name = name
