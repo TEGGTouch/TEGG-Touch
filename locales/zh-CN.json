@@ -294,7 +294,13 @@
     "action_click_desc": "按下后立即释放",
     "action_press_desc": "按下并保持",
     "action_release_desc": "释放之前按下的键",
-    "auto_start": "运行时启用音频"
+    "auto_start": "运行时启用音频",
+    "unnamed": "未命名",
+    "select_hint": "在左侧选择或新建一条指令",
+    "copy": "复制",
+    "test_cmd": "测试指令",
+    "language_zh": "中文",
+    "language_en": "English"
   },
   "macro": {
     "tab_keys": "常规按键",

@@ -294,7 +294,13 @@
     "action_click_desc": "Press and release immediately",
     "action_press_desc": "Press and hold",
     "action_release_desc": "Release previously pressed key",
-    "auto_start": "Auto-enable audio in run mode"
+    "auto_start": "Auto-enable audio in run mode",
+    "unnamed": "Untitled",
+    "select_hint": "Select or create a command on the left",
+    "copy": "Duplicate",
+    "test_cmd": "Test Command",
+    "language_zh": "Chinese",
+    "language_en": "English"
   },
   "macro": {
     "tab_keys": "Keys",

@@ -294,21 +294,25 @@ class VoiceSettingsDialog(QDialog):
     settings_saved = pyqtSignal()
     macros_changed = pyqtSignal(list)
 
-    LEFT_W = 640
-    RIGHT_W = 520
+    # 三列布局: 列表 / 编辑 / 候选按键面板
+    COL1_W = 280     # 指令列表 + 底部 mic/test/language
+    COL2_W = 320     # 当前选中指令编辑区
     PADDING = 20
-    WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20
-    WIN_H = 880
+    GUTTER = 20      # 列间距
+    WIN_W = 1200
+    WIN_H = 960
+    COL3_W = WIN_W - PADDING * 2 - COL1_W - COL2_W - GUTTER * 2 - 2  # = 538
 
     def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, macros=None, voice_auto_start=True):
         super().__init__(parent)
         self._macros = list(macros) if macros else []
-        self._commands = voice_commands or []
+        # 深拷贝防止编辑过程影响外部数据 (失败时还能 cancel)
+        self._commands = [dict(c) for c in (voice_commands or [])]
         self._language = voice_language or get_lang()
         self._saved_mic_device = voice_mic_device  # 之前保存的麦克风设备名
         self._auto_start = voice_auto_start
         self._focus_widget = None
-        self._command_rows = []
+        self._current_idx = -1   # 当前选中指令在 _commands 中的索引; -1 表示未选中
         self._drag_pos = None
 
         self.setWindowFlags(
@@ -387,66 +391,83 @@ class VoiceSettingsDialog(QDialog):
         root.addWidget(tip)
         root.addSpacing(16)
 
-        # ── Two columns ──
+        # ── 三列布局: 指令列表 | 编辑区 | 候选按键面板 ──
         columns = QHBoxLayout()
         columns.setSpacing(0)
 
-        # === Left column ===
-        left = QVBoxLayout()
-        left.setSpacing(0)
-        left.setContentsMargins(0, 0, 0, 0)
+        # Col1
+        col1 = self._build_col1_list(fn)
+        col1.setFixedWidth(self.COL1_W)
+        columns.addWidget(col1)
+        columns.addSpacing(self.GUTTER)
+        d1 = QFrame(); d1.setFixedWidth(1); d1.setStyleSheet("background: #444;")
+        columns.addWidget(d1)
 
-        # Language selector
-        left.addLayout(self._build_lang_selector(fn))
-        left.addSpacing(20)
+        # Col2
+        col2 = self._build_col2_editor(fn)
+        col2.setFixedWidth(self.COL2_W)
+        columns.addSpacing(self.GUTTER - 10)
+        columns.addWidget(col2)
+        columns.addSpacing(self.GUTTER)
+        d2 = QFrame(); d2.setFixedWidth(1); d2.setStyleSheet("background: #444;")
+        columns.addWidget(d2)
+        columns.addSpacing(10)
 
-        # Divider
-        d1 = QFrame()
-        d1.setFixedHeight(1)
-        d1.setStyleSheet("background: #444;")
-        left.addWidget(d1)
-        left.addSpacing(10)
+        # Col3
+        col3 = self._build_right_tabbed_panel(fn)
+        columns.addWidget(col3, 1)
 
-        # Command list (scrollable)
-        self._cmd_scroll = QScrollArea()
-        self._cmd_scroll.setWidgetResizable(True)
-        self._cmd_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._cmd_scroll.setStyleSheet("""
-            QScrollArea { background: transparent; border: none; }
-            QScrollBar:vertical {
+        root.addLayout(columns, 1)
+
+        # 数据载入到列表 + 默认选中
+        self._rebuild_command_list()
+        if self._commands:
+            self._cmd_list.setCurrentRow(0)
+        else:
+            self._update_editor_visibility()
+
+    # ── Col1: 指令列表 + 底部 mic/test/lang ──
+
+    def _build_col1_list(self, fn):
+        wrap = QWidget()
+        wrap.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(wrap)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(8)
+
+        # 指令列表
+        self._cmd_list = QListWidget()
+        self._cmd_list.setStyleSheet(f"""
+            QListWidget {{
+                background: {C_INPUT_BG};
+                border: 1px solid #3A3A3A; border-radius: 6px;
+                color: #E0E0E0; outline: none;
+            }}
+            QListWidget::item {{
+                padding: 8px 10px; border-bottom: 1px solid #2A2A2A;
+            }}
+            QListWidget::item:selected {{
+                background: {C_CYBER}; color: #FFF;
+            }}
+            QListWidget::item:hover {{ background: #353535; }}
+            QScrollBar:vertical {{
                 background: transparent; width: 8px; border: none;
-            }
-            QScrollBar::handle:vertical {
+            }}
+            QScrollBar::handle:vertical {{
                 background: #404040; border-radius: 4px; min-height: 30px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """)
-        self._cmd_content = QWidget()
-        self._cmd_content.setStyleSheet("background: transparent;")
-        self._cmd_layout = QVBoxLayout(self._cmd_content)
-        self._cmd_layout.setContentsMargins(0, 0, 10, 0)
-        self._cmd_layout.setSpacing(10)
-        self._cmd_layout.addStretch()
-        self._cmd_scroll.setWidget(self._cmd_content)
-        left.addWidget(self._cmd_scroll, 1)
+        self._cmd_list.setFont(_make_font(fn, 14))
+        self._cmd_list.currentRowChanged.connect(self._on_list_row_changed)
+        v.addWidget(self._cmd_list, 1)
 
-        left.addSpacing(18)
-
-        # Mic status
-        left.addLayout(self._build_mic_status(fn))
-
-        left.addSpacing(12)
-
-        # Bottom row: Add command (left) + Save (right)
-        bottom_row = QHBoxLayout()
-        bottom_row.setSpacing(12)
-
+        # 新建按钮
         add_btn = QPushButton(t("voice_dialog.add_command"))
-        add_btn.setFixedHeight(40)
+        add_btn.setFixedHeight(36)
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_btn.setFont(_make_font(fn, 16))
+        add_btn.setFont(_make_font(fn, 14))
         add_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
@@ -455,12 +476,221 @@ class VoiceSettingsDialog(QDialog):
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         add_btn.clicked.connect(self._on_add_command)
-        bottom_row.addWidget(add_btn, 1)
+        v.addWidget(add_btn)
+
+        v.addSpacing(8)
+        sep = QFrame(); sep.setFixedHeight(1); sep.setStyleSheet("background: #444;")
+        v.addWidget(sep)
+        v.addSpacing(8)
+
+        # 底部固定区: 麦克风 / 测试 / 语言
+        v.addLayout(self._build_bottom_status(fn))
+        return wrap
+
+    def _build_bottom_status(self, fn):
+        col = QVBoxLayout()
+        col.setSpacing(8)
+
+        # 麦克风状态点 + 设备下拉
+        mic_row = QHBoxLayout()
+        mic_row.setSpacing(6)
+        self._mic_dot = QLabel("\u25CF")
+        self._mic_dot.setFont(_make_font(fn, 12))
+        self._mic_dot.setStyleSheet("color: #666; background: transparent;")
+        mic_row.addWidget(self._mic_dot)
+        self._mic_lbl = QLabel(t("voice_dialog.mic_status"))
+        self._mic_lbl.setFont(_make_font(fn, 11))
+        self._mic_lbl.setStyleSheet("color: #AAA; background: transparent;")
+        mic_row.addWidget(self._mic_lbl)
+        mic_row.addStretch()
+        col.addLayout(mic_row)
+
+        self._mic_combo = QComboBox()
+        self._mic_combo.setFixedHeight(30)
+        self._mic_combo.setFont(_make_font(fn, 12))
+        self._mic_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {C_INPUT_BG}; color: #E0E0E0;
+                border: 1px solid {C_GRAY}; border-radius: 6px;
+                padding: 2px 28px 2px 8px;
+            }}
+            QComboBox:hover {{ border-color: #666; }}
+            QComboBox::drop-down {{
+                border: none; width: 22px;
+                subcontrol-origin: padding;
+                subcontrol-position: center right;
+            }}
+            QComboBox QAbstractItemView {{
+                background: #2A2A2A; color: #E0E0E0;
+                selection-background-color: {C_CYBER};
+                border: 1px solid #444; border-radius: 4px;
+            }}
+        """)
+        col.addWidget(self._mic_combo)
+
+        # 测试指令按钮
+        self._test_btn = QPushButton(t("voice_dialog.test_cmd"))
+        self._test_btn.setFixedHeight(32)
+        self._test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._test_btn.setFont(_make_font(fn, 13))
+        self._test_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        self._test_btn.clicked.connect(self._on_test_commands)
+        col.addWidget(self._test_btn)
+
+        # 自动启用音频
+        self._auto_start_cb = _CheckToggle(
+            t("voice_dialog.auto_start"), fn, checked=self._auto_start)
+        col.addWidget(self._auto_start_cb)
+
+        # 语言下拉 (识别语言)
+        lang_row = QHBoxLayout()
+        lang_row.setSpacing(6)
+        lang_lbl = QLabel(t("voice_dialog.language"))
+        lang_lbl.setFont(_make_font(fn, 12))
+        lang_lbl.setStyleSheet("color: #AAA; background: transparent;")
+        lang_row.addWidget(lang_lbl)
+        self._lang_combo = QComboBox()
+        self._lang_combo.setFixedHeight(30)
+        self._lang_combo.setFont(_make_font(fn, 12))
+        self._lang_combo.setStyleSheet(self._mic_combo.styleSheet())
+        self._lang_combo.addItem(t("voice_dialog.language_zh"), "zh-CN")
+        self._lang_combo.addItem(t("voice_dialog.language_en"), "en")
+        # 选中当前
+        idx = 0 if self._language.startswith("zh") else 1
+        self._lang_combo.setCurrentIndex(idx)
+        self._lang_combo.currentIndexChanged.connect(self._on_lang_combo_changed)
+        lang_row.addWidget(self._lang_combo, 1)
+        col.addLayout(lang_row)
+
+        # 枚举设备 (与原版相同逻辑)
+        self._mic_devices = []
+        self._populate_mic_devices()
+        return col
+
+    def _on_lang_combo_changed(self, idx):
+        self._language = self._lang_combo.itemData(idx)
+
+    # ── Col2: 当前选中指令编辑 ──
+
+    def _build_col2_editor(self, fn):
+        wrap = QWidget()
+        wrap.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(wrap)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        # 未选中时显示的占位标签
+        self._editor_hint = QLabel(t("voice_dialog.select_hint"))
+        self._editor_hint.setFont(_make_font(fn, 14))
+        self._editor_hint.setStyleSheet("color: #666; background: transparent;")
+        self._editor_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._editor_hint.setWordWrap(True)
+        v.addWidget(self._editor_hint, 1)
+
+        # 编辑表单容器
+        self._editor_form = QWidget()
+        self._editor_form.setStyleSheet("background: transparent;")
+        form = QVBoxLayout(self._editor_form)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(14)
+
+        # 名称
+        name_lbl = QLabel(t("voice_dialog.phrase"))
+        name_lbl.setFont(_make_font(fn, 14))
+        name_lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
+        form.addWidget(name_lbl)
+        self._phrase_edit = QLineEdit()
+        self._phrase_edit.setPlaceholderText(t("voice_dialog.phrase_placeholder"))
+        self._phrase_edit.setFixedHeight(36)
+        self._phrase_edit.setFont(_make_font(fn, 14))
+        self._phrase_edit.setStyleSheet(f"""
+            QLineEdit {{
+                background: {C_INPUT_BG}; color: white;
+                border: 2px solid {C_GRAY}; border-radius: 6px;
+                padding: 2px 8px;
+            }}
+            QLineEdit:focus {{ border-color: {C_GREEN}; }}
+        """)
+        self._phrase_edit.textChanged.connect(self._on_phrase_changed)
+        form.addWidget(self._phrase_edit)
+
+        # 触发按键 (TagInput)
+        keys_lbl = QLabel(t("voice_dialog.keys"))
+        keys_lbl.setFont(_make_font(fn, 14))
+        keys_lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
+        form.addWidget(keys_lbl)
+        self._keys_input = TagInput(initial_value="", accent_color=C_AMBER)
+        self._keys_input.setMinimumHeight(36)
+        self._keys_input.focusChanged.connect(self._on_focus_changed)
+        # TagInput 没有 textChanged 信号; 编辑(add/remove tag)后用一个 timer 同步
+        form.addWidget(self._keys_input)
+
+        # 动作
+        act_lbl = QLabel(t("voice_dialog.action"))
+        act_lbl.setFont(_make_font(fn, 14))
+        act_lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
+        form.addWidget(act_lbl)
+        act_row = QHBoxLayout()
+        act_row.setSpacing(6)
+        self._action_btns = {}
+        self._current_action = 'click'
+        for k, label in (('click', t("voice_dialog.action_click")),
+                          ('press', t("voice_dialog.action_press")),
+                          ('release', t("voice_dialog.action_release"))):
+            btn = QPushButton(label)
+            btn.setFixedHeight(36)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFont(_make_font(fn, 13))
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.clicked.connect(lambda _, kk=k: self._on_action_clicked(kk))
+            act_row.addWidget(btn)
+            self._action_btns[k] = btn
+        form.addLayout(act_row)
+        self._update_action_btn_styles()
+
+        form.addStretch()
+
+        # 底部操作: 复制 / 删除‖保存
+        copy_btn = QPushButton(t("voice_dialog.copy"))
+        copy_btn.setFixedHeight(36)
+        copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy_btn.setFont(_make_font(fn, 14))
+        copy_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        copy_btn.clicked.connect(self._on_copy_command)
+        form.addWidget(copy_btn)
+
+        del_save_row = QHBoxLayout()
+        del_save_row.setSpacing(8)
+        del_btn = QPushButton(t("voice_dialog.delete_command"))
+        del_btn.setFixedHeight(40)
+        del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        del_btn.setFont(_make_font(fn, 14))
+        del_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CLOSE}; color: #FFF;
+                border: none; border-radius: 6px;
+            }}
+            QPushButton:hover {{ background: {C_CLOSE_H}; }}
+        """)
+        del_btn.clicked.connect(self._on_delete_current)
+        del_save_row.addWidget(del_btn, 1)
 
         save_btn = QPushButton(t("voice_dialog.save"))
         save_btn.setFixedHeight(40)
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        save_btn.setFont(_make_font(fn, 18, bold=True))
+        save_btn.setFont(_make_font(fn, 16, bold=True))
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER}; color: #FFF;
@@ -469,31 +699,21 @@ class VoiceSettingsDialog(QDialog):
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
         save_btn.clicked.connect(self._on_save)
-        bottom_row.addWidget(save_btn, 1)
+        del_save_row.addWidget(save_btn, 1)
+        form.addLayout(del_save_row)
 
-        left.addLayout(bottom_row)
+        v.addWidget(self._editor_form)
+        self._editor_form.setVisible(False)
+        return wrap
 
-        left_widget = QWidget()
-        left_widget.setLayout(left)
-        left_widget.setFixedWidth(self.LEFT_W)
-        left_widget.setStyleSheet("background: transparent;")
-        columns.addWidget(left_widget)
-        columns.addSpacing(20)
+    def _update_editor_visibility(self):
+        has = (self._current_idx >= 0 and self._current_idx < len(self._commands))
+        self._editor_form.setVisible(has)
+        self._editor_hint.setVisible(not has)
 
-        # Divider
-        divider = QFrame()
-        divider.setFixedWidth(1)
-        divider.setStyleSheet("background: #444;")
-        columns.addWidget(divider)
-        columns.addSpacing(10)
+    # ── (legacy 原文未删, 下面是 _build_lang_selector 旧代码, 已不再被调用) ──
 
-        # === Right column: tabbed (keys + macros) ===
-        right = self._build_right_tabbed_panel(fn)
-        columns.addWidget(right, 1)
-
-        root.addLayout(columns, 1)
-
-    def _build_lang_selector(self, fn):
+    def _build_lang_selector_legacy(self, fn):
         row = QHBoxLayout()
         row.setSpacing(8)
 
@@ -752,11 +972,10 @@ class VoiceSettingsDialog(QDialog):
                 pass
             self._test_dlg = None
 
-        commands = []
-        for row in self._command_rows:
-            data = row.get_data()
-            if data['phrase']:
-                commands.append(data)
+        # 先把编辑器当前值回写, 再收集
+        self._pull_editor_to_command()
+        commands = [dict(c) for c in self._commands
+                    if (c.get('phrase') or '').strip()]
         if not commands:
             return
 
@@ -1121,33 +1340,120 @@ class VoiceSettingsDialog(QDialog):
         if self._focus_widget and isinstance(self._focus_widget, TagInput):
             self._focus_widget.add_tag(key_name)
 
-    # ── Command list management ──
+    # ── 列表 ↔ 编辑同步 ──
 
     def _load_commands(self):
-        for cmd in self._commands:
-            self._add_command_row(
-                cmd.get('phrase', ''),
-                cmd.get('keys', ''),
-                cmd.get('action', 'click'))
+        # 入口保留 (旧逻辑无 op, 真正载入由 _rebuild_command_list 完成)
+        pass
 
-    def _add_command_row(self, phrase="", keys="", action="click"):
-        fn = get_font()
-        row = _CommandRow(phrase, keys, action, fn)
-        row.delete_clicked.connect(self._on_delete_command)
-        row.focus_changed.connect(self._on_focus_changed)
-        self._command_rows.append(row)
-        # Insert before the stretch
-        idx = self._cmd_layout.count() - 1
-        self._cmd_layout.insertWidget(idx, row)
+    def _rebuild_command_list(self):
+        """从 self._commands 重建左侧列表。"""
+        self._cmd_list.blockSignals(True)
+        self._cmd_list.clear()
+        for cmd in self._commands:
+            self._cmd_list.addItem(self._display_name(cmd))
+        self._cmd_list.blockSignals(False)
+
+    def _display_name(self, cmd: dict) -> str:
+        phrase = (cmd.get('phrase') or '').strip()
+        return phrase if phrase else t("voice_dialog.unnamed")
+
+    def _refresh_current_list_item(self):
+        """当前指令的 phrase 变化时, 同步刷新列表显示。"""
+        if 0 <= self._current_idx < self._cmd_list.count():
+            item = self._cmd_list.item(self._current_idx)
+            item.setText(self._display_name(self._commands[self._current_idx]))
+
+    def _on_list_row_changed(self, row: int):
+        # 切换前先把编辑器当前 TagInput 内容回写
+        self._pull_editor_to_command()
+        self._current_idx = row
+        if 0 <= row < len(self._commands):
+            self._load_command_to_editor(self._commands[row])
+        else:
+            self._current_idx = -1
+        self._update_editor_visibility()
+
+    def _load_command_to_editor(self, cmd: dict):
+        """把 cmd 内容载入编辑器 widgets。"""
+        self._phrase_edit.blockSignals(True)
+        self._phrase_edit.setText(cmd.get('phrase', ''))
+        self._phrase_edit.blockSignals(False)
+        # TagInput 没有 setValue 方法, 重置 tags 列表后重建
+        self._keys_input.tags = [p.strip() for p in cmd.get('keys', '').split('+') if p.strip()]
+        self._keys_input._build_tags()
+        self._current_action = cmd.get('action', 'click')
+        self._update_action_btn_styles()
+
+    def _pull_editor_to_command(self):
+        """把编辑器当前值回写到 _commands[_current_idx] (主要为 TagInput 同步)。"""
+        if not (0 <= self._current_idx < len(self._commands)):
+            return
+        self._commands[self._current_idx]['phrase'] = self._phrase_edit.text().strip()
+        self._commands[self._current_idx]['keys'] = self._keys_input.get_value()
+        self._commands[self._current_idx]['action'] = self._current_action
+
+    def _on_phrase_changed(self, text):
+        if 0 <= self._current_idx < len(self._commands):
+            self._commands[self._current_idx]['phrase'] = text.strip()
+            self._refresh_current_list_item()
+
+    def _on_action_clicked(self, action):
+        self._current_action = action
+        self._update_action_btn_styles()
+        if 0 <= self._current_idx < len(self._commands):
+            self._commands[self._current_idx]['action'] = action
+
+    def _update_action_btn_styles(self):
+        for k, btn in self._action_btns.items():
+            if k == self._current_action:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {C_CYBER}; color: #FFF;
+                        border: none; border-radius: 6px; padding: 0 12px;
+                    }}
+                    QPushButton:hover {{ background: {C_CYBER_H}; }}
+                """)
+            else:
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: #404040; color: #AAA;
+                        border: none; border-radius: 6px; padding: 0 12px;
+                    }}
+                    QPushButton:hover {{ background: #505050; }}
+                """)
 
     def _on_add_command(self):
-        self._add_command_row()
+        new_cmd = {'phrase': '', 'keys': '', 'action': 'click'}
+        self._commands.append(new_cmd)
+        self._cmd_list.addItem(self._display_name(new_cmd))
+        self._cmd_list.setCurrentRow(len(self._commands) - 1)
 
-    def _on_delete_command(self, row):
-        if row in self._command_rows:
-            self._command_rows.remove(row)
-            self._cmd_layout.removeWidget(row)
-            row.deleteLater()
+    def _on_copy_command(self):
+        if not (0 <= self._current_idx < len(self._commands)):
+            return
+        self._pull_editor_to_command()
+        src = self._commands[self._current_idx]
+        new_cmd = dict(src)
+        self._commands.insert(self._current_idx + 1, new_cmd)
+        self._rebuild_command_list()
+        self._cmd_list.setCurrentRow(self._current_idx + 1)
+
+    def _on_delete_current(self):
+        if not (0 <= self._current_idx < len(self._commands)):
+            return
+        idx = self._current_idx
+        # 先脱离选中, 避免 currentRowChanged 把空 commands 又载入
+        self._cmd_list.blockSignals(True)
+        self._commands.pop(idx)
+        self._cmd_list.takeItem(idx)
+        self._cmd_list.blockSignals(False)
+        if self._commands:
+            new_idx = min(idx, len(self._commands) - 1)
+            self._cmd_list.setCurrentRow(new_idx)
+        else:
+            self._current_idx = -1
+            self._update_editor_visibility()
 
     def _on_focus_changed(self, widget):
         self._focus_widget = widget
@@ -1155,11 +1461,11 @@ class VoiceSettingsDialog(QDialog):
     # ── Save ──
 
     def _on_save(self):
-        self._result_commands = []
-        for row in self._command_rows:
-            data = row.get_data()
-            if data['phrase']:  # skip empty phrases
-                self._result_commands.append(data)
+        # 先把编辑器当前值回写
+        self._pull_editor_to_command()
+        # 过滤空 phrase
+        self._result_commands = [dict(c) for c in self._commands
+                                  if (c.get('phrase') or '').strip()]
         self._result_language = self._language
         self.settings_saved.emit()
         self.accept()
