@@ -988,15 +988,21 @@ class ButtonEditorDialog(QDialog):
         # Page 0: 常规按键 (键盘 / 手柄都有)
         self._tab_stack.addWidget(self._build_key_palette(fn))
 
-        # 手柄模式: 不需要鼠标/宏 tab (输出是手柄按钮, 不是鼠标动作/键盘宏)
+        # 手柄模式: 隐藏鼠标 tab (鼠标输出不适用), 保留宏 tab (走 gp_macros 池)
+        # 此时宏 page 在 index 1; 键盘模式宏 page 在 index 2
         if self._is_gp:
             self._tab_mouse_btn.setVisible(False)
-            self._tab_macros_btn.setVisible(False)
+            self._tab_stack.addWidget(self._build_macro_tab(fn))
+            self._macro_tab_idx = 1
+            # tab_macros_btn 默认绑定 _switch_tab(2), 改成 1
+            self._tab_macros_btn.clicked.disconnect()
+            self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(1))
         else:
             # Page 1: 鼠标操作
             self._tab_stack.addWidget(self._build_mouse_palette(fn))
             # Page 2: 自定义宏
             self._tab_stack.addWidget(self._build_macro_tab(fn))
+            self._macro_tab_idx = 2
 
         panel_lay.addWidget(self._tab_stack, 1)
 
@@ -1016,8 +1022,11 @@ class ButtonEditorDialog(QDialog):
             border-radius: 0; padding: 0 14px 4px 14px;
         }} QPushButton:hover {{ color: #E0E0E0; }}"""
         self._tab_keys_btn.setStyleSheet(sel_style if idx == 0 else off_style)
-        self._tab_mouse_btn.setStyleSheet(sel_style if idx == 1 else off_style)
-        self._tab_macros_btn.setStyleSheet(sel_style if idx == 2 else off_style)
+        # 手柄模式无鼠标 tab; 键盘模式鼠标 tab 在 idx==1
+        if not getattr(self, '_is_gp', False):
+            self._tab_mouse_btn.setStyleSheet(sel_style if idx == 1 else off_style)
+        self._tab_macros_btn.setStyleSheet(
+            sel_style if idx == getattr(self, '_macro_tab_idx', 2) else off_style)
 
     def _build_mouse_palette(self, fn):
         """构建鼠标操作 Tab: 分类标签 + 5 个鼠标按键 flow"""
