@@ -13,14 +13,17 @@ if getattr(sys, 'frozen', False):
 else:
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='teggtouch.log',
-    filemode='w'
-)
+# 日志系统 (按会话归档 + UTF-8 + 环境头 + 异常钩子)
+from core.log_setup import setup_logging, install_excepthook
+_debug = ('--debug' in sys.argv) or bool(os.environ.get('TEGG_DEBUG'))
+setup_logging(debug=_debug)
+install_excepthook()
 logger = logging.getLogger(__name__)
+
+# 系统层调优：高优先级 + 刷新率自适应 (Win 平台生效，结果缓存)
+from core.system_tuning import boost_process_priority, frame_interval_ms
+boost_process_priority()
+frame_interval_ms()  # 提前预热并打印 Hz
 
 # ═══ i18n 初始化（必须在所有 UI 模块导入之前） ═══
 from core.i18n import load_locale, t

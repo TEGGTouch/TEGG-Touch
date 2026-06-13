@@ -24,6 +24,7 @@ from core.input_engine import (
 )
 from core.config_manager import load_hotkeys
 from core.constants import UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC
+from core.system_tuning import input_poll_interval_ms
 
 user32 = ctypes.windll.user32
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ class RunController(QObject):
 
         # 快捷键定时器
         self._timer = QTimer(self)
-        self._timer.setInterval(UPDATE_INTERVAL)
+        self._timer.setInterval(input_poll_interval_ms(UPDATE_INTERVAL))
         self._timer.timeout.connect(self._tick)
 
         # 自动回中

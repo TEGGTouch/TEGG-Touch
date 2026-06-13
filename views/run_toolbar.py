@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QFrame,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon, QPixmap
 
 from core.i18n import t, get_font
 from core.constants import PT_ON, PT_OFF, PT_BLOCK, TOOLBAR_WIDTH
@@ -423,21 +423,36 @@ class CollapsedBubble(QWidget):
 
         frame = QFrame(self)
         frame.setObjectName("bubble")
+        # hover 比常态背景加深 ~12%，可感知但不刺眼
         frame.setStyleSheet(f"""
             QFrame#bubble {{
                 background: {C_PANEL};
                 border-radius: 10px;
                 border: 1px solid #444;
             }}
+            QFrame#bubble:hover {{
+                background: #1F1F1F;
+                border: 1px solid #555;
+            }}
         """)
         outer.addWidget(frame)
 
         inner = QHBoxLayout(frame)
         inner.setContentsMargins(0, 0, 0, 0)
-        lbl = QLabel("蛋挞")
+        lbl = QLabel()
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl.setFont(_make_font(get_font(), 14, bold=True))
-        lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
+        lbl.setStyleSheet("background: transparent;")
+        # 从 assets/icon.ico 加载 (内含多分辨率), 缩放到 40px 居中显示
+        import os
+        from core.constants import APP_DIR
+        _ico_path = os.path.join(APP_DIR, "assets", "icon.ico")
+        _pm = QIcon(_ico_path).pixmap(40, 40) if os.path.exists(_ico_path) else QPixmap()
+        if not _pm.isNull():
+            lbl.setPixmap(_pm)
+        else:
+            lbl.setText("蛋挞")
+            lbl.setFont(_make_font(get_font(), 14, bold=True))
+            lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
         inner.addWidget(lbl)
 
         self._drag_pos = None

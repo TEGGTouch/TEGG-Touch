@@ -13,6 +13,7 @@ from PyQt6.QtGui import QPainter, QPainterPath, QPen, QColor, QCursor, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 
 from core.constants import APP_DIR, DEFAULT_CURSOR_STYLES, CURSOR_BASE_SIZE
+from core.system_tuning import frame_interval_ms
 
 # SVG viewBox 比例 (左上指针, 非正方形)
 CURSOR_VIEWBOX_W = 27
@@ -123,9 +124,9 @@ class VirtualCursorItem(QGraphicsItem):
 
         self._refresh_pixmap()
 
-        # 位置跟踪定时器
+        # 位置跟踪定时器 (跟随显示器刷新率)
         self._tracker = QTimer()
-        self._tracker.setInterval(16)  # ~60fps
+        self._tracker.setInterval(frame_interval_ms())
         self._tracker.timeout.connect(self._update_pos)
 
     def _refresh_pixmap(self):

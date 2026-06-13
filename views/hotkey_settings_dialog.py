@@ -431,7 +431,11 @@ class HotkeySettingsDialog(QDialog):
         self._language_page = self._build_language_page(fn)
         self._stack.addWidget(self._language_page)
 
-        # 页 3: 关于蛋挞
+        # 页 3: 日志 (诊断报告)
+        self._log_page = self._build_log_page(fn)
+        self._stack.addWidget(self._log_page)
+
+        # 页 4: 关于蛋挞
         self._about_page = self._build_about_page(fn)
         self._stack.addWidget(self._about_page)
 
@@ -501,7 +505,8 @@ class HotkeySettingsDialog(QDialog):
             (t("hotkey.menu_hotkeys"), 0),
             (t("hotkey.menu_cursor"), 1),
             (t("hotkey.menu_language"), 2),
-            (t("hotkey.menu_about"), 3),
+            (t("hotkey.menu_log"), 3),
+            (t("hotkey.menu_about"), 4),
         ]
         for label_text, idx in items:
             b = QPushButton(label_text)
@@ -531,12 +536,12 @@ class HotkeySettingsDialog(QDialog):
                 }}
                 QPushButton:hover {{ background: {bg_h}; color: #FFF; }}
             """)
-        # 仅快捷键页(0)显示右侧键位面板; 光标(1)/语言(2)/关于(3) 隐藏 right_wrapper → 两列
+        # 仅快捷键页(0)显示右侧键位面板; 其余页隐藏 right_wrapper → 两列
         if hasattr(self, '_right_wrapper'):
             self._right_wrapper.setVisible(idx == 0)
-        # 光标(1) 和 关于(3) 页拉宽 left_wrapper 和 stack, 让内容撑满
+        # 光标(1) / 日志(3) / 关于(4) 页拉宽 left_wrapper 和 stack
         if hasattr(self, '_left_wrapper'):
-            if idx in (1, 3):
+            if idx in (1, 3, 4):
                 self._stack.setFixedWidth(self.WIDE_CONTENT_W)
                 self._left_wrapper.setFixedWidth(self.WIDE_LEFT_W)
             else:
@@ -953,6 +958,213 @@ class HotkeySettingsDialog(QDialog):
         self._selected_lang = get_lang()
         self._update_lang_buttons()
         return page
+
+    # ── 日志 (诊断报告) 页 ──
+
+    def _build_log_page(self, fn):
+        """日志 (诊断报告) 页 — 通栏布局: 顶部 标题+说明 跨整行, 下方两列 状态/操作"""
+        from core.log_setup import (
+            get_session_log_path, list_recent_log_paths,
+        )
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        # ── 顶部: 标题 + 说明 ──
+        title = QLabel(t("hotkey.log_page_title"))
+        title.setFont(_make_font(fn, 24, bold=True))
+        title.setStyleSheet("color: #F59E0B; background: transparent;")
+        v.addWidget(title)
+        v.addSpacing(8)
+        tip = QLabel(t("hotkey.log_page_tip"))
+        tip.setFont(_make_font(fn, 14))
+        tip.setStyleSheet("color: #AAA; background: transparent;")
+        tip.setWordWrap(True)
+        v.addWidget(tip)
+
+        v.addSpacing(20)
+        sep1 = QFrame(); sep1.setFixedHeight(1); sep1.setStyleSheet("background: #444;")
+        v.addWidget(sep1)
+        v.addSpacing(20)
+
+        # ── 下方双栏: 左 状态卡 / 右 操作卡 ──
+        two_col = QHBoxLayout()
+        two_col.setSpacing(24)
+
+        # === 左栏: 状态卡 ===
+        left = QFrame()
+        left.setStyleSheet(
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(20, 18, 20, 18)
+        ll.setSpacing(10)
+
+        # 当前会话日志
+        cur_path = get_session_log_path() or '-'
+        cur_lbl = QLabel(t("hotkey.log_session_current"))
+        cur_lbl.setFont(_make_font(fn, 13, bold=True))
+        cur_lbl.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        ll.addWidget(cur_lbl)
+        self._log_cur_path_lbl = QLabel(cur_path)
+        self._log_cur_path_lbl.setFont(_make_font(fn, 12))
+        self._log_cur_path_lbl.setStyleSheet(
+            "color: #888; background: transparent; border: none; font-family: monospace;")
+        self._log_cur_path_lbl.setWordWrap(True)
+        self._log_cur_path_lbl.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse)
+        ll.addWidget(self._log_cur_path_lbl)
+
+        ll.addSpacing(6)
+        sep_in = QFrame(); sep_in.setFixedHeight(1); sep_in.setStyleSheet("background: #3A3A3A;")
+        ll.addWidget(sep_in)
+        ll.addSpacing(6)
+
+        # 保留数
+        kept_n = len(list_recent_log_paths())
+        self._log_retained_lbl = QLabel(t("hotkey.log_retained", n=kept_n))
+        self._log_retained_lbl.setFont(_make_font(fn, 13))
+        self._log_retained_lbl.setStyleSheet(
+            "color: #CCC; background: transparent; border: none;")
+        ll.addWidget(self._log_retained_lbl)
+
+        ll.addSpacing(12)
+
+        # 启用日志开关
+        self._log_enable_cb = QPushButton(t("hotkey.log_enable"))
+        self._log_enable_cb.setCheckable(True)
+        self._log_enable_cb.setChecked(self._is_logging_enabled())
+        self._log_enable_cb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._log_enable_cb.setFixedHeight(34)
+        self._log_enable_cb.setFont(_make_font(fn, 13, bold=True))
+        self._log_enable_cb.clicked.connect(self._on_toggle_logging)
+        self._apply_log_enable_btn_style()
+        ll.addWidget(self._log_enable_cb)
+        en_hint = QLabel(t("hotkey.log_enable_hint"))
+        en_hint.setFont(_make_font(fn, 11))
+        en_hint.setStyleSheet("color: #777; background: transparent; border: none;")
+        en_hint.setWordWrap(True)
+        ll.addWidget(en_hint)
+
+        ll.addStretch()
+        two_col.addWidget(left, 1)
+
+        # === 右栏: 操作卡 ===
+        right = QFrame()
+        right.setStyleSheet(
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+        rl = QVBoxLayout(right)
+        rl.setContentsMargins(20, 18, 20, 18)
+        rl.setSpacing(14)
+
+        # 操作标题
+        ops_lbl = QLabel(t("hotkey.log_export").rsplit('—', 1)[0].strip() or t("hotkey.menu_log"))
+        ops_lbl.setFont(_make_font(fn, 13, bold=True))
+        ops_lbl.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        # 用更通用的"操作" — 直接取菜单名 + 后缀, 简单点
+        ops_lbl.setText(t("hotkey.menu_log"))
+        rl.addWidget(ops_lbl)
+
+        # 打开日志文件夹
+        open_btn = QPushButton(t("hotkey.log_open_folder"))
+        open_btn.setFixedHeight(40)
+        open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        open_btn.setFont(_make_font(fn, 14))
+        open_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px; padding: 0 14px;
+                text-align: left;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        open_btn.clicked.connect(self._on_open_log_folder)
+        rl.addWidget(open_btn)
+
+        rl.addSpacing(4)
+
+        # 导出诊断包 (主按钮)
+        export_btn = QPushButton(t("hotkey.log_export"))
+        export_btn.setFixedHeight(48)
+        export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        export_btn.setFont(_make_font(fn, 15, bold=True))
+        export_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CYBER}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 14px;
+                text-align: left;
+            }}
+            QPushButton:hover {{ background: {C_CYBER_H}; }}
+        """)
+        export_btn.clicked.connect(self._on_export_diag)
+        rl.addWidget(export_btn)
+
+        ex_hint = QLabel(t("hotkey.log_export_hint"))
+        ex_hint.setFont(_make_font(fn, 12))
+        ex_hint.setStyleSheet("color: #999; background: transparent; border: none;")
+        ex_hint.setWordWrap(True)
+        rl.addWidget(ex_hint)
+
+        rl.addStretch()
+        two_col.addWidget(right, 1)
+
+        v.addLayout(two_col)
+        v.addStretch()
+        return page
+
+    # ── 日志页操作 ──
+
+    def _is_logging_enabled(self) -> bool:
+        import logging
+        root = logging.getLogger()
+        # FileHandler 是否还存在且 level <= CRITICAL
+        for h in root.handlers:
+            if isinstance(h, logging.FileHandler) and h.level <= logging.CRITICAL:
+                return True
+        return False
+
+    def _on_toggle_logging(self):
+        """开关日志: 关 = file handler.level=CRITICAL+1, 开 = 恢复 INFO"""
+        import logging
+        enabled = self._log_enable_cb.isChecked()
+        root = logging.getLogger()
+        for h in root.handlers:
+            if isinstance(h, logging.FileHandler):
+                h.setLevel(logging.INFO if enabled else logging.CRITICAL + 1)
+        self._apply_log_enable_btn_style()
+
+    def _apply_log_enable_btn_style(self):
+        if self._log_enable_cb.isChecked():
+            bg, bg_h, fg = C_CYBER, C_CYBER_H, "#FFF"
+            prefix = "\u2713 "
+        else:
+            bg, bg_h, fg = "#404040", "#505050", "#AAA"
+            prefix = ""
+        self._log_enable_cb.setText(prefix + t("hotkey.log_enable"))
+        self._log_enable_cb.setStyleSheet(f"""
+            QPushButton {{
+                background: {bg}; color: {fg};
+                border: none; border-radius: 6px; padding: 0 14px;
+                text-align: left;
+            }}
+            QPushButton:hover {{ background: {bg_h}; }}
+        """)
+
+    def _on_open_log_folder(self):
+        from core.log_setup import _logs_root
+        import subprocess
+        path = _logs_root()
+        try:
+            subprocess.Popen(['explorer', path])
+        except Exception:
+            pass
+
+    def _on_export_diag(self):
+        """导出诊断包到桌面 + 进度弹窗"""
+        from views.diag_export_dialog import DiagExportDialog
+        dlg = DiagExportDialog(self)
+        dlg.exec()
 
     # ── 关于页 ──
 

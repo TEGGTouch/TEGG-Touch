@@ -12,6 +12,7 @@ from PyQt6.QtGui import QPainter, QIcon
 
 from core.i18n import t, load_locale
 from core.constants import APP_VERSION, APP_DIR, PT_ON, PT_OFF, PT_BLOCK, DEFAULT_TRANSPARENCY, DEFAULT_GRID_SIZE
+from core.system_tuning import frame_interval_ms
 from core.config_manager import (
     init_profiles, load_hotkeys, get_active_profile_name,
     load_profile, save_profile, set_active_profile,
@@ -172,14 +173,14 @@ class OverlayWindow(QGraphicsView):
         self._virtual_cursor.setVisible(False)
         self._scene.addItem(self._virtual_cursor)
 
-        # ── 智能穿透轮询定时器 (编辑模式) ──
+        # ── 智能穿透轮询定时器 (编辑模式, 跟随显示器刷新率) ──
         self._smart_pt_timer = QTimer(self)
-        self._smart_pt_timer.setInterval(16)  # ~60fps，与原版 update_loop 对齐
+        self._smart_pt_timer.setInterval(frame_interval_ms())
         self._smart_pt_timer.timeout.connect(self._poll_smart_passthrough)
 
         # 连接场景信号
         self._scene.button_double_clicked.connect(self._open_button_editor)
-        self._scene.wheel_rebuilt.connect(lambda: self._apply_item_opacity(self._current_opacity))
+        self._scene.wheel_rebuilt.connect(self._on_wheel_rebuilt)
 
         # ── 默认透明度 (与工具栏滑块初始值一致) ──
         self._apply_item_opacity(DEFAULT_TRANSPARENCY)
@@ -244,6 +245,14 @@ class OverlayWindow(QGraphicsView):
         item.hoverActivated.connect(self._run_controller.on_hover_activated)
         item.hoverDeactivated.connect(self._run_controller.on_hover_deactivated)
         item.actionTriggered.connect(self._run_controller.on_action_triggered)
+
+    def _on_wheel_rebuilt(self):
+        """轮盘重建后:重新连接新 sector/ring item 的信号 + 同步透明度与模式
+        修 bug:中心环/中二环切换 mode 时 _rebuild_wheel 会销毁旧 item 重建新 item,
+        若不重连信号,新 item 的 actionTriggered 无人接收,视觉触发但按键不发送。"""
+        self._wire_wheel_signals()
+        self._scene.set_mode(self._current_mode)
+        self._apply_item_opacity(self._current_opacity)
 
     # ── 模式切换 ──
 
