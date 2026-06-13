@@ -95,6 +95,32 @@ BTN_TYPE_CENTER_BAND = "center_band"
 BTN_TYPE_WHEEL_SECTOR = "wheel_sector"
 BTN_TYPE_WHEEL_RING = "wheel_center_ring"
 BTN_TYPE_WHEEL_INNER_RING = "wheel_inner_ring"
+# 手柄模式三类按钮 (gamepad_install 完成后切到手柄 sim_mode 才显示)
+BTN_TYPE_GP_BUTTON = "gp_button"     # 手柄键 (A/B/X/Y/LB/RB/Start/Back/D-pad/L3/R3 等)
+BTN_TYPE_GP_STICK = "gp_stick"       # 摇杆 (圆形, 模拟左/右摇杆)
+BTN_TYPE_GP_TRIGGER = "gp_trigger"   # 扳机 (矩形, 模拟 LT/RT 行程)
+
+# 摇杆 / 扳机标识
+STICK_ID_LEFT = "L"
+STICK_ID_RIGHT = "R"
+TRIGGER_ID_LEFT = "L"
+TRIGGER_ID_RIGHT = "R"
+
+# 手柄按键标签 (用于编辑器面板和持久化前缀)
+# 实际枚举映射在 engine/gamepad_engine.py 中, 避免 constants.py 依赖 vgamepad
+GP_BUTTON_LABELS = [
+    "A", "B", "X", "Y",
+    "LB", "RB", "LT", "RT",
+    "Start", "Back", "Guide",
+    "D-Up", "D-Down", "D-Left", "D-Right",
+    "L3", "R3",
+]
+GP_KEY_PREFIX = "gp:"   # 按键映射字段值的前缀, 区分于 mouse: / macro:
+
+# 手柄按钮配色 (蓝紫调, 区分键盘按钮)
+COLOR_GP_BTN_BG = "#1A1E2E"
+COLOR_GP_BTN_BORDER = "#3B82F6"
+COLOR_GP_BTN_TEXT = "#93C5FD"
 
 # === 中心轮盘配置 ===
 # 碰撞区域（hit test）— 相邻组件碰撞半径无缝衔接，无死区
