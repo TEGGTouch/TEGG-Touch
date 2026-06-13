@@ -5,13 +5,13 @@ TEGG Touch 蛋挞 (PyQt6) - touch_button_item.py
 
 from PyQt6.QtWidgets import QGraphicsObject, QGraphicsItem
 from PyQt6.QtCore import Qt, QRectF, QPointF, QTimer, pyqtSignal, pyqtProperty
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPainterPath
+from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPainterPath, QFontDatabase, QFontMetrics
 
 from core.constants import (
     BTN_RADIUS, BTN_MARGIN, BTN_TYPE_CENTER_BAND, BTN_TYPE_GP_BUTTON,
     COLOR_BTN_BG, COLOR_BTN_BORDER, COLOR_TEXT,
     COLOR_GP_BTN_BG, COLOR_GP_BTN_BORDER, COLOR_GP_BTN_TEXT,
-    GP_KEY_PREFIX, DEFAULT_GRID_SIZE,
+    GP_KEY_PREFIX, GP_KEY_TO_LABEL, DEFAULT_GRID_SIZE,
 )
 from core.i18n import t, get_font
 from models.button_model import ButtonData
@@ -87,19 +87,33 @@ def _format_btn_name(name):
     return name
 
 
-def _strip_gp(key: str) -> str:
-    """剥离 'gp:' 前缀, 用于显示。"""
-    return key[len(GP_KEY_PREFIX):] if key.startswith(GP_KEY_PREFIX) else key
+def _gp_display(key: str) -> str:
+    """gp: 字段值 → 友好显示 label (例如 'gp:D-Left' → '←', 'gp:LB' → '左肩 LB')。
+    非 gp 字段直接返回原样。"""
+    if not key.startswith(GP_KEY_PREFIX):
+        return key
+    storage = key[len(GP_KEY_PREFIX):]
+    return GP_KEY_TO_LABEL.get(storage, storage)
 
 
-def _primary_gp_label(data) -> str:
-    """提取第一个非空 gp 字段的标签 (用作 icon)。"""
-    for f in ('hover', 'lclick', 'rclick', 'mclick',
-              'wheelup', 'wheeldown', 'xbutton1', 'xbutton2', 'hover_toggle'):
-        val = getattr(data, f, '')
-        if val and val.startswith(GP_KEY_PREFIX):
-            return _strip_gp(val.split('+')[0])
-    return ''
+# 手柄键固定图标 (Segoe Fluent Icons / MDL2 Assets: \uE7FC = GameConsole)
+GP_ICON_CHAR = "\uE7FC"
+GP_ICON_FALLBACK = "GP"  # 字体不可用时降级文本
+
+_ICON_FONT = None  # 缓存检测结果: "Segoe Fluent Icons" | "Segoe MDL2 Assets" | ""
+
+def _get_icon_font_name() -> str:
+    """惰性检测系统是否有 Segoe 图标字体, 缓存结果。"""
+    global _ICON_FONT
+    if _ICON_FONT is None:
+        fams = QFontDatabase.families()
+        if "Segoe Fluent Icons" in fams:
+            _ICON_FONT = "Segoe Fluent Icons"
+        elif "Segoe MDL2 Assets" in fams:
+            _ICON_FONT = "Segoe MDL2 Assets"
+        else:
+            _ICON_FONT = ""
+    return _ICON_FONT
 
 
 class TouchButtonItem(QGraphicsObject):
@@ -232,6 +246,50 @@ class TouchButtonItem(QGraphicsObject):
         def _make_px_font(px, bold=True):
             return _get_cached_font(font_name, px, bold)
 
+        # ── 手柄键: 跟回中带一样的 icon+name 布局 ──
+        # icon 永远是固定 Segoe gamepad 字形, name/key 都用 font_px 同尺寸, 居中堆叠
+        # 跟按钮形状无关 (font_px 只跟 grid_size 走)
+        if is_gp:
+            # 底部文字: normal=name, active=去前缀的友好 label (例如 'gp:LB' → '左肩 LB')
+            if self._visual_state != 'normal':
+                key_field = STATE_TO_KEY.get(self._visual_state)
+                if key_field == 'hover' and getattr(self.data, 'hover_mode', 'trigger') == 'toggle':
+                    key_field = 'hover_toggle'
+                key_val = getattr(self.data, key_field, '') if key_field else ''
+                if key_val:
+                    s = '+'.join(_gp_display(k) for k in key_val.split('+'))
+                    # 长 label (例如 '左肩 LB') 不截断, 让 Qt elide; 超 8 字符再截
+                    bottom_text = s if len(s) <= 8 else s[:7] + '…'
+                else:
+                    bottom_text = _format_btn_name(self.data.name) if self.data.name else ''
+            else:
+                bottom_text = _format_btn_name(self.data.name) if self.data.name else ''
+
+            # icon 用 Segoe 字体, 文字用常规字体, 两者都是 font_px
+            icon_font_name = _get_icon_font_name()
+            if icon_font_name:
+                icon_font = _get_cached_font(icon_font_name, font_px, bold=False)
+                icon_char = GP_ICON_CHAR
+            else:
+                icon_font = _make_px_font(font_px, bold=True)
+                icon_char = GP_ICON_FALLBACK
+            name_font = _make_px_font(font_px)
+
+            # 用 QFontMetrics 算两行高度, 整体居中 (无额外 gap, 模拟 '\n')
+            icon_h = QFontMetrics(icon_font).height()
+            name_h = QFontMetrics(name_font).height()
+            total_h = icon_h + name_h
+            y0 = rect.y() + (rect.height() - total_h) / 2
+
+            painter.setPen(text_color)
+            painter.setFont(icon_font)
+            painter.drawText(QRectF(rect.x(), y0, rect.width(), icon_h),
+                             Qt.AlignmentFlag.AlignCenter, icon_char)
+            painter.setFont(name_font)
+            painter.drawText(QRectF(rect.x(), y0 + icon_h, rect.width(), name_h),
+                             Qt.AlignmentFlag.AlignCenter, bottom_text)
+            return
+
         if is_band:
             display_text = t("canvas.center_band_label")
             painter.setFont(_make_px_font(font_px))
@@ -242,27 +300,11 @@ class TouchButtonItem(QGraphicsObject):
             if key_field == 'hover' and getattr(self.data, 'hover_mode', 'trigger') == 'toggle':
                 key_field = 'hover_toggle'
             key_val = getattr(self.data, key_field, '') if key_field else ''
-            # 手柄键: 去 'gp:' 前缀显示
-            if is_gp and key_val:
-                key_val = '+'.join(_strip_gp(k) for k in key_val.split('+'))
             if key_val:
-                display_text = key_val if len(key_val) <= 5 else key_val[:4] + '..'
+                display_text = key_val if len(key_val) <= 3 else key_val[:2] + '..'
                 painter.setFont(_make_px_font(font_px + 6))
             else:
                 display_text = _format_btn_name(self.data.name)
-                painter.setFont(_make_px_font(font_px))
-        elif is_gp:
-            # 手柄键 normal: 两行 — 第一行 icon (主 gp 标签), 第二行 name
-            gp_label = _primary_gp_label(self.data)
-            name = self.data.name or ''
-            if gp_label and name:
-                display_text = f"{gp_label}\n{_format_btn_name(name)}"
-                painter.setFont(_make_px_font(font_px))
-            elif gp_label:
-                display_text = gp_label
-                painter.setFont(_make_px_font(font_px + 10, bold=True))
-            else:
-                display_text = _format_btn_name(name) if name else ''
                 painter.setFont(_make_px_font(font_px))
         else:
             display_text = _format_btn_name(self.data.name)

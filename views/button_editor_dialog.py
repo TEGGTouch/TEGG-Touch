@@ -22,7 +22,7 @@ from core.constants import (
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL, C_DELAY, ACTION_COLORS,
-    BTN_TYPE_GP_BUTTON, GP_BUTTON_LABELS, GP_KEY_PREFIX,
+    BTN_TYPE_GP_BUTTON, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
 )
 from models.button_model import ButtonData
 
@@ -747,9 +747,9 @@ class ButtonEditorDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
-        # 手柄键模式: 只显示手柄按键分类; 键盘模式: 显示所有键盘分类
+        # 手柄键模式: 只显示手柄按键分类 (用显示 label, 点击时反查存储 key)
         if self._is_gp:
-            cats = [(t("key_cat.gp_buttons"), list(GP_BUTTON_LABELS))]
+            cats = [(t("key_cat.gp_buttons"), [label for _, label in GP_BUTTONS])]
         else:
             cats = _get_key_categories()
 
@@ -783,12 +783,14 @@ class ButtonEditorDialog(QDialog):
         return container
 
     def _on_key_clicked(self, key_name):
-        """键位面板点击 → 插入到聚焦的输入控件 (手柄模式自动加 'gp:' 前缀)"""
+        """键位面板点击 → 插入到聚焦的输入控件
+        手柄模式: 显示 label 反查存储 key, 加 'gp:' 前缀 (例如 '左肩 LB' → 'gp:LB')"""
         w = self._focus_widget
         if w is None:
             return
         if self._is_gp:
-            key_name = GP_KEY_PREFIX + key_name
+            storage_key = GP_LABEL_TO_KEY.get(key_name, key_name)
+            key_name = GP_KEY_PREFIX + storage_key
         if isinstance(w, TagInput):
             w.add_tag(key_name)
         elif isinstance(w, (_FocusLineEdit, QLineEdit)):

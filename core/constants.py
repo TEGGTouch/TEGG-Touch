@@ -106,15 +106,31 @@ STICK_ID_RIGHT = "R"
 TRIGGER_ID_LEFT = "L"
 TRIGGER_ID_RIGHT = "R"
 
-# 手柄按键标签 (用于编辑器面板和持久化前缀)
-# 实际枚举映射在 engine/gamepad_engine.py 中, 避免 constants.py 依赖 vgamepad
-GP_BUTTON_LABELS = [
-    "A", "B", "X", "Y",
-    "LB", "RB", "LT", "RT",
-    "Start", "Back", "Guide",
-    "D-Up", "D-Down", "D-Left", "D-Right",
-    "L3", "R3",
+# 手柄按键: (存储 key, 显示 label) 元组列表
+# 存储 key 是 ASCII 简称 (向后兼容 + 引擎映射), 显示 label 是中英混合 (用户视图)
+# 实际 XUSB 枚举映射在 engine/gamepad_engine.py 中, 避免 constants.py 依赖 vgamepad
+GP_BUTTONS = [
+    ("A",       "A"),
+    ("B",       "B"),
+    ("X",       "X"),
+    ("Y",       "Y"),
+    ("LB",      "左肩 LB"),
+    ("RB",      "右肩 RB"),
+    ("LT",      "左扳 LT"),
+    ("RT",      "右扳 RT"),
+    ("Start",   "菜单 Start"),
+    ("Back",    "视图 Back"),
+    ("Guide",   "Xbox"),
+    ("D-Up",    "↑"),
+    ("D-Down",  "↓"),
+    ("D-Left",  "←"),
+    ("D-Right", "→"),
+    ("L3",      "左摇按 L3"),
+    ("R3",      "右摇按 R3"),
 ]
+GP_KEY_TO_LABEL = dict(GP_BUTTONS)         # 存储 key → 显示 label (按钮上活跃态显示用)
+GP_LABEL_TO_KEY = {l: k for k, l in GP_BUTTONS}  # label → 存储 key (编辑器点击时反查)
+
 GP_KEY_PREFIX = "gp:"   # 按键映射字段值的前缀, 区分于 mouse: / macro:
 
 # 手柄按钮配色 (蓝紫调, 区分键盘按钮)
