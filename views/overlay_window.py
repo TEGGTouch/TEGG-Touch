@@ -124,8 +124,9 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.quit_clicked.connect(self.close)
         self._edit_toolbar.minimize_clicked.connect(self.minimize_to_taskbar)
         self._edit_toolbar.sim_mode_change_requested.connect(self._on_sim_mode_change_requested)
-        self._edit_toolbar.left_stick_clicked.connect(self._on_stick_placeholder_clicked)
-        self._edit_toolbar.right_stick_clicked.connect(self._on_stick_placeholder_clicked)
+        self._edit_toolbar.add_gp_button_clicked.connect(self._on_add_gp_button)
+        self._edit_toolbar.add_gp_stick_clicked.connect(self._on_add_gp_stick)
+        self._edit_toolbar.add_gp_trigger_clicked.connect(self._on_add_gp_trigger)
 
         # 连接运行工具栏信号
         self._run_toolbar.stop_clicked.connect(self.to_edit)
@@ -531,9 +532,19 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.set_sim_mode(mode)
         self._persist_sim_mode_flags()
 
-    def _on_stick_placeholder_clicked(self):
-        """左/右摇杆按钮当前是占位，统一提示『即将上线』。"""
-        self._toast.show_toast(t("toolbar.stick_coming_soon"))
+    # ── 手柄模式三类按钮添加 (C3-C5 接入真实 scene factory) ──
+
+    def _on_add_gp_button(self):
+        """添加手柄键 — C3 接入"""
+        self._toast.show_toast(t("toolbar.gp_coming_soon"))
+
+    def _on_add_gp_stick(self):
+        """添加摇杆 — C4 接入"""
+        self._toast.show_toast(t("toolbar.gp_coming_soon"))
+
+    def _on_add_gp_trigger(self):
+        """添加扳机 — C5 接入"""
+        self._toast.show_toast(t("toolbar.gp_coming_soon"))
 
     def _persist_sim_mode_flags(self):
         """合并写入 sim_mode + gamepad_install_seen 到 hotkeys.json。"""

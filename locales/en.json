@@ -17,9 +17,10 @@
     "sim_keyboard": "Keyboard",
     "sim_gamepad": "Gamepad",
     "sim_tooltip": "Switch simulation mode (keyboard / gamepad)",
-    "left_stick": "Left Stick",
-    "right_stick": "Right Stick",
-    "stick_coming_soon": "Stick feature coming soon, stay tuned",
+    "add_gp_button": "GP Btn",
+    "add_gp_stick": "Stick",
+    "add_gp_trigger": "Trigger",
+    "gp_coming_soon": "This button editor is coming soon",
     "opacity": "Opacity",
     "grid": "Grid",
     "center_wheel": "Wheel",
@@ -100,7 +101,10 @@
     "stop": "Stop and return to edit mode",
     "voice": "Configure voice commands to trigger keys by voice",
     "voice_run": "Voice recognition: trigger keys by speaking",
-    "collapse": "Collapse toolbar into a draggable bubble; double-click bubble to expand"
+    "collapse": "Collapse toolbar into a draggable bubble; double-click bubble to expand",
+    "add_gp_button": "Add gamepad button (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 etc.)",
+    "add_gp_stick": "Add joystick (circular, simulates left/right stick)",
+    "add_gp_trigger": "Add trigger (rectangular, simulates LT/RT value)"
   },
   "hotkey": {
     "title": "Settings",

@@ -187,8 +187,10 @@ class EditToolbar(QWidget):
     quit_clicked = pyqtSignal()
     moved = pyqtSignal()  # 工具栏被拖拽移动时发出，用于同步软键盘位置
     sim_mode_change_requested = pyqtSignal(str)  # 'keyboard' | 'gamepad'
-    left_stick_clicked = pyqtSignal()
-    right_stick_clicked = pyqtSignal()
+    # 手柄模式三类按钮添加请求 (gp_btn 编辑器选 A/B/X/Y/...; stick 选左/右; trigger 选 LT/RT)
+    add_gp_button_clicked = pyqtSignal()
+    add_gp_stick_clicked = pyqtSignal()
+    add_gp_trigger_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -253,15 +255,14 @@ class EditToolbar(QWidget):
         self._install_tip(self._profile_btn)
         r1.addWidget(self._profile_btn)
 
-        # 添加按钮 (键盘 + 手柄 两种模式都显示)
-        add_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_button"),
-                               C_GRAY, C_GRAY_H)
-        add_btn.setToolTip(t("tooltip.add_button"))
-        self._install_tip(add_btn)
-        add_btn.clicked.connect(self.add_button_clicked.emit)
-        r1.addWidget(add_btn)
+        # ── 键盘模式专属: +按键 / +回中带 / 中心轮盘 ──
+        self._add_kb_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_button"),
+                                        C_GRAY, C_GRAY_H)
+        self._add_kb_btn.setToolTip(t("tooltip.add_button"))
+        self._install_tip(self._add_kb_btn)
+        self._add_kb_btn.clicked.connect(self.add_button_clicked.emit)
+        r1.addWidget(self._add_kb_btn)
 
-        # ── 键盘模式专属: 回中带 + 中心轮盘 ──
         self._cb_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_center_band"),
                                     C_GRAY, C_GRAY_H)
         self._cb_btn.setToolTip(t("tooltip.center_band"))
@@ -278,22 +279,30 @@ class EditToolbar(QWidget):
         self._wheel_btn.clicked.connect(self._on_wheel_toggle)
         r1.addWidget(self._wheel_btn)
 
-        # ── 手柄模式专属: 左/右摇杆 (默认隐藏, toggle 行为同中心轮盘) ──
-        self._left_stick_on = False
-        self._left_stick_btn = _IconTextBtn("\uE739", "\u25a3", t("toolbar.left_stick"),
-                                            C_GRAY, C_GRAY_H)
-        self._left_stick_btn.clicked.connect(self._on_left_stick_toggle)
-        self._install_tip(self._left_stick_btn)
-        self._left_stick_btn.setVisible(False)
-        r1.addWidget(self._left_stick_btn)
+        # ── 手柄模式专属: +手柄键 / +摇杆 / +扳机 (默认隐藏) ──
+        self._add_gp_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_gp_button"),
+                                        C_GRAY, C_GRAY_H)
+        self._add_gp_btn.setToolTip(t("tooltip.add_gp_button"))
+        self._install_tip(self._add_gp_btn)
+        self._add_gp_btn.clicked.connect(self.add_gp_button_clicked.emit)
+        self._add_gp_btn.setVisible(False)
+        r1.addWidget(self._add_gp_btn)
 
-        self._right_stick_on = False
-        self._right_stick_btn = _IconTextBtn("\uE739", "\u25a3", t("toolbar.right_stick"),
+        self._add_stick_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_gp_stick"),
+                                           C_GRAY, C_GRAY_H)
+        self._add_stick_btn.setToolTip(t("tooltip.add_gp_stick"))
+        self._install_tip(self._add_stick_btn)
+        self._add_stick_btn.clicked.connect(self.add_gp_stick_clicked.emit)
+        self._add_stick_btn.setVisible(False)
+        r1.addWidget(self._add_stick_btn)
+
+        self._add_trigger_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_gp_trigger"),
                                              C_GRAY, C_GRAY_H)
-        self._right_stick_btn.clicked.connect(self._on_right_stick_toggle)
-        self._install_tip(self._right_stick_btn)
-        self._right_stick_btn.setVisible(False)
-        r1.addWidget(self._right_stick_btn)
+        self._add_trigger_btn.setToolTip(t("tooltip.add_gp_trigger"))
+        self._install_tip(self._add_trigger_btn)
+        self._add_trigger_btn.clicked.connect(self.add_gp_trigger_clicked.emit)
+        self._add_trigger_btn.setVisible(False)
+        r1.addWidget(self._add_trigger_btn)
 
         # 分隔线
         r1.addWidget(_VSep())
@@ -563,25 +572,6 @@ class EditToolbar(QWidget):
             self._wheel_btn.set_icon_text("\uE739", "\u25a3")
         self.wheel_clicked.emit()
 
-    def _on_left_stick_toggle(self):
-        self._left_stick_on = not self._left_stick_on
-        self._apply_stick_visual(self._left_stick_btn, self._left_stick_on)
-        self.left_stick_clicked.emit()
-
-    def _on_right_stick_toggle(self):
-        self._right_stick_on = not self._right_stick_on
-        self._apply_stick_visual(self._right_stick_btn, self._right_stick_on)
-        self.right_stick_clicked.emit()
-
-    def _apply_stick_visual(self, btn, on: bool):
-        """同中心轮盘: 开启 → 玫红 + 勾选, 关闭 → 深灰 + 方框。"""
-        if on:
-            btn.set_colors(C_WH_ON, C_WH_ON_H)
-            btn.set_icon_text("\uE73E", "\u2611")
-        else:
-            btn.set_colors(C_GRAY, C_GRAY_H)
-            btn.set_icon_text("\uE739", "\u25a3")
-
     def _on_opacity(self, value):
         self._val_lbl.setText(f"{value}%")
         self.opacity_changed.emit(value / 100.0)
@@ -681,19 +671,23 @@ class EditToolbar(QWidget):
         self._sim_mode = mode
         if mode == 'gamepad':
             self._sm_btn.setText(t("toolbar.sim_gamepad") + " \u25BC")
+            self._add_kb_btn.setVisible(False)
             self._cb_btn.setVisible(False)
             self._wheel_btn.setVisible(False)
-            self._left_stick_btn.setVisible(True)
-            self._right_stick_btn.setVisible(True)
+            self._add_gp_btn.setVisible(True)
+            self._add_stick_btn.setVisible(True)
+            self._add_trigger_btn.setVisible(True)
         else:
             self._sm_btn.setText(t("toolbar.sim_keyboard") + " \u25BC")
+            self._add_kb_btn.setVisible(True)
             self._cb_btn.setVisible(True)
             self._wheel_btn.setVisible(True)
-            self._left_stick_btn.setVisible(False)
-            self._right_stick_btn.setVisible(False)
+            self._add_gp_btn.setVisible(False)
+            self._add_stick_btn.setVisible(False)
+            self._add_trigger_btn.setVisible(False)
         # 强制整条布局链 invalidate，否则 hide 后的 sizeHint 仍可能含旧宽度
-        for w in (self._cb_btn, self._wheel_btn,
-                  self._left_stick_btn, self._right_stick_btn):
+        for w in (self._add_kb_btn, self._cb_btn, self._wheel_btn,
+                  self._add_gp_btn, self._add_stick_btn, self._add_trigger_btn):
             w.updateGeometry()
         # 容器内层 + 外层 都要 invalidate
         container = self.findChild(QFrame, "et_container")

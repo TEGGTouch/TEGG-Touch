@@ -17,9 +17,10 @@
     "sim_keyboard": "键盘",
     "sim_gamepad": "手柄",
     "sim_tooltip": "切换模拟模式（键盘 / 手柄）",
-    "left_stick": "左摇杆",
-    "right_stick": "右摇杆",
-    "stick_coming_soon": "摇杆功能即将上线，敬请期待",
+    "add_gp_button": "手柄键",
+    "add_gp_stick": "摇杆",
+    "add_gp_trigger": "扳机",
+    "gp_coming_soon": "该按钮编辑器即将上线，敬请期待",
     "opacity": "透明度",
     "grid": "网格",
     "center_wheel": "中心轮盘",
@@ -100,7 +101,10 @@
     "stop": "停止运行，返回编辑模式",
     "voice": "配置语音指令，用语音触发按键操作",
     "voice_run": "语音识别: 开启后用语音触发按键",
-    "collapse": "收起工具栏为悬浮方块，双击方块可展开"
+    "collapse": "收起工具栏为悬浮方块，双击方块可展开",
+    "add_gp_button": "添加手柄键 (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 等)",
+    "add_gp_stick": "添加摇杆 (圆形, 模拟左/右摇杆移动)",
+    "add_gp_trigger": "添加扳机 (矩形, 模拟 LT/RT 行程值)"
   },
   "hotkey": {
     "title": "设置",
