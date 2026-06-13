@@ -123,6 +123,9 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.settings_clicked.connect(self._open_hotkey_settings)
         self._edit_toolbar.quit_clicked.connect(self.close)
         self._edit_toolbar.minimize_clicked.connect(self.minimize_to_taskbar)
+        self._edit_toolbar.sim_mode_change_requested.connect(self._on_sim_mode_change_requested)
+        self._edit_toolbar.left_stick_clicked.connect(self._on_stick_placeholder_clicked)
+        self._edit_toolbar.right_stick_clicked.connect(self._on_stick_placeholder_clicked)
 
         # 连接运行工具栏信号
         self._run_toolbar.stop_clicked.connect(self.to_edit)
@@ -190,6 +193,12 @@ class OverlayWindow(QGraphicsView):
 
         # 连接按钮信号到运行控制器
         self._wire_button_signals()
+
+        # ── 模拟模式 (键盘 / 手柄) 初始化 ──
+        _hk = load_hotkeys() or {}
+        self._sim_mode = _hk.get('sim_mode', 'keyboard')
+        self._gamepad_install_seen = bool(_hk.get('gamepad_install_seen', False))
+        self._edit_toolbar.set_sim_mode(self._sim_mode)
 
     def _load_profile(self):
         """加载方案配置，创建场景中的按钮"""
@@ -494,6 +503,48 @@ class OverlayWindow(QGraphicsView):
         if self._scene.get_config():
             self._scene.get_config()['run_toolbar_x'] = x
             self._scene.get_config()['run_toolbar_y'] = y
+
+    # ── 模拟模式 (键盘 / 手柄) ──
+
+    def _on_sim_mode_change_requested(self, mode: str):
+        """工具栏请求切换模式。切到 gamepad 时:
+           - READY_OK → 静默切换 (无弹窗)
+           - 任何需要用户决策的状态 (要装/更新/损坏/需重启) → 弹窗
+        """
+        if mode == self._sim_mode:
+            return
+        if mode == 'gamepad':
+            from core.gamepad_install import detect_status, Status
+            st, _ = detect_status()
+            if st != Status.READY_OK:
+                from views.gamepad_install_dialog import GamepadInstallDialog
+                dlg = GamepadInstallDialog(self)
+                ok = (dlg.exec() == dlg.DialogCode.Accepted)
+                self._gamepad_install_seen = True
+                if not ok:
+                    self._persist_sim_mode_flags()
+                    return
+            else:
+                self._gamepad_install_seen = True
+        # 应用并持久化
+        self._sim_mode = mode
+        self._edit_toolbar.set_sim_mode(mode)
+        self._persist_sim_mode_flags()
+
+    def _on_stick_placeholder_clicked(self):
+        """左/右摇杆按钮当前是占位，统一提示『即将上线』。"""
+        self._toast.show_toast(t("toolbar.stick_coming_soon"))
+
+    def _persist_sim_mode_flags(self):
+        """合并写入 sim_mode + gamepad_install_seen 到 hotkeys.json。"""
+        try:
+            from core.config_manager import save_hotkeys
+            save_hotkeys({
+                'sim_mode': self._sim_mode,
+                'gamepad_install_seen': self._gamepad_install_seen,
+            })
+        except Exception as e:
+            logger.warning(f"保存 sim_mode 失败: {e}")
 
     # ── 编辑操作 ──
 

@@ -9,10 +9,10 @@ TEGG Touch 蛋挞 (PyQt6) - edit_toolbar.py
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
-    QLabel, QFrame, QSlider,
+    QLabel, QFrame, QSlider, QMenu,
 )
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QFontDatabase
+from PyQt6.QtCore import Qt, QSize, QPoint, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QFontDatabase, QAction
 
 from core.i18n import t, get_font
 from core.constants import (
@@ -186,6 +186,9 @@ class EditToolbar(QWidget):
     minimize_clicked = pyqtSignal()
     quit_clicked = pyqtSignal()
     moved = pyqtSignal()  # 工具栏被拖拽移动时发出，用于同步软键盘位置
+    sim_mode_change_requested = pyqtSignal(str)  # 'keyboard' | 'gamepad'
+    left_stick_clicked = pyqtSignal()
+    right_stick_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -201,6 +204,7 @@ class EditToolbar(QWidget):
 
         self._wheel_on = False
         self._drag_pos = None
+        self._sim_mode = 'keyboard'  # 'keyboard' | 'gamepad'
         self._tip = ToolbarTipWidget()
         self._init_ui()
         self._position_toolbar()
@@ -249,7 +253,7 @@ class EditToolbar(QWidget):
         self._install_tip(self._profile_btn)
         r1.addWidget(self._profile_btn)
 
-        # 添加按钮
+        # 添加按钮 (键盘 + 手柄 两种模式都显示)
         add_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_button"),
                                C_GRAY, C_GRAY_H)
         add_btn.setToolTip(t("tooltip.add_button"))
@@ -257,13 +261,13 @@ class EditToolbar(QWidget):
         add_btn.clicked.connect(self.add_button_clicked.emit)
         r1.addWidget(add_btn)
 
-        # 回中带
-        cb_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_center_band"),
-                              C_GRAY, C_GRAY_H)
-        cb_btn.setToolTip(t("tooltip.center_band"))
-        self._install_tip(cb_btn)
-        cb_btn.clicked.connect(self.add_center_band_clicked.emit)
-        r1.addWidget(cb_btn)
+        # ── 键盘模式专属: 回中带 + 中心轮盘 ──
+        self._cb_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_center_band"),
+                                    C_GRAY, C_GRAY_H)
+        self._cb_btn.setToolTip(t("tooltip.center_band"))
+        self._install_tip(self._cb_btn)
+        self._cb_btn.clicked.connect(self.add_center_band_clicked.emit)
+        r1.addWidget(self._cb_btn)
 
         # 中心轮盘 toggle
         self._wheel_btn = _IconTextBtn(
@@ -273,6 +277,23 @@ class EditToolbar(QWidget):
         self._install_tip(self._wheel_btn)
         self._wheel_btn.clicked.connect(self._on_wheel_toggle)
         r1.addWidget(self._wheel_btn)
+
+        # ── 手柄模式专属: 左/右摇杆 (默认隐藏, toggle 行为同中心轮盘) ──
+        self._left_stick_on = False
+        self._left_stick_btn = _IconTextBtn("\uE739", "\u25a3", t("toolbar.left_stick"),
+                                            C_GRAY, C_GRAY_H)
+        self._left_stick_btn.clicked.connect(self._on_left_stick_toggle)
+        self._install_tip(self._left_stick_btn)
+        self._left_stick_btn.setVisible(False)
+        r1.addWidget(self._left_stick_btn)
+
+        self._right_stick_on = False
+        self._right_stick_btn = _IconTextBtn("\uE739", "\u25a3", t("toolbar.right_stick"),
+                                             C_GRAY, C_GRAY_H)
+        self._right_stick_btn.clicked.connect(self._on_right_stick_toggle)
+        self._install_tip(self._right_stick_btn)
+        self._right_stick_btn.setVisible(False)
+        r1.addWidget(self._right_stick_btn)
 
         # 分隔线
         r1.addWidget(_VSep())
@@ -345,20 +366,21 @@ class EditToolbar(QWidget):
         r2.addWidget(sm_lbl)
         r2.addSpacing(8)
 
-        # 模拟模式按钮 (#0C4A6E)
-        sm_btn = QPushButton(t("toolbar.sim_keyboard") + " \u25BC")
-        sm_btn.setFixedHeight(30)
-        sm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        sm_btn.setFont(_make_font(fn, 13, bold=True))
-        sm_btn.setStyleSheet(f"""
+        # 模拟模式按钮 — 点击弹下拉菜单 (键盘 / 手柄)
+        self._sm_btn = QPushButton(t("toolbar.sim_keyboard") + " \u25BC")
+        self._sm_btn.setFixedHeight(30)
+        self._sm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sm_btn.setFont(_make_font(fn, 13, bold=True))
+        self._sm_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER}; color: #E0E0E0; border: none;
                 border-radius: 6px; padding: 0 12px;
             }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
-        sm_btn.setToolTip(t("toolbar.sim_tooltip"))
-        r2.addWidget(sm_btn)
+        self._sm_btn.setToolTip(t("toolbar.sim_tooltip"))
+        self._sm_btn.clicked.connect(self._show_sim_mode_menu)
+        r2.addWidget(self._sm_btn)
 
         r2.addSpacing(14)
         r2.addWidget(_VSep())
@@ -541,6 +563,25 @@ class EditToolbar(QWidget):
             self._wheel_btn.set_icon_text("\uE739", "\u25a3")
         self.wheel_clicked.emit()
 
+    def _on_left_stick_toggle(self):
+        self._left_stick_on = not self._left_stick_on
+        self._apply_stick_visual(self._left_stick_btn, self._left_stick_on)
+        self.left_stick_clicked.emit()
+
+    def _on_right_stick_toggle(self):
+        self._right_stick_on = not self._right_stick_on
+        self._apply_stick_visual(self._right_stick_btn, self._right_stick_on)
+        self.right_stick_clicked.emit()
+
+    def _apply_stick_visual(self, btn, on: bool):
+        """同中心轮盘: 开启 → 玫红 + 勾选, 关闭 → 深灰 + 方框。"""
+        if on:
+            btn.set_colors(C_WH_ON, C_WH_ON_H)
+            btn.set_icon_text("\uE73E", "\u2611")
+        else:
+            btn.set_colors(C_GRAY, C_GRAY_H)
+            btn.set_icon_text("\uE739", "\u25a3")
+
     def _on_opacity(self, value):
         self._val_lbl.setText(f"{value}%")
         self.opacity_changed.emit(value / 100.0)
@@ -601,6 +642,70 @@ class EditToolbar(QWidget):
         else:
             self._wheel_btn.set_colors(C_GRAY, C_GRAY_H)
             self._wheel_btn.set_icon_text("\uE739", "\u25a3")
+
+    # ── 模拟模式 (键盘 / 手柄) ───────────────────────────────────
+
+    def _show_sim_mode_menu(self):
+        """弹出模拟模式选择菜单 — 在按钮上方对齐左下角。"""
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background: {C_PANEL}; color: #E0E0E0;
+                border: 1px solid #555; padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 6px 18px; border-radius: 4px;
+            }}
+            QMenu::item:selected {{ background: {C_CYBER_H}; color: #FFF; }}
+        """)
+        act_kb = QAction(t("toolbar.sim_keyboard"), menu)
+        act_kb.triggered.connect(lambda: self._on_sim_mode_picked('keyboard'))
+        menu.addAction(act_kb)
+        act_gp = QAction(t("toolbar.sim_gamepad"), menu)
+        act_gp.triggered.connect(lambda: self._on_sim_mode_picked('gamepad'))
+        menu.addAction(act_gp)
+        # 锚到按钮左下角弹出
+        pos = self._sm_btn.mapToGlobal(QPoint(0, self._sm_btn.height()))
+        menu.exec(pos)
+
+    def _on_sim_mode_picked(self, mode: str):
+        """菜单选中 — 转发给外部决定能否切换 (手柄要先检测驱动)。"""
+        if mode == self._sim_mode:
+            return
+        self.sim_mode_change_requested.emit(mode)
+
+    def set_sim_mode(self, mode: str):
+        """外部确认切换后调用，更新 UI: 按钮文字 + Row1 按钮显隐。"""
+        if mode not in ('keyboard', 'gamepad'):
+            mode = 'keyboard'
+        self._sim_mode = mode
+        if mode == 'gamepad':
+            self._sm_btn.setText(t("toolbar.sim_gamepad") + " \u25BC")
+            self._cb_btn.setVisible(False)
+            self._wheel_btn.setVisible(False)
+            self._left_stick_btn.setVisible(True)
+            self._right_stick_btn.setVisible(True)
+        else:
+            self._sm_btn.setText(t("toolbar.sim_keyboard") + " \u25BC")
+            self._cb_btn.setVisible(True)
+            self._wheel_btn.setVisible(True)
+            self._left_stick_btn.setVisible(False)
+            self._right_stick_btn.setVisible(False)
+        # 强制整条布局链 invalidate，否则 hide 后的 sizeHint 仍可能含旧宽度
+        for w in (self._cb_btn, self._wheel_btn,
+                  self._left_stick_btn, self._right_stick_btn):
+            w.updateGeometry()
+        # 容器内层 + 外层 都要 invalidate
+        container = self.findChild(QFrame, "et_container")
+        if container is not None and container.layout() is not None:
+            container.layout().invalidate()
+            container.layout().activate()
+            container.adjustSize()
+        if self.layout() is not None:
+            self.layout().invalidate()
+            self.layout().activate()
+        self.adjustSize()
+        self._position_toolbar()
 
     # ── Tip 事件过滤器 ───────────────────────────────────────
 
