@@ -8,7 +8,7 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter, QPainterPath, QColor, QCursor
 
 from core.constants import (
-    DEFAULT_GRID_SIZE, BTN_TYPE_CENTER_BAND, BTN_TYPE_GP_BUTTON,
+    DEFAULT_GRID_SIZE, BTN_TYPE_CENTER_BAND, BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK,
     COLOR_GP_BTN_BORDER,
 )
 
@@ -16,7 +16,7 @@ from core.constants import (
 # 缩放手柄颜色: 跟随按钮类型, 视觉一致
 _COLOR_HANDLE_DEFAULT = "#555555"
 _COLOR_HANDLE_CENTER_BAND = "#176F2C"        # 与回中带边框一致
-_COLOR_HANDLE_GP_BUTTON = COLOR_GP_BTN_BORDER  # 与手柄键边框一致 (蓝)
+_COLOR_HANDLE_GP = COLOR_GP_BTN_BORDER       # 与手柄键/摇杆边框一致 (蓝)
 
 
 class ResizeHandleItem(QGraphicsItem):
@@ -44,13 +44,13 @@ class ResizeHandleItem(QGraphicsItem):
         path.lineTo(s, s)
         path.lineTo(0, s)
         path.closeSubpath()
-        # 手柄颜色跟随按钮类型: 回中带绿 / 手柄键蓝 / 其他灰
+        # 手柄颜色跟随按钮类型: 回中带绿 / 手柄键 + 摇杆蓝 / 其他灰
         btn_type = (getattr(self._parent_btn.data, 'btn_type', '')
                     if hasattr(self._parent_btn, 'data') else '')
         if btn_type == BTN_TYPE_CENTER_BAND:
             color = _COLOR_HANDLE_CENTER_BAND
-        elif btn_type == BTN_TYPE_GP_BUTTON:
-            color = _COLOR_HANDLE_GP_BUTTON
+        elif btn_type in (BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK):
+            color = _COLOR_HANDLE_GP
         else:
             color = _COLOR_HANDLE_DEFAULT
         painter.fillPath(path, QColor(color))

@@ -21,7 +21,7 @@ from core.constants import (
 
 @dataclass
 class GamepadStickData:
-    """摇杆按钮配置 — 圆形 ≥ 2x2 网格"""
+    """摇杆按钮配置 — 圆形 ≥ 2x2 网格 + 鼠标其它按键作为额外触发源 (无 hover)"""
     x: float = 0.0
     y: float = 0.0
     w: float = 200.0
@@ -33,6 +33,16 @@ class GamepadStickData:
     release_threshold_ratio: float = 1.5   # 鼠标距圆心 > R×ratio 释放
     sensitivity_curve: str = "linear"      # 'linear' | 'square'
     eight_way: bool = False                # 八方向锁定 (老 RPG 用)
+
+    # 鼠标其它按键: 摇杆 active 时按下/抬起对应键, 触发该字段内容 (gp:X / gpmacro:X 等)
+    # 跟 ButtonData 字段同名同语义, 但 stick 不需要 hover (鼠标始终在 stick 上)
+    lclick: str = ""
+    rclick: str = ""
+    mclick: str = ""
+    xbutton1: str = ""
+    xbutton2: str = ""
+    wheelup: str = ""
+    wheeldown: str = ""
 
     def to_dict(self) -> dict:
         d = asdict(self)

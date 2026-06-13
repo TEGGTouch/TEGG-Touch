@@ -251,7 +251,9 @@ class OverlayWindow(QGraphicsView):
             self._wire_single_item(item)
 
     def _wire_single_item(self, item):
-        """将单个 Item 的信号连接到运行控制器"""
+        """将单个 Item 的信号连接到运行控制器 (gp_stick 等无 hover 信号的 item 跳过)"""
+        if not hasattr(item, 'hoverActivated'):
+            return
         item.hoverActivated.connect(self._run_controller.on_hover_activated)
         item.hoverDeactivated.connect(self._run_controller.on_hover_deactivated)
         item.actionTriggered.connect(self._run_controller.on_action_triggered)
@@ -542,8 +544,10 @@ class OverlayWindow(QGraphicsView):
             self._wire_single_item(item)
 
     def _on_add_gp_stick(self):
-        """添加摇杆 — C4 接入"""
-        self._toast.show_toast(t("toolbar.gp_coming_soon"))
+        """添加摇杆 — 调 scene factory, 创建 GpStickItem"""
+        item = self._scene.add_gp_stick()
+        if item:
+            item.setOpacity(self._current_opacity)
 
     def _on_add_gp_trigger(self):
         """添加扳机 — C5 接入"""
@@ -617,10 +621,23 @@ class OverlayWindow(QGraphicsView):
     # ── 弹窗 ──
 
     def _open_button_editor(self, item):
-        """打开按钮编辑弹窗 — 回中带使用简化弹窗"""
+        """打开按钮编辑弹窗 — 按 btn_type 派发: 回中带 / 摇杆 / 其他 (kb + gp_btn)"""
         if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_CENTER_BAND:
             dialog = CenterBandDialog(item, self)
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            dialog.deleted.connect(lambda it: self._on_button_deleted(it))
+            dialog.copied.connect(lambda it: self._on_button_copied(it))
+            dialog.show()
+            return
+        # 摇杆: 左右双栏编辑器 (参数 + 鼠标动作; 右栏 gp 键 + gp 宏)
+        from core.constants import BTN_TYPE_GP_STICK
+        if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_GP_STICK:
+            from views.gp_stick_editor_dialog import GpStickEditorDialog
+            cfg = self._scene.get_config()
+            gp_macros = cfg.get('gp_macros', [])
+            dialog = GpStickEditorDialog(item, self, gp_macros=gp_macros)
+            dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            dialog.saved.connect(lambda it: self._on_button_saved(it))
             dialog.deleted.connect(lambda it: self._on_button_deleted(it))
             dialog.copied.connect(lambda it: self._on_button_copied(it))
             dialog.show()
@@ -925,6 +942,12 @@ class OverlayWindow(QGraphicsView):
         self._run_controller.stop()
         release_all_keys()  # 兜底释放所有残留按键，防止卡键
         uninstall_wheel_hook()
+        # 显式拔出虚拟手柄 (防止下次启动 ViGEmBus bus 累积 ghost 设备)
+        try:
+            from engine.gamepad_engine import GamepadEngine
+            GamepadEngine.shutdown_singleton()
+        except Exception as _e:
+            logger.warning(f"GamepadEngine shutdown 失败: {_e}")
         self._scene.save_config()
         # 关闭所有非模态弹窗
         from PyQt6.QtWidgets import QDialog

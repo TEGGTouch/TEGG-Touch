@@ -101,6 +101,9 @@ class RunController(QObject):
         # 防抖标志
         self._debounce = {}
 
+        # 摇杆状态机 — 任一帧只允许一个 active 摇杆 (跨摇杆切换会让旧的释放 + SetCursorPos 跳到新圆心)
+        self._active_gp_stick = None  # GpStickItem | None
+
         # 快捷键定时器
         self._timer = QTimer(self)
         self._timer.setInterval(input_poll_interval_ms(UPDATE_INTERVAL))
@@ -185,7 +188,9 @@ class RunController(QObject):
                 item._hover_sm.reset()
         # 兜底释放所有残留按键，防止卡键
         release_all_keys()
-        # 手柄: 释放所有按下的按钮 + 摇杆/扳机归零
+        # 手柄: 释放当前 active 摇杆 + 引擎全部归零 (含摇杆/扳机/按钮)
+        if self._active_gp_stick is not None:
+            self._release_active_stick()
         gp = GamepadEngine.get()
         if gp is not None:
             gp.release_all()
@@ -227,7 +232,10 @@ class RunController(QObject):
         # 3. 侧键轮询
         self._poll_hardware_buttons()
 
-        # 4. 轮询式 hover/click 检测 (核心! 解决 WS_EX_TRANSPARENT 问题)
+        # 4a. 摇杆轮询 (在 hover/click 之前; 摇杆 item 不走 hover_sm, 自有状态机)
+        self._poll_gp_sticks()
+
+        # 4b. 轮询式 hover/click 检测 (核心! 解决 WS_EX_TRANSPARENT 问题)
         self._poll_hover_and_click()
 
         # 5. 自动回中管理
@@ -245,6 +253,20 @@ class RunController(QObject):
 
         # 只关注有 data 属性的交互 item（按钮/扇区/圆环）
         active_item = item if (item and hasattr(item, 'data') and item.isVisible()) else None
+
+        # ── 摇杆 item: 不走 hover_sm + click 逻辑 (由 _poll_gp_sticks 接管), 但仍发 cursor_on_ui ──
+        from scene.gp_stick_item import GpStickItem
+        if isinstance(active_item, GpStickItem):
+            # 离开上一次的非 gp_stick item (若有)
+            prev_item = self._poll_hover_item
+            if prev_item is not None and prev_item is not active_item:
+                if hasattr(prev_item, '_hover_sm'):
+                    prev_item._hover_sm.leave()
+                if hasattr(prev_item, 'set_visual_state'):
+                    prev_item.set_visual_state('normal')
+            self._poll_hover_item = None
+            self.cursor_on_ui.emit(True)
+            return  # 摇杆不响应键鼠点击
 
         # ── 回中带每帧检测 (匹配原版: 每帧 in_rect → SetCursorPos + continue) ──
         if (active_item is not None
@@ -436,7 +458,14 @@ class RunController(QObject):
             self.passthrough_changed.emit('pt_block')
 
     def _dispatch_wheel(self, direction, abs_x, abs_y):
-        """将滚轮事件分发到场景坐标处的 Item"""
+        """将滚轮事件分发到场景坐标处的 Item; 摇杆 active 时优先路由到 stick"""
+        # 优先: 摇杆 active 时, 滚轮路由到 stick.wheelup/wheeldown (用户正在用摇杆)
+        if self._active_gp_stick is not None and _is_alive(self._active_gp_stick):
+            stick = self._active_gp_stick
+            key = stick.data.wheelup if direction == 'up' else stick.data.wheeldown
+            if key:
+                self._smart_trigger(key, 'click')
+            return
         try:
             global_pos = QPoint(abs_x, abs_y)
             view_pos = self._window.mapFromGlobal(global_pos)
@@ -461,7 +490,15 @@ class RunController(QObject):
             self._dispatch_xbutton('xbutton2', 'p' if xb2 else 'r')
 
     def _dispatch_xbutton(self, btn_name, action):
-        """将侧键事件分发到鼠标下的 Item"""
+        """侧键事件分发: 摇杆 active 时优先到 stick.xbutton1/2; 否则到鼠标下的 Item"""
+        # 摇杆 active 时, 侧键路由到 stick (走 _smart_trigger 支持 gp:/gpmacro: 前缀)
+        if self._active_gp_stick is not None and _is_alive(self._active_gp_stick):
+            stick = self._active_gp_stick
+            key = getattr(stick.data, btn_name, '')
+            if key:
+                self._smart_trigger(key, action)
+            return
+
         pt = ctypes.wintypes.POINT()
         user32.GetCursorPos(ctypes.byref(pt))
         cursor_pos = QPoint(pt.x, pt.y)
@@ -602,6 +639,209 @@ class RunController(QObject):
                     self._execute_macro(macro_data)
                 else:
                     logger.warning("GP Macro not found: '%s'", name)
+
+    # ── 摇杆轮询: 状态机 + 跨摇杆切换 + SetCursorPos 圆心 + gp engine ──
+
+    def _poll_gp_sticks(self):
+        """每帧处理所有 gp_stick item: 计算 cursor 位置 → 状态迁移 → 引擎赋值 + flush"""
+        import math
+        from scene.gp_stick_item import GpStickItem
+
+        sticks = [it for it in self._scene.button_items
+                  if isinstance(it, GpStickItem) and it.isVisible()]
+        if not sticks and self._active_gp_stick is None:
+            return
+
+        # cursor → scene 坐标
+        try:
+            pt = ctypes.wintypes.POINT()
+            user32.GetCursorPos(ctypes.byref(pt))
+            view_pos = self._window.mapFromGlobal(QPoint(pt.x, pt.y))
+            scene_pos = self._window.mapToScene(view_pos)
+        except Exception:
+            return
+
+        # 找鼠标下最上层摇杆 (按 z 降序; 平局取后加的 = 索引大的)
+        cursor_stick = None
+        # 列表后加的 z 序更高 (实际 z 相同时 Qt 按添加顺序)
+        for s in reversed(sticks):
+            if not _is_alive(s):
+                continue
+            if s.is_cursor_in_circle(scene_pos):
+                cursor_stick = s
+                break
+
+        active = self._active_gp_stick
+        if active is not None and not _is_alive(active):
+            active = None
+            self._active_gp_stick = None
+
+        # ── 状态迁移 ──
+        if cursor_stick is None and active is not None:
+            # 当前无入圆但有 active: 检查吸附/释放
+            dist_ratio = active.cursor_distance_ratio(scene_pos)
+            if dist_ratio > active.data.release_threshold_ratio:
+                self._release_active_stick()
+            else:
+                self._update_stick_value(active, scene_pos, sticking=True)
+        elif cursor_stick is not None and cursor_stick is active:
+            # 仍在同一 active 摇杆: 正常更新
+            self._update_stick_value(active, scene_pos, sticking=False)
+        elif cursor_stick is not None and cursor_stick is not active:
+            # 跨摇杆切换 或 首次激活: 释放老的 + 激活新的
+            if active is not None:
+                self._release_active_stick()
+            self._activate_stick(cursor_stick)
+
+        # active stick 下: 检测鼠标键边沿 → 触发 stick 鼠标动作字段
+        if self._active_gp_stick is not None and _is_alive(self._active_gp_stick):
+            self._poll_stick_mouse_actions(self._active_gp_stick)
+
+        # 帧末 flush
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.flush()
+
+    def _activate_stick(self, stick):
+        """激活摇杆: SetCursorPos 到圆心 (屏幕坐标), 状态 → active, 引擎 (0,0)"""
+        try:
+            center_scene = stick.circle_center_scene()
+            view_pt = self._window.mapFromScene(center_scene)
+            screen_pt = self._window.mapToGlobal(view_pt)
+            user32.SetCursorPos(int(screen_pt.x()), int(screen_pt.y()))
+        except Exception as e:
+            logger.warning("SetCursorPos to stick center failed: %s", e)
+        self._active_gp_stick = stick
+        stick.set_stick_visual('active', 0.0, 0.0)
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.set_stick(stick.data.stick_id, 0.0, 0.0)
+
+    def _release_active_stick(self):
+        """释放 active 摇杆: 状态 → idle, 引擎 (0,0); 顺便释放本 stick 的鼠标动作 held 键"""
+        stick = self._active_gp_stick
+        if stick is None:
+            return
+        if _is_alive(stick):
+            # 释放鼠标动作 held 键 (lclick/rclick/mclick), 防卡键
+            for prev_attr, key_field in (
+                ('_prev_lmb', 'lclick'),
+                ('_prev_rmb', 'rclick'),
+                ('_prev_mmb', 'mclick'),
+            ):
+                if getattr(self, prev_attr):
+                    key = getattr(stick.data, key_field, '')
+                    if key:
+                        self._smart_trigger(key, 'r')
+            stick.set_stick_visual('idle', 0.0, 0.0)
+            gp = GamepadEngine.get()
+            if gp is not None:
+                gp.set_stick(stick.data.stick_id, 0.0, 0.0)
+        self._active_gp_stick = None
+
+    def _poll_stick_mouse_actions(self, stick):
+        """active stick 下的鼠标键边沿检测 → 触发 stick.lclick/rclick/mclick
+        共享 self._prev_lmb 等状态; _poll_hover_and_click 在 stick 模式下不再处理边沿。
+        同时根据当前按下的鼠标键, 设置 stick 小球的颜色 + 显示触发键文本。"""
+        from scene.gp_stick_item import _gp_display
+
+        lmb = (user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0
+        rmb = (user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0
+        mmb = (user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0
+        for new_state, prev_attr, key_field in (
+            (lmb, '_prev_lmb', 'lclick'),
+            (rmb, '_prev_rmb', 'rclick'),
+            (mmb, '_prev_mmb', 'mclick'),
+        ):
+            if new_state != getattr(self, prev_attr):
+                key = getattr(stick.data, key_field, '')
+                if key:
+                    self._smart_trigger(key, 'p' if new_state else 'r')
+                setattr(self, prev_attr, new_state)
+
+        # 选当前 hold 的优先级最高的鼠标键, 设小球颜色 + 显示键文本 (优先 LMB > RMB > MMB)
+        if self._prev_lmb and stick.data.lclick:
+            stick.set_pressed_action('lclick', _gp_display(stick.data.lclick))
+        elif self._prev_rmb and stick.data.rclick:
+            stick.set_pressed_action('rclick', _gp_display(stick.data.rclick))
+        elif self._prev_mmb and stick.data.mclick:
+            stick.set_pressed_action('mclick', _gp_display(stick.data.mclick))
+        else:
+            stick.set_pressed_action(None, '')
+
+    def _update_stick_value(self, stick, scene_pos, sticking: bool):
+        """根据 cursor 位置算 stick 值 (含死区/曲线/八向锁) + 更新视觉 + 引擎
+        八方向锁定时, 视觉小球位置 AND 引擎值都吸附到 8 个固定方向。"""
+        import math
+        center = stick.circle_center_scene()
+        dx = scene_pos.x() - center.x()
+        dy = scene_pos.y() - center.y()
+        r = stick.circle_radius_scene()
+        if r <= 0:
+            return
+        norm_x = dx / r
+        norm_y = dy / r
+        mag = math.sqrt(norm_x * norm_x + norm_y * norm_y)
+
+        # 1) 计算视觉位置 (vis_x, vis_y) + 状态
+        if sticking or mag >= 1.0:
+            state = 'sticking'
+            if mag > 0:
+                vis_x = norm_x / mag
+                vis_y = norm_y / mag
+            else:
+                vis_x = vis_y = 0.0
+        else:
+            state = 'active'
+            vis_x = norm_x
+            vis_y = norm_y
+
+        # 2) 计算引擎值 (含死区缩放)
+        if state == 'sticking':
+            out_x, out_y = vis_x, vis_y
+        else:
+            dz = max(0.0, min(0.5, stick.data.dead_zone))
+            if mag < dz:
+                out_x = out_y = 0.0
+            else:
+                scale = (mag - dz) / (1.0 - dz) if (1.0 - dz) > 0 else 1.0
+                out_x = (norm_x / mag) * scale if mag > 0 else 0.0
+                out_y = (norm_y / mag) * scale if mag > 0 else 0.0
+
+        # 3) 灵敏度曲线 (square: 微调精度提升)
+        if stick.data.sensitivity_curve == 'square':
+            out_x = math.copysign(out_x * out_x, out_x)
+            out_y = math.copysign(out_y * out_y, out_y)
+
+        # 4) 八方向锁定: 视觉 + 引擎 同步吸附到最近的 45° 方向
+        if stick.data.eight_way:
+            if abs(vis_x) > 1e-4 or abs(vis_y) > 1e-4:
+                vang = math.atan2(vis_y, vis_x)
+                vsnap = round(vang / (math.pi / 4)) * (math.pi / 4)
+                vm = min(1.0, math.sqrt(vis_x * vis_x + vis_y * vis_y))
+                vis_x = math.cos(vsnap) * vm
+                vis_y = math.sin(vsnap) * vm
+            if abs(out_x) > 1e-4 or abs(out_y) > 1e-4:
+                ang = math.atan2(out_y, out_x)
+                snap = round(ang / (math.pi / 4)) * (math.pi / 4)
+                m = min(1.0, math.sqrt(out_x * out_x + out_y * out_y))
+                out_x = math.cos(snap) * m
+                out_y = math.sin(snap) * m
+
+        # 5) sticking 进度: 0=刚出圆, 1=即将释放; 用于绘制圆外蓝色进度条
+        sticking_progress = 0.0
+        if state == 'sticking':
+            ratio = stick.data.release_threshold_ratio
+            if ratio > 1.0:
+                sticking_progress = max(0.0, min(1.0, (mag - 1.0) / (ratio - 1.0)))
+
+        # 6) 视觉 + 引擎赋值 (引擎 Y 翻转: 屏幕 down 正 → 手柄 up 正)
+        stick.set_stick_visual(state, vis_x, vis_y, sticking_progress=sticking_progress)
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.set_stick(stick.data.stick_id,
+                         max(-1.0, min(1.0, out_x)),
+                         max(-1.0, min(1.0, -out_y)))
 
     def _find_macro(self, name: str, pool: str = 'kb'):
         """从当前 config 中查找宏。pool='kb' 查 macros, pool='gp' 查 gp_macros"""

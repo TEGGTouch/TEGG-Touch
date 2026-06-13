@@ -10,6 +10,7 @@ TEGG Touch 蛋挞 — 手柄引擎: VX360Gamepad 封装 + 帧聚合
   路由到 set_trigger api, 因为 XUSB_BUTTON 枚举中 LT/RT 不是 button 而是 trigger
 """
 
+import atexit
 import logging
 import threading
 
@@ -166,6 +167,28 @@ class GamepadEngine:
         self._dirty = False
 
 
+    @classmethod
+    def shutdown_singleton(cls):
+        """显式销毁虚拟手柄设备 — 触发 vgamepad __del__ 拔出 ViGEm 端
+        atexit 注册; 也可在 app closeEvent 主动调, 防 force-kill 时设备残留 ViGEmBus bus"""
+        with cls._lock:
+            if cls._instance is not None:
+                try:
+                    cls._instance.release_all()
+                except Exception:
+                    pass
+                try:
+                    cls._instance._pad = None   # 抹掉引用 → __del__ → unplug
+                except Exception:
+                    pass
+                cls._instance = None
+                logger.info("GamepadEngine 已 shutdown (虚拟手柄拔出)")
+
+
 def is_lib_available() -> bool:
     """vgamepad lib 是否已 import (不代表 ViGEmBus 驱动 OK)"""
     return _VG_AVAILABLE
+
+
+# 进程正常退出时自动清理虚拟手柄设备 (防止 ViGEmBus bus 累积 ghost 设备)
+atexit.register(GamepadEngine.shutdown_singleton)
