@@ -253,7 +253,8 @@ class ButtonEditorDialog(QDialog):
     saved = pyqtSignal(object)
     deleted = pyqtSignal(object)
     copied = pyqtSignal(object)
-    macros_changed = pyqtSignal(list)  # 宏列表变更时发出
+    macros_changed = pyqtSignal(list)     # 键盘宏列表变更
+    gp_macros_changed = pyqtSignal(list)  # 手柄宏列表变更 (gp button 编辑时用)
 
     LEFT_W = 340
     RIGHT_W = 560
@@ -264,16 +265,21 @@ class ButtonEditorDialog(QDialog):
     MAX_MACROS = 20
     C_MACRO = "#8B5CF6"  # 宏 tag 紫色
 
-    def __init__(self, item, parent=None, macros=None):
+    def __init__(self, item, parent=None, macros=None, gp_macros=None):
         super().__init__(parent)
         self._item = item
         self.data = item.data
         self._focus_widget = None  # 当前聚焦的输入控件
         self._is_wheel = not hasattr(self.data, 'btn_type')
-        # 手柄键模式: 键位面板换成手柄按键, 隐藏鼠标/宏 tab, on_click 加 'gp:' 前缀
+        # 手柄键模式: 键位面板换成手柄按键, on_click 加 'gp:' 前缀, 宏池取 gp_macros
         self._is_gp = (not self._is_wheel
                        and getattr(self.data, 'btn_type', '') == BTN_TYPE_GP_BUTTON)
-        self._macros = list(macros) if macros else []
+        # 活跃宏池: gp 按钮 → gp_macros, 其他 → macros (键盘宏)
+        # self._macros 是 UI 渲染/CRUD 的统一引用; 保存时按 _is_gp 发对应信号
+        if self._is_gp:
+            self._macros = list(gp_macros) if gp_macros else []
+        else:
+            self._macros = list(macros) if macros else []
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -1251,16 +1257,25 @@ class ButtonEditorDialog(QDialog):
             self._macro_list.addItem(item)
             self._macro_list.setItemWidget(item, row)
 
+    def _emit_macros_changed(self):
+        """按当前按钮类型发对应宏列表变更信号 (gp → gp_macros_changed, 其他 → macros_changed)"""
+        if self._is_gp:
+            self.gp_macros_changed.emit(self._macros)
+        else:
+            self.macros_changed.emit(self._macros)
+
     def _insert_macro_tag(self, macro_name):
-        """点击宏行 → 添加 macro:name 到当前 TagInput"""
+        """点击宏行 → 添加 macro:name (或 gpmacro:name) 到当前 TagInput"""
         w = self._focus_widget
         if w and isinstance(w, TagInput):
-            w.add_tag(f"macro:{macro_name}")
+            prefix = "gpmacro:" if self._is_gp else "macro:"
+            w.add_tag(f"{prefix}{macro_name}")
 
     def _new_macro(self):
         from views.macro_editor_dialog import MacroEditorDialog
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(existing_names=names, parent=self)
+        mode = 'gp' if self._is_gp else 'kb'
+        dlg = MacroEditorDialog(existing_names=names, parent=self, mode=mode)
         dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
         dlg.exec()
 
@@ -1268,7 +1283,8 @@ class ButtonEditorDialog(QDialog):
         from views.macro_editor_dialog import MacroEditorDialog
         data = copy.deepcopy(self._macros[idx])
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self)
+        mode = 'gp' if self._is_gp else 'kb'
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode=mode)
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
         dlg.exec()
 
@@ -1287,7 +1303,7 @@ class ButtonEditorDialog(QDialog):
         new_macro['name'] = candidate
         self._macros.append(new_macro)
         self._rebuild_macro_list()
-        self.macros_changed.emit(self._macros)
+        self._emit_macros_changed()
 
     def _delete_macro(self, idx):
         from views.profile_manager_dialog import _StyledConfirmDialog
@@ -1299,7 +1315,7 @@ class ButtonEditorDialog(QDialog):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._macros.pop(idx)
             self._rebuild_macro_list()
-            self.macros_changed.emit(self._macros)
+            self._emit_macros_changed()
 
     def _on_macro_editor_saved(self, data, idx):
         if idx >= 0 and idx < len(self._macros):
@@ -1307,7 +1323,7 @@ class ButtonEditorDialog(QDialog):
         else:
             self._macros.append(data)
         self._rebuild_macro_list()
-        self.macros_changed.emit(self._macros)
+        self._emit_macros_changed()
 
     # ── 定位 ──────────────────────────────────────────────────
 

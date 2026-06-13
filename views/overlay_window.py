@@ -625,10 +625,13 @@ class OverlayWindow(QGraphicsView):
             dialog.copied.connect(lambda it: self._on_button_copied(it))
             dialog.show()
             return
-        macros = self._scene.get_config().get('macros', [])
-        dialog = ButtonEditorDialog(item, self, macros=macros)
+        cfg = self._scene.get_config()
+        macros = cfg.get('macros', [])
+        gp_macros = cfg.get('gp_macros', [])
+        dialog = ButtonEditorDialog(item, self, macros=macros, gp_macros=gp_macros)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.macros_changed.connect(self._on_macros_changed)
+        dialog.gp_macros_changed.connect(self._on_gp_macros_changed)
         dialog.saved.connect(lambda data: self._on_button_saved(item))
         dialog.deleted.connect(lambda it: self._on_button_deleted(it))
         dialog.copied.connect(lambda it: self._on_button_copied(it))
@@ -652,11 +655,18 @@ class OverlayWindow(QGraphicsView):
             self._scene.save_config()
 
     def _on_macros_changed(self, macros_list):
-        """宏列表变更 → 写入 config 并保存"""
+        """键盘宏列表变更 → 写入 config 并保存"""
         if self._scene.get_config() is not None:
             self._scene.get_config()['macros'] = macros_list
             self._scene.save_config()
             logger.info("Macros updated: %d macros", len(macros_list))
+
+    def _on_gp_macros_changed(self, gp_macros_list):
+        """手柄宏列表变更 → 写入 config 并保存"""
+        if self._scene.get_config() is not None:
+            self._scene.get_config()['gp_macros'] = gp_macros_list
+            self._scene.save_config()
+            logger.info("GP Macros updated: %d macros", len(gp_macros_list))
 
     def _on_dialog_destroyed(self, attr_name):
         """弹窗销毁时清理引用的统一槽方法"""

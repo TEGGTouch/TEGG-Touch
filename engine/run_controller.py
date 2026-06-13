@@ -532,11 +532,14 @@ class RunController(QObject):
         parts = [p.strip() for p in key_str.split('+')]
         normal_keys = []
         macro_names = []
+        gp_macro_names = []  # gpmacro:Name (手柄宏池)
         mouse_buttons = []   # mouse:left, mouse:right, mouse:middle, mouse:x1, mouse:x2
         mouse_wheels = []    # mouse:wheelup, mouse:wheeldown
         gp_labels = []       # gp:A, gp:LB, gp:LT 等
         for p in parts:
-            if p.startswith('macro:'):
+            if p.startswith('gpmacro:'):
+                gp_macro_names.append(p[8:])
+            elif p.startswith('macro:'):
                 macro_names.append(p[6:])
             elif p.startswith('mouse:'):
                 mouse_val = p[6:]  # "left", "right", "middle", "x1", "x2", "wheelup", "wheeldown"
@@ -585,16 +588,26 @@ class RunController(QObject):
         # 宏: 仅在 press / click 时触发 (release 忽略, 避免重复)
         if macro_names and action in ('p', 'click'):
             for name in macro_names:
-                macro_data = self._find_macro(name)
+                macro_data = self._find_macro(name, pool='kb')
                 if macro_data:
                     self._execute_macro(macro_data)
                 else:
                     logger.warning("Macro not found: '%s'", name)
 
-    def _find_macro(self, name: str):
-        """从当前 config 中查找宏"""
+        # 手柄宏: 同上, 查 gp_macros 池
+        if gp_macro_names and action in ('p', 'click'):
+            for name in gp_macro_names:
+                macro_data = self._find_macro(name, pool='gp')
+                if macro_data:
+                    self._execute_macro(macro_data)
+                else:
+                    logger.warning("GP Macro not found: '%s'", name)
+
+    def _find_macro(self, name: str, pool: str = 'kb'):
+        """从当前 config 中查找宏。pool='kb' 查 macros, pool='gp' 查 gp_macros"""
         config = self._scene.get_config() if hasattr(self._scene, 'get_config') else {}
-        for m in config.get('macros', []):
+        field = 'gp_macros' if pool == 'gp' else 'macros'
+        for m in config.get(field, []):
             if m.get('name') == name:
                 return m
         return None

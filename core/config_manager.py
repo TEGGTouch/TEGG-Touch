@@ -209,8 +209,9 @@ def load_config_from_file(filepath: str) -> dict:
         'voice_commands': [],
         'voice_mic_device': None,
         'voice_auto_start': True,
-        # 自定义宏
+        # 自定义宏 (kb / gp 两池, per-profile)
         'macros': [],
+        'gp_macros': [],
     }
     if not os.path.exists(filepath):
         return result
@@ -292,10 +293,13 @@ def load_config_from_file(filepath: str) -> dict:
             result['voice_commands'] = raw_vc
         result['voice_mic_device'] = data.get('voice_mic_device', None)
         result['voice_auto_start'] = data.get('voice_auto_start', True)
-        # 自定义宏
+        # 自定义宏 (kb / gp 两池)
         raw_macros = data.get('macros', [])
         if isinstance(raw_macros, list):
             result['macros'] = raw_macros
+        raw_gp_macros = data.get('gp_macros', [])
+        if isinstance(raw_gp_macros, list):
+            result['gp_macros'] = raw_gp_macros
         logger.info(f"配置加载成功: {filepath}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"配置文件格式错误: {filepath}: {e}")
@@ -335,7 +339,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          voice_commands=None,
                          voice_mic_device=None,
                          voice_auto_start=None,
-                         macros=None) -> bool:
+                         macros=None,
+                         gp_macros=None) -> bool:
     """保存配置到指定文件。"""
     # Bug 5 fix: geometry 为 None 时使用当前屏幕尺寸作为 fallback
     if geometry is None:
@@ -424,9 +429,11 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
     if voice_auto_start is not None:
         data['voice_auto_start'] = voice_auto_start
 
-    # 自定义宏
+    # 自定义宏 (kb / gp 两池)
     if macros is not None:
         data['macros'] = macros
+    if gp_macros is not None:
+        data['gp_macros'] = gp_macros
 
     try:
         os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)

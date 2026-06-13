@@ -380,6 +380,8 @@
     "confirm_delete": "Delete macro '{name}'?",
     "confirm_delete_title": "Delete Macro",
     "editor_title": "Macro Editor",
+    "editor_title_kb": "Keyboard Macro Editor",
+    "editor_title_gp": "Gamepad Macro Editor",
     "name_label": "Macro Name",
     "name_placeholder": "Enter macro name",
     "add_key_step": "+ Add Key Step",

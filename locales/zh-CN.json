@@ -380,6 +380,8 @@
     "confirm_delete": "确定删除宏 '{name}' 吗？",
     "confirm_delete_title": "删除宏",
     "editor_title": "宏编辑器",
+    "editor_title_kb": "键盘 宏编辑器",
+    "editor_title_gp": "手柄 宏编辑器",
     "name_label": "宏名称",
     "name_placeholder": "输入宏名称",
     "add_key_step": "+ 新增指令",

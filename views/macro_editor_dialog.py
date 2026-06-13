@@ -15,6 +15,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
 
 from core.i18n import t, get_font
+from core.constants import GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX
 from views.button_editor_dialog import (
     _get_key_categories, _get_mouse_keys, _FlowWidget, _make_font, _detect_icon_font,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
@@ -284,14 +285,17 @@ class MacroEditorDialog(QDialog):
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20
     WIN_H = 800
 
-    def __init__(self, macro_data: dict = None, existing_names: list[str] = None, parent=None):
+    def __init__(self, macro_data: dict = None, existing_names: list[str] = None,
+                 parent=None, mode: str = 'kb'):
         super().__init__(parent)
         # macro_data: {"name": "...", "steps": [...]} or None for new
+        # mode: 'kb' (键盘宏, 默认) | 'gp' (手柄宏); 决定标题 + 键位面板 + 点击插入前缀
         self._macro = macro_data or {"name": "", "steps": []}
         self._step_rows: list[_StepRow] = []
         self._focus_widget = None
         self._existing_names = set(existing_names or [])
         self._original_name = self._macro.get('name', '')
+        self._mode = mode if mode in ('kb', 'gp') else 'kb'
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -327,9 +331,10 @@ class MacroEditorDialog(QDialog):
         root.setContentsMargins(self.PADDING, self.PADDING, self.PADDING, self.PADDING)
         root.setSpacing(0)
 
-        # ── 标题栏 ──
+        # ── 标题栏 (按 mode 切标题) ──
         title_row = QHBoxLayout()
-        title_lbl = QLabel(t("macro.editor_title"))
+        title_key = "macro.editor_title_gp" if self._mode == 'gp' else "macro.editor_title_kb"
+        title_lbl = QLabel(t(title_key))
         title_lbl.setFont(_make_font(fn, 18, bold=True))
         title_lbl.setStyleSheet("color: white; background: transparent;")
         title_row.addWidget(title_lbl)
@@ -538,56 +543,77 @@ class MacroEditorDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
-        # ── 鼠标操作 (最顶部) ──
         from core.i18n import t as _t
-        mouse_keys = _get_mouse_keys()
-        mouse_display_names = [label for label, _ in mouse_keys]
-        mouse_tag_values = [tag for _, tag in mouse_keys]
-        self._mouse_name_to_tag = dict(zip(mouse_display_names, mouse_tag_values))
 
-        cat_lbl_mouse = QLabel(f"── {_t('key_cat.mouse_buttons')} ──")
-        cat_lbl_mouse.setFont(_make_font(fn, 13, bold=True))
-        cat_lbl_mouse.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
-        layout.addWidget(cat_lbl_mouse)
-        layout.addSpacing(6)
+        if self._mode == 'gp':
+            # ── 手柄模式: 仅显示手柄按键面板 (label → storage key + gp: 前缀) ──
+            cat_lbl_gp = QLabel(f"── {_t('key_cat.gp_buttons')} ──")
+            cat_lbl_gp.setFont(_make_font(fn, 13, bold=True))
+            cat_lbl_gp.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+            layout.addWidget(cat_lbl_gp)
+            layout.addSpacing(6)
+            gp_labels = [label for _, label in GP_BUTTONS]
+            gp_container = QWidget()
+            gp_container.setStyleSheet("background: transparent;")
+            gp_flow = _FlowWidget(gp_labels, self._on_key_clicked, fn, gp_container)
+            gc_lay = QVBoxLayout(gp_container)
+            gc_lay.setContentsMargins(0, 0, 0, 0)
+            gc_lay.setSpacing(0)
+            gc_lay.addWidget(gp_flow)
+            layout.addWidget(gp_container)
+        else:
+            # ── 键盘模式: 鼠标 + 键盘分类 (原行为) ──
+            mouse_keys = _get_mouse_keys()
+            mouse_display_names = [label for label, _ in mouse_keys]
+            mouse_tag_values = [tag for _, tag in mouse_keys]
+            self._mouse_name_to_tag = dict(zip(mouse_display_names, mouse_tag_values))
 
-        mouse_container = QWidget()
-        mouse_container.setStyleSheet("background: transparent;")
-        mouse_flow = _FlowWidget(
-            mouse_display_names,
-            lambda name: self._on_mouse_key_clicked(name),
-            fn, mouse_container
-        )
-        mc_lay = QVBoxLayout(mouse_container)
-        mc_lay.setContentsMargins(0, 0, 0, 0)
-        mc_lay.setSpacing(0)
-        mc_lay.addWidget(mouse_flow)
-        layout.addWidget(mouse_container)
-
-        # ── 键盘按键分类 ──
-        for i, (cat_name, keys) in enumerate(_get_key_categories()):
-            layout.addSpacing(16)
-            cat_lbl = QLabel(f"── {cat_name} ──")
-            cat_lbl.setFont(_make_font(fn, 13, bold=True))
-            cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
-            layout.addWidget(cat_lbl)
+            cat_lbl_mouse = QLabel(f"── {_t('key_cat.mouse_buttons')} ──")
+            cat_lbl_mouse.setFont(_make_font(fn, 13, bold=True))
+            cat_lbl_mouse.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+            layout.addWidget(cat_lbl_mouse)
             layout.addSpacing(6)
 
-            container = QWidget()
-            container.setStyleSheet("background: transparent;")
-            flow = _FlowWidget(keys, self._on_key_clicked, fn, container)
-            c_lay = QVBoxLayout(container)
-            c_lay.setContentsMargins(0, 0, 0, 0)
-            c_lay.setSpacing(0)
-            c_lay.addWidget(flow)
-            layout.addWidget(container)
+            mouse_container = QWidget()
+            mouse_container.setStyleSheet("background: transparent;")
+            mouse_flow = _FlowWidget(
+                mouse_display_names,
+                lambda name: self._on_mouse_key_clicked(name),
+                fn, mouse_container
+            )
+            mc_lay = QVBoxLayout(mouse_container)
+            mc_lay.setContentsMargins(0, 0, 0, 0)
+            mc_lay.setSpacing(0)
+            mc_lay.addWidget(mouse_flow)
+            layout.addWidget(mouse_container)
+
+            for i, (cat_name, keys) in enumerate(_get_key_categories()):
+                layout.addSpacing(16)
+                cat_lbl = QLabel(f"── {cat_name} ──")
+                cat_lbl.setFont(_make_font(fn, 13, bold=True))
+                cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+                layout.addWidget(cat_lbl)
+                layout.addSpacing(6)
+
+                container = QWidget()
+                container.setStyleSheet("background: transparent;")
+                flow = _FlowWidget(keys, self._on_key_clicked, fn, container)
+                c_lay = QVBoxLayout(container)
+                c_lay.setContentsMargins(0, 0, 0, 0)
+                c_lay.setSpacing(0)
+                c_lay.addWidget(flow)
+                layout.addWidget(container)
 
         layout.addStretch()
         scroll.setWidget(content)
         return scroll
 
     def _on_key_clicked(self, key_name):
-        """键位面板点击 → 填入当前聚焦的 TagInput"""
+        """键位面板点击 → 填入当前聚焦的 TagInput
+        手柄模式: 反查 label → storage key + 加 'gp:' 前缀 (例如 '左肩 LB' → 'gp:LB')"""
+        if self._mode == 'gp':
+            storage_key = GP_LABEL_TO_KEY.get(key_name, key_name)
+            key_name = GP_KEY_PREFIX + storage_key
         if self._focus_widget and isinstance(self._focus_widget, TagInput):
             self._focus_widget.add_tag(key_name)
 
