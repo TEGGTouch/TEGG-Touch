@@ -23,8 +23,12 @@ from core.input_engine import (
     mouse_press, mouse_release, mouse_wheel,
 )
 from core.config_manager import load_hotkeys
-from core.constants import UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC
+from core.constants import (
+    UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC,
+    GP_KEY_PREFIX,
+)
 from core.system_tuning import input_poll_interval_ms
+from engine.gamepad_engine import GamepadEngine
 
 user32 = ctypes.windll.user32
 logger = logging.getLogger(__name__)
@@ -181,6 +185,10 @@ class RunController(QObject):
                 item._hover_sm.reset()
         # 兜底释放所有残留按键，防止卡键
         release_all_keys()
+        # 手柄: 释放所有按下的按钮 + 摇杆/扳机归零
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.release_all()
 
     # ── 获取光标下的 item ──
 
@@ -518,7 +526,7 @@ class RunController(QObject):
     # ── 宏感知的智能触发 ──
 
     def _smart_trigger(self, key_str: str, action: str):
-        """解析 key_str, 分离普通键、mouse:xxx 和 macro:name 标签, 分别执行"""
+        """解析 key_str, 分离普通键、mouse:xxx / macro:name / gp:LABEL 标签, 分别执行"""
         if not key_str:
             return
         parts = [p.strip() for p in key_str.split('+')]
@@ -526,6 +534,7 @@ class RunController(QObject):
         macro_names = []
         mouse_buttons = []   # mouse:left, mouse:right, mouse:middle, mouse:x1, mouse:x2
         mouse_wheels = []    # mouse:wheelup, mouse:wheeldown
+        gp_labels = []       # gp:A, gp:LB, gp:LT 等
         for p in parts:
             if p.startswith('macro:'):
                 macro_names.append(p[6:])
@@ -535,6 +544,8 @@ class RunController(QObject):
                     mouse_wheels.append(mouse_val)
                 else:
                     mouse_buttons.append(mouse_val)
+            elif p.startswith(GP_KEY_PREFIX):
+                gp_labels.append(p[len(GP_KEY_PREFIX):])
             else:
                 normal_keys.append(p)
 
@@ -554,6 +565,22 @@ class RunController(QObject):
             for mw in mouse_wheels:
                 direction = 'up' if mw == 'wheelup' else 'down'
                 mouse_wheel(direction)
+
+        # 手柄按钮: 走 gamepad_engine
+        if gp_labels:
+            gp = GamepadEngine.get()
+            if gp is not None:
+                for label in gp_labels:
+                    if action == 'p':
+                        gp.press_button(label)
+                    elif action == 'r':
+                        gp.release_button(label)
+                    elif action == 'click':
+                        gp.press_button(label)
+                        gp.release_button(label)
+                gp.flush()
+            else:
+                logger.warning("GamepadEngine 不可用 (ViGEmBus 未加载?), 忽略手柄按键: %s", gp_labels)
 
         # 宏: 仅在 press / click 时触发 (release 忽略, 避免重复)
         if macro_names and action in ('p', 'click'):

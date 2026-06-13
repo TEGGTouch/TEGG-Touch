@@ -652,6 +652,23 @@ class OverlayScene(QGraphicsScene):
         self.toast_requested.emit(t("toast.center_band_created"))
         return item
 
+    def add_gp_button(self):
+        """新增手柄键按钮 — 视觉同普通按钮但配色蓝紫调, 编辑器面板显示手柄按键"""
+        from models.button_model import ButtonData
+        from core.constants import BTN_TYPE_GP_BUTTON
+        gs = self.grid_size
+        data = ButtonData(
+            name=t("button_defaults.gp_button"),
+            btn_type=BTN_TYPE_GP_BUTTON,
+            w=gs, h=gs,
+        )
+        pos = self._find_empty_slot(data.w, data.h)
+        if pos:
+            data.x, data.y = pos
+        item = self.add_button(data, _toast=False)
+        self.toast_requested.emit(t("toast.gp_button_created"))
+        return item
+
     def delete_button(self, item):
         """删除按钮"""
         if hasattr(item, '_hover_sm'):

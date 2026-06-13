@@ -532,11 +532,14 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.set_sim_mode(mode)
         self._persist_sim_mode_flags()
 
-    # ── 手柄模式三类按钮添加 (C3-C5 接入真实 scene factory) ──
+    # ── 手柄模式三类按钮添加 ──
 
     def _on_add_gp_button(self):
-        """添加手柄键 — C3 接入"""
-        self._toast.show_toast(t("toolbar.gp_coming_soon"))
+        """添加手柄键 — 调 scene factory, 创建 TouchButtonItem (btn_type=gp_button)"""
+        item = self._scene.add_gp_button()
+        if item:
+            item.setOpacity(self._current_opacity)
+            self._wire_single_item(item)
 
     def _on_add_gp_stick(self):
         """添加摇杆 — C4 接入"""

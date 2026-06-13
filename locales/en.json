@@ -247,6 +247,7 @@
   "toast": {
     "created": "✓ Created",
     "center_band_created": "✓ Center Band created",
+    "gp_button_created": "✓ Gamepad button created",
     "copy_success": "✓ Copy success"
   },
   "canvas": {
@@ -309,13 +310,15 @@
     "other": "Other",
     "numpad": "Numpad",
     "media": "Media Keys",
-    "mouse_buttons": "Mouse Buttons"
+    "mouse_buttons": "Mouse Buttons",
+    "gp_buttons": "Gamepad Buttons"
   },
   "button_defaults": {
     "name": "Button",
     "center_band": "Center Band",
     "center_ring": "Center Ring",
-    "inner_ring": "Middle Ring"
+    "inner_ring": "Middle Ring",
+    "gp_button": "GP Button"
   },
   "voice": {
     "status_loading": "Loading voice model...",

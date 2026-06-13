@@ -247,6 +247,7 @@
   "toast": {
     "created": "✓ 创建成功",
     "center_band_created": "✓ 回中带已创建",
+    "gp_button_created": "✓ 手柄键已创建",
     "copy_success": "✓ 复制成功"
   },
   "canvas": {
@@ -309,13 +310,15 @@
     "other": "其他",
     "numpad": "小键盘",
     "media": "媒体键",
-    "mouse_buttons": "鼠标按键"
+    "mouse_buttons": "鼠标按键",
+    "gp_buttons": "手柄按键"
   },
   "button_defaults": {
     "name": "按钮",
     "center_band": "回中带",
     "center_ring": "中心环",
-    "inner_ring": "中二环"
+    "inner_ring": "中二环",
+    "gp_button": "手柄键"
   },
   "voice": {
     "status_loading": "正在加载语音模型...",

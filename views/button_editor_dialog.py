@@ -22,6 +22,7 @@ from core.constants import (
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL, C_DELAY, ACTION_COLORS,
+    BTN_TYPE_GP_BUTTON, GP_BUTTON_LABELS, GP_KEY_PREFIX,
 )
 from models.button_model import ButtonData
 
@@ -269,6 +270,9 @@ class ButtonEditorDialog(QDialog):
         self.data = item.data
         self._focus_widget = None  # 当前聚焦的输入控件
         self._is_wheel = not hasattr(self.data, 'btn_type')
+        # 手柄键模式: 键位面板换成手柄按键, 隐藏鼠标/宏 tab, on_click 加 'gp:' 前缀
+        self._is_gp = (not self._is_wheel
+                       and getattr(self.data, 'btn_type', '') == BTN_TYPE_GP_BUTTON)
         self._macros = list(macros) if macros else []
 
         self.setWindowFlags(
@@ -743,7 +747,13 @@ class ButtonEditorDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
-        for i, (cat_name, keys) in enumerate(_get_key_categories()):
+        # 手柄键模式: 只显示手柄按键分类; 键盘模式: 显示所有键盘分类
+        if self._is_gp:
+            cats = [(t("key_cat.gp_buttons"), list(GP_BUTTON_LABELS))]
+        else:
+            cats = _get_key_categories()
+
+        for i, (cat_name, keys) in enumerate(cats):
             # 分类标签
             if i > 0:
                 layout.addSpacing(20)
@@ -773,10 +783,12 @@ class ButtonEditorDialog(QDialog):
         return container
 
     def _on_key_clicked(self, key_name):
-        """键位面板点击 → 插入到聚焦的输入控件"""
+        """键位面板点击 → 插入到聚焦的输入控件 (手柄模式自动加 'gp:' 前缀)"""
         w = self._focus_widget
         if w is None:
             return
+        if self._is_gp:
+            key_name = GP_KEY_PREFIX + key_name
         if isinstance(w, TagInput):
             w.add_tag(key_name)
         elif isinstance(w, (_FocusLineEdit, QLineEdit)):
@@ -932,7 +944,7 @@ class ButtonEditorDialog(QDialog):
         panel_lay.setContentsMargins(0, 0, 0, 0)
         panel_lay.setSpacing(8)
 
-        # Tab 按钮行 (3 个)
+        # Tab 按钮行 (3 个; 手柄模式只显示常规按键)
         tab_row = QHBoxLayout()
         tab_row.setSpacing(8)
 
@@ -965,14 +977,18 @@ class ButtonEditorDialog(QDialog):
         self._tab_stack = QStackedWidget()
         self._tab_stack.setStyleSheet("background: transparent;")
 
-        # Page 0: 常规按键
+        # Page 0: 常规按键 (键盘 / 手柄都有)
         self._tab_stack.addWidget(self._build_key_palette(fn))
 
-        # Page 1: 鼠标操作
-        self._tab_stack.addWidget(self._build_mouse_palette(fn))
-
-        # Page 2: 自定义宏
-        self._tab_stack.addWidget(self._build_macro_tab(fn))
+        # 手柄模式: 不需要鼠标/宏 tab (输出是手柄按钮, 不是鼠标动作/键盘宏)
+        if self._is_gp:
+            self._tab_mouse_btn.setVisible(False)
+            self._tab_macros_btn.setVisible(False)
+        else:
+            # Page 1: 鼠标操作
+            self._tab_stack.addWidget(self._build_mouse_palette(fn))
+            # Page 2: 自定义宏
+            self._tab_stack.addWidget(self._build_macro_tab(fn))
 
         panel_lay.addWidget(self._tab_stack, 1)
 
