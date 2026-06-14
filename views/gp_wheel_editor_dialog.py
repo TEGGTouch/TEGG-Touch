@@ -14,8 +14,9 @@ from PyQt6.QtWidgets import (
     QApplication, QRadioButton, QButtonGroup, QStackedWidget,
     QScrollArea,
 )
-from PyQt6.QtCore import Qt, QPoint, pyqtSignal
-from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon
+from PyQt6.QtCore import Qt, QPoint, QSize, QByteArray, pyqtSignal
+from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon, QIcon, QPixmap
+from PyQt6.QtSvg import QSvgRenderer
 
 from core.i18n import t, get_font
 from core.constants import (
@@ -37,6 +38,32 @@ _C_ERROR = "#E11D48"
 
 _CHECK_ICON_URL = os.path.join(APP_DIR, "assets", "check.svg").replace("\\", "/")
 _RADIO_DOT_URL = os.path.join(APP_DIR, "assets", "radio_dot.svg").replace("\\", "/")
+
+# check.svg 是固定白色; 这里按颜色生成对应 QIcon 并缓存 (color hex → QIcon)
+_CHECK_ICON_CACHE: dict = {}
+
+
+def _check_icon(color: str) -> QIcon:
+    color = color.upper()
+    if color in _CHECK_ICON_CACHE:
+        return _CHECK_ICON_CACHE[color]
+    try:
+        with open(_CHECK_ICON_URL, 'rb') as f:
+            svg = f.read().decode('utf-8')
+        svg = svg.replace('#FFFFFF', color).replace('#ffffff', color)
+        renderer = QSvgRenderer(QByteArray(svg.encode('utf-8')))
+        pm = QPixmap(32, 32)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        renderer.render(p)
+        p.end()
+        icon = QIcon(pm)
+    except Exception:
+        icon = QIcon(_CHECK_ICON_URL)
+    _CHECK_ICON_CACHE[color] = icon
+    return icon
 
 _DEFAULT_RELEASE_PCT = 150
 
@@ -106,35 +133,38 @@ class _TriggerSection(QWidget):
         fn = self._fn
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
+        lay.setSpacing(14)
 
         sec_lbl = QLabel(title)
-        sec_lbl.setFont(_font(fn, 15, bold=True))
+        sec_lbl.setFont(_font(fn, 16, bold=True))
         sec_lbl.setStyleSheet(f"color: {_C_BLUE_H}; background: transparent;")
         lay.addWidget(sec_lbl)
-        lay.addSpacing(4)
 
-        # 控制方式 radio
+        # 控制方式 — tab 按钮 (三选一, 互斥由 Dialog 协调)
         lay.addWidget(_make_field_label(fn, t("gp_wheel_editor.mode_label")))
         mode_row = QHBoxLayout()
-        self._mode_group = QButtonGroup(self)
-        self._rb_scroll = _make_radio(fn, t("gp_wheel_editor.mode_scroll"))
-        self._rb_vertical = _make_radio(fn, t("gp_wheel_editor.mode_vertical"))
-        self._rb_buttons = _make_radio(fn, t("gp_wheel_editor.mode_buttons"))
-        self._mode_group.addButton(self._rb_scroll)
-        self._mode_group.addButton(self._rb_vertical)
-        self._mode_group.addButton(self._rb_buttons)
+        mode_row.setSpacing(8)
+        self._mode_btns: dict = {}
+        self._disabled_reasons: dict = {}
+        mode_info = [
+            ('scroll', t("gp_wheel_editor.mode_scroll")),
+            ('vertical', t("gp_wheel_editor.mode_vertical")),
+            ('buttons', t("gp_wheel_editor.mode_buttons")),
+        ]
         cur_mode = getattr(self._data, f'{self._prefix}_mode', 'scroll')
-        {'scroll': self._rb_scroll, 'vertical': self._rb_vertical,
-         'buttons': self._rb_buttons}.get(cur_mode, self._rb_scroll).setChecked(True)
-        for rb in (self._rb_scroll, self._rb_vertical, self._rb_buttons):
-            rb.toggled.connect(self._on_mode_toggle)
-        mode_row.addWidget(self._rb_scroll); mode_row.addSpacing(12)
-        mode_row.addWidget(self._rb_vertical); mode_row.addSpacing(12)
-        mode_row.addWidget(self._rb_buttons); mode_row.addStretch()
+        if cur_mode not in ('scroll', 'vertical', 'buttons'):
+            cur_mode = 'scroll'
+        self._current_mode = cur_mode
+        for key, label in mode_info:
+            b = QPushButton(label)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFont(_font(fn, 14, bold=True))
+            b.setFixedHeight(36)
+            b.clicked.connect(lambda _, k=key: self._on_tab_clicked(k))
+            mode_row.addWidget(b, 1)
+            self._mode_btns[key] = b
         lay.addLayout(mode_row)
-
-        lay.addSpacing(6)
+        self._refresh_tab_styles()
 
         # 参数 stacked widget
         self._stack = QStackedWidget()
@@ -147,16 +177,9 @@ class _TriggerSection(QWidget):
         idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2}
         self._stack.setCurrentIndex(idx_map.get(cur_mode, 0))
 
-        # 互斥错误提示 (默认隐藏, 外部 validation 触发)
-        self._err_lbl = QLabel("")
-        self._err_lbl.setFont(_font(fn, 12, bold=True))
-        self._err_lbl.setStyleSheet(f"color: {_C_ERROR}; background: transparent;")
-        self._err_lbl.setVisible(False)
-        lay.addWidget(self._err_lbl)
-
     def _build_scroll_params(self, fn):
         page = QWidget(); v = QVBoxLayout(page)
-        v.setContentsMargins(0, 0, 0, 0); v.setSpacing(4)
+        v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
         v.addWidget(_make_label(fn, t("gp_wheel_editor.scroll_hint"), _C_HINT, 12))
         head, slider, value_lbl = _make_value_slider(
             fn, t("gp_wheel_editor.scroll_step"),
@@ -169,20 +192,23 @@ class _TriggerSection(QWidget):
 
     def _build_vertical_params(self, fn):
         page = QWidget(); v = QVBoxLayout(page)
-        v.setContentsMargins(0, 0, 0, 0); v.setSpacing(4)
-        v.addWidget(_make_label(fn, t("gp_wheel_editor.vertical_hint"), _C_HINT, 12))
+        v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
+        v.addWidget(_make_label(
+            fn,
+            "上下移动鼠标改变扳机值; 位移单位是方向盘高度的百分比 (跟着方向盘缩放, 不会被像素绑死)。",
+            _C_HINT, 12))
         head, slider, value_lbl = _make_value_slider(
-            fn, t("gp_wheel_editor.vertical_px"),
-            init=int(getattr(self._data, f'{self._prefix}_vertical_px')),
-            min_v=50, max_v=500, default_v=200, suffix='px',
+            fn, "0→100% 所需位移",
+            init=int(round(getattr(self._data, f'{self._prefix}_vertical_pct') * 100)),
+            min_v=10, max_v=80, default_v=50, suffix='%',
         )
-        self._vertical_px_slider = slider
+        self._vertical_pct_slider = slider
         v.addLayout(head); v.addWidget(slider)
         return page
 
     def _build_buttons_params(self, fn):
         page = QWidget(); v = QVBoxLayout(page)
-        v.setContentsMargins(0, 0, 0, 0); v.setSpacing(8)
+        v.setContentsMargins(0, 0, 0, 0); v.setSpacing(14)
         v.addWidget(_make_label(fn, t("gp_wheel_editor.buttons_hint"), _C_HINT, 12))
         # interval (ms)
         head_ms, slider_ms, _ = _make_value_slider(
@@ -202,37 +228,79 @@ class _TriggerSection(QWidget):
         v.addLayout(head_step); v.addWidget(slider_step)
         return page
 
-    def _on_mode_toggle(self, checked: bool):
-        if not checked:
+    def _on_tab_clicked(self, mode: str):
+        if mode in self._disabled_reasons:
             return
-        if self._rb_scroll.isChecked():
-            mode = 'scroll'; self._stack.setCurrentIndex(0)
-        elif self._rb_vertical.isChecked():
-            mode = 'vertical'; self._stack.setCurrentIndex(1)
-        else:
-            mode = 'buttons'; self._stack.setCurrentIndex(2)
+        if mode == self._current_mode:
+            return
+        self._current_mode = mode
+        idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2}
+        self._stack.setCurrentIndex(idx_map.get(mode, 0))
+        self._refresh_tab_styles()
         self.mode_changed.emit(mode)
 
     def current_mode(self) -> str:
-        if self._rb_scroll.isChecked():
-            return 'scroll'
-        if self._rb_vertical.isChecked():
-            return 'vertical'
-        return 'buttons'
+        return self._current_mode
 
-    def show_error(self, msg: str):
-        self._err_lbl.setText(msg)
-        self._err_lbl.setVisible(True)
+    def set_disabled_modes(self, disabled_modes, reason: str):
+        """Dialog 协调互斥: disabled_modes = 被对方占用的 mode 集合"""
+        self._disabled_reasons = {m: reason for m in (disabled_modes or set())
+                                  if m in ('scroll', 'vertical', 'buttons')}
+        self._refresh_tab_styles()
 
-    def clear_error(self):
-        self._err_lbl.setVisible(False)
+    def _refresh_tab_styles(self):
+        """tab 三态: 选中=C_CYBER/C_CYBER_H; 空闲=C_GRAY/C_GRAY_H; 禁用=透明无填充 + 细边框 + 灰字 + tooltip
+        选中 & 禁用(被对方占用) 都加 ☑ 图标 (用 assets/check.svg, 跟项目其他位置一致)"""
+        empty_icon = QIcon()
+        for key, b in self._mode_btns.items():
+            is_selected = (key == self._current_mode)
+            is_disabled = (key in self._disabled_reasons)
+            # ☑ 图标: 选中 = 白色; 禁用 (被对方占用) = 灰色 #555 (跟禁用文字/边框同色)
+            if is_selected:
+                b.setIcon(_check_icon("#FFFFFF"))
+            elif is_disabled:
+                b.setIcon(_check_icon("#555555"))
+            else:
+                b.setIcon(empty_icon)
+            b.setIconSize(QSize(16, 16))
+            if is_disabled:
+                b.setEnabled(False)
+                b.setCursor(Qt.CursorShape.ArrowCursor)
+                b.setToolTip(self._disabled_reasons[key])
+                # 不填充 (transparent), 用细边框维持高度/形状; QSS 用 :disabled 防被默认灰板覆盖
+                b.setStyleSheet("""
+                    QPushButton, QPushButton:disabled {
+                        background: transparent; color: #555;
+                        border: 1px solid #3A3A3A; border-radius: 6px;
+                    }
+                """)
+            else:
+                b.setEnabled(True)
+                b.setCursor(Qt.CursorShape.PointingHandCursor)
+                b.setToolTip("")
+                if is_selected:
+                    b.setStyleSheet(f"""
+                        QPushButton {{
+                            background: {C_CYBER}; color: #FFF;
+                            border: none; border-radius: 6px;
+                        }}
+                        QPushButton:hover {{ background: {C_CYBER_H}; }}
+                    """)
+                else:
+                    b.setStyleSheet(f"""
+                        QPushButton {{
+                            background: {C_GRAY}; color: #CCC;
+                            border: none; border-radius: 6px;
+                        }}
+                        QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}
+                    """)
 
     def apply_to_data(self):
         setattr(self._data, f'{self._prefix}_mode', self.current_mode())
         setattr(self._data, f'{self._prefix}_scroll_step',
                 self._scroll_step_slider.value() / 100.0)
-        setattr(self._data, f'{self._prefix}_vertical_px',
-                float(self._vertical_px_slider.value()))
+        setattr(self._data, f'{self._prefix}_vertical_pct',
+                self._vertical_pct_slider.value() / 100.0)
         setattr(self._data, f'{self._prefix}_buttons_ms',
                 int(self._buttons_ms_slider.value()))
         setattr(self._data, f'{self._prefix}_buttons_step',
@@ -240,11 +308,27 @@ class _TriggerSection(QWidget):
 
 
 def _make_label(fn, text, color, px):
-    lbl = QLabel(text)
+    """提示/说明文字 — HTML 包一层 line-height 让多行不挤"""
+    lbl = QLabel(f'<div style="line-height: 180%;">{text}</div>')
+    lbl.setTextFormat(Qt.TextFormat.RichText)
     lbl.setFont(_font(fn, px))
     lbl.setStyleSheet(f"color: {color}; background: transparent;")
     lbl.setWordWrap(True)
     return lbl
+
+
+def _wrap_in_card(inner_widget) -> QFrame:
+    """把 LT/RT section 包成一张卡片 (圆角 + 边框 + 内边距; 用 objectName 选择器避免污染子 QFrame)"""
+    card = QFrame()
+    card.setObjectName("gpwheel_trigger_card")
+    card.setStyleSheet(
+        "QFrame#gpwheel_trigger_card { background: #232323; "
+        "border: 1px solid #3A3A3A; border-radius: 8px; }")
+    cl = QVBoxLayout(card)
+    cl.setContentsMargins(22, 20, 22, 20)
+    cl.setSpacing(0)
+    cl.addWidget(inner_widget)
+    return card
 
 
 def _make_field_label(fn, text):
@@ -324,8 +408,8 @@ class GpWheelEditorDialog(QDialog):
     saved = pyqtSignal(object)
     deleted = pyqtSignal(object)
 
-    WIN_W = 540
-    WIN_H = 800
+    WIN_W = 960
+    WIN_H = 960
     PADDING = 20
 
     def __init__(self, item, parent=None):
@@ -364,7 +448,7 @@ class GpWheelEditorDialog(QDialog):
         root.setContentsMargins(self.PADDING, self.PADDING, self.PADDING, self.PADDING)
         root.setSpacing(0)
 
-        # 标题
+        # 顶部: 标题 + 关闭按钮
         hdr = QHBoxLayout()
         title = QLabel(t("gp_wheel_editor.title"))
         title.setFont(_font(fn, 18, bold=True))
@@ -382,15 +466,16 @@ class GpWheelEditorDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         hdr.addWidget(close_btn)
         root.addLayout(hdr)
-        root.addSpacing(10)
+        root.addSpacing(12)
 
-        # 提示
-        tip = QLabel(t("gp_wheel_editor.tip"))
-        tip.setFont(_font(fn, 12))
+        # 提示 (HTML line-height 拉宽)
+        tip = QLabel(f'<div style="line-height:180%">{t("gp_wheel_editor.tip")}</div>')
+        tip.setTextFormat(Qt.TextFormat.RichText)
+        tip.setFont(_font(fn, 13))
         tip.setStyleSheet(f"color: {_C_HINT}; background: transparent;")
         tip.setWordWrap(True)
         root.addWidget(tip)
-        root.addSpacing(14)
+        root.addSpacing(20)
 
         # 可滚动区域
         scroll = QScrollArea()
@@ -407,30 +492,14 @@ class GpWheelEditorDialog(QDialog):
         sc.setContentsMargins(0, 0, 12, 0)
         sc.setSpacing(0)
 
-        SECTION_GAP = 16
+        SECTION_GAP = 22
 
         # ─── Section 1 方向盘参数 ───
         sec1 = QLabel(t("gp_wheel_editor.section_wheel"))
-        sec1.setFont(_font(fn, 15, bold=True))
+        sec1.setFont(_font(fn, 16, bold=True))
         sec1.setStyleSheet(f"color: {_C_BLUE_H}; background: transparent;")
         sc.addWidget(sec1)
-        sc.addSpacing(6)
-
-        # 名称
-        sc.addWidget(_make_field_label(fn, t("gp_wheel_editor.name")))
-        self._name_edit = QLineEdit(self.data.name or "")
-        self._name_edit.setPlaceholderText(t("gp_wheel_editor.name_placeholder"))
-        self._name_edit.setFont(_font(fn, 14))
-        self._name_edit.setFixedHeight(36)
-        self._name_edit.setStyleSheet(f"""
-            QLineEdit {{
-                background: {C_INPUT_BG}; color: white;
-                border: 2px solid #555; border-radius: 6px; padding: 4px 8px;
-            }}
-            QLineEdit:focus {{ border-color: {_C_BLUE}; }}
-        """)
-        sc.addWidget(self._name_edit)
-        sc.addSpacing(12)
+        sc.addSpacing(10)
 
         # 释放阈值
         head, self._release_slider, _ = _make_value_slider(
@@ -440,13 +509,15 @@ class GpWheelEditorDialog(QDialog):
         )
         sc.addLayout(head)
         sc.addWidget(self._release_slider)
+        sc.addSpacing(6)
         rel_hint = _make_label(fn, t("gp_wheel_editor.release_threshold_hint"),
-                                _C_HINT, 11)
+                                _C_HINT, 12)
         sc.addWidget(rel_hint)
-        sc.addSpacing(12)
+        sc.addSpacing(18)
 
         # 灵敏度曲线
         sc.addWidget(_make_field_label(fn, t("gp_wheel_editor.sensitivity")))
+        sc.addSpacing(8)
         sens_row = QHBoxLayout()
         self._sens_group = QButtonGroup(self)
         self._rb_linear = _make_radio(fn, t("gp_wheel_editor.sens_linear"))
@@ -463,24 +534,22 @@ class GpWheelEditorDialog(QDialog):
         sep1 = QFrame(); sep1.setFrameShape(QFrame.Shape.HLine)
         sep1.setStyleSheet("background: #444; border: none;"); sep1.setFixedHeight(1)
         sc.addWidget(sep1)
-        sc.addSpacing(12)
+        sc.addSpacing(16)
 
-        # ─── Section 2 LT ───
+        # ─── Section 2/3: LT / RT 卡片左右并排 ───
         self._lt_section = _TriggerSection(t("gp_wheel_editor.lt_title"), self.data, 'lt')
         self._lt_section.mode_changed.connect(self._on_mode_changed)
-        sc.addWidget(self._lt_section)
-        sc.addSpacing(SECTION_GAP)
+        lt_card = _wrap_in_card(self._lt_section)
 
-        # 分隔线
-        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet("background: #444; border: none;"); sep2.setFixedHeight(1)
-        sc.addWidget(sep2)
-        sc.addSpacing(12)
-
-        # ─── Section 3 RT ───
         self._rt_section = _TriggerSection(t("gp_wheel_editor.rt_title"), self.data, 'rt')
         self._rt_section.mode_changed.connect(self._on_mode_changed)
-        sc.addWidget(self._rt_section)
+        rt_card = _wrap_in_card(self._rt_section)
+
+        cards_row = QHBoxLayout()
+        cards_row.setSpacing(14)
+        cards_row.addWidget(lt_card, 1)
+        cards_row.addWidget(rt_card, 1)
+        sc.addLayout(cards_row)
 
         sc.addStretch()
         scroll.setWidget(body)
@@ -494,39 +563,42 @@ class GpWheelEditorDialog(QDialog):
         del_btn.setFixedHeight(40); del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         del_btn.setFont(_font(fn, 16))
         del_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 6px; padding: 0 32px; }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         del_btn.clicked.connect(self._on_delete)
-        btn_row.addWidget(del_btn)
+        btn_row.addWidget(del_btn, 1)
 
         self._save_btn = QPushButton(t("gp_wheel_editor.save"))
         self._save_btn.setFixedHeight(40); self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._save_btn.setFont(_font(fn, 16, bold=True))
         self._save_btn.clicked.connect(self._on_save)
-        btn_row.addWidget(self._save_btn, 1)
+        btn_row.addWidget(self._save_btn, 3)
         self._apply_save_button_style(enabled=True)
         root.addLayout(btn_row)
 
-    # ── 互斥校验 ──
+    # ── 互斥校验 (三选一: LT/RT 不能用同一种控制方式) ──
 
     def _on_mode_changed(self, _mode: str):
         self._validate_mutual_exclusion()
 
     def _validate_mutual_exclusion(self):
-        """LT 选 buttons → RT 不能选 buttons (LMB/RMB 已被 LT 全占)"""
+        """LT/RT 三模式互斥: 一方选了什么, 另一方对应的 tab 被禁用 + tooltip 提示"""
         lt_mode = self._lt_section.current_mode()
         rt_mode = self._rt_section.current_mode()
-        conflict = (lt_mode == 'buttons' and rt_mode == 'buttons')
-        if conflict:
-            err = t("gp_wheel_editor.err_mutual_buttons")
-            self._lt_section.show_error(err)
-            self._rt_section.show_error(err)
-            self._apply_save_button_style(enabled=False)
-        else:
-            self._lt_section.clear_error()
-            self._rt_section.clear_error()
-            self._apply_save_button_style(enabled=True)
+        name_map = {
+            'scroll':   t("gp_wheel_editor.mode_scroll"),
+            'vertical': t("gp_wheel_editor.mode_vertical"),
+            'buttons':  t("gp_wheel_editor.mode_buttons"),
+        }
+        rt_label = name_map.get(rt_mode, rt_mode)
+        lt_label = name_map.get(lt_mode, lt_mode)
+        self._lt_section.set_disabled_modes(
+            {rt_mode}, f"右扳机已使用「{rt_label}」, 两个扳机不能用同一种控制方式")
+        self._rt_section.set_disabled_modes(
+            {lt_mode}, f"左扳机已使用「{lt_label}」, 两个扳机不能用同一种控制方式")
+        # 防御: 老 profile 可能两侧同 mode → 保存禁用
+        self._apply_save_button_style(enabled=(lt_mode != rt_mode))
 
     def _apply_save_button_style(self, enabled: bool):
         self._save_btn.setEnabled(enabled)
@@ -554,7 +626,6 @@ class GpWheelEditorDialog(QDialog):
         self.accept()
 
     def _apply_to_data(self):
-        self.data.name = self._name_edit.text().strip()
         self.data.release_threshold_ratio = self._release_slider.value() / 100.0
         self.data.sensitivity_curve = ('square' if self._rb_square.isChecked() else 'linear')
         self._lt_section.apply_to_data()

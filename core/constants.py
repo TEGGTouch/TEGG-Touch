@@ -50,6 +50,15 @@ DEFAULT_CURSOR_STYLES = {
     "cursor_block": {"stroke": "#FFFFFF", "fill": "#E69318", "scale": 1.0},
 }
 
+# === 方向盘样式 (全局, 跟 cursor 一样存 hotkeys.json) ===
+# variant: 'stroke' (描边) | 'fill' (填充); color = 单色 (active 100%, idle 50% alpha)
+DEFAULT_WHEEL_STYLE = {
+    "variant": "stroke",
+    "color":   "#3B82F6",    # 按钮 border 蓝
+}
+WHEEL_VARIANT_STROKE = "stroke"
+WHEEL_VARIANT_FILL = "fill"
+
 def get_hotkey_labels():
     """返回本地化的快捷键显示名称（运行时求值）。"""
     return {
@@ -98,10 +107,10 @@ BTN_TYPE_WHEEL_INNER_RING = "wheel_inner_ring"
 # 手柄模式三类按钮 (gamepad_install 完成后切到手柄 sim_mode 才显示)
 BTN_TYPE_GP_BUTTON = "gp_button"     # 手柄键 (A/B/X/Y/LB/RB/Start/Back/D-pad/L3/R3 等)
 BTN_TYPE_GP_STICK = "gp_stick"       # 摇杆 (圆形, 模拟左/右摇杆)
-BTN_TYPE_GP_WHEEL = "gp_wheel"       # 方向盘 (4×2 复合: LT + 圆盘 + RT)
+BTN_TYPE_GP_WHEEL = "gp_wheel"       # 方向盘 (方形 N×N, 左右浮挂 1×N 的 LT/RT 视觉条)
 
-# 方向盘默认尺寸 (4×2 grid @ 100px = 400×200, 固定不缩放)
-GP_WHEEL_DEFAULT_W = 400
+# 方向盘默认尺寸 (方形, 默认 2×2 grid @ 100px = 200×200; 可缩放)
+GP_WHEEL_DEFAULT_W = 200
 GP_WHEEL_DEFAULT_H = 200
 
 # 摇杆 / 扳机标识

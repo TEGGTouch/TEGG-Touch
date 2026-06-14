@@ -8,7 +8,8 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter, QPainterPath, QColor, QCursor
 
 from core.constants import (
-    DEFAULT_GRID_SIZE, BTN_TYPE_CENTER_BAND, BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK,
+    DEFAULT_GRID_SIZE, BTN_TYPE_CENTER_BAND,
+    BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL,
     COLOR_GP_BTN_BORDER,
 )
 
@@ -49,7 +50,7 @@ class ResizeHandleItem(QGraphicsItem):
                     if hasattr(self._parent_btn, 'data') else '')
         if btn_type == BTN_TYPE_CENTER_BAND:
             color = _COLOR_HANDLE_CENTER_BAND
-        elif btn_type in (BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK):
+        elif btn_type in (BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL):
             color = _COLOR_HANDLE_GP
         else:
             color = _COLOR_HANDLE_DEFAULT

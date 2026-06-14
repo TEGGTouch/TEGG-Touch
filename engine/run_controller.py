@@ -900,8 +900,10 @@ class RunController(QObject):
             if dist_ratio > active.data.release_threshold_ratio:
                 self._release_gp_wheel()
             else:
-                # 在 release zone 内: steering 钉边缘, 不更新 LT/RT 引用 Y
+                # 在 release zone 内: steering 钉边缘 (sticky); 但 vertical 扳机仍跟随 Y
+                # (用户期望: 阈值范围内 vertical 一直有效, 不会因为离开方块就停)
                 self._update_wheel_steering(active, scene_pos, force_edge=True)
+                self._update_wheel_triggers(active, screen_pt)
                 self._sync_wheel_visual(active)
         elif in_rect and wheel is active:
             self._update_wheel_steering(active, scene_pos, force_edge=False)
@@ -981,7 +983,9 @@ class RunController(QObject):
             mode = getattr(wheel.data, f'{prefix}_mode')
             cur = getattr(self, val_attr)
             if mode == 'vertical':
-                px_per = max(1.0, getattr(wheel.data, f'{prefix}_vertical_px'))
+                # 0→1 所需 Y 位移 = 方向盘高度 × pct (方向盘是方形, w == h)
+                pct = max(0.05, min(0.95, getattr(wheel.data, f'{prefix}_vertical_pct')))
+                px_per = max(1.0, wheel.data.w * pct)
                 cur = max(0.0, min(1.0, cur + (-dy) / px_per))
             elif mode == 'buttons':
                 ms = max(1, getattr(wheel.data, f'{prefix}_buttons_ms'))

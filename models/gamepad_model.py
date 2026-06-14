@@ -75,17 +75,17 @@ class GamepadWheelData:
     release_threshold_ratio: float = 1.5   # 鼠标距矩形中心 > w/2×ratio → 全部释放
     sensitivity_curve: str = "linear"      # 'linear' | 'square'
 
-    # LT 控制方式
-    lt_mode: str = "scroll"                # 'scroll' | 'vertical' | 'buttons'
+    # LT 控制方式 — 默认左右键 (LMB 加 / RMB 减)
+    lt_mode: str = "buttons"               # 'scroll' | 'vertical' | 'buttons'
     lt_scroll_step: float = 0.05
-    lt_vertical_px: float = 200.0          # 多少 px Δ 对应 ±1.0
+    lt_vertical_pct: float = 0.5           # 0→1 所需 Y 位移 = 方向盘高度 × pct (默认 50%, 上限 80%)
     lt_buttons_ms: int = 100
     lt_buttons_step: float = 0.05
 
-    # RT 控制方式 (默认与 LT 不同)
+    # RT 控制方式 — 默认垂直位移
     rt_mode: str = "vertical"
     rt_scroll_step: float = 0.05
-    rt_vertical_px: float = 200.0
+    rt_vertical_pct: float = 0.5
     rt_buttons_ms: int = 100
     rt_buttons_step: float = 0.05
 

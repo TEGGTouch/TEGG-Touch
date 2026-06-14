@@ -212,6 +212,8 @@ def load_config_from_file(filepath: str) -> dict:
         # 自定义宏 (kb / gp 两池, per-profile)
         'macros': [],
         'gp_macros': [],
+        # 模拟模式 (per-profile): 'keyboard' | 'gamepad'; None 表示该 profile 未设置, 调用方回退
+        'sim_mode': None,
     }
     if not os.path.exists(filepath):
         return result
@@ -300,6 +302,10 @@ def load_config_from_file(filepath: str) -> dict:
         raw_gp_macros = data.get('gp_macros', [])
         if isinstance(raw_gp_macros, list):
             result['gp_macros'] = raw_gp_macros
+        # 模拟模式 (per-profile)
+        raw_sim = data.get('sim_mode')
+        if raw_sim in ('keyboard', 'gamepad'):
+            result['sim_mode'] = raw_sim
         logger.info(f"配置加载成功: {filepath}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"配置文件格式错误: {filepath}: {e}")
@@ -340,7 +346,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          voice_mic_device=None,
                          voice_auto_start=None,
                          macros=None,
-                         gp_macros=None) -> bool:
+                         gp_macros=None,
+                         sim_mode=None) -> bool:
     """保存配置到指定文件。"""
     # Bug 5 fix: geometry 为 None 时使用当前屏幕尺寸作为 fallback
     if geometry is None:
@@ -434,6 +441,10 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['macros'] = macros
     if gp_macros is not None:
         data['gp_macros'] = gp_macros
+
+    # 模拟模式 (per-profile)
+    if sim_mode in ('keyboard', 'gamepad'):
+        data['sim_mode'] = sim_mode
 
     try:
         os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)
@@ -706,6 +717,14 @@ def load_hotkeys() -> dict:
         # 保留 cursor_styles 字段
         if 'cursor_styles' in data:
             result['cursor_styles'] = data['cursor_styles']
+        # 保留 sim_mode (作为 per-profile sim_mode 缺失时的全局回退) 与 gamepad_install_seen (全局)
+        if 'sim_mode' in data:
+            result['sim_mode'] = data['sim_mode']
+        if 'gamepad_install_seen' in data:
+            result['gamepad_install_seen'] = data['gamepad_install_seen']
+        # 保留 wheel_style (方向盘样式: variant + color, 全局)
+        if 'wheel_style' in data:
+            result['wheel_style'] = data['wheel_style']
         logger.info(f"快捷键配置加载成功: {HOTKEYS_FILE}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"快捷键配置格式错误: {e}")

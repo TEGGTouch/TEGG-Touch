@@ -1089,7 +1089,13 @@ class OverlayScene(QGraphicsScene):
             item.data.h = cell_h * new_gs
             item.setPos(item.data.x + item._offset_x, item.data.y + item._offset_y)
             item.prepareGeometryChange()
-            item._update_handle_pos()
+            # 不同 item 类的缩放手柄方法名不同 (touch_button/center_band: _update_handle_pos;
+            # gp_stick/gp_wheel: _update_resize_handle_pos)
+            for m in ('_update_handle_pos', '_update_resize_handle_pos'):
+                fn = getattr(item, m, None)
+                if callable(fn):
+                    fn()
+                    break
             item.update()
 
         # 重绘网格

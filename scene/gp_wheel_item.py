@@ -1,25 +1,82 @@
 """
 TEGG Touch 蛋挞 (PyQt6) - gp_wheel_item.py
-方向盘 QGraphicsObject — 4×2 复合 item:
-  左 1×2 = LT 视觉进度条
-  中 2×2 = 圆形方向盘 (转向指示器)
-  右 1×2 = RT 视觉进度条
-整体 4×2 矩形是统一输入区, 鼠标位置在哪里都生效。
-默认大小固定 (400×200), 不可缩放, 仅可拖动。
+方向盘 QGraphicsObject — 方形 N×N + 两侧浮挂 LT/RT:
+  中央 N×N = 圆角大方块, 也是唯一的鼠标交互区 (steering 输入)
+  左侧 1×N = LT 视觉进度条 (无交互, 仅视觉)
+  右侧 1×N = RT 视觉进度条 (无交互, 仅视觉)
+默认 2×2 grid (200×200), 可缩放 (强制方形, 最小 2 格)。
+编辑模式: 显示方形外框 + 缩放手柄;
+运行模式: 隐藏外框, 仅方向盘旋转 + LT/RT 视觉跟随。
 """
 
 import math
+import os
 
 from PyQt6.QtWidgets import QGraphicsObject, QGraphicsItem
-from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPainterPath
+from PyQt6.QtCore import Qt, QRectF, QPointF, QByteArray, pyqtSignal
+from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPainterPath, QPixmap
+from PyQt6.QtSvg import QSvgRenderer
 
 from core.constants import (
-    DEFAULT_GRID_SIZE, BTN_MARGIN,
+    DEFAULT_GRID_SIZE, BTN_MARGIN, APP_DIR,
     COLOR_GP_BTN_BG, COLOR_GP_BTN_BORDER, COLOR_GP_BTN_TEXT,
+    DEFAULT_WHEEL_STYLE, WHEEL_VARIANT_STROKE, WHEEL_VARIANT_FILL,
 )
 from core.i18n import get_font
 from models.gamepad_model import GamepadWheelData
+
+
+# ── 方向盘 SVG 渲染 + 缓存 ──
+# 占位色 (两张 SVG 都用这个色, 渲染前替换成用户色)
+_SVG_PLACEHOLDER_COLOR = "#FFCB31"
+_SVG_FILE_BY_VARIANT = {
+    WHEEL_VARIANT_STROKE: "wheel_stroke.svg",
+    WHEEL_VARIANT_FILL:   "wheel_fill.svg",
+}
+_WHEEL_RENDER_SIZE = 512   # 高分辨率一次, 运行时按需缩放
+# cache key = (variant, color_upper) → QPixmap
+_WHEEL_CACHE: dict = {}
+
+
+def render_wheel_pixmap(variant: str, color: str) -> QPixmap:
+    """SVG → QPixmap, 缓存。返回 None 表示加载失败 (paint 会走几何回退)。"""
+    if variant not in _SVG_FILE_BY_VARIANT:
+        variant = WHEEL_VARIANT_STROKE
+    color = (color or DEFAULT_WHEEL_STYLE["color"]).upper()
+    key = (variant, color)
+    if key in _WHEEL_CACHE:
+        return _WHEEL_CACHE[key]
+    path = os.path.join(APP_DIR, "assets", _SVG_FILE_BY_VARIANT[variant])
+    if not os.path.exists(path):
+        _WHEEL_CACHE[key] = None
+        return None
+    try:
+        with open(path, 'rb') as f:
+            svg_text = f.read().decode('utf-8', errors='ignore')
+        # 占位 #FFCB31 → 用户色 (case-insensitive, 但 SVG 里都是大写, 保险起见两种都换)
+        svg_text = svg_text.replace(_SVG_PLACEHOLDER_COLOR, color)
+        svg_text = svg_text.replace(_SVG_PLACEHOLDER_COLOR.lower(), color)
+        renderer = QSvgRenderer(QByteArray(svg_text.encode('utf-8')))
+        if not renderer.isValid():
+            _WHEEL_CACHE[key] = None
+            return None
+        pm = QPixmap(_WHEEL_RENDER_SIZE, _WHEEL_RENDER_SIZE)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        renderer.render(p)
+        p.end()
+        _WHEEL_CACHE[key] = pm
+        return pm
+    except Exception:
+        _WHEEL_CACHE[key] = None
+        return None
+
+
+def clear_wheel_render_cache():
+    """设置改动后清缓存, 下次 paint 重新渲染"""
+    _WHEEL_CACHE.clear()
 
 
 # 配色 (跟 gp_stick / gp_btn 蓝调一致)
@@ -36,6 +93,9 @@ _AUX = QColor(COLOR_GP_BTN_BORDER)     # 内部分隔线
 # 方向盘指示线最大旋转角度 (steering = ±1.0 时左右旋转此角度)
 _MAX_WHEEL_ANGLE_DEG = 70.0
 
+# 缩放手柄距右下角内缩 (跟 gp_stick 一致)
+_RESIZE_INSET = 24
+
 
 class GpWheelItem(QGraphicsObject):
     """方向盘 item — 4×2 矩形, 单例 (每个 profile 最多一个)"""
@@ -45,6 +105,18 @@ class GpWheelItem(QGraphicsObject):
     def __init__(self, data: GamepadWheelData, offset_x: float = 0, offset_y: float = 0):
         super().__init__()
         self.data = data
+        # 老 profile 兼容: 老版本是 4×2 (400×200) 矩形, 现在改方形 → 取 min 收缩到 2×2
+        if self.data.w != self.data.h:
+            side = max(2 * DEFAULT_GRID_SIZE, min(self.data.w, self.data.h))
+            self.data.w = side
+            self.data.h = side
+        # 老 profile 默认值迁移: LT 默认从 'scroll' 改成 'buttons'; 仅在 LT 全套老默认未动时迁移,
+        # 避免覆盖用户主动选 scroll 的配置
+        if (self.data.lt_mode == 'scroll'
+                and self.data.lt_scroll_step == 0.05
+                and self.data.lt_buttons_ms == 100
+                and self.data.lt_buttons_step == 0.05):
+            self.data.lt_mode = 'buttons'
         self._offset_x = offset_x
         self._offset_y = offset_y
         self._mode = 'edit'  # 'edit' | 'run'
@@ -53,10 +125,13 @@ class GpWheelItem(QGraphicsObject):
         self._lt = 0.0
         self._rt = 0.0
         self._active = False
+        # 方向盘样式 (variant + color); overlay_window 在加载完成后会调 apply_style 覆盖
+        self._style = dict(DEFAULT_WHEEL_STYLE)
 
         # Z 序: 跟摇杆同 20 (方向盘单例, 不会与其他 gp_wheel 叠)
         self.setZValue(20)
-        self.setAcceptHoverEvents(False)
+        # 编辑模式下 hover → 显示 scene tooltip (run 模式靠 polling, 不影响)
+        self.setAcceptHoverEvents(True)
 
         # 初始位置 (像素 → scene 坐标 + 中心 offset)
         self.setPos(self._offset_x + data.x, self._offset_y + data.y)
@@ -65,121 +140,149 @@ class GpWheelItem(QGraphicsObject):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
 
+        # 缩放手柄 (强制方形, 跟 gp_stick 一致)
+        from scene.resize_handle_item import ResizeHandleItem
+        self._resize_handle = ResizeHandleItem(self)
+        self._update_resize_handle_pos()
+
         # 编辑模式光标
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAcceptedMouseButtons(
             Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
-
-        self.setToolTip(self._build_tooltip())
+        # tooltip 改用 scene.show_tooltip (hoverEnterEvent 触发), 不用 Qt 默认 setToolTip
 
     # ── 几何 ──
 
+    def _bar_width(self) -> float:
+        """LT/RT 条宽 = 1 格 (跟随场景 grid_size)"""
+        if self.scene() is not None and hasattr(self.scene(), 'grid_size'):
+            return float(self.scene().grid_size)
+        return float(DEFAULT_GRID_SIZE)
+
     def boundingRect(self) -> QRectF:
-        """扩展 boundingRect 容纳 release zone (= w/2 × ratio 半径范围) — 留出未来视觉反馈空间"""
+        """bounds = 左 LT (1 格) + 中央方形 (N 格) + 右 RT (1 格) + 释放区外扩"""
+        w = self.data.w
+        bar_w = self._bar_width()
         ratio = max(1.0, self.data.release_threshold_ratio)
-        ext_x = (self.data.w / 2) * (ratio - 1.0) + 4
-        ext_y = (self.data.h / 2) * (ratio - 1.0) + 4
-        return QRectF(-ext_x, -ext_y,
-                      self.data.w + 2 * ext_x,
-                      self.data.h + 2 * ext_y)
+        ext = (w / 2) * (ratio - 1.0) + 4
+        return QRectF(-bar_w - ext, -ext,
+                      w + 2 * bar_w + 2 * ext,
+                      w + 2 * ext)
 
     def shape(self) -> QPainterPath:
-        """hit-test 只在内部矩形 (避免 release zone 触发误判)"""
+        """hit-test 只在中央方形 — LT/RT 是纯视觉, 不参与鼠标交互 / 拖拽"""
         path = QPainterPath()
-        path.addRect(QRectF(0, 0, self.data.w, self.data.h))
+        path.addRect(QRectF(0, 0, self.data.w, self.data.w))
         return path
 
     def rect_center_local(self) -> QPointF:
-        return QPointF(self.data.w / 2, self.data.h / 2)
+        return QPointF(self.data.w / 2, self.data.w / 2)
 
     def rect_center_scene(self) -> QPointF:
         return self.mapToScene(self.rect_center_local())
 
     def half_width_scene(self) -> float:
-        # scene 无缩放, 直接返回本地一半宽
+        # scene 无缩放, 直接返回本地一半宽 (square: w == h)
         return self.data.w / 2
 
     def is_cursor_in_rect(self, scene_pos: QPointF) -> bool:
+        """是否在中央方形内 (LT/RT 不算)"""
         local = self.mapFromScene(scene_pos)
         return (0 <= local.x() <= self.data.w
-                and 0 <= local.y() <= self.data.h)
+                and 0 <= local.y() <= self.data.w)
 
     def cursor_distance_ratio(self, scene_pos: QPointF) -> float:
-        """鼠标距矩形中心 / (w/2) — 大于 release_threshold_ratio 时应释放
-        用 X 距离衡量 (steering 主要在 X 方向, Y 方向不影响 steering 但仍计算合距更安全)"""
+        """鼠标距方形中心的切比雪夫距离 / (w/2) — 大于 release_threshold_ratio 时释放。
+        用 max(|dx|, |dy|) 而非纯 X, 这样垂直方向走出方形也会触发释放
+        (方形的几何切比雪夫距离 = 跟方形边的同向距离)。"""
         c = self.rect_center_scene()
         dx = abs(scene_pos.x() - c.x())
+        dy = abs(scene_pos.y() - c.y())
         half = max(1.0, self.half_width_scene())
-        return dx / half
+        return max(dx, dy) / half
 
     # ── 绘制 ──
 
     def paint(self, painter: QPainter, option, widget=None):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        w = self.data.w
+        bar_w = self._bar_width()
+        is_edit = (self._mode == 'edit')
         border_color = _BORDER_ACTIVE if self._active else _BORDER_IDLE
-        border_w = 3 if self._active else 2
 
-        # 整体矩形外框
-        rect = QRectF(BTN_MARGIN, BTN_MARGIN,
-                      self.data.w - 2 * BTN_MARGIN,
-                      self.data.h - 2 * BTN_MARGIN)
-        painter.setPen(QPen(border_color, border_w))
-        painter.setBrush(QBrush(_FILL))
-        painter.drawRoundedRect(rect, 8, 8)
-
-        # 3 列等分: w/4 = LT 条 / 2w/4 = 中央方向盘 / w/4 = RT 条
-        col_w = self.data.w / 4.0
-        h = self.data.h
-
-        # 左 LT 条
-        lt_rect = QRectF(0, 0, col_w, h).adjusted(8, 8, -4, -8)
+        # ── LT 视觉条 (左, 浮挂在方形外, 1 格宽) ──
+        lt_rect = QRectF(-bar_w + 6, 6, bar_w - 12, w - 12)
         self._paint_trigger_bar(painter, lt_rect, self._lt, "LT")
 
-        # 右 RT 条
-        rt_rect = QRectF(3 * col_w, 0, col_w, h).adjusted(4, 8, -8, -8)
+        # ── RT 视觉条 (右, 浮挂在方形外, 1 格宽) ──
+        rt_rect = QRectF(w + 6, 6, bar_w - 12, w - 12)
         self._paint_trigger_bar(painter, rt_rect, self._rt, "RT")
 
-        # 中央方向盘 (2 列宽 = 2 × col_w, 圆形内切于 2×2 子区域)
-        center_box = QRectF(col_w, 0, 2 * col_w, h).adjusted(8, 8, -8, -8)
-        cx = center_box.x() + center_box.width() / 2
-        cy = center_box.y() + center_box.height() / 2
-        r = min(center_box.width(), center_box.height()) / 2
+        # ── 中央方形 (编辑模式才描边/填底; 运行模式只有方向盘图) ──
+        # 右下角为直角 (匹配缩放手柄三角形); 其他三角圆角
+        if is_edit:
+            x = BTN_MARGIN
+            y = BTN_MARGIN
+            ow = w - 2 * BTN_MARGIN
+            oh = ow
+            r = 12
+            outline_path = QPainterPath()
+            outline_path.moveTo(x + r, y)
+            outline_path.lineTo(x + ow - r, y)
+            outline_path.arcTo(x + ow - 2 * r, y, 2 * r, 2 * r, 90, -90)
+            outline_path.lineTo(x + ow, y + oh)             # 右下: 直角
+            outline_path.lineTo(x + r, y + oh)
+            outline_path.arcTo(x, y + oh - 2 * r, 2 * r, 2 * r, -90, -90)
+            outline_path.lineTo(x, y + r)
+            outline_path.arcTo(x, y, 2 * r, 2 * r, 180, -90)
+            outline_path.closeSubpath()
+            border_w_v = 3 if self._active else 2
+            painter.setPen(QPen(border_color, border_w_v))
+            painter.setBrush(QBrush(_FILL))
+            painter.drawPath(outline_path)
 
-        # 圆盘 (盘面)
-        painter.setPen(QPen(border_color, 2))
-        painter.setBrush(QBrush(_FILL.darker(110)))
-        painter.drawEllipse(QPointF(cx, cy), r, r)
-
-        # 中心横十字 (作为方向盘视觉)
-        painter.setPen(QPen(_AUX, 1, Qt.PenStyle.DashLine))
-        painter.drawLine(QPointF(cx - r * 0.8, cy), QPointF(cx + r * 0.8, cy))
-
-        # 方向指示线 (steering = ±1.0 → ±_MAX_WHEEL_ANGLE_DEG)
+        # ── 方向盘 (SVG 渲染, variant + color 由设置控制, 跟随 steering 旋转) ──
+        cx = w / 2
+        cy = w / 2
+        r = w / 2 - BTN_MARGIN
         angle_deg = self._steering * _MAX_WHEEL_ANGLE_DEG
-        angle_rad = math.radians(angle_deg - 90)  # -90 让 0° 指向上
-        ind_color = _INDICATOR_ACTIVE if self._active else _INDICATOR
-        painter.setPen(QPen(ind_color, 4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-        ind_len = r * 0.85
-        painter.drawLine(
-            QPointF(cx, cy),
-            QPointF(cx + math.cos(angle_rad) * ind_len,
-                    cy + math.sin(angle_rad) * ind_len),
-        )
-        # 中心实心圆点
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(ind_color)
-        painter.drawEllipse(QPointF(cx, cy), 5, 5)
 
-        # 名称 (编辑模式右上角小字)
-        if self._mode == 'edit' and self.data.name:
+        if r > 0:
+            variant = self._style.get("variant", DEFAULT_WHEEL_STYLE["variant"])
+            color = self._style.get("color", DEFAULT_WHEEL_STYLE["color"])
+            pixmap = render_wheel_pixmap(variant, color)
+
+            if pixmap is not None:
+                painter.save()
+                painter.translate(cx, cy)
+                painter.rotate(angle_deg)
+                # active 100%, idle 50% (同色, 透明度区分)
+                painter.setOpacity(1.0 if self._active else 0.5)
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                painter.drawPixmap(
+                    QRectF(-r, -r, 2 * r, 2 * r),
+                    pixmap,
+                    QRectF(pixmap.rect()),
+                )
+                painter.restore()
+            else:
+                # 回退: SVG 加载失败, 画一个简化的圆 (idle/active 同色, 透明度区分)
+                fallback = QColor(color if isinstance(color, str) else "#3B82F6")
+                fallback.setAlphaF(1.0 if self._active else 0.5)
+                painter.setPen(QPen(fallback, max(3.0, r * 0.08)))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawEllipse(QPointF(cx, cy), r - 4, r - 4)
+
+        # ── 名称 (编辑模式) ──
+        if is_edit and self.data.name:
             fn = get_font()
             f = QFont(fn)
             f.setPixelSize(12)
             painter.setFont(f)
             painter.setPen(_TEXT)
             painter.drawText(
-                QRectF(0, 4, self.data.w, 16),
+                QRectF(0, 4, w, 16),
                 Qt.AlignmentFlag.AlignCenter, self.data.name)
 
     def _paint_trigger_bar(self, painter: QPainter, rect: QRectF,
@@ -236,11 +339,27 @@ class GpWheelItem(QGraphicsObject):
         self._active = active
         self.update()
 
+    def apply_style(self, style: dict):
+        """从设置弹窗收到新样式 (variant + color); 调用方负责清模块缓存"""
+        if not isinstance(style, dict):
+            return
+        merged = dict(DEFAULT_WHEEL_STYLE)
+        if style.get("variant") in (WHEEL_VARIANT_STROKE, WHEEL_VARIANT_FILL):
+            merged["variant"] = style["variant"]
+        col = style.get("color")
+        if isinstance(col, str) and col.startswith("#") and len(col) == 7:
+            merged["color"] = col.upper()
+        self._style = merged
+        self.update()
+
     def set_mode(self, mode: str):
         self._mode = mode
         movable = (mode == 'edit')
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, movable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, movable)
+        # 缩放手柄只在编辑模式可见
+        if self._resize_handle is not None:
+            self._resize_handle.setVisible(movable)
         if mode == 'edit':
             self.setCursor(Qt.CursorShape.PointingHandCursor)
         else:
@@ -274,5 +393,57 @@ class GpWheelItem(QGraphicsObject):
             return
         super().mouseDoubleClickEvent(event)
 
+    def resize_to(self, w: float, h: float):
+        """缩放回调 — 强制方形 (鼠标区是方块, w == h)"""
+        gs = self.scene().grid_size if self.scene() else DEFAULT_GRID_SIZE
+        size = max(2 * gs, min(w, h))   # 至少 2 网格
+        self.prepareGeometryChange()
+        self.data.w = size
+        self.data.h = size
+        self._update_resize_handle_pos()
+        self.update()
+
+    def _update_resize_handle_pos(self):
+        self._resize_handle.setPos(self.data.w - _RESIZE_INSET,
+                                   self.data.w - _RESIZE_INSET)
+
     def _build_tooltip(self) -> str:
-        return "方向盘\nLT + 转向 + RT\n双击编辑 ｜ 可拖动 ｜ 不可缩放"
+        mode_label = {'scroll': '滚轮', 'vertical': '垂直位移', 'buttons': '左右键'}
+        lines = ["方向盘"]
+        lines.append(f"释放阈值: {int(self.data.release_threshold_ratio * 100)}% 半宽")
+        lines.append(f"灵敏度: {'平方' if self.data.sensitivity_curve == 'square' else '线性'}")
+        lines.append("")
+        lt_m = mode_label.get(self.data.lt_mode, self.data.lt_mode)
+        rt_m = mode_label.get(self.data.rt_mode, self.data.rt_mode)
+        # vertical 模式额外显示 pct
+        if self.data.lt_mode == 'vertical':
+            lt_m = f"{lt_m} ({int(self.data.lt_vertical_pct * 100)}%)"
+        if self.data.rt_mode == 'vertical':
+            rt_m = f"{rt_m} ({int(self.data.rt_vertical_pct * 100)}%)"
+        lines.append(f"LT: {lt_m}")
+        lines.append(f"RT: {rt_m}")
+        lines.append("")
+        lines.append("双击编辑｜可拖动｜右下角缩放")
+        return "\n".join(lines)
+
+    # ── Hover (编辑模式 scene tooltip) ──
+
+    def hoverEnterEvent(self, event):
+        if self._mode == 'edit':
+            scene = self.scene()
+            if scene and hasattr(scene, 'show_tooltip'):
+                scene.show_tooltip(self._build_tooltip(), event.scenePos())
+        super().hoverEnterEvent(event)
+
+    def hoverMoveEvent(self, event):
+        if self._mode == 'edit':
+            scene = self.scene()
+            if scene and hasattr(scene, 'move_tooltip'):
+                scene.move_tooltip(event.scenePos())
+        super().hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        scene = self.scene()
+        if scene and hasattr(scene, 'hide_tooltip'):
+            scene.hide_tooltip()
+        super().hoverLeaveEvent(event)

@@ -427,15 +427,19 @@ class HotkeySettingsDialog(QDialog):
         self._cursor_page = self._build_cursor_page(fn)
         self._stack.addWidget(self._cursor_page)
 
-        # 页 2: 语言设置
+        # 页 2: 方向盘样式
+        self._wheel_page = self._build_wheel_page(fn)
+        self._stack.addWidget(self._wheel_page)
+
+        # 页 3: 语言设置
         self._language_page = self._build_language_page(fn)
         self._stack.addWidget(self._language_page)
 
-        # 页 3: 日志 (诊断报告)
+        # 页 4: 日志 (诊断报告)
         self._log_page = self._build_log_page(fn)
         self._stack.addWidget(self._log_page)
 
-        # 页 4: 关于蛋挞
+        # 页 5: 关于蛋挞
         self._about_page = self._build_about_page(fn)
         self._stack.addWidget(self._about_page)
 
@@ -504,9 +508,10 @@ class HotkeySettingsDialog(QDialog):
         items = [
             (t("hotkey.menu_hotkeys"), 0),
             (t("hotkey.menu_cursor"), 1),
-            (t("hotkey.menu_language"), 2),
-            (t("hotkey.menu_log"), 3),
-            (t("hotkey.menu_about"), 4),
+            ("方向盘配色", 2),
+            (t("hotkey.menu_language"), 3),
+            (t("hotkey.menu_log"), 4),
+            (t("hotkey.menu_about"), 5),
         ]
         for label_text, idx in items:
             b = QPushButton(label_text)
@@ -539,9 +544,9 @@ class HotkeySettingsDialog(QDialog):
         # 仅快捷键页(0)显示右侧键位面板; 其余页隐藏 right_wrapper → 两列
         if hasattr(self, '_right_wrapper'):
             self._right_wrapper.setVisible(idx == 0)
-        # 光标(1) / 日志(3) / 关于(4) 页拉宽 left_wrapper 和 stack
+        # 光标(1) / 方向盘(2) / 日志(4) / 关于(5) 页拉宽 left_wrapper 和 stack
         if hasattr(self, '_left_wrapper'):
-            if idx in (1, 3, 4):
+            if idx in (1, 2, 4, 5):
                 self._stack.setFixedWidth(self.WIDE_CONTENT_W)
                 self._left_wrapper.setFixedWidth(self.WIDE_LEFT_W)
             else:
@@ -865,6 +870,187 @@ class HotkeySettingsDialog(QDialog):
             if slider:
                 slider.setValue(int(round(float(style.get('scale', 1.0)) * 100)))
             self._refresh_cursor_preview(ct)
+
+    # ── 方向盘样式页 ──
+
+    def _ensure_wheel_buf(self):
+        if not hasattr(self, '_wheel_buf'):
+            from core.constants import DEFAULT_WHEEL_STYLE
+            existing = (load_hotkeys() or {}).get('wheel_style') or {}
+            buf = dict(DEFAULT_WHEEL_STYLE)
+            v = existing.get('variant')
+            if v in ('stroke', 'fill'):
+                buf['variant'] = v
+            c = existing.get('color')
+            if isinstance(c, str) and c.startswith('#') and len(c) == 7:
+                buf['color'] = c.upper()
+            self._wheel_buf = buf
+
+    def _build_wheel_page(self, fn):
+        self._ensure_wheel_buf()
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        tip = QLabel("方向盘外观: 描边或填充, 单色配置 (active 100% / idle 50% 透明度)")
+        tip.setFont(_make_font(fn, 13))
+        tip.setStyleSheet("color: #888; background: transparent;")
+        tip.setWordWrap(True)
+        v.addWidget(tip)
+        v.addSpacing(20)
+
+        # 单卡片: 预览 + variant + color
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+        card.setFixedWidth(400)
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(24, 22, 24, 22)
+        cl.setSpacing(16)
+
+        # 预览
+        preview = QLabel()
+        preview.setFixedSize(240, 240)
+        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview.setStyleSheet(
+            "background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 6px;")
+        cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._wheel_preview_lbl = preview
+
+        # variant 行 (描边 / 填充, 两个按钮)
+        var_row = QHBoxLayout()
+        var_lbl = QLabel("样式")
+        var_lbl.setFont(_make_font(fn, 14))
+        var_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        var_row.addWidget(var_lbl)
+        var_row.addStretch()
+        self._wheel_var_btns = {}
+        for v_key, v_text in (('stroke', '描边'), ('fill', '填充')):
+            b = QPushButton(v_text)
+            b.setFixedSize(80, 32)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFont(_make_font(fn, 13, bold=True))
+            b.clicked.connect(lambda _, k=v_key: self._on_wheel_variant_changed(k))
+            var_row.addWidget(b)
+            self._wheel_var_btns[v_key] = b
+        cl.addLayout(var_row)
+
+        # color 行
+        color_row = QHBoxLayout()
+        color_lbl = QLabel("颜色")
+        color_lbl.setFont(_make_font(fn, 14))
+        color_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        color_row.addWidget(color_lbl)
+        color_row.addStretch()
+        self._wheel_color_btn = QPushButton()
+        self._wheel_color_btn.setFixedSize(96, 28)
+        self._wheel_color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_color_btn_style(self._wheel_color_btn, self._wheel_buf['color'])
+        self._wheel_color_btn.clicked.connect(self._on_wheel_color_pick)
+        color_row.addWidget(self._wheel_color_btn)
+        cl.addLayout(color_row)
+
+        # 卡片居左
+        wrap = QHBoxLayout()
+        wrap.addWidget(card)
+        wrap.addStretch()
+        v.addLayout(wrap)
+        v.addStretch()
+
+        # 底部: 重置 + 保存
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        reset_btn = QPushButton("重置默认")
+        reset_btn.setFixedHeight(40)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setFont(_make_font(fn, 14, bold=True))
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 18px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        reset_btn.clicked.connect(self._on_wheel_reset)
+        bottom.addWidget(reset_btn)
+        bottom.addSpacing(10)
+        save_btn = QPushButton(t("hotkey.save"))
+        save_btn.setFixedHeight(40)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setFont(_make_font(fn, 14, bold=True))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CYBER}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 24px;
+            }}
+            QPushButton:hover {{ background: {C_CYBER_H}; }}
+        """)
+        save_btn.clicked.connect(self._on_save)
+        bottom.addWidget(save_btn)
+        v.addLayout(bottom)
+
+        # 初始: variant 高亮 + 预览
+        self._refresh_wheel_variant_btns()
+        self._refresh_wheel_preview()
+        return page
+
+    def _refresh_wheel_variant_btns(self):
+        cur = self._wheel_buf.get('variant', 'stroke')
+        for key, b in self._wheel_var_btns.items():
+            selected = (key == cur)
+            bg = C_CYBER if selected else "#404040"
+            bg_h = C_CYBER_H if selected else "#505050"
+            b.setStyleSheet(f"""
+                QPushButton {{
+                    background: {bg}; color: #FFF;
+                    border: none; border-radius: 6px;
+                }}
+                QPushButton:hover {{ background: {bg_h}; }}
+            """)
+
+    def _refresh_wheel_preview(self):
+        from scene.gp_wheel_item import render_wheel_pixmap
+        pm = render_wheel_pixmap(self._wheel_buf['variant'], self._wheel_buf['color'])
+        if pm and not pm.isNull():
+            scaled = pm.scaled(
+                self._wheel_preview_lbl.width() - 8,
+                self._wheel_preview_lbl.height() - 8,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            self._wheel_preview_lbl.setPixmap(scaled)
+        else:
+            self._wheel_preview_lbl.setText("(SVG 缺失)")
+            self._wheel_preview_lbl.setStyleSheet(
+                "background: #1A1A1A; color: #888; "
+                "border: 1px solid #2A2A2A; border-radius: 6px;")
+
+    def _on_wheel_variant_changed(self, variant: str):
+        if variant not in ('stroke', 'fill'):
+            return
+        self._wheel_buf['variant'] = variant
+        self._refresh_wheel_variant_btns()
+        self._refresh_wheel_preview()
+
+    def _on_wheel_color_pick(self):
+        initial = QColor(self._wheel_buf.get('color', '#3B82F6'))
+        color = QColorDialog.getColor(
+            initial, self, "方向盘颜色",
+            QColorDialog.ColorDialogOption.DontUseNativeDialog)
+        if not color.isValid():
+            return
+        hex_val = color.name(QColor.NameFormat.HexRgb).upper()
+        self._wheel_buf['color'] = hex_val
+        self._apply_color_btn_style(self._wheel_color_btn, hex_val)
+        self._refresh_wheel_preview()
+
+    def _on_wheel_reset(self):
+        from core.constants import DEFAULT_WHEEL_STYLE
+        self._wheel_buf = dict(DEFAULT_WHEEL_STYLE)
+        self._apply_color_btn_style(self._wheel_color_btn, self._wheel_buf['color'])
+        self._refresh_wheel_variant_btns()
+        self._refresh_wheel_preview()
 
     # ── 语言页 ──
 
@@ -1539,6 +1725,11 @@ class HotkeySettingsDialog(QDialog):
         if hasattr(self, '_cursor_buf'):
             data['cursor_styles'] = self._cursor_buf
             clear_cursor_render_cache()
+        # 方向盘样式
+        if hasattr(self, '_wheel_buf'):
+            data['wheel_style'] = self._wheel_buf
+            from scene.gp_wheel_item import clear_wheel_render_cache
+            clear_wheel_render_cache()
 
         save_hotkeys(data)
 

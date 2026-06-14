@@ -81,7 +81,8 @@ class GpStickItem(QGraphicsObject):
 
         # Z 序: 摇杆 (20) > 普通按钮 (15), 多个摇杆叠放时按添加顺序 (Qt 自动)
         self.setZValue(20)
-        self.setAcceptHoverEvents(False)  # 不依赖 hover, 用 polling
+        # 编辑模式下 hover → 显示 scene tooltip (run 模式靠 polling, 不影响)
+        self.setAcceptHoverEvents(True)
 
         # 初始位置 (像素 → 场景坐标 = 像素 + offset)
         self.setPos(self._offset_x + data.x, self._offset_y + data.y)
@@ -102,8 +103,7 @@ class GpStickItem(QGraphicsObject):
         self.setAcceptedMouseButtons(
             Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
 
-        # 编辑模式 tooltip
-        self.setToolTip(self._build_tooltip())
+        # 编辑模式 tooltip 改用 scene.show_tooltip (hoverEnterEvent 触发), 不用 Qt 默认 setToolTip
 
     # ── 几何 ──
 
@@ -349,4 +349,47 @@ class GpStickItem(QGraphicsObject):
 
     def _build_tooltip(self) -> str:
         sid = "左摇杆" if self.data.stick_id == STICK_ID_LEFT else "右摇杆"
-        return f"{sid}\n双击编辑"
+        lines = [sid]
+        if self.data.name:
+            lines[0] = f"{sid}  {self.data.name}"
+        lines.append(f"死区: {int(self.data.dead_zone * 100)}%")
+        lines.append(f"灵敏度: {'平方' if self.data.sensitivity_curve == 'square' else '线性'}")
+        if self.data.eight_way:
+            lines.append("八方向锁定")
+        # 鼠标动作映射 (只列非空)
+        action_lines = []
+        for f, label in (('lclick', 'LMB'), ('rclick', 'RMB'), ('mclick', 'MMB'),
+                         ('xbutton1', 'X1'), ('xbutton2', 'X2'),
+                         ('wheelup', '滚轮↑'), ('wheeldown', '滚轮↓')):
+            v = getattr(self.data, f, '')
+            if v:
+                action_lines.append(f"  {label}: {v}")
+        if action_lines:
+            lines.append("")
+            lines.append("鼠标动作:")
+            lines.extend(action_lines)
+        lines.append("")
+        lines.append("双击编辑")
+        return "\n".join(lines)
+
+    # ── Hover (编辑模式 scene tooltip) ──
+
+    def hoverEnterEvent(self, event):
+        if self._mode == 'edit':
+            scene = self.scene()
+            if scene and hasattr(scene, 'show_tooltip'):
+                scene.show_tooltip(self._build_tooltip(), event.scenePos())
+        super().hoverEnterEvent(event)
+
+    def hoverMoveEvent(self, event):
+        if self._mode == 'edit':
+            scene = self.scene()
+            if scene and hasattr(scene, 'move_tooltip'):
+                scene.move_tooltip(event.scenePos())
+        super().hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        scene = self.scene()
+        if scene and hasattr(scene, 'hide_tooltip'):
+            scene.hide_tooltip()
+        super().hoverLeaveEvent(event)
