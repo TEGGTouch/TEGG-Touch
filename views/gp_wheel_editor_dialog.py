@@ -295,6 +295,24 @@ class _TriggerSection(QWidget):
                         QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}
                     """)
 
+    def refresh_from_data(self):
+        """从 self._data 重新读所有字段并刷新 UI (供「恢复默认」用)"""
+        cur_mode = getattr(self._data, f'{self._prefix}_mode', 'scroll')
+        if cur_mode not in ('scroll', 'vertical', 'buttons'):
+            cur_mode = 'scroll'
+        self._current_mode = cur_mode
+        idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2}
+        self._stack.setCurrentIndex(idx_map[cur_mode])
+        self._scroll_step_slider.setValue(
+            int(getattr(self._data, f'{self._prefix}_scroll_step') * 100))
+        self._vertical_pct_slider.setValue(
+            int(round(getattr(self._data, f'{self._prefix}_vertical_pct') * 100)))
+        self._buttons_ms_slider.setValue(
+            int(getattr(self._data, f'{self._prefix}_buttons_ms')))
+        self._buttons_step_slider.setValue(
+            int(getattr(self._data, f'{self._prefix}_buttons_step') * 100))
+        self._refresh_tab_styles()
+
     def apply_to_data(self):
         setattr(self._data, f'{self._prefix}_mode', self.current_mode())
         setattr(self._data, f'{self._prefix}_scroll_step',
@@ -569,6 +587,16 @@ class GpWheelEditorDialog(QDialog):
         del_btn.clicked.connect(self._on_delete)
         btn_row.addWidget(del_btn, 1)
 
+        reset_btn = QPushButton("恢复默认")
+        reset_btn.setFixedHeight(40); reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setFont(_font(fn, 16))
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{ background: {C_GRAY}; color: #FFF; border: none; border-radius: 6px; padding: 0 32px; }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        reset_btn.clicked.connect(self._on_reset_defaults)
+        btn_row.addWidget(reset_btn, 1)
+
         self._save_btn = QPushButton(t("gp_wheel_editor.save"))
         self._save_btn.setFixedHeight(40); self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._save_btn.setFont(_font(fn, 16, bold=True))
@@ -613,6 +641,24 @@ class GpWheelEditorDialog(QDialog):
             """)
 
     # ── 回调 ──
+
+    def _on_reset_defaults(self):
+        """把所有参数恢复成 GamepadWheelData() 默认值; 保留位置/尺寸/名称"""
+        from models.gamepad_model import GamepadWheelData
+        defaults = GamepadWheelData()
+        keep = {'x', 'y', 'w', 'h', 'name', 'btn_type'}
+        for field in self.data.__dataclass_fields__:
+            if field not in keep:
+                setattr(self.data, field, getattr(defaults, field))
+        # 刷新 UI: section 1
+        self._release_slider.setValue(int(self.data.release_threshold_ratio * 100))
+        (self._rb_square if self.data.sensitivity_curve == 'square'
+         else self._rb_linear).setChecked(True)
+        # section 2/3
+        self._lt_section.refresh_from_data()
+        self._rt_section.refresh_from_data()
+        # 重新计算互斥 (mode 可能变了)
+        self._validate_mutual_exclusion()
 
     def _on_delete(self):
         self.deleted.emit(self._item)
