@@ -14,8 +14,9 @@ TEGG Touch 蛋挞 — 手柄模式按钮配置数据模型
 from dataclasses import dataclass, asdict
 
 from core.constants import (
-    BTN_TYPE_GP_STICK, BTN_TYPE_GP_TRIGGER,
-    STICK_ID_LEFT, TRIGGER_ID_LEFT,
+    BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL,
+    STICK_ID_LEFT,
+    GP_WHEEL_DEFAULT_W, GP_WHEEL_DEFAULT_H,
 )
 
 
@@ -59,17 +60,34 @@ class GamepadStickData:
 
 
 @dataclass
-class GamepadTriggerData:
-    """扳机按钮配置 — 矩形, 横纵两种朝向"""
+class GamepadWheelData:
+    """方向盘配置 — 4×2 复合 item (LT 视觉条 + 中央圆盘 + RT 视觉条)
+    一个 profile 最多一个 (toolbar toggle 控制)。
+    Steering 走左摇杆 X 轴; LT/RT 三种控制方式 (互斥)。"""
     x: float = 0.0
     y: float = 0.0
-    w: float = 240.0
-    h: float = 80.0
+    w: float = float(GP_WHEEL_DEFAULT_W)
+    h: float = float(GP_WHEEL_DEFAULT_H)
     name: str = ""
-    btn_type: str = BTN_TYPE_GP_TRIGGER
-    trigger_id: str = TRIGGER_ID_LEFT      # 'L' | 'R'
-    orientation: str = "h"                 # 'h' (横) | 'v' (纵)
-    end_ratio: float = 0.15                # 左右 (或上下) 端 0/1 方形占比
+    btn_type: str = BTN_TYPE_GP_WHEEL
+
+    # Steering (左摇杆 X 轴)
+    release_threshold_ratio: float = 1.5   # 鼠标距矩形中心 > w/2×ratio → 全部释放
+    sensitivity_curve: str = "linear"      # 'linear' | 'square'
+
+    # LT 控制方式
+    lt_mode: str = "scroll"                # 'scroll' | 'vertical' | 'buttons'
+    lt_scroll_step: float = 0.05
+    lt_vertical_px: float = 200.0          # 多少 px Δ 对应 ±1.0
+    lt_buttons_ms: int = 100
+    lt_buttons_step: float = 0.05
+
+    # RT 控制方式 (默认与 LT 不同)
+    rt_mode: str = "vertical"
+    rt_scroll_step: float = 0.05
+    rt_vertical_px: float = 200.0
+    rt_buttons_ms: int = 100
+    rt_buttons_step: float = 0.05
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -77,9 +95,11 @@ class GamepadTriggerData:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict) -> 'GamepadTriggerData':
+    def from_dict(cls, d: dict) -> 'GamepadWheelData':
         mapped = dict(d)
         if 'type' in mapped:
             mapped['btn_type'] = mapped.pop('type')
         valid = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in mapped.items() if k in valid})
+
+

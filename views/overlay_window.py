@@ -126,7 +126,7 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.sim_mode_change_requested.connect(self._on_sim_mode_change_requested)
         self._edit_toolbar.add_gp_button_clicked.connect(self._on_add_gp_button)
         self._edit_toolbar.add_gp_stick_clicked.connect(self._on_add_gp_stick)
-        self._edit_toolbar.add_gp_trigger_clicked.connect(self._on_add_gp_trigger)
+        self._edit_toolbar.gp_wheel_toggle_clicked.connect(self._on_gp_wheel_toggle)
 
         # 连接运行工具栏信号
         self._run_toolbar.stop_clicked.connect(self.to_edit)
@@ -219,6 +219,8 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.set_grid_size(saved_grid)
         # 同步轮盘按钮状态到工具栏
         self._edit_toolbar.set_wheel_state(self._scene.wheel_visible)
+        # 同步方向盘 toggle 状态 (profile 加载后, 若已存在 gp_wheel item 则显玫红)
+        self._edit_toolbar.set_gp_wheel_state(self._scene.get_gp_wheel_item() is not None)
         # 恢复透明度 (从 profile 读取)
         saved_opacity = config.get('transparency', DEFAULT_TRANSPARENCY)
         if isinstance(saved_opacity, (int, float)):
@@ -549,9 +551,16 @@ class OverlayWindow(QGraphicsView):
         if item:
             item.setOpacity(self._current_opacity)
 
-    def _on_add_gp_trigger(self):
-        """添加扳机 — C5 接入"""
-        self._toast.show_toast(t("toolbar.gp_coming_soon"))
+    def _on_gp_wheel_toggle(self):
+        """方向盘 toggle (单例) — 有就删, 没就建; 同步 toolbar 状态"""
+        visible = self._scene.toggle_gp_wheel()
+        # toggle 操作刚翻了 toolbar 状态, 但 scene 才是真相, 这里用 set_xxx_state 强同步
+        self._edit_toolbar.set_gp_wheel_state(visible)
+        if visible:
+            wheel = self._scene.get_gp_wheel_item()
+            if wheel:
+                wheel.setOpacity(self._current_opacity)
+        self._scene.save_config()
 
     def _persist_sim_mode_flags(self):
         """合并写入 sim_mode + gamepad_install_seen 到 hotkeys.json。"""
@@ -630,7 +639,7 @@ class OverlayWindow(QGraphicsView):
             dialog.show()
             return
         # 摇杆: 左右双栏编辑器 (参数 + 鼠标动作; 右栏 gp 键 + gp 宏)
-        from core.constants import BTN_TYPE_GP_STICK
+        from core.constants import BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL
         if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_GP_STICK:
             from views.gp_stick_editor_dialog import GpStickEditorDialog
             cfg = self._scene.get_config()
@@ -640,6 +649,15 @@ class OverlayWindow(QGraphicsView):
             dialog.saved.connect(lambda it: self._on_button_saved(it))
             dialog.deleted.connect(lambda it: self._on_button_deleted(it))
             dialog.copied.connect(lambda it: self._on_button_copied(it))
+            dialog.show()
+            return
+        # 方向盘: 单栏编辑器 (参数 + LT/RT 模式), 删除时同步 toolbar toggle
+        if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_GP_WHEEL:
+            from views.gp_wheel_editor_dialog import GpWheelEditorDialog
+            dialog = GpWheelEditorDialog(item, self)
+            dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            dialog.saved.connect(lambda it: self._on_button_saved(it))
+            dialog.deleted.connect(lambda it: self._on_gp_wheel_deleted(it))
             dialog.show()
             return
         cfg = self._scene.get_config()
@@ -662,6 +680,12 @@ class OverlayWindow(QGraphicsView):
     def _on_button_deleted(self, item):
         """按钮删除后"""
         self._scene.delete_button(item)
+        self._scene.save_config()
+
+    def _on_gp_wheel_deleted(self, item):
+        """方向盘从编辑器删除 — 同步 toolbar toggle 灰回去"""
+        self._scene.delete_button(item)
+        self._edit_toolbar.set_gp_wheel_state(False)
         self._scene.save_config()
 
     def _on_button_copied(self, item):
@@ -757,6 +781,8 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar.set_profile_name(name)
         # 同步轮盘按钮状态到工具栏
         self._edit_toolbar.set_wheel_state(self._scene.wheel_visible)
+        # 同步方向盘 toggle 状态 (profile 加载后, 若已存在 gp_wheel item 则显玫红)
+        self._edit_toolbar.set_gp_wheel_state(self._scene.get_gp_wheel_item() is not None)
 
     def _open_voice_settings(self):
         """打开语音指令设置弹窗"""

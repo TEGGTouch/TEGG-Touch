@@ -19,7 +19,7 @@
     "sim_tooltip": "Switch simulation mode (keyboard / gamepad)",
     "add_gp_button": "GP Btn",
     "add_gp_stick": "Stick",
-    "add_gp_trigger": "Trigger",
+    "toggle_gp_wheel": "Wheel",
     "gp_coming_soon": "This button editor is coming soon",
     "opacity": "Opacity",
     "grid": "Grid",
@@ -104,7 +104,7 @@
     "collapse": "Collapse toolbar into a draggable bubble; double-click bubble to expand",
     "add_gp_button": "Add gamepad button (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 etc.)",
     "add_gp_stick": "Add joystick (circular, simulates left/right stick)",
-    "add_gp_trigger": "Add trigger (rectangular, simulates LT/RT value)"
+    "toggle_gp_wheel": "Steering Wheel (4×2 composite: LT + steering + RT, singleton, for racing games)"
   },
   "hotkey": {
     "title": "Settings",
@@ -249,6 +249,7 @@
     "center_band_created": "✓ Center Band created",
     "gp_button_created": "✓ Gamepad button created",
     "gp_stick_created": "✓ Joystick created",
+    "gp_wheel_created": "✓ Steering wheel created",
     "copy_success": "✓ Copy success"
   },
   "canvas": {
@@ -320,6 +321,34 @@
     "center_ring": "Center Ring",
     "inner_ring": "Middle Ring",
     "gp_button": "GP Button"
+  },
+  "gp_wheel_editor": {
+    "title": "Steering Wheel Editor",
+    "tip": "The wheel is a 4×2 singleton item composed of [Left LT bar + Center disk + Right RT bar]. The entire area responds to mouse: horizontal distance controls steering; LT/RT respond to the mode selected below.",
+    "section_wheel": "Wheel Parameters",
+    "name": "Name",
+    "name_placeholder": "Optional, for editor identification",
+    "release_threshold": "Release Threshold (× Half-Width)",
+    "release_threshold_hint": "When the cursor distance from the rectangle's horizontal center exceeds (half-width × threshold), steering + LT + RT all reset. Re-enter to reactivate.",
+    "sensitivity": "Sensitivity Curve",
+    "sens_linear": "Linear",
+    "sens_square": "Square (finer micro-adjust)",
+    "lt_title": "Left Trigger LT",
+    "rt_title": "Right Trigger RT",
+    "mode_label": "Control Mode",
+    "mode_scroll": "Scroll",
+    "mode_vertical": "Vertical",
+    "mode_buttons": "L/R Buttons",
+    "scroll_hint": "Each scroll click ± step (up = +, down = −)",
+    "scroll_step": "Step per scroll",
+    "vertical_hint": "Mouse Y up = increase, down = decrease (accumulated Δ)",
+    "vertical_px": "Pixels per ±1.0",
+    "buttons_hint": "Hold LMB → increase, hold RMB → decrease (add step every N ms)",
+    "buttons_ms": "Interval (ms)",
+    "buttons_step": "Step per interval",
+    "err_mutual_buttons": "⚠ LT and RT cannot both use 'L/R Buttons' (LMB/RMB conflict)",
+    "delete": "Delete",
+    "save": "Save"
   },
   "gp_stick_editor": {
     "title": "Joystick Editor",

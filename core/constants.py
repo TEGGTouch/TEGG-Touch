@@ -98,7 +98,11 @@ BTN_TYPE_WHEEL_INNER_RING = "wheel_inner_ring"
 # 手柄模式三类按钮 (gamepad_install 完成后切到手柄 sim_mode 才显示)
 BTN_TYPE_GP_BUTTON = "gp_button"     # 手柄键 (A/B/X/Y/LB/RB/Start/Back/D-pad/L3/R3 等)
 BTN_TYPE_GP_STICK = "gp_stick"       # 摇杆 (圆形, 模拟左/右摇杆)
-BTN_TYPE_GP_TRIGGER = "gp_trigger"   # 扳机 (矩形, 模拟 LT/RT 行程)
+BTN_TYPE_GP_WHEEL = "gp_wheel"       # 方向盘 (4×2 复合: LT + 圆盘 + RT)
+
+# 方向盘默认尺寸 (4×2 grid @ 100px = 400×200, 固定不缩放)
+GP_WHEEL_DEFAULT_W = 400
+GP_WHEEL_DEFAULT_H = 200
 
 # 摇杆 / 扳机标识
 STICK_ID_LEFT = "L"

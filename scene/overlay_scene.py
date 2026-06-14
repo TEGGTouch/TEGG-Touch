@@ -329,9 +329,10 @@ class OverlayScene(QGraphicsScene):
         offset_x = self.sceneRect().width() / 2
         offset_y = self.sceneRect().height() / 2
 
-        from core.constants import BTN_TYPE_GP_STICK
-        from models.gamepad_model import GamepadStickData
+        from core.constants import BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL
+        from models.gamepad_model import GamepadStickData, GamepadWheelData
         from scene.gp_stick_item import GpStickItem
+        from scene.gp_wheel_item import GpWheelItem
 
         for btn_dict in buttons:
             if btn_dict.get('deleted'):
@@ -345,6 +346,15 @@ class OverlayScene(QGraphicsScene):
             if btn_type == BTN_TYPE_GP_STICK:
                 data = GamepadStickData.from_dict(btn_dict)
                 item = GpStickItem(data, offset_x, offset_y)
+                item.doubleClicked.connect(self._on_button_double_clicked)
+                self.addItem(item)
+                self.button_items.append(item)
+                continue
+
+            # 方向盘 (4×2 复合 item, 单例)
+            if btn_type == BTN_TYPE_GP_WHEEL:
+                data = GamepadWheelData.from_dict(btn_dict)
+                item = GpWheelItem(data, offset_x, offset_y)
                 item.doubleClicked.connect(self._on_button_double_clicked)
                 self.addItem(item)
                 self.button_items.append(item)
@@ -682,6 +692,43 @@ class OverlayScene(QGraphicsScene):
         self.toast_requested.emit(t("toast.gp_button_created"))
         return item
 
+    def get_gp_wheel_item(self):
+        """返回当前 profile 的 gp_wheel item (单例); 不存在返回 None"""
+        from scene.gp_wheel_item import GpWheelItem
+        for it in self.button_items:
+            if isinstance(it, GpWheelItem):
+                return it
+        return None
+
+    def add_gp_wheel(self):
+        """新增方向盘 (单例; 已存在则返回现有)"""
+        from models.gamepad_model import GamepadWheelData
+        from scene.gp_wheel_item import GpWheelItem
+        existing = self.get_gp_wheel_item()
+        if existing is not None:
+            return existing
+        data = GamepadWheelData()
+        pos = self._find_empty_slot(data.w, data.h)
+        if pos:
+            data.x, data.y = pos
+        offset_x = self.sceneRect().width() / 2
+        offset_y = self.sceneRect().height() / 2
+        item = GpWheelItem(data, offset_x, offset_y)
+        item.doubleClicked.connect(self._on_button_double_clicked)
+        self.addItem(item)
+        self.button_items.append(item)
+        self.toast_requested.emit(t("toast.gp_wheel_created"))
+        return item
+
+    def toggle_gp_wheel(self) -> bool:
+        """toggle 方向盘单例: 有就删, 没就建; 返回 True 表示现在显示, False 表示移除"""
+        existing = self.get_gp_wheel_item()
+        if existing is not None:
+            self.delete_button(existing)
+            return False
+        self.add_gp_wheel()
+        return True
+
     def add_gp_stick(self, stick_id: str = None):
         """新增摇杆 item — 圆形 ≥ 2×2 网格, 默认 L 摇杆 (若已存在 L 则建 R)"""
         from models.gamepad_model import GamepadStickData
@@ -719,11 +766,15 @@ class OverlayScene(QGraphicsScene):
         self.removeItem(item)
 
     def copy_button(self, source):
-        """复制按钮 — 按类型 dispatch (kb / gp_btn / gp_stick)"""
+        """复制按钮 — 按类型 dispatch (kb / gp_btn / gp_stick / gp_wheel)"""
         from models.button_model import ButtonData
-        from core.constants import BTN_TYPE_GP_STICK
+        from core.constants import BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL
         src_type = getattr(source.data, 'btn_type', 'normal')
         src_dict = source.data.to_dict()
+
+        # 方向盘是单例, 不允许复制 (用户即使点了 copy 也忽略)
+        if src_type == BTN_TYPE_GP_WHEEL:
+            return None
 
         if src_type == BTN_TYPE_GP_STICK:
             from models.gamepad_model import GamepadStickData

@@ -187,10 +187,10 @@ class EditToolbar(QWidget):
     quit_clicked = pyqtSignal()
     moved = pyqtSignal()  # 工具栏被拖拽移动时发出，用于同步软键盘位置
     sim_mode_change_requested = pyqtSignal(str)  # 'keyboard' | 'gamepad'
-    # 手柄模式三类按钮添加请求 (gp_btn 编辑器选 A/B/X/Y/...; stick 选左/右; trigger 选 LT/RT)
+    # 手柄模式按钮添加 (+手柄键 / +摇杆) + 方向盘 toggle
     add_gp_button_clicked = pyqtSignal()
     add_gp_stick_clicked = pyqtSignal()
-    add_gp_trigger_clicked = pyqtSignal()
+    gp_wheel_toggle_clicked = pyqtSignal()   # 方向盘 toggle (单例: 显/隐)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -296,13 +296,16 @@ class EditToolbar(QWidget):
         self._add_stick_btn.setVisible(False)
         r1.addWidget(self._add_stick_btn)
 
-        self._add_trigger_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_gp_trigger"),
-                                             C_GRAY, C_GRAY_H)
-        self._add_trigger_btn.setToolTip(t("tooltip.add_gp_trigger"))
-        self._install_tip(self._add_trigger_btn)
-        self._add_trigger_btn.clicked.connect(self.add_gp_trigger_clicked.emit)
-        self._add_trigger_btn.setVisible(False)
-        r1.addWidget(self._add_trigger_btn)
+        # 方向盘 toggle (单例, 跟中心轮盘同套路: 灰→玫红+勾选)
+        self._wheel_gp_on = False
+        self._wheel_gp_btn = _IconTextBtn(
+            "\uE739", "\u25a3", t("toolbar.toggle_gp_wheel"),
+            C_GRAY, C_GRAY_H)
+        self._wheel_gp_btn.setToolTip(t("tooltip.toggle_gp_wheel"))
+        self._install_tip(self._wheel_gp_btn)
+        self._wheel_gp_btn.clicked.connect(self._on_gp_wheel_toggle)
+        self._wheel_gp_btn.setVisible(False)
+        r1.addWidget(self._wheel_gp_btn)
 
         # 分隔线
         r1.addWidget(_VSep())
@@ -572,6 +575,25 @@ class EditToolbar(QWidget):
             self._wheel_btn.set_icon_text("\uE739", "\u25a3")
         self.wheel_clicked.emit()
 
+    def _on_gp_wheel_toggle(self):
+        """方向盘 toggle: 翻转视觉 (玫红/灰) + emit 信号"""
+        self._wheel_gp_on = not self._wheel_gp_on
+        self._apply_gp_wheel_visual()
+        self.gp_wheel_toggle_clicked.emit()
+
+    def _apply_gp_wheel_visual(self):
+        if self._wheel_gp_on:
+            self._wheel_gp_btn.set_colors(C_WH_ON, C_WH_ON_H)
+            self._wheel_gp_btn.set_icon_text("\uE73E", "\u2611")
+        else:
+            self._wheel_gp_btn.set_colors(C_GRAY, C_GRAY_H)
+            self._wheel_gp_btn.set_icon_text("\uE739", "\u25a3")
+
+    def set_gp_wheel_state(self, visible: bool):
+        """外部同步 (启动 / 编辑器内删除等场景): 直接设状态, 不 emit 信号"""
+        self._wheel_gp_on = bool(visible)
+        self._apply_gp_wheel_visual()
+
     def _on_opacity(self, value):
         self._val_lbl.setText(f"{value}%")
         self.opacity_changed.emit(value / 100.0)
@@ -676,7 +698,7 @@ class EditToolbar(QWidget):
             self._wheel_btn.setVisible(False)
             self._add_gp_btn.setVisible(True)
             self._add_stick_btn.setVisible(True)
-            self._add_trigger_btn.setVisible(True)
+            self._wheel_gp_btn.setVisible(True)
         else:
             self._sm_btn.setText(t("toolbar.sim_keyboard") + " \u25BC")
             self._add_kb_btn.setVisible(True)
@@ -684,10 +706,10 @@ class EditToolbar(QWidget):
             self._wheel_btn.setVisible(True)
             self._add_gp_btn.setVisible(False)
             self._add_stick_btn.setVisible(False)
-            self._add_trigger_btn.setVisible(False)
+            self._wheel_gp_btn.setVisible(False)
         # 强制整条布局链 invalidate，否则 hide 后的 sizeHint 仍可能含旧宽度
         for w in (self._add_kb_btn, self._cb_btn, self._wheel_btn,
-                  self._add_gp_btn, self._add_stick_btn, self._add_trigger_btn):
+                  self._add_gp_btn, self._add_stick_btn, self._wheel_gp_btn):
             w.updateGeometry()
         # 容器内层 + 外层 都要 invalidate
         container = self.findChild(QFrame, "et_container")

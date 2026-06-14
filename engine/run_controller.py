@@ -104,6 +104,12 @@ class RunController(QObject):
         # 摇杆状态机 — 任一帧只允许一个 active 摇杆 (跨摇杆切换会让旧的释放 + SetCursorPos 跳到新圆心)
         self._active_gp_stick = None  # GpStickItem | None
 
+        # 方向盘单例状态 + LT/RT 持久值
+        self._active_gp_wheel = None  # GpWheelItem | None
+        self._wheel_lt = 0.0          # 0~1, 持久化
+        self._wheel_rt = 0.0
+        self._wheel_last_screen_y = 0  # vertical 模式的 reference Y (screen 坐标)
+
         # 快捷键定时器
         self._timer = QTimer(self)
         self._timer.setInterval(input_poll_interval_ms(UPDATE_INTERVAL))
@@ -188,9 +194,11 @@ class RunController(QObject):
                 item._hover_sm.reset()
         # 兜底释放所有残留按键，防止卡键
         release_all_keys()
-        # 手柄: 释放当前 active 摇杆 + 引擎全部归零 (含摇杆/扳机/按钮)
+        # 手柄: 释放当前 active 摇杆/方向盘 + 引擎全部归零
         if self._active_gp_stick is not None:
             self._release_active_stick()
+        if self._active_gp_wheel is not None:
+            self._release_gp_wheel()
         gp = GamepadEngine.get()
         if gp is not None:
             gp.release_all()
@@ -235,7 +243,10 @@ class RunController(QObject):
         # 4a. 摇杆轮询 (在 hover/click 之前; 摇杆 item 不走 hover_sm, 自有状态机)
         self._poll_gp_sticks()
 
-        # 4b. 轮询式 hover/click 检测 (核心! 解决 WS_EX_TRANSPARENT 问题)
+        # 4b. 方向盘轮询 (单例; 同样自有状态机)
+        self._poll_gp_wheel()
+
+        # 4c. 轮询式 hover/click 检测 (核心! 解决 WS_EX_TRANSPARENT 问题)
         self._poll_hover_and_click()
 
         # 5. 自动回中管理
@@ -254,9 +265,10 @@ class RunController(QObject):
         # 只关注有 data 属性的交互 item（按钮/扇区/圆环）
         active_item = item if (item and hasattr(item, 'data') and item.isVisible()) else None
 
-        # ── 摇杆 item: 不走 hover_sm + click 逻辑 (由 _poll_gp_sticks 接管), 但仍发 cursor_on_ui ──
+        # ── 方向盘 / 摇杆: 不走 hover_sm + click 逻辑 (各自有状态机), 但仍发 cursor_on_ui ──
         from scene.gp_stick_item import GpStickItem
-        if isinstance(active_item, GpStickItem):
+        from scene.gp_wheel_item import GpWheelItem
+        if isinstance(active_item, (GpStickItem, GpWheelItem)):
             # 离开上一次的非 gp_stick item (若有)
             prev_item = self._poll_hover_item
             if prev_item is not None and prev_item is not active_item:
@@ -458,8 +470,12 @@ class RunController(QObject):
             self.passthrough_changed.emit('pt_block')
 
     def _dispatch_wheel(self, direction, abs_x, abs_y):
-        """将滚轮事件分发到场景坐标处的 Item; 摇杆 active 时优先路由到 stick"""
-        # 优先: 摇杆 active 时, 滚轮路由到 stick.wheelup/wheeldown (用户正在用摇杆)
+        """将滚轮事件分发到场景坐标处的 Item;
+        优先级: 方向盘 active 且 LT/RT 用 scroll 模式 > 摇杆 active > 普通 item.on_wheel"""
+        # 1) 方向盘 active 时, scroll 模式的 LT/RT 接收滚轮
+        if self._dispatch_wheel_to_active_wheel(direction):
+            return
+        # 2) 摇杆 active 时, 滚轮路由到 stick.wheelup/wheeldown
         if self._active_gp_stick is not None and _is_alive(self._active_gp_stick):
             stick = self._active_gp_stick
             key = stick.data.wheelup if direction == 'up' else stick.data.wheeldown
@@ -842,6 +858,177 @@ class RunController(QObject):
             gp.set_stick(stick.data.stick_id,
                          max(-1.0, min(1.0, out_x)),
                          max(-1.0, min(1.0, -out_y)))
+
+    # ── 方向盘 (gp_wheel) 单例状态机 ──
+
+    def _poll_gp_wheel(self):
+        """单例方向盘: 入区 SetCursorPos 中心 + steering 归零;
+           运行中 steering 跟随鼠标 X (距中心 / 半宽), LT/RT 按各自 mode 更新;
+           出 release zone (距中心 > 半宽 × ratio) → steering + LT + RT 全归零"""
+        import math
+        from scene.gp_wheel_item import GpWheelItem
+
+        wheel = next((it for it in self._scene.button_items
+                      if isinstance(it, GpWheelItem) and it.isVisible()), None)
+        if wheel is None and self._active_gp_wheel is None:
+            return
+
+        try:
+            pt = ctypes.wintypes.POINT()
+            user32.GetCursorPos(ctypes.byref(pt))
+            screen_pt = QPoint(pt.x, pt.y)
+            view_pos = self._window.mapFromGlobal(screen_pt)
+            scene_pos = self._window.mapToScene(view_pos)
+        except Exception:
+            return
+
+        active = self._active_gp_wheel
+        if active is not None and not _is_alive(active):
+            active = None
+            self._active_gp_wheel = None
+
+        if wheel is None:
+            # wheel 被删 但 active 还残留: 释放
+            if active is not None:
+                self._release_gp_wheel()
+            return
+
+        in_rect = wheel.is_cursor_in_rect(scene_pos)
+
+        if not in_rect and active is not None:
+            dist_ratio = active.cursor_distance_ratio(scene_pos)
+            if dist_ratio > active.data.release_threshold_ratio:
+                self._release_gp_wheel()
+            else:
+                # 在 release zone 内: steering 钉边缘, 不更新 LT/RT 引用 Y
+                self._update_wheel_steering(active, scene_pos, force_edge=True)
+                self._sync_wheel_visual(active)
+        elif in_rect and wheel is active:
+            self._update_wheel_steering(active, scene_pos, force_edge=False)
+            self._update_wheel_triggers(active, screen_pt)
+            self._sync_wheel_visual(active)
+        elif in_rect and wheel is not active:
+            if active is not None:
+                self._release_gp_wheel()
+            self._activate_gp_wheel(wheel)
+
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.flush()
+
+    def _activate_gp_wheel(self, wheel):
+        """入区瞬移光标到矩形中心 + steering = 0; LT/RT 值保持上次"""
+        try:
+            center = wheel.rect_center_scene()
+            view_pt = self._window.mapFromScene(center)
+            screen_pt = self._window.mapToGlobal(view_pt)
+            user32.SetCursorPos(int(screen_pt.x()), int(screen_pt.y()))
+            self._wheel_last_screen_y = int(screen_pt.y())
+        except Exception as e:
+            logger.warning("SetCursorPos to wheel center failed: %s", e)
+        self._active_gp_wheel = wheel
+        wheel.set_visual(0.0, self._wheel_lt, self._wheel_rt, active=True)
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.set_stick("L", 0.0, 0.0)
+            gp.set_trigger("L", self._wheel_lt)
+            gp.set_trigger("R", self._wheel_rt)
+
+    def _release_gp_wheel(self):
+        """steering + LT + RT 全归零, 方向盘 idle"""
+        wheel = self._active_gp_wheel
+        if wheel is None:
+            return
+        if _is_alive(wheel):
+            wheel.set_visual(0.0, 0.0, 0.0, active=False)
+        self._wheel_lt = 0.0
+        self._wheel_rt = 0.0
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.set_stick("L", 0.0, 0.0)
+            gp.set_trigger("L", 0.0)
+            gp.set_trigger("R", 0.0)
+        self._active_gp_wheel = None
+
+    def _update_wheel_steering(self, wheel, scene_pos, force_edge: bool):
+        """计算 steering 并写入引擎 (仅左摇杆 X 轴, Y 始终 0)"""
+        import math
+        cx = wheel.rect_center_scene().x()
+        half_w = max(1.0, wheel.half_width_scene())
+        dx = scene_pos.x() - cx
+        val = max(-1.0, min(1.0, dx / half_w))
+        if force_edge:
+            val = max(-1.0, min(1.0, val))
+        if wheel.data.sensitivity_curve == 'square':
+            val = math.copysign(val * val, val)
+        self._wheel_steering_last = val
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.set_stick("L", val, 0.0)
+
+    def _update_wheel_triggers(self, wheel, screen_pt: QPoint):
+        """根据 LT/RT 各自 mode 更新值; scroll 由 _dispatch_wheel 异步处理 (不在此 tick)"""
+        # vertical mode: 用 screen Y delta (上 = 屏幕 Y 减小, value +)
+        cur_y = int(screen_pt.y())
+        dy = cur_y - self._wheel_last_screen_y
+        self._wheel_last_screen_y = cur_y
+
+        lmb = (user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0
+        rmb = (user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0
+        dt_ms = max(1, self._timer.interval())
+
+        for prefix, val_attr in (('lt', '_wheel_lt'), ('rt', '_wheel_rt')):
+            mode = getattr(wheel.data, f'{prefix}_mode')
+            cur = getattr(self, val_attr)
+            if mode == 'vertical':
+                px_per = max(1.0, getattr(wheel.data, f'{prefix}_vertical_px'))
+                cur = max(0.0, min(1.0, cur + (-dy) / px_per))
+            elif mode == 'buttons':
+                ms = max(1, getattr(wheel.data, f'{prefix}_buttons_ms'))
+                step = getattr(wheel.data, f'{prefix}_buttons_step')
+                rate = step / ms  # value per ms
+                if lmb:
+                    cur = min(1.0, cur + rate * dt_ms)
+                if rmb:
+                    cur = max(0.0, cur - rate * dt_ms)
+            # scroll 模式: 由 _dispatch_wheel 处理, 此处不动
+            setattr(self, val_attr, cur)
+
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.set_trigger("L", self._wheel_lt)
+            gp.set_trigger("R", self._wheel_rt)
+
+    def _sync_wheel_visual(self, wheel):
+        """把 active 状态最新的 steering + LT + RT 同步到 item"""
+        steering = getattr(self, '_wheel_steering_last', 0.0)
+        wheel.set_visual(steering, self._wheel_lt, self._wheel_rt, active=True)
+
+    def _dispatch_wheel_to_active_wheel(self, direction: str) -> bool:
+        """方向盘 active 时, scroll 事件交给配 scroll 模式的 trigger; 返回 True 表示已消费"""
+        wheel = self._active_gp_wheel
+        if wheel is None or not _is_alive(wheel):
+            return False
+        handled = False
+        for prefix, val_attr in (('lt', '_wheel_lt'), ('rt', '_wheel_rt')):
+            if getattr(wheel.data, f'{prefix}_mode') != 'scroll':
+                continue
+            step = getattr(wheel.data, f'{prefix}_scroll_step')
+            cur = getattr(self, val_attr)
+            if direction == 'up':
+                cur = min(1.0, cur + step)
+            else:
+                cur = max(0.0, cur - step)
+            setattr(self, val_attr, cur)
+            handled = True
+        if handled:
+            gp = GamepadEngine.get()
+            if gp is not None:
+                gp.set_trigger("L", self._wheel_lt)
+                gp.set_trigger("R", self._wheel_rt)
+                gp.flush()
+            self._sync_wheel_visual(wheel)
+        return handled
 
     def _find_macro(self, name: str, pool: str = 'kb'):
         """从当前 config 中查找宏。pool='kb' 查 macros, pool='gp' 查 gp_macros"""

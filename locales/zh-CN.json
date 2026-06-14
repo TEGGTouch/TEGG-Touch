@@ -19,7 +19,7 @@
     "sim_tooltip": "切换模拟模式（键盘 / 手柄）",
     "add_gp_button": "手柄键",
     "add_gp_stick": "摇杆",
-    "add_gp_trigger": "扳机",
+    "toggle_gp_wheel": "方向盘",
     "gp_coming_soon": "该按钮编辑器即将上线，敬请期待",
     "opacity": "透明度",
     "grid": "网格",
@@ -104,7 +104,7 @@
     "collapse": "收起工具栏为悬浮方块，双击方块可展开",
     "add_gp_button": "添加手柄键 (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 等)",
     "add_gp_stick": "添加摇杆 (圆形, 模拟左/右摇杆移动)",
-    "add_gp_trigger": "添加扳机 (矩形, 模拟 LT/RT 行程值)"
+    "toggle_gp_wheel": "方向盘 (4×2 复合: LT + 转向 + RT, 单例, 适合赛车游戏)"
   },
   "hotkey": {
     "title": "设置",
@@ -249,6 +249,7 @@
     "center_band_created": "✓ 回中带已创建",
     "gp_button_created": "✓ 手柄键已创建",
     "gp_stick_created": "✓ 摇杆已创建",
+    "gp_wheel_created": "✓ 方向盘已创建",
     "copy_success": "✓ 复制成功"
   },
   "canvas": {
@@ -320,6 +321,34 @@
     "center_ring": "中心环",
     "inner_ring": "中二环",
     "gp_button": "手柄键"
+  },
+  "gp_wheel_editor": {
+    "title": "方向盘编辑器",
+    "tip": "方向盘是 4×2 单例 item, 由「左 LT 条 + 中圆盘 + 右 RT 条」组成。整个区域响应鼠标:水平距离决定转向, LT/RT 通过下方选择的控制方式触发。",
+    "section_wheel": "方向盘参数",
+    "name": "名称",
+    "name_placeholder": "可选, 编辑时辨识用",
+    "release_threshold": "释放阈值 (× 半宽)",
+    "release_threshold_hint": "鼠标距矩形横向中心 > 半宽 × 阈值 时 steering+LT+RT 全归零, 需重新入区激活",
+    "sensitivity": "灵敏度曲线",
+    "sens_linear": "线性",
+    "sens_square": "平方 (微调更精细)",
+    "lt_title": "左扳机 LT",
+    "rt_title": "右扳机 RT",
+    "mode_label": "控制方式",
+    "mode_scroll": "滚轮",
+    "mode_vertical": "垂直位移",
+    "mode_buttons": "左右键",
+    "scroll_hint": "滚动一次 → 增减 step (上 +, 下 −)",
+    "scroll_step": "每次 step",
+    "vertical_hint": "鼠标 Y 向上移 → 增加, 向下移 → 减少 (按 Δ 累计)",
+    "vertical_px": "每 ±1.0 所需位移",
+    "buttons_hint": "长按 LMB → 增加, 长按 RMB → 减少 (每 N ms 加 step)",
+    "buttons_ms": "周期 (间隔 ms)",
+    "buttons_step": "每周期 step",
+    "err_mutual_buttons": "⚠ LT 和 RT 不能同时选「左右键」(LMB/RMB 冲突)",
+    "delete": "删除",
+    "save": "保存"
   },
   "gp_stick_editor": {
     "title": "摇杆编辑器",
