@@ -51,13 +51,10 @@ DEFAULT_CURSOR_STYLES = {
 }
 
 # === 方向盘样式 (全局, 跟 cursor 一样存 hotkeys.json) ===
-# variant: 'stroke' (描边) | 'fill' (填充); color = 单色 (active 100%, idle 50% alpha)
+# 用户只配 stroke 色; fill 色用按钮 bg (COLOR_GP_BTN_BG); active 100%, idle 50% alpha
 DEFAULT_WHEEL_STYLE = {
-    "variant": "stroke",
-    "color":   "#3B82F6",    # 按钮 border 蓝
+    "color": "#3B82F6",      # 描边色, 默认按钮 border 蓝
 }
-WHEEL_VARIANT_STROKE = "stroke"
-WHEEL_VARIANT_FILL = "fill"
 
 def get_hotkey_labels():
     """返回本地化的快捷键显示名称（运行时求值）。"""

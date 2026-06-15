@@ -214,6 +214,9 @@ def load_config_from_file(filepath: str) -> dict:
         'gp_macros': [],
         # 模拟模式 (per-profile): 'keyboard' | 'gamepad'; None 表示该 profile 未设置, 调用方回退
         'sim_mode': None,
+        # 外观 (per-profile, None 表示该 profile 未设置, 调用方回退全局 hotkeys 做一次性迁移)
+        'wheel_style': None,
+        'cursor_styles': None,
     }
     if not os.path.exists(filepath):
         return result
@@ -306,6 +309,13 @@ def load_config_from_file(filepath: str) -> dict:
         raw_sim = data.get('sim_mode')
         if raw_sim in ('keyboard', 'gamepad'):
             result['sim_mode'] = raw_sim
+        # 外观 (per-profile)
+        raw_ws = data.get('wheel_style')
+        if isinstance(raw_ws, dict):
+            result['wheel_style'] = raw_ws
+        raw_cs = data.get('cursor_styles')
+        if isinstance(raw_cs, dict):
+            result['cursor_styles'] = raw_cs
         logger.info(f"配置加载成功: {filepath}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"配置文件格式错误: {filepath}: {e}")
@@ -347,7 +357,9 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          voice_auto_start=None,
                          macros=None,
                          gp_macros=None,
-                         sim_mode=None) -> bool:
+                         sim_mode=None,
+                         wheel_style=None,
+                         cursor_styles=None) -> bool:
     """保存配置到指定文件。"""
     # Bug 5 fix: geometry 为 None 时使用当前屏幕尺寸作为 fallback
     if geometry is None:
@@ -445,6 +457,12 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
     # 模拟模式 (per-profile)
     if sim_mode in ('keyboard', 'gamepad'):
         data['sim_mode'] = sim_mode
+
+    # 外观 (per-profile)
+    if isinstance(wheel_style, dict):
+        data['wheel_style'] = wheel_style
+    if isinstance(cursor_styles, dict):
+        data['cursor_styles'] = cursor_styles
 
     try:
         os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)

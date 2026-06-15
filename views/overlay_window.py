@@ -167,19 +167,16 @@ class OverlayWindow(QGraphicsView):
         self._run_controller.voice_command_triggered.connect(
             self._voice_hud.show_command)
 
-        # ── 虚拟光标 ──
+        # ── 虚拟光标 + 方向盘样式 (per-profile, _load_profile 之后用 _resolve_*_from_profile 更新) ──
+        # 这里先用全局默认建虚拟光标 item; profile 加载后 _on_settings_saved-style flow 会重设
         from core.constants import DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE
-        self._cursor_styles = (load_hotkeys() or {}).get(
-            'cursor_styles', None) or dict(DEFAULT_CURSOR_STYLES)
+        self._cursor_styles = dict(DEFAULT_CURSOR_STYLES)
+        self._wheel_style = dict(DEFAULT_WHEEL_STYLE)
         _initial_style = self._cursor_styles.get(
             'cursor', DEFAULT_CURSOR_STYLES['cursor'])
         self._virtual_cursor = VirtualCursorItem('cursor', _initial_style)
         self._virtual_cursor.setVisible(False)
         self._scene.addItem(self._virtual_cursor)
-
-        # ── 方向盘样式 (全局, 跟 cursor 一样存 hotkeys.json) ──
-        self._wheel_style = (load_hotkeys() or {}).get(
-            'wheel_style', None) or dict(DEFAULT_WHEEL_STYLE)
 
         # ── 智能穿透轮询定时器 (编辑模式, 跟随显示器刷新率) ──
         self._smart_pt_timer = QTimer(self)
@@ -205,6 +202,9 @@ class OverlayWindow(QGraphicsView):
         self._gamepad_install_seen = bool(_hk.get('gamepad_install_seen', False))
         self._sim_mode = self._resolve_sim_mode_from_profile(_hk)
         self._edit_toolbar.set_sim_mode(self._sim_mode)
+        # ── 外观 (wheel_style + cursor_styles) per-profile, 启动同时按 profile 配置应用 ──
+        self._resolve_appearance_from_profile(_hk)
+        self._apply_appearance_to_items()
 
     def _load_profile(self):
         """加载方案配置，创建场景中的按钮"""
@@ -589,6 +589,66 @@ class OverlayWindow(QGraphicsView):
             return legacy
         return 'keyboard'
 
+    def _resolve_appearance_from_profile(self, hotkeys: dict):
+        """从当前 profile 读 wheel_style + cursor_styles; 无则回退老 hotkeys (一次性迁移),
+        若迁移了就写回 profile config, 下次 save 落盘。"""
+        from core.constants import DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE
+        cfg = self._scene.get_config() or {}
+        # wheel_style
+        ws = cfg.get('wheel_style')
+        if not isinstance(ws, dict):
+            legacy = (hotkeys or {}).get('wheel_style')
+            if isinstance(legacy, dict):
+                ws = legacy
+                cfg['wheel_style'] = ws
+            else:
+                ws = dict(DEFAULT_WHEEL_STYLE)
+        self._wheel_style = ws
+        # cursor_styles
+        cs = cfg.get('cursor_styles')
+        if not isinstance(cs, dict):
+            legacy = (hotkeys or {}).get('cursor_styles')
+            if isinstance(legacy, dict):
+                cs = legacy
+                cfg['cursor_styles'] = cs
+            else:
+                cs = dict(DEFAULT_CURSOR_STYLES)
+        self._cursor_styles = cs
+
+    def _apply_appearance_to_items(self):
+        """把当前 _wheel_style / _cursor_styles 推给场景里的 item (清缓存 + apply);
+        顺手镜像到 hotkeys.json, 让设置弹窗下次打开能看到当前 profile 的真值"""
+        from scene.virtual_cursor_item import clear_cursor_render_cache
+        from scene.gp_wheel_item import clear_wheel_render_cache
+        clear_cursor_render_cache()
+        clear_wheel_render_cache()
+        cur_type = getattr(self._virtual_cursor, '_cursor_type', 'cursor')
+        try:
+            self._virtual_cursor.apply_styles_map(self._cursor_styles, cur_type)
+        except Exception as e:
+            logger.warning(f"apply cursor styles 失败: {e}")
+        self._apply_wheel_style_to_current_item()
+        # 镜像到 hotkeys (设置弹窗读 hotkeys)
+        try:
+            from core.config_manager import save_hotkeys
+            save_hotkeys({
+                'cursor_styles': self._cursor_styles,
+                'wheel_style': self._wheel_style,
+            })
+        except Exception as e:
+            logger.warning(f"mirror 外观到 hotkeys 失败: {e}")
+
+    def _persist_appearance_to_profile(self):
+        """改了 wheel_style / cursor_styles 后写回 active profile"""
+        try:
+            cfg = self._scene.get_config()
+            if cfg is not None:
+                cfg['wheel_style'] = self._wheel_style
+                cfg['cursor_styles'] = self._cursor_styles
+                self._scene.save_config()
+        except Exception as e:
+            logger.warning(f"保存外观到 profile 失败: {e}")
+
     def _persist_sim_mode_flags(self):
         """sim_mode 写到当前 profile, gamepad_install_seen 仍走全局 hotkeys。"""
         try:
@@ -814,14 +874,15 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.set_wheel_state(self._scene.wheel_visible)
         # 同步方向盘 toggle 状态 (profile 加载后, 若已存在 gp_wheel item 则显玫红)
         self._edit_toolbar.set_gp_wheel_state(self._scene.get_gp_wheel_item() is not None)
-        # 把当前 wheel_style 应用到新 profile 的 gp_wheel item (若存在)
-        self._apply_wheel_style_to_current_item()
-        # 恢复新 profile 的模拟模式 (无则回退全局 hotkeys, 再无则 keyboard)
+        # 恢复新 profile 的模拟模式 + 外观 (wheel_style + cursor_styles)
         from core.config_manager import load_hotkeys
-        new_mode = self._resolve_sim_mode_from_profile(load_hotkeys() or {})
+        _hk = load_hotkeys() or {}
+        new_mode = self._resolve_sim_mode_from_profile(_hk)
         if new_mode != self._sim_mode:
             self._sim_mode = new_mode
         self._edit_toolbar.set_sim_mode(self._sim_mode)
+        self._resolve_appearance_from_profile(_hk)
+        self._apply_appearance_to_items()
 
     def _open_voice_settings(self):
         """打开语音指令设置弹窗"""
@@ -872,36 +933,26 @@ class OverlayWindow(QGraphicsView):
         dialog.show()
 
     def _on_settings_saved(self):
-        """设置保存后"""
+        """设置保存后: 热键读 hotkeys; 外观 (cursor + wheel_style) 从 hotkeys 拿了写回 active profile"""
         # 运行控制器重新读取热键
         self._run_controller.reload_hotkeys()
-        # 重新加载 cursor_styles 并应用到当前光标
         from core.constants import DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE
-        from scene.virtual_cursor_item import clear_cursor_render_cache
-        from scene.gp_wheel_item import clear_wheel_render_cache
         hk = load_hotkeys() or {}
-        self._cursor_styles = hk.get('cursor_styles', None) or dict(DEFAULT_CURSOR_STYLES)
-        clear_cursor_render_cache()
-        cur_type = getattr(self._virtual_cursor, '_cursor_type', 'cursor')
-        self._virtual_cursor.apply_styles_map(self._cursor_styles, cur_type)
-        # 重新加载 wheel_style 并应用到当前方向盘 (若存在)
-        self._wheel_style = hk.get('wheel_style', None) or dict(DEFAULT_WHEEL_STYLE)
-        clear_wheel_render_cache()
-        self._apply_wheel_style_to_current_item()
+        # 外观: 设置弹窗刚把新值写到 hotkeys, 这里拷到 active profile (per-profile 的真源头)
+        new_cursor = hk.get('cursor_styles', None) or dict(DEFAULT_CURSOR_STYLES)
+        new_wheel = hk.get('wheel_style', None) or dict(DEFAULT_WHEEL_STYLE)
+        self._cursor_styles = new_cursor
+        self._wheel_style = new_wheel
+        self._persist_appearance_to_profile()
+        self._apply_appearance_to_items()
 
     def _on_defaults_reset(self):
         """设置面板重置默认 → 重置透明度 + 清除运行工具栏保存的位置"""
         from core.constants import DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE
-        from scene.virtual_cursor_item import clear_cursor_render_cache
-        from scene.gp_wheel_item import clear_wheel_render_cache
         self._cursor_styles = dict(DEFAULT_CURSOR_STYLES)
-        clear_cursor_render_cache()
-        cur_type = getattr(self._virtual_cursor, '_cursor_type', 'cursor')
-        self._virtual_cursor.apply_styles_map(self._cursor_styles, cur_type)
-        # 方向盘样式同步重置
         self._wheel_style = dict(DEFAULT_WHEEL_STYLE)
-        clear_wheel_render_cache()
-        self._apply_wheel_style_to_current_item()
+        self._persist_appearance_to_profile()
+        self._apply_appearance_to_items()
         default_opacity = DEFAULT_TRANSPARENCY
         # 重置透明度
         self._apply_item_opacity(default_opacity)

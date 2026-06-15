@@ -20,58 +20,61 @@ from PyQt6.QtSvg import QSvgRenderer
 from core.constants import (
     DEFAULT_GRID_SIZE, BTN_MARGIN, APP_DIR,
     COLOR_GP_BTN_BG, COLOR_GP_BTN_BORDER, COLOR_GP_BTN_TEXT,
-    DEFAULT_WHEEL_STYLE, WHEEL_VARIANT_STROKE, WHEEL_VARIANT_FILL,
+    DEFAULT_WHEEL_STYLE,
 )
 from core.i18n import get_font
 from models.gamepad_model import GamepadWheelData
 
 
 # ── 方向盘 SVG 渲染 + 缓存 ──
-# 占位色 (两张 SVG 都用这个色, 渲染前替换成用户色)
+# 两张 SVG 叠加: wheel_fill 用按钮 bg 色填充, wheel_stroke 用用户色描边
 _SVG_PLACEHOLDER_COLOR = "#FFCB31"
-_SVG_FILE_BY_VARIANT = {
-    WHEEL_VARIANT_STROKE: "wheel_stroke.svg",
-    WHEEL_VARIANT_FILL:   "wheel_fill.svg",
-}
-_WHEEL_RENDER_SIZE = 512   # 高分辨率一次, 运行时按需缩放
-# cache key = (variant, color_upper) → QPixmap
+_WHEEL_FILL_SVG = "wheel_fill.svg"
+_WHEEL_STROKE_SVG = "wheel_stroke.svg"
+_WHEEL_RENDER_SIZE = 512    # 高分辨率一次, 运行时按需缩放
+# cache key = stroke color (upper hex) → QPixmap
 _WHEEL_CACHE: dict = {}
 
 
-def render_wheel_pixmap(variant: str, color: str) -> QPixmap:
-    """SVG → QPixmap, 缓存。返回 None 表示加载失败 (paint 会走几何回退)。"""
-    if variant not in _SVG_FILE_BY_VARIANT:
-        variant = WHEEL_VARIANT_STROKE
-    color = (color or DEFAULT_WHEEL_STYLE["color"]).upper()
-    key = (variant, color)
-    if key in _WHEEL_CACHE:
-        return _WHEEL_CACHE[key]
-    path = os.path.join(APP_DIR, "assets", _SVG_FILE_BY_VARIANT[variant])
+def _render_one_svg_layer(svg_file: str, color: str, painter: QPainter):
+    """读 SVG, 把占位色 #FFCB31 换成 color, 渲染到 painter (painter 当前 viewbox 决定大小)"""
+    path = os.path.join(APP_DIR, "assets", svg_file)
     if not os.path.exists(path):
-        _WHEEL_CACHE[key] = None
-        return None
+        return False
     try:
         with open(path, 'rb') as f:
             svg_text = f.read().decode('utf-8', errors='ignore')
-        # 占位 #FFCB31 → 用户色 (case-insensitive, 但 SVG 里都是大写, 保险起见两种都换)
         svg_text = svg_text.replace(_SVG_PLACEHOLDER_COLOR, color)
         svg_text = svg_text.replace(_SVG_PLACEHOLDER_COLOR.lower(), color)
         renderer = QSvgRenderer(QByteArray(svg_text.encode('utf-8')))
         if not renderer.isValid():
-            _WHEEL_CACHE[key] = None
-            return None
-        pm = QPixmap(_WHEEL_RENDER_SIZE, _WHEEL_RENDER_SIZE)
-        pm.fill(Qt.GlobalColor.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        renderer.render(p)
-        p.end()
-        _WHEEL_CACHE[key] = pm
-        return pm
+            return False
+        renderer.render(painter)
+        return True
     except Exception:
-        _WHEEL_CACHE[key] = None
+        return False
+
+
+def render_wheel_pixmap(color: str) -> QPixmap:
+    """SVG 双层叠加 → QPixmap, 缓存。fill 用按钮 bg, stroke 用用户色。"""
+    color = (color or DEFAULT_WHEEL_STYLE["color"]).upper()
+    if color in _WHEEL_CACHE:
+        return _WHEEL_CACHE[color]
+    pm = QPixmap(_WHEEL_RENDER_SIZE, _WHEEL_RENDER_SIZE)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    # 1) fill 层 (按钮 bg 色) — 让方向盘永远不透
+    fill_ok = _render_one_svg_layer(_WHEEL_FILL_SVG, COLOR_GP_BTN_BG, p)
+    # 2) stroke 层 (用户色) — 描边压在 fill 上面
+    stroke_ok = _render_one_svg_layer(_WHEEL_STROKE_SVG, color, p)
+    p.end()
+    if not (fill_ok or stroke_ok):
+        _WHEEL_CACHE[color] = None
         return None
+    _WHEEL_CACHE[color] = pm
+    return pm
 
 
 def clear_wheel_render_cache():
@@ -90,8 +93,8 @@ _INDICATOR = QColor("#0284C7")         # 方向盘指示线 idle
 _INDICATOR_ACTIVE = QColor("#FFFFFF")  # 方向盘指示线 active
 _AUX = QColor(COLOR_GP_BTN_BORDER)     # 内部分隔线
 
-# 方向盘指示线最大旋转角度 (steering = ±1.0 时左右旋转此角度)
-_MAX_WHEEL_ANGLE_DEG = 70.0
+# 方向盘视觉旋转角度上限 (老常量, 现已迁移到 data.max_rotation_deg, 仅作 fallback)
+_MAX_WHEEL_ANGLE_DEG_FALLBACK = 180.0
 
 # 缩放手柄距右下角内缩 (跟 gp_stick 一致)
 _RESIZE_INSET = 24
@@ -246,12 +249,12 @@ class GpWheelItem(QGraphicsObject):
         cx = w / 2
         cy = w / 2
         r = w / 2 - BTN_MARGIN
-        angle_deg = self._steering * _MAX_WHEEL_ANGLE_DEG
+        max_deg = getattr(self.data, 'max_rotation_deg', _MAX_WHEEL_ANGLE_DEG_FALLBACK) or _MAX_WHEEL_ANGLE_DEG_FALLBACK
+        angle_deg = self._steering * max_deg
 
         if r > 0:
-            variant = self._style.get("variant", DEFAULT_WHEEL_STYLE["variant"])
             color = self._style.get("color", DEFAULT_WHEEL_STYLE["color"])
-            pixmap = render_wheel_pixmap(variant, color)
+            pixmap = render_wheel_pixmap(color)
 
             if pixmap is not None:
                 painter.save()
@@ -340,12 +343,10 @@ class GpWheelItem(QGraphicsObject):
         self.update()
 
     def apply_style(self, style: dict):
-        """从设置弹窗收到新样式 (variant + color); 调用方负责清模块缓存"""
+        """从设置弹窗收到新样式 (只剩 color, 老 variant 字段静默忽略); 调用方负责清模块缓存"""
         if not isinstance(style, dict):
             return
         merged = dict(DEFAULT_WHEEL_STYLE)
-        if style.get("variant") in (WHEEL_VARIANT_STROKE, WHEEL_VARIANT_FILL):
-            merged["variant"] = style["variant"]
         col = style.get("color")
         if isinstance(col, str) and col.startswith("#") and len(col) == 7:
             merged["color"] = col.upper()
@@ -412,6 +413,7 @@ class GpWheelItem(QGraphicsObject):
         lines = ["方向盘"]
         lines.append(f"释放阈值: {int(self.data.release_threshold_ratio * 100)}% 半宽")
         lines.append(f"灵敏度: {'平方' if self.data.sensitivity_curve == 'square' else '线性'}")
+        lines.append(f"视觉旋转: ±{int(getattr(self.data, 'max_rotation_deg', 180))}°")
         lines.append("")
         lt_m = mode_label.get(self.data.lt_mode, self.data.lt_mode)
         rt_m = mode_label.get(self.data.rt_mode, self.data.rt_mode)

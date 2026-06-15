@@ -65,7 +65,7 @@ def _check_icon(color: str) -> QIcon:
     _CHECK_ICON_CACHE[color] = icon
     return icon
 
-_DEFAULT_RELEASE_PCT = 150
+_DEFAULT_RELEASE_PCT = 200
 
 
 def _font(name, px, bold=False):
@@ -523,7 +523,7 @@ class GpWheelEditorDialog(QDialog):
         head, self._release_slider, _ = _make_value_slider(
             fn, t("gp_wheel_editor.release_threshold"),
             init=int(self.data.release_threshold_ratio * 100),
-            min_v=110, max_v=200, default_v=_DEFAULT_RELEASE_PCT, suffix='%',
+            min_v=110, max_v=300, default_v=_DEFAULT_RELEASE_PCT, suffix='%',
         )
         sc.addLayout(head)
         sc.addWidget(self._release_slider)
@@ -546,6 +546,33 @@ class GpWheelEditorDialog(QDialog):
         sens_row.addWidget(self._rb_linear); sens_row.addSpacing(16)
         sens_row.addWidget(self._rb_square); sens_row.addStretch()
         sc.addLayout(sens_row)
+        sc.addSpacing(18)
+
+        # 视觉旋转角度 (单边, steering = ±1.0 时盘的最大旋转)
+        sc.addWidget(_make_field_label(fn, "视觉旋转角度 (单边)"))
+        sc.addSpacing(8)
+        rot_row = QHBoxLayout()
+        rot_row.setSpacing(8)
+        self._rot_btns: dict = {}
+        cur_rot = int(round(getattr(self.data, 'max_rotation_deg', 180.0)))
+        if cur_rot not in (90, 180, 270, 360, 720):
+            cur_rot = 180
+        self._current_max_rotation = cur_rot
+        for deg in (90, 180, 270, 360, 720):
+            b = QPushButton(f"{deg}°")
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFont(_font(fn, 14, bold=True))
+            b.setFixedHeight(36)
+            b.clicked.connect(lambda _, d=deg: self._on_rot_clicked(d))
+            rot_row.addWidget(b, 1)
+            self._rot_btns[deg] = b
+        sc.addLayout(rot_row)
+        sc.addSpacing(6)
+        rot_hint = _make_label(
+            fn, "真车 90~180° 紧凑赛车手感; 360~540° 接近真车; 720° 模拟器整圈感",
+            _C_HINT, 12)
+        sc.addWidget(rot_hint)
+        self._refresh_rot_btns()
         sc.addSpacing(SECTION_GAP)
 
         # 分隔线
@@ -654,6 +681,11 @@ class GpWheelEditorDialog(QDialog):
         self._release_slider.setValue(int(self.data.release_threshold_ratio * 100))
         (self._rb_square if self.data.sensitivity_curve == 'square'
          else self._rb_linear).setChecked(True)
+        cur_rot = int(round(self.data.max_rotation_deg))
+        if cur_rot not in (90, 180, 270, 360, 720):
+            cur_rot = 180
+        self._current_max_rotation = cur_rot
+        self._refresh_rot_btns()
         # section 2/3
         self._lt_section.refresh_from_data()
         self._rt_section.refresh_from_data()
@@ -674,8 +706,37 @@ class GpWheelEditorDialog(QDialog):
     def _apply_to_data(self):
         self.data.release_threshold_ratio = self._release_slider.value() / 100.0
         self.data.sensitivity_curve = ('square' if self._rb_square.isChecked() else 'linear')
+        self.data.max_rotation_deg = float(self._current_max_rotation)
         self._lt_section.apply_to_data()
         self._rt_section.apply_to_data()
+
+    # ── 视觉旋转角度 tab ──
+
+    def _on_rot_clicked(self, deg: int):
+        if deg == self._current_max_rotation:
+            return
+        self._current_max_rotation = deg
+        self._refresh_rot_btns()
+
+    def _refresh_rot_btns(self):
+        for deg, b in self._rot_btns.items():
+            selected = (deg == self._current_max_rotation)
+            if selected:
+                b.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {C_CYBER}; color: #FFF;
+                        border: none; border-radius: 6px;
+                    }}
+                    QPushButton:hover {{ background: {C_CYBER_H}; }}
+                """)
+            else:
+                b.setStyleSheet(f"""
+                    QPushButton {{
+                        background: {C_GRAY}; color: #CCC;
+                        border: none; border-radius: 6px;
+                    }}
+                    QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}
+                """)
 
     # ── 定位 + 拖拽 ──
 

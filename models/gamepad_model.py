@@ -72,8 +72,9 @@ class GamepadWheelData:
     btn_type: str = BTN_TYPE_GP_WHEEL
 
     # Steering (左摇杆 X 轴)
-    release_threshold_ratio: float = 1.5   # 鼠标距矩形中心 > w/2×ratio → 全部释放
+    release_threshold_ratio: float = 2.0   # 鼠标距矩形中心 > w/2×ratio → 全部释放 (默认 200%, UI 110%~300%)
     sensitivity_curve: str = "linear"      # 'linear' | 'square'
+    max_rotation_deg: float = 180.0        # steering = ±1.0 时方向盘视觉旋转角度 (单边); UI 离散 90/180/270/360/720
 
     # LT 控制方式 — 默认左右键 (LMB 加 / RMB 减)
     lt_mode: str = "buttons"               # 'scroll' | 'vertical' | 'buttons'

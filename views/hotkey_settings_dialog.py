@@ -878,9 +878,7 @@ class HotkeySettingsDialog(QDialog):
             from core.constants import DEFAULT_WHEEL_STYLE
             existing = (load_hotkeys() or {}).get('wheel_style') or {}
             buf = dict(DEFAULT_WHEEL_STYLE)
-            v = existing.get('variant')
-            if v in ('stroke', 'fill'):
-                buf['variant'] = v
+            # 老的 variant 字段静默忽略 (现在只配 color, fill 走按钮 bg)
             c = existing.get('color')
             if isinstance(c, str) and c.startswith('#') and len(c) == 7:
                 buf['color'] = c.upper()
@@ -894,14 +892,14 @@ class HotkeySettingsDialog(QDialog):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        tip = QLabel("方向盘外观: 描边或填充, 单色配置 (active 100% / idle 50% 透明度)")
+        tip = QLabel("方向盘外观: 描边色可配, 填充用按钮底色 (方向盘永远不透; active 100% / idle 50% 透明度)")
         tip.setFont(_make_font(fn, 13))
         tip.setStyleSheet("color: #888; background: transparent;")
         tip.setWordWrap(True)
         v.addWidget(tip)
         v.addSpacing(20)
 
-        # 单卡片: 预览 + variant + color
+        # 单卡片: 预览 + color
         card = QFrame()
         card.setStyleSheet(
             "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
@@ -918,24 +916,6 @@ class HotkeySettingsDialog(QDialog):
             "background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 6px;")
         cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
         self._wheel_preview_lbl = preview
-
-        # variant 行 (描边 / 填充, 两个按钮)
-        var_row = QHBoxLayout()
-        var_lbl = QLabel("样式")
-        var_lbl.setFont(_make_font(fn, 14))
-        var_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
-        var_row.addWidget(var_lbl)
-        var_row.addStretch()
-        self._wheel_var_btns = {}
-        for v_key, v_text in (('stroke', '描边'), ('fill', '填充')):
-            b = QPushButton(v_text)
-            b.setFixedSize(80, 32)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setFont(_make_font(fn, 13, bold=True))
-            b.clicked.connect(lambda _, k=v_key: self._on_wheel_variant_changed(k))
-            var_row.addWidget(b)
-            self._wheel_var_btns[v_key] = b
-        cl.addLayout(var_row)
 
         # color 行
         color_row = QHBoxLayout()
@@ -991,28 +971,13 @@ class HotkeySettingsDialog(QDialog):
         bottom.addWidget(save_btn)
         v.addLayout(bottom)
 
-        # 初始: variant 高亮 + 预览
-        self._refresh_wheel_variant_btns()
+        # 初始预览
         self._refresh_wheel_preview()
         return page
 
-    def _refresh_wheel_variant_btns(self):
-        cur = self._wheel_buf.get('variant', 'stroke')
-        for key, b in self._wheel_var_btns.items():
-            selected = (key == cur)
-            bg = C_CYBER if selected else "#404040"
-            bg_h = C_CYBER_H if selected else "#505050"
-            b.setStyleSheet(f"""
-                QPushButton {{
-                    background: {bg}; color: #FFF;
-                    border: none; border-radius: 6px;
-                }}
-                QPushButton:hover {{ background: {bg_h}; }}
-            """)
-
     def _refresh_wheel_preview(self):
         from scene.gp_wheel_item import render_wheel_pixmap
-        pm = render_wheel_pixmap(self._wheel_buf['variant'], self._wheel_buf['color'])
+        pm = render_wheel_pixmap(self._wheel_buf['color'])
         if pm and not pm.isNull():
             scaled = pm.scaled(
                 self._wheel_preview_lbl.width() - 8,
@@ -1025,13 +990,6 @@ class HotkeySettingsDialog(QDialog):
             self._wheel_preview_lbl.setStyleSheet(
                 "background: #1A1A1A; color: #888; "
                 "border: 1px solid #2A2A2A; border-radius: 6px;")
-
-    def _on_wheel_variant_changed(self, variant: str):
-        if variant not in ('stroke', 'fill'):
-            return
-        self._wheel_buf['variant'] = variant
-        self._refresh_wheel_variant_btns()
-        self._refresh_wheel_preview()
 
     def _on_wheel_color_pick(self):
         initial = QColor(self._wheel_buf.get('color', '#3B82F6'))
@@ -1049,7 +1007,6 @@ class HotkeySettingsDialog(QDialog):
         from core.constants import DEFAULT_WHEEL_STYLE
         self._wheel_buf = dict(DEFAULT_WHEEL_STYLE)
         self._apply_color_btn_style(self._wheel_color_btn, self._wheel_buf['color'])
-        self._refresh_wheel_variant_btns()
         self._refresh_wheel_preview()
 
     # ── 语言页 ──
