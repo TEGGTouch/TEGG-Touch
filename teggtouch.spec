@@ -9,6 +9,9 @@ from PyInstaller.utils.hooks import collect_all, collect_data_files
 # ── collect_all: 收集包的 全部内容 (Python代码+DLL+数据文件+隐藏import) ──
 vosk_datas, vosk_binaries, vosk_hidden = collect_all('vosk')
 sd_datas, sd_binaries, sd_hidden = collect_all('sounddevice')
+# vgamepad 内置 ViGEmClient.dll (vgamepad/win/vigem/client/x64/ViGEmClient.dll)
+# 不 collect_all 的话 PyInstaller 只追踪 .py, DLL 落地不到打包目录, 启动直接 FileNotFoundError
+vg_datas, vg_binaries, vg_hidden = collect_all('vgamepad')
 
 sd_data_datas = []
 sd_data_binaries = []
@@ -18,9 +21,9 @@ try:
 except Exception:
     pass
 
-all_datas = vosk_datas + sd_datas + sd_data_datas
-all_binaries = vosk_binaries + sd_binaries + sd_data_binaries
-all_hidden = vosk_hidden + sd_hidden + sd_data_hidden
+all_datas = vosk_datas + sd_datas + sd_data_datas + vg_datas
+all_binaries = vosk_binaries + sd_binaries + sd_data_binaries + vg_binaries
+all_hidden = vosk_hidden + sd_hidden + sd_data_hidden + vg_hidden
 
 a = Analysis(
     ['main.py'],

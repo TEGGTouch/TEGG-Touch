@@ -93,13 +93,22 @@ class UpdateChecker(QThread):
             tag = data.get("tag_name", "")
             html_url = data.get("html_url", "")
             body = data.get("body", "")
+            # 优先用第一个 .zip 资源的直链, 没有就回退 release 页面
+            download_url = html_url
+            for asset in data.get("assets", []) or []:
+                name = (asset.get("name") or "").lower()
+                if name.endswith(".zip"):
+                    direct = asset.get("browser_download_url")
+                    if direct:
+                        download_url = direct
+                        break
 
             _save_check_timestamp()
 
             if _is_newer(tag, APP_VERSION):
                 version_str = tag.lstrip("vV")
-                logger.info(f"New version available: {version_str}")
-                self.update_available.emit(version_str, html_url, body)
+                logger.info(f"New version available: {version_str} → {download_url}")
+                self.update_available.emit(version_str, download_url, body)
             else:
                 logger.debug(f"Already up to date ({APP_VERSION})")
 

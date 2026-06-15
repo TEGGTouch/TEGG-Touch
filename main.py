@@ -68,6 +68,11 @@ def _check_for_updates(parent):
     def _on_update(version, url, body):
         dlg = UpdateDialog(version, url, body, parent)
         dlg.show()
+        # 强制顶到最上层 (跟 overlay 一样 WindowStaysOnTopHint, 不 raise 会被同级 overlay 压住)
+        dlg.raise_()
+        dlg.activateWindow()
+        # 保持引用防止被 GC (show 是非模态)
+        parent._update_dialog = dlg
 
     checker.update_available.connect(_on_update)
     checker.start()

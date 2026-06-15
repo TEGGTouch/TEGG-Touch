@@ -79,6 +79,20 @@ if exist "%OUT%\core\default_profile.json" (echo      - default_profile √) els
 if exist "%OUT%\profiles"       (echo      - profiles       √) else (echo      - profiles       ✗)
 echo.
 
+:: ── 关键依赖 smoke test (退出码非 0 直接中止打包流程, 别让 v0.3.0 vgamepad DLL 漏装事故重演) ──
+echo [smoke] 检查打包产物关键依赖...
+python smoke_test_build.py "%OUT%"
+if errorlevel 1 (
+    echo.
+    echo ==========================================
+    echo    ✗ 打包失败 — Smoke test 未通过
+    echo ==========================================
+    echo 请按上方提示修复 spec, 然后重新 build
+    pause
+    exit /b 1
+)
+echo.
+
 echo ==========================================
 echo    ★ 打包完成！ v%VER% ★
 echo ==========================================
