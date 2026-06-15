@@ -82,6 +82,7 @@ class GamepadWheelData:
     lt_vertical_pct: float = 0.5           # 0→1 所需 Y 位移 = 方向盘高度 × pct (默认 50%, 上限 80%)
     lt_buttons_ms: int = 100
     lt_buttons_step: float = 0.05
+    lt_reverse: bool = False               # 逆向 (含义跟 mode 联动)
 
     # RT 控制方式 — 默认垂直位移
     rt_mode: str = "vertical"
@@ -89,6 +90,7 @@ class GamepadWheelData:
     rt_vertical_pct: float = 0.5
     rt_buttons_ms: int = 100
     rt_buttons_step: float = 0.05
+    rt_reverse: bool = False
 
     def to_dict(self) -> dict:
         d = asdict(self)

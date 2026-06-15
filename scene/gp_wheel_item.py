@@ -130,6 +130,10 @@ class GpWheelItem(QGraphicsObject):
         self._active = False
         # 方向盘样式 (variant + color); overlay_window 在加载完成后会调 apply_style 覆盖
         self._style = dict(DEFAULT_WHEEL_STYLE)
+        # 编辑器预览态: 显示鼠标有效区域 (释放阈值边界) — 30% 透明蓝方块
+        # _preview_release_ratio = None 时用 data.release_threshold_ratio, 不为 None 时用预览值
+        self._show_release_zone: bool = False
+        self._preview_release_ratio: float = None
 
         # Z 序: 跟摇杆同 20 (方向盘单例, 不会与其他 gp_wheel 叠)
         self.setZValue(20)
@@ -163,10 +167,13 @@ class GpWheelItem(QGraphicsObject):
         return float(DEFAULT_GRID_SIZE)
 
     def boundingRect(self) -> QRectF:
-        """bounds = 左 LT (1 格) + 中央方形 (N 格) + 右 RT (1 格) + 释放区外扩"""
+        """bounds = 左 LT (1 格) + 中央方形 (N 格) + 右 RT (1 格) + 释放区外扩
+        编辑器预览态可能用更大的 ratio (slider 实时拖到 500%), 取 max 确保 zone 不被裁"""
         w = self.data.w
         bar_w = self._bar_width()
         ratio = max(1.0, self.data.release_threshold_ratio)
+        if self._show_release_zone and self._preview_release_ratio is not None:
+            ratio = max(ratio, self._preview_release_ratio)
         ext = (w / 2) * (ratio - 1.0) + 4
         return QRectF(-bar_w - ext, -ext,
                       w + 2 * bar_w + 2 * ext,
@@ -244,6 +251,22 @@ class GpWheelItem(QGraphicsObject):
             painter.setPen(QPen(border_color, border_w_v))
             painter.setBrush(QBrush(_FILL))
             painter.drawPath(outline_path)
+
+        # ── 鼠标有效区域预览 (编辑器勾选时) — 蓝色 30% 透明方块, 边长 = w × ratio ──
+        # 放在方向盘之前画, 让方向盘 + 外框压在上面, 不挡视觉重心
+        if self._show_release_zone:
+            ratio = (self._preview_release_ratio
+                     if self._preview_release_ratio is not None
+                     else self.data.release_threshold_ratio)
+            ratio = max(1.0, float(ratio))
+            cx_l = w / 2
+            half = (w / 2) * ratio
+            zone = QRectF(cx_l - half, cx_l - half, 2 * half, 2 * half)
+            zone_color = QColor("#3B82F6")
+            zone_color.setAlphaF(0.30)
+            painter.setPen(QPen(QColor("#3B82F6"), 2, Qt.PenStyle.DashLine))
+            painter.setBrush(QBrush(zone_color))
+            painter.drawRect(zone)
 
         # ── 方向盘 (SVG 渲染, variant + color 由设置控制, 跟随 steering 旋转) ──
         cx = w / 2
@@ -340,6 +363,18 @@ class GpWheelItem(QGraphicsObject):
         self._lt = lt
         self._rt = rt
         self._active = active
+        self.update()
+
+    def set_show_release_zone(self, flag: bool):
+        """编辑器: 是否在方向盘上叠加显示鼠标释放区域 (蓝色 30% 透明方块)"""
+        self._show_release_zone = bool(flag)
+        self.prepareGeometryChange()  # zone 可能超过当前 bounds, 通知 Qt 重算
+        self.update()
+
+    def set_preview_release_ratio(self, ratio):
+        """编辑器拖滑块时实时预览; None 表示用 data.release_threshold_ratio"""
+        self._preview_release_ratio = ratio
+        self.prepareGeometryChange()
         self.update()
 
     def apply_style(self, style: dict):

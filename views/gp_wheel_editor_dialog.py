@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLineEdit, QLabel, QSlider, QPushButton, QFrame, QWidget,
     QApplication, QRadioButton, QButtonGroup, QStackedWidget,
-    QScrollArea,
+    QScrollArea, QCheckBox,
 )
 from PyQt6.QtCore import Qt, QPoint, QSize, QByteArray, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon, QIcon, QPixmap
@@ -177,6 +177,29 @@ class _TriggerSection(QWidget):
         idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2}
         self._stack.setCurrentIndex(idx_map.get(cur_mode, 0))
 
+        # ── 逆向 checkbox (作用于当前 mode, 说明文本跟 mode 联动) ──
+        from PyQt6.QtWidgets import QCheckBox
+        lay.addSpacing(6)
+        self._reverse_cb = QCheckBox("逆向")
+        self._reverse_cb.setFont(_font(fn, 14, bold=True))
+        self._reverse_cb.setStyleSheet(f"""
+            QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
+            QCheckBox::indicator {{
+                width: 16px; height: 16px; border-radius: 3px;
+                border: 2px solid #666; background: {_C_BG};
+            }}
+            QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+            QCheckBox::indicator:checked {{
+                background: {_C_BLUE}; border: 2px solid {_C_BLUE};
+                image: url({_CHECK_ICON_URL});
+            }}
+        """)
+        self._reverse_cb.setChecked(bool(getattr(self._data, f'{self._prefix}_reverse', False)))
+        lay.addWidget(self._reverse_cb)
+        # 解释文本 (跟 mode 联动)
+        self._reverse_hint = _make_label(fn, self._reverse_hint_text(cur_mode), _C_HINT, 12)
+        lay.addWidget(self._reverse_hint)
+
     def _build_scroll_params(self, fn):
         page = QWidget(); v = QVBoxLayout(page)
         v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
@@ -237,7 +260,20 @@ class _TriggerSection(QWidget):
         idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2}
         self._stack.setCurrentIndex(idx_map.get(mode, 0))
         self._refresh_tab_styles()
+        # 同步「逆向」说明文本
+        if hasattr(self, '_reverse_hint'):
+            self._reverse_hint.setText(
+                f'<div style="line-height: 180%;">{self._reverse_hint_text(mode)}</div>')
         self.mode_changed.emit(mode)
+
+    def _reverse_hint_text(self, mode: str) -> str:
+        if mode == 'scroll':
+            return "勾选后: 向上滚动 → 扳机值减少, 向下滚动 → 扳机值增加"
+        if mode == 'vertical':
+            return "勾选后: 鼠标向上移 → 扳机值减少, 向下移 → 扳机值增加"
+        if mode == 'buttons':
+            return "勾选后: 左键 → 扳机值减少, 右键 → 扳机值增加"
+        return ""
 
     def current_mode(self) -> str:
         return self._current_mode
@@ -311,6 +347,10 @@ class _TriggerSection(QWidget):
             int(getattr(self._data, f'{self._prefix}_buttons_ms')))
         self._buttons_step_slider.setValue(
             int(getattr(self._data, f'{self._prefix}_buttons_step') * 100))
+        self._reverse_cb.setChecked(bool(getattr(self._data, f'{self._prefix}_reverse', False)))
+        if hasattr(self, '_reverse_hint'):
+            self._reverse_hint.setText(
+                f'<div style="line-height: 180%;">{self._reverse_hint_text(cur_mode)}</div>')
         self._refresh_tab_styles()
 
     def apply_to_data(self):
@@ -323,6 +363,7 @@ class _TriggerSection(QWidget):
                 int(self._buttons_ms_slider.value()))
         setattr(self._data, f'{self._prefix}_buttons_step',
                 self._buttons_step_slider.value() / 100.0)
+        setattr(self._data, f'{self._prefix}_reverse', self._reverse_cb.isChecked())
 
 
 def _make_label(fn, text, color, px):
@@ -519,12 +560,35 @@ class GpWheelEditorDialog(QDialog):
         sc.addWidget(sec1)
         sc.addSpacing(10)
 
-        # 释放阈值
+        # 释放阈值 (head row 内插一个「显示鼠标有效区域」checkbox)
         head, self._release_slider, _ = _make_value_slider(
             fn, t("gp_wheel_editor.release_threshold"),
             init=int(self.data.release_threshold_ratio * 100),
-            min_v=110, max_v=300, default_v=_DEFAULT_RELEASE_PCT, suffix='%',
+            min_v=110, max_v=500, default_v=_DEFAULT_RELEASE_PCT, suffix='%',
         )
+        # 在 head 的标签后面 (index=1, 即 stretch 之前) 插入 checkbox
+        self._show_zone_cb = QCheckBox("显示鼠标有效区域")
+        self._show_zone_cb.setFont(_font(fn, 13))
+        self._show_zone_cb.setStyleSheet(f"""
+            QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
+            QCheckBox::indicator {{
+                width: 16px; height: 16px; border-radius: 3px;
+                border: 2px solid #666; background: {_C_BG};
+            }}
+            QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+            QCheckBox::indicator:checked {{
+                background: {_C_BLUE}; border: 2px solid {_C_BLUE};
+                image: url({_CHECK_ICON_URL});
+            }}
+        """)
+        self._show_zone_cb.setChecked(False)
+        self._show_zone_cb.toggled.connect(self._on_show_zone_toggled)
+        head.insertSpacing(1, 16)
+        head.insertWidget(2, self._show_zone_cb)
+
+        # slider 拖动 → 预览 zone 大小实时变 (前提是 checkbox 已勾)
+        self._release_slider.valueChanged.connect(self._on_release_slider_changed)
+
         sc.addLayout(head)
         sc.addWidget(self._release_slider)
         sc.addSpacing(6)
@@ -702,6 +766,36 @@ class GpWheelEditorDialog(QDialog):
         self._apply_to_data()
         self.saved.emit(self._item)
         self.accept()
+
+    # ── 释放阈值预览 (鼠标有效区域显示) ──
+
+    def _on_show_zone_toggled(self, checked: bool):
+        if hasattr(self._item, 'set_show_release_zone'):
+            self._item.set_show_release_zone(checked)
+            if checked and hasattr(self._item, 'set_preview_release_ratio'):
+                self._item.set_preview_release_ratio(self._release_slider.value() / 100.0)
+            elif hasattr(self._item, 'set_preview_release_ratio'):
+                self._item.set_preview_release_ratio(None)
+
+    def _on_release_slider_changed(self, value: int):
+        # checkbox 勾上时才需要实时刷预览; 否则只更新值标签 (_make_value_slider 已处理)
+        if (self._show_zone_cb.isChecked()
+                and hasattr(self._item, 'set_preview_release_ratio')):
+            self._item.set_preview_release_ratio(value / 100.0)
+
+    def _cleanup_preview(self):
+        if hasattr(self._item, 'set_show_release_zone'):
+            self._item.set_show_release_zone(False)
+        if hasattr(self._item, 'set_preview_release_ratio'):
+            self._item.set_preview_release_ratio(None)
+
+    def accept(self):
+        self._cleanup_preview()
+        super().accept()
+
+    def reject(self):
+        self._cleanup_preview()
+        super().reject()
 
     def _apply_to_data(self):
         self.data.release_threshold_ratio = self._release_slider.value() / 100.0

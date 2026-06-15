@@ -106,9 +106,9 @@ BTN_TYPE_GP_BUTTON = "gp_button"     # 手柄键 (A/B/X/Y/LB/RB/Start/Back/D-pad
 BTN_TYPE_GP_STICK = "gp_stick"       # 摇杆 (圆形, 模拟左/右摇杆)
 BTN_TYPE_GP_WHEEL = "gp_wheel"       # 方向盘 (方形 N×N, 左右浮挂 1×N 的 LT/RT 视觉条)
 
-# 方向盘默认尺寸 (方形, 默认 2×2 grid @ 100px = 200×200; 可缩放)
-GP_WHEEL_DEFAULT_W = 200
-GP_WHEEL_DEFAULT_H = 200
+# 方向盘默认尺寸 (方形, 默认 3×3 grid @ 100px = 300×300; 最小 2×2, 可缩放)
+GP_WHEEL_DEFAULT_W = 300
+GP_WHEEL_DEFAULT_H = 300
 
 # 摇杆 / 扳机标识
 STICK_ID_LEFT = "L"

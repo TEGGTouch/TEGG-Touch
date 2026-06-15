@@ -981,19 +981,24 @@ class RunController(QObject):
 
         for prefix, val_attr in (('lt', '_wheel_lt'), ('rt', '_wheel_rt')):
             mode = getattr(wheel.data, f'{prefix}_mode')
+            reverse = bool(getattr(wheel.data, f'{prefix}_reverse', False))
             cur = getattr(self, val_attr)
             if mode == 'vertical':
                 # 0→1 所需 Y 位移 = 方向盘高度 × pct (方向盘是方形, w == h)
+                # reverse: 上→减, 下→加 (默认是 上→加, 下→减)
                 pct = max(0.05, min(0.95, getattr(wheel.data, f'{prefix}_vertical_pct')))
                 px_per = max(1.0, wheel.data.w * pct)
-                cur = max(0.0, min(1.0, cur + (-dy) / px_per))
+                sign = 1.0 if reverse else -1.0
+                cur = max(0.0, min(1.0, cur + sign * dy / px_per))
             elif mode == 'buttons':
+                # reverse: 互换 LMB / RMB 含义
                 ms = max(1, getattr(wheel.data, f'{prefix}_buttons_ms'))
                 step = getattr(wheel.data, f'{prefix}_buttons_step')
                 rate = step / ms  # value per ms
-                if lmb:
+                add_btn, sub_btn = (rmb, lmb) if reverse else (lmb, rmb)
+                if add_btn:
                     cur = min(1.0, cur + rate * dt_ms)
-                if rmb:
+                if sub_btn:
                     cur = max(0.0, cur - rate * dt_ms)
             # scroll 模式: 由 _dispatch_wheel 处理, 此处不动
             setattr(self, val_attr, cur)
@@ -1018,8 +1023,13 @@ class RunController(QObject):
             if getattr(wheel.data, f'{prefix}_mode') != 'scroll':
                 continue
             step = getattr(wheel.data, f'{prefix}_scroll_step')
+            reverse = bool(getattr(wheel.data, f'{prefix}_reverse', False))
             cur = getattr(self, val_attr)
-            if direction == 'up':
+            # 默认: 上→加, 下→减; reverse: 上→减, 下→加
+            effective_up = (direction == 'up')
+            if reverse:
+                effective_up = not effective_up
+            if effective_up:
                 cur = min(1.0, cur + step)
             else:
                 cur = max(0.0, cur - step)
