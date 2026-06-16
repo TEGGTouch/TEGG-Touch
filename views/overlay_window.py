@@ -536,6 +536,10 @@ class OverlayWindow(QGraphicsView):
                 if not ok:
                     self._persist_sim_mode_flags()
                     return
+                # 安装/检测期间 app 进程一直跑, 之前 import 失败的缓存要清掉
+                # 否则 GamepadEngine.get() 直接返回 None, 用户得重启 app 才能用
+                from engine.gamepad_engine import retry_import
+                retry_import()
             else:
                 self._gamepad_install_seen = True
         # 应用并持久化

@@ -512,6 +512,15 @@ class RunController(QObject):
             key = stick.data.wheelup if direction == 'up' else stick.data.wheeldown
             if key:
                 self._smart_trigger(key, 'click')
+                # hub 视觉闪一下 ~200ms (跟方向盘对齐: 小球变 ACTION_COLORS 配色 + 显示键文本)
+                # _poll_stick_mouse_actions 末尾不会清滚轮类状态, 由这里的 QTimer 自己清
+                if hasattr(stick, 'set_pressed_action'):
+                    from scene.gp_stick_item import _gp_display
+                    field = 'wheelup' if direction == 'up' else 'wheeldown'
+                    stick.set_pressed_action(field, _gp_display(key))
+                    QTimer.singleShot(200, lambda s=stick, f=field:
+                        s.set_pressed_action(None, '') if _is_alive(s) and
+                        getattr(s, '_pressed_action', None) == f else None)
             return
         try:
             global_pos = QPoint(abs_x, abs_y)
@@ -617,9 +626,16 @@ class RunController(QObject):
     # ── 宏感知的智能触发 ──
 
     def _smart_trigger(self, key_str: str, action: str):
-        """解析 key_str, 分离普通键、mouse:xxx / macro:name / gp:LABEL 标签, 分别执行"""
+        """解析 key_str, 分离普通键、mouse:xxx / macro:name / gp:LABEL 标签, 分别执行
+
+        action 归一化: touch_button_item / wheel_sector_item / wheel_ring_item 的滚轮
+        信号 emit 'c' (跟 input_engine.trigger 一致), 但本函数内部 + 手柄分支用 'click'。
+        历史上 'c' 进来后手柄分支三路 (p/r/click) 全 miss → 手柄按键 (含 LT/RT) 静默丢弃。
+        """
         if not key_str:
             return
+        if action == 'c':
+            action = 'click'
         parts = [p.strip() for p in key_str.split('+')]
         normal_keys = []
         macro_names = []
@@ -643,9 +659,9 @@ class RunController(QObject):
             else:
                 normal_keys.append(p)
 
-        # 普通键照常触发
+        # 普通键照常触发 — input_engine.trigger 用 'c' 表 click
         if normal_keys:
-            trigger('+'.join(normal_keys), action)
+            trigger('+'.join(normal_keys), 'c' if action == 'click' else action)
 
         # 鼠标按钮: press → mouse_press, release → mouse_release
         for mb in mouse_buttons:
@@ -826,7 +842,11 @@ class RunController(QObject):
         elif self._prev_mmb and stick.data.mclick:
             stick.set_pressed_action('mclick', _gp_display(stick.data.mclick))
         else:
-            stick.set_pressed_action(None, '')
+            # 只清按钮类 (lclick/rclick/mclick); 滚轮类 (wheelup/wheeldown) 由
+            # _dispatch_wheel 的 QTimer 自己清, 否则刚 set 的滚轮闪烁立刻被本帧覆盖。
+            cur = getattr(stick, '_pressed_action', None)
+            if cur in ('lclick', 'rclick', 'mclick'):
+                stick.set_pressed_action(None, '')
 
     def _update_stick_value(self, stick, scene_pos, sticking: bool):
         """根据 cursor 位置算 stick 值 (含死区/曲线/八向锁) + 更新视觉 + 引擎
@@ -1158,19 +1178,19 @@ class RunController(QObject):
         self._wheel_x1_was_down = x1
         self._wheel_x2_was_down = x2
 
-        # 鼠标动作叠加: 持有中的鼠标键如果映射了 gp:LT / gp:RT, 当前应为 1.0
-        # 跟 wheel 自己的 LT/RT 取 max → 互不影响进度条 (wheel 进度条只显示 _wheel_lt/_rt)
+        # 鼠标动作叠加: 持有中的任意鼠标键 (含滚轮 pulse) 若映射了 gp:LT / gp:RT,
+        # 当前 override 应为 1.0; 跟 wheel 自己的 LT/RT 取 max → 互不影响进度条
+        # (wheel 进度条只显示 _wheel_lt/_rt)。
+        # 遍历 .values() 而非硬编码字段名 — 让 wheelup/wheeldown 滚轮 pulse 也自动生效。
         override_lt = 0.0
         override_rt = 0.0
-        for field in ('lclick', 'rclick', 'mclick', 'xbutton1', 'xbutton2'):
-            if field in self._wheel_mouse_holding:
-                key = self._wheel_mouse_holding[field]
-                for p in key.split('+'):
-                    p = p.strip()
-                    if p == f'{GP_KEY_PREFIX}LT':
-                        override_lt = 1.0
-                    elif p == f'{GP_KEY_PREFIX}RT':
-                        override_rt = 1.0
+        for key in self._wheel_mouse_holding.values():
+            for p in key.split('+'):
+                p = p.strip()
+                if p == f'{GP_KEY_PREFIX}LT':
+                    override_lt = 1.0
+                elif p == f'{GP_KEY_PREFIX}RT':
+                    override_rt = 1.0
         final_lt = max(self._wheel_lt, override_lt)
         final_rt = max(self._wheel_rt, override_rt)
 
@@ -1226,6 +1246,13 @@ class RunController(QObject):
         if key_str:
             # 滚轮事件 = 一次性 click; _smart_trigger 内 click 对 gp 走延迟 release
             self._smart_trigger(key_str, 'click')
+            # 配 gp:LT/RT 时, _smart_trigger 的 50ms 延迟 release 在 _poll_gp_wheel
+            # 每帧 set_trigger 覆盖下根本撑不过 1 帧 (~16ms 就被刷成 0)。
+            # 把滚轮也加入 _wheel_mouse_holding ~120ms, 让 _update_wheel_triggers 的
+            # override_lt/rt 机制持续生效, 游戏端 60Hz polling 至少能采到 6+ 帧 = 100ms
+            # 的扳机按下信号。120ms = 看得到但不至于卡很久。
+            self._wheel_mouse_holding[field] = key_str
+            QTimer.singleShot(120, lambda f=field: self._wheel_mouse_holding.pop(f, None))
             # hub 视觉闪一下 ~200ms (scroll 是瞬时事件没有 hold)
             if hasattr(wheel, 'set_pressed_action'):
                 from scene.gp_stick_item import _gp_display

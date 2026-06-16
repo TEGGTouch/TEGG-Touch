@@ -8,26 +8,62 @@ TEGG Touch 蛋挞 — 手柄引擎: VX360Gamepad 封装 + 帧聚合
 - 进程单例: 整个 app 只创建 1 个虚拟手柄设备
 - LT/RT 在 gp_button 编辑器里可作为「按钮」使用 (press = 1.0, release = 0.0),
   路由到 set_trigger api, 因为 XUSB_BUTTON 枚举中 LT/RT 不是 button 而是 trigger
+
+vgamepad 惰性导入:
+- vgamepad 的 __init__.py 顶层执行 VBus() → vigem_connect, ViGEmBus 驱动
+  未装时会抛 VIGEM_ERROR_BUS_NOT_FOUND (普通 Exception, 不是 ImportError)。
+- 模块顶层 import 会让整个 app 启动崩溃,所以这里改成惰性 — 只在切到
+  手柄模式 / 实际 get() 时才尝试。
+- retry_import() 供安装对话框成功后调用,让用户装完驱动不用重启 app。
 """
 
 import atexit
 import logging
+import sys
 import threading
 
 logger = logging.getLogger(__name__)
 
-try:
-    import vgamepad as vg
-    _VG_AVAILABLE = True
-except ImportError:
-    vg = None
-    _VG_AVAILABLE = False
+# 惰性导入状态: _vg 是成功导入的模块缓存; _vg_attempted 是失败缓存避免每帧重试
+_vg = None
+_vg_attempted = False
 
 
-def _build_button_map() -> dict:
+def _try_import_vgamepad(force_retry: bool = False):
+    """惰性 import vgamepad; 成功返回模块, 失败返回 None。
+
+    首次失败后会缓存(避免每帧重跑 ctypes 调用), 除非 force_retry=True。
+    安装对话框装完驱动后应调 retry_import() 强制重试。
+    """
+    global _vg, _vg_attempted
+    if _vg is not None:
+        return _vg
+    if _vg_attempted and not force_retry:
+        return None
+    _vg_attempted = True
+    # 清掉上次 partial import 残留 (vgamepad/__init__.py 抛异常时
+    # submodule 可能已进 sys.modules, 不清会污染重试)
+    for k in list(sys.modules.keys()):
+        if k == 'vgamepad' or k.startswith('vgamepad.'):
+            del sys.modules[k]
+    try:
+        import vgamepad as vg
+        _vg = vg
+        logger.info("vgamepad 已加载 (ViGEmBus 驱动可用)")
+        return vg
+    except Exception as e:
+        logger.debug(f"vgamepad import 失败 (ViGEmBus 驱动未装/未加载?): {e}")
+        return None
+
+
+def retry_import():
+    """安装对话框装完驱动后调用 — 强制重试 import 并清 GamepadEngine 失败标记。"""
+    _try_import_vgamepad(force_retry=True)
+    GamepadEngine.reset_init_failed()
+
+
+def _build_button_map(vg) -> dict:
     """标签 → XUSB_BUTTON 枚举 (LT/RT 走 trigger, 不在此 map)"""
-    if not _VG_AVAILABLE:
-        return {}
     e = vg.XUSB_BUTTON
     return {
         "A": e.XUSB_GAMEPAD_A,
@@ -58,21 +94,32 @@ class GamepadEngine:
     @classmethod
     def get(cls) -> 'GamepadEngine | None':
         """获取单例; 若 vgamepad 缺失或 ViGEmBus 未加载返回 None"""
-        if not _VG_AVAILABLE or cls._init_failed:
+        if cls._init_failed:
+            return None
+        vg = _try_import_vgamepad()
+        if vg is None:
             return None
         with cls._lock:
             if cls._instance is None:
                 try:
-                    cls._instance = cls()
+                    cls._instance = cls(vg)
                 except Exception as e:
                     logger.error(f"GamepadEngine 初始化失败 (ViGEmBus 未加载?): {e}")
                     cls._init_failed = True
                     return None
             return cls._instance
 
-    def __init__(self):
+    @classmethod
+    def reset_init_failed(cls):
+        """清掉「初始化失败」缓存 — 安装驱动后调用, 让下次 get() 重试。"""
+        with cls._lock:
+            if cls._init_failed:
+                logger.info("GamepadEngine 失败缓存已清, 下次 get() 将重试")
+            cls._init_failed = False
+
+    def __init__(self, vg):
         self._pad = vg.VX360Gamepad()
-        self._button_map = _build_button_map()
+        self._button_map = _build_button_map(vg)
         self._pressed_buttons: set[str] = set()
         self._lstick = (0.0, 0.0)
         self._rstick = (0.0, 0.0)
@@ -186,8 +233,8 @@ class GamepadEngine:
 
 
 def is_lib_available() -> bool:
-    """vgamepad lib 是否已 import (不代表 ViGEmBus 驱动 OK)"""
-    return _VG_AVAILABLE
+    """vgamepad lib + 驱动是否可用 (惰性 import, 失败有缓存)"""
+    return _try_import_vgamepad() is not None
 
 
 # 进程正常退出时自动清理虚拟手柄设备 (防止 ViGEmBus bus 累积 ghost 设备)
