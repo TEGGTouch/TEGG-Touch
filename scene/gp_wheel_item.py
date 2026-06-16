@@ -20,7 +20,7 @@ from PyQt6.QtSvg import QSvgRenderer
 from core.constants import (
     DEFAULT_GRID_SIZE, BTN_MARGIN, APP_DIR,
     COLOR_GP_BTN_BG, COLOR_GP_BTN_BORDER, COLOR_GP_BTN_TEXT,
-    DEFAULT_WHEEL_STYLE,
+    DEFAULT_WHEEL_STYLE, ACTION_COLORS,
 )
 from core.i18n import get_font
 from models.gamepad_model import GamepadWheelData
@@ -134,6 +134,15 @@ class GpWheelItem(QGraphicsObject):
         # _preview_release_ratio = None 时用 data.release_threshold_ratio, 不为 None 时用预览值
         self._show_release_zone: bool = False
         self._preview_release_ratio: float = None
+        # marker 模式浮标位置 (0~1), None 表示该侧不画浮标
+        self._lt_marker: float = None
+        self._rt_marker: float = None
+        # 鼠标动作按下视觉: 中心 hub 变色 + 显示键文本 (跟 gp_stick 同套语义)
+        self._pressed_action: str = None       # 'lclick' | 'rclick' | ...
+        self._pressed_key_display: str = ''
+        # 死区预览 (玫红色, 编辑器勾选才显示)
+        self._show_dead_zone: bool = False
+        self._preview_dead_zone: float = None
 
         # Z 序: 跟摇杆同 20 (方向盘单例, 不会与其他 gp_wheel 叠)
         self.setZValue(20)
@@ -221,13 +230,15 @@ class GpWheelItem(QGraphicsObject):
         is_edit = (self._mode == 'edit')
         border_color = _BORDER_ACTIVE if self._active else _BORDER_IDLE
 
-        # ── LT 视觉条 (左, 浮挂在方形外, 1 格宽) ──
+        # ── LT 视觉条 (左, 浮挂在方形外, 1 格宽); marker 玫瑰红 ──
         lt_rect = QRectF(-bar_w + 6, 6, bar_w - 12, w - 12)
-        self._paint_trigger_bar(painter, lt_rect, self._lt, "LT")
+        self._paint_trigger_bar(painter, lt_rect, self._lt, "LT",
+                                marker=self._lt_marker, marker_color="#F43F5E")
 
-        # ── RT 视觉条 (右, 浮挂在方形外, 1 格宽) ──
+        # ── RT 视觉条 (右, 浮挂在方形外, 1 格宽); marker 琥珀黄 ──
         rt_rect = QRectF(w + 6, 6, bar_w - 12, w - 12)
-        self._paint_trigger_bar(painter, rt_rect, self._rt, "RT")
+        self._paint_trigger_bar(painter, rt_rect, self._rt, "RT",
+                                marker=self._rt_marker, marker_color="#F59E0B")
 
         # ── 中央方形 (编辑模式才描边/填底; 运行模式只有方向盘图) ──
         # 右下角为直角 (匹配缩放手柄三角形); 其他三角圆角
@@ -251,6 +262,33 @@ class GpWheelItem(QGraphicsObject):
             painter.setPen(QPen(border_color, border_w_v))
             painter.setBrush(QBrush(_FILL))
             painter.drawPath(outline_path)
+
+            # 中心死区: 编辑器勾选「显示死区」后才画 — 玫红色双竖线 + 50% 半透明填充
+            if self._show_dead_zone:
+                dz = (self._preview_dead_zone
+                      if self._preview_dead_zone is not None
+                      else getattr(self.data, 'dead_zone', 0.0))
+                dz = max(0.0, min(0.95, float(dz)))
+                if dz > 0:
+                    cx_l = w / 2
+                    dz_x = (w / 2) * dz
+                    top_y = BTN_MARGIN + 4
+                    bot_y = w - BTN_MARGIN - 4
+                    rose_fill = QColor("#F43F5E")
+                    rose_fill.setAlphaF(0.5)
+                    rose_line = QColor("#F43F5E")
+                    # 内部 50% 半透明填充
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QBrush(rose_fill))
+                    painter.drawRect(QRectF(cx_l - dz_x, top_y,
+                                            2 * dz_x, bot_y - top_y))
+                    # 两侧虚线 (玫红 2px)
+                    painter.setPen(QPen(rose_line, 2, Qt.PenStyle.DashLine))
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawLine(QPointF(cx_l - dz_x, top_y),
+                                     QPointF(cx_l - dz_x, bot_y))
+                    painter.drawLine(QPointF(cx_l + dz_x, top_y),
+                                     QPointF(cx_l + dz_x, bot_y))
 
         # ── 鼠标有效区域预览 (编辑器勾选时) — 蓝色 30% 透明方块, 边长 = w × ratio ──
         # 放在方向盘之前画, 让方向盘 + 外框压在上面, 不挡视觉重心
@@ -300,6 +338,27 @@ class GpWheelItem(QGraphicsObject):
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawEllipse(QPointF(cx, cy), r - 4, r - 4)
 
+        # ── 鼠标动作按下视觉: 方向盘中心 hub 实底着色 + 键文本 ──
+        if self._pressed_action and r > 0:
+            hub_r = r * 0.22
+            hub_color = QColor(ACTION_COLORS.get(self._pressed_action, "#F59E0B"))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(hub_color))
+            painter.drawEllipse(QPointF(cx, cy), hub_r, hub_r)
+            if self._pressed_key_display:
+                # 键文本 — 居中显示在 hub 内, 文本太长则上方溢出
+                fn = get_font()
+                f = QFont(fn)
+                f.setPixelSize(max(11, int(hub_r * 0.45)))
+                f.setWeight(QFont.Weight.Bold)
+                painter.setFont(f)
+                # 白字, 黑色 luminance 用 ACTION_COLORS 决定 (大多是深色 → 用白字)
+                painter.setPen(QColor("#FFFFFF"))
+                tw = max(hub_r * 2, 80.0)
+                text_rect = QRectF(cx - tw / 2, cy - 10, tw, 20)
+                painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter,
+                                 self._pressed_key_display)
+
         # ── 名称 (编辑模式) ──
         if is_edit and self.data.name:
             fn = get_font()
@@ -312,8 +371,10 @@ class GpWheelItem(QGraphicsObject):
                 Qt.AlignmentFlag.AlignCenter, self.data.name)
 
     def _paint_trigger_bar(self, painter: QPainter, rect: QRectF,
-                           value: float, label: str):
-        """绘制单个 LT / RT 进度条 (底部往上填充)"""
+                           value: float, label: str,
+                           marker: float = None, marker_color: str = None):
+        """绘制单个 LT / RT 进度条 (底部往上填充)
+        marker: 浮标位置 0~1, None 不画; marker_color: 浮标线颜色 (hex)"""
         # 背景
         painter.setPen(QPen(_BORDER_IDLE, 1))
         painter.setBrush(QBrush(_PROGRESS_BG))
@@ -330,6 +391,15 @@ class GpWheelItem(QGraphicsObject):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(color))
             painter.drawRoundedRect(fill_rect, 6, 6)
+
+        # 浮标线 (marker 模式专用): 4px 横线, 位置 = 0(底) ~ 1(顶)
+        if marker is not None and marker_color:
+            m = max(0.0, min(1.0, float(marker)))
+            m_y = rect.bottom() - m * rect.height()
+            painter.setPen(QPen(QColor(marker_color), 4, Qt.PenStyle.SolidLine,
+                                Qt.PenCapStyle.FlatCap))
+            painter.drawLine(QPointF(rect.x() + 2, m_y),
+                             QPointF(rect.right() - 2, m_y))
 
         # 标签 (顶部) + 当前值 (底部)
         fn = get_font()
@@ -365,6 +435,24 @@ class GpWheelItem(QGraphicsObject):
         self._active = active
         self.update()
 
+    def set_pressed_action(self, action: str, key_display: str = ''):
+        """RunController: 鼠标动作触发时调; action ∈ {lclick/rclick/...} | None;
+        None = 清除按下视觉 (中心 hub 恢复); 否则按 ACTION_COLORS 着色 + 显示键文本"""
+        if action == self._pressed_action and key_display == self._pressed_key_display:
+            return
+        self._pressed_action = action
+        self._pressed_key_display = key_display or ''
+        self.update()
+
+    def set_markers(self, lt: float, rt: float):
+        """run controller 推: marker 浮标位置 (0~1, None 隐藏)
+        LT 浮标 = 玫瑰红, RT 浮标 = 琥珀黄"""
+        if lt == self._lt_marker and rt == self._rt_marker:
+            return
+        self._lt_marker = lt
+        self._rt_marker = rt
+        self.update()
+
     def set_show_release_zone(self, flag: bool):
         """编辑器: 是否在方向盘上叠加显示鼠标释放区域 (蓝色 30% 透明方块)"""
         self._show_release_zone = bool(flag)
@@ -375,6 +463,16 @@ class GpWheelItem(QGraphicsObject):
         """编辑器拖滑块时实时预览; None 表示用 data.release_threshold_ratio"""
         self._preview_release_ratio = ratio
         self.prepareGeometryChange()
+        self.update()
+
+    def set_show_dead_zone(self, flag: bool):
+        """编辑器: 是否在方向盘上叠加显示死区 (玫红线 + 50% 半透明填充)"""
+        self._show_dead_zone = bool(flag)
+        self.update()
+
+    def set_preview_dead_zone(self, pct):
+        """编辑器拖滑块时实时预览死区宽度; None 表示用 data.dead_zone"""
+        self._preview_dead_zone = pct
         self.update()
 
     def apply_style(self, style: dict):
@@ -405,6 +503,10 @@ class GpWheelItem(QGraphicsObject):
         self._lt = 0.0
         self._rt = 0.0
         self._active = False
+        self._lt_marker = None
+        self._rt_marker = None
+        self._pressed_action = None
+        self._pressed_key_display = ''
         self.update()
 
     # ── 编辑交互 ──
@@ -447,6 +549,7 @@ class GpWheelItem(QGraphicsObject):
         mode_label = {'scroll': '滚轮', 'vertical': '垂直位移', 'buttons': '左右键'}
         lines = ["方向盘"]
         lines.append(f"释放阈值: {int(self.data.release_threshold_ratio * 100)}% 半宽")
+        lines.append(f"中心死区: {int(getattr(self.data, 'dead_zone', 0.10) * 100)}%")
         lines.append(f"灵敏度: {'平方' if self.data.sensitivity_curve == 'square' else '线性'}")
         lines.append(f"视觉旋转: ±{int(getattr(self.data, 'max_rotation_deg', 180))}°")
         lines.append("")

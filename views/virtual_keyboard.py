@@ -276,11 +276,14 @@ class VirtualKeyboard(QWidget):
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             bg = C_KEY_MOD if is_mod else C_KEY
 
-            # 字体: 长标签用小字
+            # 字体: 长标签 (功能键 Esc/Shift/Enter...) 小字; 单字符灰键加大撑满方格
             if len(label) > 3:
                 btn.setFont(_make_font("Consolas", 12, bold=True))
-            else:
+            elif is_mod:
                 btn.setFont(_make_font("Consolas", 15, bold=True))
+            else:
+                # 单字符 + 非 mod (字母/数字/符号) → 24px 撑满 ~42px 方格
+                btn.setFont(_make_font("Consolas", 24, bold=True))
 
             btn.setGeometry(kx, ky, kw, kh)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)

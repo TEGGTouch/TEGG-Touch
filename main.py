@@ -104,6 +104,10 @@ def main():
         if os.path.exists(_icon_path):
             app.setWindowIcon(QIcon(_icon_path))
 
+        # 全局给所有 QDialog 装外发光阴影 (自动识别 *_container 命名)
+        from core.shadow_helper import install_global_dialog_shadow
+        install_global_dialog_shadow(app)
+
         window = OverlayWindow()
         window.show()
 

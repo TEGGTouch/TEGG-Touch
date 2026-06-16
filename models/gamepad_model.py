@@ -75,22 +75,37 @@ class GamepadWheelData:
     release_threshold_ratio: float = 2.0   # 鼠标距矩形中心 > w/2×ratio → 全部释放 (默认 200%, UI 110%~300%)
     sensitivity_curve: str = "linear"      # 'linear' | 'square'
     max_rotation_deg: float = 180.0        # steering = ±1.0 时方向盘视觉旋转角度 (单边); UI 离散 90/180/270/360/720
+    dead_zone: float = 0.10                # 中心死区 (X 轴): |val| < dz → steering=0; dz~1 重映射成 0~1
 
-    # LT 控制方式 — 默认左右键 (LMB 加 / RMB 减)
-    lt_mode: str = "buttons"               # 'scroll' | 'vertical' | 'buttons'
+    # LT 控制方式 — 默认浮标点击 (左键锁定)
+    lt_mode: str = "marker"                # 'scroll' | 'vertical' | 'buttons' | 'marker'
     lt_scroll_step: float = 0.05
     lt_vertical_pct: float = 0.5           # 0→1 所需 Y 位移 = 方向盘高度 × pct (默认 50%, 上限 80%)
     lt_buttons_ms: int = 100
     lt_buttons_step: float = 0.05
+    lt_marker_pct: float = 0.5             # marker 模式: 同 vertical 含义
+    lt_marker_button: str = "L"            # marker 模式: 用哪个鼠标键锁定 ('L' | 'R')
     lt_reverse: bool = False               # 逆向 (含义跟 mode 联动)
 
-    # RT 控制方式 — 默认垂直位移
-    rt_mode: str = "vertical"
+    # RT 控制方式 — 默认浮标点击 (右键锁定)
+    rt_mode: str = "marker"
     rt_scroll_step: float = 0.05
     rt_vertical_pct: float = 0.5
     rt_buttons_ms: int = 100
     rt_buttons_step: float = 0.05
+    rt_marker_pct: float = 0.5
+    rt_marker_button: str = "R"
     rt_reverse: bool = False
+
+    # 其他鼠标按键: wheel active 时, 未被 LT/RT 占用的鼠标键触发对应映射
+    # 优先级低于 LT/RT (buttons 模式占左右键; marker 占其中一个; scroll 占滚轮)
+    mouse_lclick: str = ""
+    mouse_rclick: str = ""
+    mouse_mclick: str = ""
+    mouse_xbutton1: str = ""
+    mouse_xbutton2: str = ""
+    mouse_wheelup: str = ""
+    mouse_wheeldown: str = ""
 
     def to_dict(self) -> dict:
         d = asdict(self)

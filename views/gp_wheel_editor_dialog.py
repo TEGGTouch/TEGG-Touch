@@ -38,6 +38,11 @@ _C_ERROR = "#E11D48"
 
 _CHECK_ICON_URL = os.path.join(APP_DIR, "assets", "check.svg").replace("\\", "/")
 _RADIO_DOT_URL = os.path.join(APP_DIR, "assets", "radio_dot.svg").replace("\\", "/")
+_RADIO_DOT_ROSE_URL = os.path.join(APP_DIR, "assets", "radio_dot_rose.svg").replace("\\", "/")
+_RADIO_DOT_AMBER_URL = os.path.join(APP_DIR, "assets", "radio_dot_amber.svg").replace("\\", "/")
+# marker 模式: LT = 玫瑰红, RT = 琥珀黄 (跟方向盘上的浮标横线同色)
+_MARKER_COLOR_LT = "#F43F5E"
+_MARKER_COLOR_RT = "#F59E0B"
 
 # check.svg 是固定白色; 这里按颜色生成对应 QIcon 并缓存 (color hex → QIcon)
 _CHECK_ICON_CACHE: dict = {}
@@ -119,7 +124,8 @@ class _DefaultMarkedSlider(QSlider):
 class _TriggerSection(QWidget):
     """LT 或 RT 一个完整 section: mode radio + 3 个 mode 的参数 (QStackedWidget)"""
 
-    mode_changed = pyqtSignal(str)   # 'scroll' | 'vertical' | 'buttons'
+    mode_changed = pyqtSignal(str)              # 'scroll' | 'vertical' | 'buttons' | 'marker'
+    marker_button_changed = pyqtSignal(str)     # 'L' | 'R' — 用户改了 marker 模式的 click 键
 
     def __init__(self, title: str, data, prefix: str, parent=None):
         """prefix: 'lt' or 'rt' — 用于读 data 的 lt_scroll_step / rt_vertical_px 等字段"""
@@ -147,12 +153,13 @@ class _TriggerSection(QWidget):
         self._mode_btns: dict = {}
         self._disabled_reasons: dict = {}
         mode_info = [
+            ('marker', '浮标点击'),                        # 默认模式, 放最左
             ('scroll', t("gp_wheel_editor.mode_scroll")),
             ('vertical', t("gp_wheel_editor.mode_vertical")),
             ('buttons', t("gp_wheel_editor.mode_buttons")),
         ]
         cur_mode = getattr(self._data, f'{self._prefix}_mode', 'scroll')
-        if cur_mode not in ('scroll', 'vertical', 'buttons'):
+        if cur_mode not in ('scroll', 'vertical', 'buttons', 'marker'):
             cur_mode = 'scroll'
         self._current_mode = cur_mode
         for key, label in mode_info:
@@ -172,9 +179,10 @@ class _TriggerSection(QWidget):
         self._stack.addWidget(self._build_scroll_params(fn))
         self._stack.addWidget(self._build_vertical_params(fn))
         self._stack.addWidget(self._build_buttons_params(fn))
+        self._stack.addWidget(self._build_marker_params(fn))
         lay.addWidget(self._stack)
 
-        idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2}
+        idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2, 'marker': 3}
         self._stack.setCurrentIndex(idx_map.get(cur_mode, 0))
 
         # ── 逆向 checkbox (作用于当前 mode, 说明文本跟 mode 联动) ──
@@ -251,13 +259,88 @@ class _TriggerSection(QWidget):
         v.addLayout(head_step); v.addWidget(slider_step)
         return page
 
+    def _build_marker_params(self, fn):
+        page = QWidget(); v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
+        marker_color = "玫瑰红" if self._prefix == 'lt' else "琥珀黄"
+        v.addWidget(_make_label(
+            fn,
+            f"鼠标上下移动 {marker_color} 浮标 (不直接改扳机值), 按下下方所选鼠标键 → 扳机值锁定到浮标当前位置。位移单位是方向盘高度的百分比。",
+            _C_HINT, 12))
+        # 同 vertical 的 pct slider
+        head, slider, _ = _make_value_slider(
+            fn, "0→100% 所需位移",
+            init=int(round(getattr(self._data, f'{self._prefix}_marker_pct', 0.5) * 100)),
+            min_v=10, max_v=80, default_v=50, suffix='%',
+        )
+        self._marker_pct_slider = slider
+        v.addLayout(head); v.addWidget(slider)
+        # click 键 radio (L / R) — 选中态用 marker 色 (LT 玫红 / RT 琥珀黄)
+        v.addSpacing(4)
+        v.addWidget(_make_field_label(fn, "锁定按键"))
+        btn_row = QHBoxLayout()
+        self._marker_btn_group = QButtonGroup(self)
+        self._rb_marker_l = self._make_marker_radio(fn, "左键")
+        self._rb_marker_r = self._make_marker_radio(fn, "右键")
+        self._marker_btn_group.addButton(self._rb_marker_l)
+        self._marker_btn_group.addButton(self._rb_marker_r)
+        cur_btn = getattr(self._data, f'{self._prefix}_marker_button', 'L')
+        (self._rb_marker_r if cur_btn == 'R' else self._rb_marker_l).setChecked(True)
+        # 用户主动改 radio 时 emit (会触发 Dialog 联动另一侧自动翻转)
+        self._rb_marker_l.toggled.connect(self._on_marker_btn_toggled)
+        self._rb_marker_r.toggled.connect(self._on_marker_btn_toggled)
+        btn_row.addWidget(self._rb_marker_l); btn_row.addSpacing(20)
+        btn_row.addWidget(self._rb_marker_r); btn_row.addStretch()
+        v.addLayout(btn_row)
+        return page
+
+    def _make_marker_radio(self, fn, text):
+        """marker 模式专用 radio: 选中态用 LT 玫红 / RT 琥珀黄 (跟方向盘浮标线同色)"""
+        color = _MARKER_COLOR_LT if self._prefix == 'lt' else _MARKER_COLOR_RT
+        dot_url = _RADIO_DOT_ROSE_URL if self._prefix == 'lt' else _RADIO_DOT_AMBER_URL
+        rb = QRadioButton(text)
+        rb.setFont(_font(fn, 14))
+        rb.setStyleSheet(f"""
+            QRadioButton {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
+            QRadioButton:checked {{ color: {color}; font-weight: bold; }}
+            QRadioButton::indicator {{
+                width: 16px; height: 16px; border-radius: 9px;
+                border: 2px solid #666; background: {_C_BG};
+            }}
+            QRadioButton::indicator:hover {{ border-color: {color}; }}
+            QRadioButton::indicator:checked {{
+                border: 2px solid {color}; background: {_C_BG};
+                image: url({dot_url});
+            }}
+            QRadioButton::indicator:checked:hover {{ border: 2px solid {color}; }}
+        """)
+        return rb
+
+    def _on_marker_btn_toggled(self, checked: bool):
+        if not checked:
+            return     # 只在 toggled-ON 时发, 避免重复
+        if getattr(self, '_silencing_marker_btn', False):
+            return     # 外部联动设置时不要回传
+        self.marker_button_changed.emit(self.current_marker_button())
+
+    def current_marker_button(self) -> str:
+        return 'R' if self._rb_marker_r.isChecked() else 'L'
+
+    def set_marker_button(self, btn: str):
+        """外部 (Dialog) 联动: 静默改 radio, 不触发 marker_button_changed"""
+        self._silencing_marker_btn = True
+        try:
+            (self._rb_marker_r if btn == 'R' else self._rb_marker_l).setChecked(True)
+        finally:
+            self._silencing_marker_btn = False
+
     def _on_tab_clicked(self, mode: str):
         if mode in self._disabled_reasons:
             return
         if mode == self._current_mode:
             return
         self._current_mode = mode
-        idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2}
+        idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2, 'marker': 3}
         self._stack.setCurrentIndex(idx_map.get(mode, 0))
         self._refresh_tab_styles()
         # 同步「逆向」说明文本
@@ -273,28 +356,40 @@ class _TriggerSection(QWidget):
             return "勾选后: 鼠标向上移 → 扳机值减少, 向下移 → 扳机值增加"
         if mode == 'buttons':
             return "勾选后: 左键 → 扳机值减少, 右键 → 扳机值增加"
+        if mode == 'marker':
+            return "勾选后: 鼠标向上移 → 浮标向下走, 向下移 → 浮标向上走"
         return ""
 
     def current_mode(self) -> str:
         return self._current_mode
 
-    def set_disabled_modes(self, disabled_modes, reason: str):
-        """Dialog 协调互斥: disabled_modes = 被对方占用的 mode 集合"""
+    def set_disabled_modes(self, disabled_modes, reason: str, other_selected: str = None):
+        """Dialog 协调互斥:
+        disabled_modes = 不能选的 mode 集合
+        other_selected = 对面正在用的 mode (用于显示灰色 ☑ 提示)
+        ☑ 标记规则: 这一侧选中 (白勾) / 对面也选了同一 mode (灰勾) / 其他原因禁用 (不显示勾)"""
         self._disabled_reasons = {m: reason for m in (disabled_modes or set())
-                                  if m in ('scroll', 'vertical', 'buttons')}
+                                  if m in ('scroll', 'vertical', 'buttons', 'marker')}
+        self._other_selected_mode = other_selected if other_selected in (
+            'scroll', 'vertical', 'buttons', 'marker') else None
         self._refresh_tab_styles()
 
     def _refresh_tab_styles(self):
         """tab 三态: 选中=C_CYBER/C_CYBER_H; 空闲=C_GRAY/C_GRAY_H; 禁用=透明无填充 + 细边框 + 灰字 + tooltip
-        选中 & 禁用(被对方占用) 都加 ☑ 图标 (用 assets/check.svg, 跟项目其他位置一致)"""
+        ☑ 图标规则:
+          - 这一侧选中 → 白勾
+          - 对面正在用同一 mode (灰勾, 提示"被对方采用了")
+          - 因其他原因禁用 (例如 marker+buttons 冲突) 但没人选这个 → 不画勾"""
         empty_icon = QIcon()
+        other_mode = getattr(self, '_other_selected_mode', None)
         for key, b in self._mode_btns.items():
             is_selected = (key == self._current_mode)
             is_disabled = (key in self._disabled_reasons)
-            # ☑ 图标: 选中 = 白色; 禁用 (被对方占用) = 灰色 #555 (跟禁用文字/边框同色)
+            is_other_using = (key == other_mode) and not is_selected
+            # ☑: 选中 (白) 或 对方采用 (灰); 仅"被禁但没人选"时无勾
             if is_selected:
                 b.setIcon(_check_icon("#FFFFFF"))
-            elif is_disabled:
+            elif is_other_using:
                 b.setIcon(_check_icon("#555555"))
             else:
                 b.setIcon(empty_icon)
@@ -334,10 +429,10 @@ class _TriggerSection(QWidget):
     def refresh_from_data(self):
         """从 self._data 重新读所有字段并刷新 UI (供「恢复默认」用)"""
         cur_mode = getattr(self._data, f'{self._prefix}_mode', 'scroll')
-        if cur_mode not in ('scroll', 'vertical', 'buttons'):
+        if cur_mode not in ('scroll', 'vertical', 'buttons', 'marker'):
             cur_mode = 'scroll'
         self._current_mode = cur_mode
-        idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2}
+        idx_map = {'scroll': 0, 'vertical': 1, 'buttons': 2, 'marker': 3}
         self._stack.setCurrentIndex(idx_map[cur_mode])
         self._scroll_step_slider.setValue(
             int(getattr(self._data, f'{self._prefix}_scroll_step') * 100))
@@ -347,6 +442,10 @@ class _TriggerSection(QWidget):
             int(getattr(self._data, f'{self._prefix}_buttons_ms')))
         self._buttons_step_slider.setValue(
             int(getattr(self._data, f'{self._prefix}_buttons_step') * 100))
+        self._marker_pct_slider.setValue(
+            int(round(getattr(self._data, f'{self._prefix}_marker_pct', 0.5) * 100)))
+        cur_btn = getattr(self._data, f'{self._prefix}_marker_button', 'L')
+        self.set_marker_button(cur_btn)
         self._reverse_cb.setChecked(bool(getattr(self._data, f'{self._prefix}_reverse', False)))
         if hasattr(self, '_reverse_hint'):
             self._reverse_hint.setText(
@@ -363,6 +462,9 @@ class _TriggerSection(QWidget):
                 int(self._buttons_ms_slider.value()))
         setattr(self._data, f'{self._prefix}_buttons_step',
                 self._buttons_step_slider.value() / 100.0)
+        setattr(self._data, f'{self._prefix}_marker_pct',
+                self._marker_pct_slider.value() / 100.0)
+        setattr(self._data, f'{self._prefix}_marker_button', self.current_marker_button())
         setattr(self._data, f'{self._prefix}_reverse', self._reverse_cb.isChecked())
 
 
@@ -560,19 +662,24 @@ class GpWheelEditorDialog(QDialog):
         sc.addWidget(sec1)
         sc.addSpacing(10)
 
-        # 释放阈值 (head row 内插一个「显示鼠标有效区域」checkbox)
+        # ── 释放阈值 (1/2 左) + 死区 (1/2 右) 同一行 ──
+        two_col_rd = QHBoxLayout()
+        two_col_rd.setSpacing(20)
+
+        # 左: 释放阈值
+        rel_col = QVBoxLayout()
+        rel_col.setSpacing(0)
         head, self._release_slider, _ = _make_value_slider(
             fn, t("gp_wheel_editor.release_threshold"),
             init=int(self.data.release_threshold_ratio * 100),
             min_v=110, max_v=500, default_v=_DEFAULT_RELEASE_PCT, suffix='%',
         )
-        # 在 head 的标签后面 (index=1, 即 stretch 之前) 插入 checkbox
         self._show_zone_cb = QCheckBox("显示鼠标有效区域")
-        self._show_zone_cb.setFont(_font(fn, 13))
+        self._show_zone_cb.setFont(_font(fn, 12))
         self._show_zone_cb.setStyleSheet(f"""
-            QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
+            QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 6px; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
+                width: 14px; height: 14px; border-radius: 3px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
@@ -583,21 +690,60 @@ class GpWheelEditorDialog(QDialog):
         """)
         self._show_zone_cb.setChecked(False)
         self._show_zone_cb.toggled.connect(self._on_show_zone_toggled)
-        head.insertSpacing(1, 16)
+        head.insertSpacing(1, 10)
         head.insertWidget(2, self._show_zone_cb)
-
-        # slider 拖动 → 预览 zone 大小实时变 (前提是 checkbox 已勾)
         self._release_slider.valueChanged.connect(self._on_release_slider_changed)
-
-        sc.addLayout(head)
-        sc.addWidget(self._release_slider)
-        sc.addSpacing(6)
+        rel_col.addLayout(head)
+        rel_col.addWidget(self._release_slider)
+        rel_col.addSpacing(6)
         rel_hint = _make_label(fn, t("gp_wheel_editor.release_threshold_hint"),
                                 _C_HINT, 12)
-        sc.addWidget(rel_hint)
+        rel_col.addWidget(rel_hint)
+        rel_col.addStretch()
+        two_col_rd.addLayout(rel_col, 1)
+
+        # 右: 中心死区 (玫红色可视化)
+        _MARKER_ROSE = "#F43F5E"
+        dz_col = QVBoxLayout()
+        dz_col.setSpacing(0)
+        head_dz, self._dead_zone_slider, _ = _make_value_slider(
+            fn, "中心死区",
+            init=int(round(getattr(self.data, 'dead_zone', 0.10) * 100)),
+            min_v=0, max_v=30, default_v=10, suffix='%',
+        )
+        self._show_dz_cb = QCheckBox("显示死区")
+        self._show_dz_cb.setFont(_font(fn, 12))
+        self._show_dz_cb.setStyleSheet(f"""
+            QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 6px; }}
+            QCheckBox::indicator {{
+                width: 14px; height: 14px; border-radius: 3px;
+                border: 2px solid #666; background: {_C_BG};
+            }}
+            QCheckBox::indicator:hover {{ border-color: {_MARKER_ROSE}; }}
+            QCheckBox::indicator:checked {{
+                background: {_MARKER_ROSE}; border: 2px solid {_MARKER_ROSE};
+                image: url({_CHECK_ICON_URL});
+            }}
+        """)
+        self._show_dz_cb.setChecked(False)
+        self._show_dz_cb.toggled.connect(self._on_show_dz_toggled)
+        head_dz.insertSpacing(1, 10)
+        head_dz.insertWidget(2, self._show_dz_cb)
+        self._dead_zone_slider.valueChanged.connect(self._on_dz_slider_changed)
+        dz_col.addLayout(head_dz)
+        dz_col.addWidget(self._dead_zone_slider)
+        dz_col.addSpacing(6)
+        dz_hint = _make_label(
+            fn, "鼠标在方向盘中心 ±死区% 范围内, 不输出转向 — 减少小幅抖动误触发",
+            _C_HINT, 12)
+        dz_col.addWidget(dz_hint)
+        dz_col.addStretch()
+        two_col_rd.addLayout(dz_col, 1)
+
+        sc.addLayout(two_col_rd)
         sc.addSpacing(18)
 
-        # 灵敏度曲线
+        # 灵敏度曲线 (独立一行)
         sc.addWidget(_make_field_label(fn, t("gp_wheel_editor.sensitivity")))
         sc.addSpacing(8)
         sens_row = QHBoxLayout()
@@ -612,7 +758,7 @@ class GpWheelEditorDialog(QDialog):
         sc.addLayout(sens_row)
         sc.addSpacing(18)
 
-        # 视觉旋转角度 (单边, steering = ±1.0 时盘的最大旋转)
+        # 视觉旋转角度 (独立一行)
         sc.addWidget(_make_field_label(fn, "视觉旋转角度 (单边)"))
         sc.addSpacing(8)
         rot_row = QHBoxLayout()
@@ -647,11 +793,15 @@ class GpWheelEditorDialog(QDialog):
 
         # ─── Section 2/3: LT / RT 卡片左右并排 ───
         self._lt_section = _TriggerSection(t("gp_wheel_editor.lt_title"), self.data, 'lt')
-        self._lt_section.mode_changed.connect(self._on_mode_changed)
+        self._lt_section.mode_changed.connect(lambda m: self._on_mode_changed_from('lt', m))
+        self._lt_section.marker_button_changed.connect(
+            lambda btn: self._on_marker_button_changed_from('lt', btn))
         lt_card = _wrap_in_card(self._lt_section)
 
         self._rt_section = _TriggerSection(t("gp_wheel_editor.rt_title"), self.data, 'rt')
-        self._rt_section.mode_changed.connect(self._on_mode_changed)
+        self._rt_section.mode_changed.connect(lambda m: self._on_mode_changed_from('rt', m))
+        self._rt_section.marker_button_changed.connect(
+            lambda btn: self._on_marker_button_changed_from('rt', btn))
         rt_card = _wrap_in_card(self._rt_section)
 
         cards_row = QHBoxLayout()
@@ -688,6 +838,18 @@ class GpWheelEditorDialog(QDialog):
         reset_btn.clicked.connect(self._on_reset_defaults)
         btn_row.addWidget(reset_btn, 1)
 
+        # 其他鼠标按键配置 (琥珀色, 在「保存」左边)
+        self._mouse_cfg_btn = QPushButton("其他鼠标按键配置")
+        self._mouse_cfg_btn.setFixedHeight(40)
+        self._mouse_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mouse_cfg_btn.setFont(_font(fn, 15, bold=True))
+        self._mouse_cfg_btn.setStyleSheet(f"""
+            QPushButton {{ background: #F59E0B; color: #000; border: none; border-radius: 6px; padding: 0 24px; }}
+            QPushButton:hover {{ background: #D97706; color: #FFF; }}
+        """)
+        self._mouse_cfg_btn.clicked.connect(self._on_open_mouse_cfg)
+        btn_row.addWidget(self._mouse_cfg_btn, 2)
+
         self._save_btn = QPushButton(t("gp_wheel_editor.save"))
         self._save_btn.setFixedHeight(40); self._save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._save_btn.setFont(_font(fn, 16, bold=True))
@@ -698,26 +860,78 @@ class GpWheelEditorDialog(QDialog):
 
     # ── 互斥校验 (三选一: LT/RT 不能用同一种控制方式) ──
 
-    def _on_mode_changed(self, _mode: str):
+    def _on_mode_changed_from(self, from_prefix: str, new_mode: str):
+        """from_prefix = 'lt' | 'rt', 哪边刚改了 mode; new_mode = 它的新 mode"""
+        # 若刚切到 marker, 而对面也是 marker → 这一侧 (新切的) 取对面的相反键
+        if new_mode == 'marker':
+            other = self._rt_section if from_prefix == 'lt' else self._lt_section
+            if other.current_mode() == 'marker':
+                this = self._lt_section if from_prefix == 'lt' else self._rt_section
+                other_btn = other.current_marker_button()
+                opposite = 'R' if other_btn == 'L' else 'L'
+                if this.current_marker_button() != opposite:
+                    this.set_marker_button(opposite)
         self._validate_mutual_exclusion()
 
     def _validate_mutual_exclusion(self):
-        """LT/RT 三模式互斥: 一方选了什么, 另一方对应的 tab 被禁用 + tooltip 提示"""
+        """LT/RT 模式互斥规则:
+        (a) 同模式互斥 — 但 marker 例外 (双方都可用 marker, 通过按键互斥)
+        (b) marker + buttons 互斥 (buttons 占左右键, marker 占其中一个 → 必然抢键)
+        (c) marker + marker 允许, 但锁定按键自动翻反 (在 _on_marker_button_changed_from 处理)"""
         lt_mode = self._lt_section.current_mode()
         rt_mode = self._rt_section.current_mode()
         name_map = {
             'scroll':   t("gp_wheel_editor.mode_scroll"),
             'vertical': t("gp_wheel_editor.mode_vertical"),
             'buttons':  t("gp_wheel_editor.mode_buttons"),
+            'marker':   '浮标点击',
         }
         rt_label = name_map.get(rt_mode, rt_mode)
         lt_label = name_map.get(lt_mode, lt_mode)
+
+        # (a) 同模式互斥, marker 例外
+        lt_disabled = set()
+        rt_disabled = set()
+        if rt_mode != 'marker':
+            lt_disabled.add(rt_mode)
+        if lt_mode != 'marker':
+            rt_disabled.add(lt_mode)
+        # (b) marker ↔ buttons 互斥
+        if rt_mode == 'marker':
+            lt_disabled.add('buttons')
+        if rt_mode == 'buttons':
+            lt_disabled.add('marker')
+        if lt_mode == 'marker':
+            rt_disabled.add('buttons')
+        if lt_mode == 'buttons':
+            rt_disabled.add('marker')
+
         self._lt_section.set_disabled_modes(
-            {rt_mode}, f"右扳机已使用「{rt_label}」, 两个扳机不能用同一种控制方式")
+            lt_disabled, f"右扳机已使用「{rt_label}」, 跟当前模式互斥",
+            other_selected=rt_mode)
         self._rt_section.set_disabled_modes(
-            {lt_mode}, f"左扳机已使用「{lt_label}」, 两个扳机不能用同一种控制方式")
-        # 防御: 老 profile 可能两侧同 mode → 保存禁用
-        self._apply_save_button_style(enabled=(lt_mode != rt_mode))
+            rt_disabled, f"左扳机已使用「{lt_label}」, 跟当前模式互斥",
+            other_selected=lt_mode)
+
+        # marker + marker 启动时双方相同按键 → 把 RT 翻反 (启动加载老数据兜底; UI 联动走信号路径)
+        if lt_mode == 'marker' and rt_mode == 'marker':
+            if self._lt_section.current_marker_button() == self._rt_section.current_marker_button():
+                lt_btn = self._lt_section.current_marker_button()
+                self._rt_section.set_marker_button('R' if lt_btn == 'L' else 'L')
+
+        # 保存禁用条件: 同 mode 但非 marker (marker 双开是合法的)
+        ok = (lt_mode != rt_mode) or (lt_mode == 'marker' and rt_mode == 'marker')
+        self._apply_save_button_style(enabled=ok)
+
+    def _on_marker_button_changed_from(self, from_prefix: str, btn: str):
+        """marker + marker 双方选了同一个键 → 自动翻反对面"""
+        if (self._lt_section.current_mode() != 'marker'
+                or self._rt_section.current_mode() != 'marker'):
+            return
+        other = self._rt_section if from_prefix == 'lt' else self._lt_section
+        opposite = 'R' if btn == 'L' else 'L'
+        if other.current_marker_button() != opposite:
+            other.set_marker_button(opposite)
 
     def _apply_save_button_style(self, enabled: bool):
         self._save_btn.setEnabled(enabled)
@@ -743,6 +957,7 @@ class GpWheelEditorDialog(QDialog):
                 setattr(self.data, field, getattr(defaults, field))
         # 刷新 UI: section 1
         self._release_slider.setValue(int(self.data.release_threshold_ratio * 100))
+        self._dead_zone_slider.setValue(int(round(self.data.dead_zone * 100)))
         (self._rb_square if self.data.sensitivity_curve == 'square'
          else self._rb_linear).setChecked(True)
         cur_rot = int(round(self.data.max_rotation_deg))
@@ -767,6 +982,23 @@ class GpWheelEditorDialog(QDialog):
         self.saved.emit(self._item)
         self.accept()
 
+    # ── 其他鼠标按键配置 ──
+
+    def _on_open_mouse_cfg(self):
+        """打开 GpWheelMouseDialog — 配置 wheel active 时其他鼠标按键映射"""
+        from views.gp_wheel_mouse_dialog import GpWheelMouseDialog
+        # 拿当前方向盘 gp_macros (跟 gp_stick 编辑器一致, 从 scene 当前 profile 拿)
+        gp_macros = []
+        try:
+            sc = self._item.scene()
+            if sc is not None and hasattr(sc, 'get_config'):
+                cfg = sc.get_config() or {}
+                gp_macros = list(cfg.get('gp_macros', []) or [])
+        except Exception:
+            pass
+        dlg = GpWheelMouseDialog(self._item, parent=self, gp_macros=gp_macros)
+        dlg.exec()      # 模态; 弹窗 _on_save 内部已写回 self._item.data
+
     # ── 释放阈值预览 (鼠标有效区域显示) ──
 
     def _on_show_zone_toggled(self, checked: bool):
@@ -783,11 +1015,30 @@ class GpWheelEditorDialog(QDialog):
                 and hasattr(self._item, 'set_preview_release_ratio')):
             self._item.set_preview_release_ratio(value / 100.0)
 
+    # ── 死区预览 (玫红色可视化) ──
+
+    def _on_show_dz_toggled(self, checked: bool):
+        if hasattr(self._item, 'set_show_dead_zone'):
+            self._item.set_show_dead_zone(checked)
+            if checked and hasattr(self._item, 'set_preview_dead_zone'):
+                self._item.set_preview_dead_zone(self._dead_zone_slider.value() / 100.0)
+            elif hasattr(self._item, 'set_preview_dead_zone'):
+                self._item.set_preview_dead_zone(None)
+
+    def _on_dz_slider_changed(self, value: int):
+        if (self._show_dz_cb.isChecked()
+                and hasattr(self._item, 'set_preview_dead_zone')):
+            self._item.set_preview_dead_zone(value / 100.0)
+
     def _cleanup_preview(self):
         if hasattr(self._item, 'set_show_release_zone'):
             self._item.set_show_release_zone(False)
         if hasattr(self._item, 'set_preview_release_ratio'):
             self._item.set_preview_release_ratio(None)
+        if hasattr(self._item, 'set_show_dead_zone'):
+            self._item.set_show_dead_zone(False)
+        if hasattr(self._item, 'set_preview_dead_zone'):
+            self._item.set_preview_dead_zone(None)
 
     def accept(self):
         self._cleanup_preview()
@@ -799,6 +1050,7 @@ class GpWheelEditorDialog(QDialog):
 
     def _apply_to_data(self):
         self.data.release_threshold_ratio = self._release_slider.value() / 100.0
+        self.data.dead_zone = self._dead_zone_slider.value() / 100.0
         self.data.sensitivity_curve = ('square' if self._rb_square.isChecked() else 'linear')
         self.data.max_rotation_deg = float(self._current_max_rotation)
         self._lt_section.apply_to_data()

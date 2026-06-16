@@ -721,12 +721,32 @@ class OverlayWindow(QGraphicsView):
     # ── 弹窗 ──
 
     def _open_button_editor(self, item):
-        """打开按钮编辑弹窗 — 按 btn_type 派发: 回中带 / 摇杆 / 其他 (kb + gp_btn)"""
+        """打开按钮编辑弹窗 — 按 btn_type 派发: 回中带 / 摇杆 / 方向盘 / 其他 (kb + gp_btn)
+        防重复: 每个 item 已有未关闭的编辑弹窗 → 直接 raise 不新建"""
+        # 重复打开保护 (双击多次/事件 race 都会触发)
+        existing = getattr(item, '_editor_dialog', None)
+        if existing is not None:
+            try:
+                if existing.isVisible():
+                    existing.raise_()
+                    existing.activateWindow()
+                    return
+            except (RuntimeError, AttributeError):
+                # 弹窗 C++ 侧已删, attr 还在; 继续走新建流程
+                pass
+
+        def _register(dialog):
+            """把新建的 dialog 绑到 item, 关闭时自动清空"""
+            item._editor_dialog = dialog
+            dialog.destroyed.connect(
+                lambda _=None, _it=item: setattr(_it, '_editor_dialog', None))
+
         if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_CENTER_BAND:
             dialog = CenterBandDialog(item, self)
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             dialog.deleted.connect(lambda it: self._on_button_deleted(it))
             dialog.copied.connect(lambda it: self._on_button_copied(it))
+            _register(dialog)
             dialog.show()
             return
         # 摇杆: 左右双栏编辑器 (参数 + 鼠标动作; 右栏 gp 键 + gp 宏)
@@ -740,6 +760,7 @@ class OverlayWindow(QGraphicsView):
             dialog.saved.connect(lambda it: self._on_button_saved(it))
             dialog.deleted.connect(lambda it: self._on_button_deleted(it))
             dialog.copied.connect(lambda it: self._on_button_copied(it))
+            _register(dialog)
             dialog.show()
             return
         # 方向盘: 单栏编辑器 (参数 + LT/RT 模式), 删除时同步 toolbar toggle
@@ -749,6 +770,7 @@ class OverlayWindow(QGraphicsView):
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             dialog.saved.connect(lambda it: self._on_button_saved(it))
             dialog.deleted.connect(lambda it: self._on_gp_wheel_deleted(it))
+            _register(dialog)
             dialog.show()
             return
         cfg = self._scene.get_config()
@@ -761,6 +783,7 @@ class OverlayWindow(QGraphicsView):
         dialog.saved.connect(lambda data: self._on_button_saved(item))
         dialog.deleted.connect(lambda it: self._on_button_deleted(it))
         dialog.copied.connect(lambda it: self._on_button_copied(it))
+        _register(dialog)
         dialog.show()
 
     def _on_button_saved(self, item):

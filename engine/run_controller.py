@@ -47,6 +47,8 @@ user32.SetCursorPos.restype = ctypes.wintypes.BOOL
 VK_LBUTTON = 0x01
 VK_RBUTTON = 0x02
 VK_MBUTTON = 0x04
+VK_XBUTTON1 = 0x05
+VK_XBUTTON2 = 0x06
 
 
 def _is_alive(item) -> bool:
@@ -56,6 +58,22 @@ def _is_alive(item) -> bool:
         return not sip.isdeleted(item)
     except (ImportError, RuntimeError):
         return True
+
+
+def _wheel_occupied_fields(data) -> set:
+    """根据 LT/RT 的 mode + marker_button 算出哪些鼠标动作字段被扳机占用。
+    占用 = wheel.data.mouse_* 该字段配了也不生效。"""
+    occupied: set = set()
+    for prefix in ('lt', 'rt'):
+        mode = getattr(data, f'{prefix}_mode', '')
+        if mode == 'buttons':
+            occupied.update(('lclick', 'rclick'))
+        elif mode == 'marker':
+            btn = getattr(data, f'{prefix}_marker_button', 'L')
+            occupied.add('lclick' if btn == 'L' else 'rclick')
+        elif mode == 'scroll':
+            occupied.update(('wheelup', 'wheeldown'))
+    return occupied
 
 
 class RunController(QObject):
@@ -109,6 +127,19 @@ class RunController(QObject):
         self._wheel_lt = 0.0          # 0~1, 持久化
         self._wheel_rt = 0.0
         self._wheel_last_screen_y = 0  # vertical 模式的 reference Y (screen 坐标)
+        # marker 模式: 浮标位置 (0~1, 不写入扳机值, 直到用户点击对应键才锁定到扳机)
+        # 上次按键状态用于边沿检测 (按下→ click 一次, 持续按住不重复)
+        self._wheel_lt_marker_pos = 0.0
+        self._wheel_rt_marker_pos = 0.0
+        self._wheel_lmb_was_down = False
+        self._wheel_rmb_was_down = False
+        # 方向盘 active 时其他鼠标按键触发的动作 (优先级低于 LT/RT)
+        # 持有状态: {field_name → key_str}, 用于按下时记 + 释放时触发 'r'
+        self._wheel_mouse_holding: dict = {}
+        # 上次鼠标键状态 (用于 x1/x2 边沿检测; lmb/rmb 复用 _wheel_lmb_was_down)
+        self._wheel_mmb_was_down = False
+        self._wheel_x1_was_down = False
+        self._wheel_x2_was_down = False
 
         # 快捷键定时器
         self._timer = QTimer(self)
@@ -576,6 +607,13 @@ class RunController(QObject):
             self._active_key_count = max(0, self._active_key_count - 1)
         self._smart_trigger(key_str, action)
 
+    def _gp_delayed_release(self, label: str):
+        """vgamepad 状态机延迟释放 — 给 'click' 动作用, 确保 press 帧能被驱动看到"""
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.release_button(label)
+            gp.flush()
+
     # ── 宏感知的智能触发 ──
 
     def _smart_trigger(self, key_str: str, action: str):
@@ -623,6 +661,8 @@ class RunController(QObject):
                 mouse_wheel(direction)
 
         # 手柄按钮: 走 gamepad_engine
+        # 注意: vgamepad 是状态机不是事件队列 — press 后立即 release 净变化为 0,
+        # 驱动收不到 button down 事件。'click' 必须 press → flush → 延迟 → release → flush
         if gp_labels:
             gp = GamepadEngine.get()
             if gp is not None:
@@ -633,8 +673,11 @@ class RunController(QObject):
                         gp.release_button(label)
                     elif action == 'click':
                         gp.press_button(label)
-                        gp.release_button(label)
-                gp.flush()
+                        gp.flush()      # 让 press 立即可见
+                        QTimer.singleShot(
+                            50, lambda l=label: self._gp_delayed_release(l))
+                if action != 'click':
+                    gp.flush()
             else:
                 logger.warning("GamepadEngine 不可用 (ViGEmBus 未加载?), 忽略手柄按键: %s", gp_labels)
 
@@ -929,7 +972,13 @@ class RunController(QObject):
         except Exception as e:
             logger.warning("SetCursorPos to wheel center failed: %s", e)
         self._active_gp_wheel = wheel
+        # marker 模式: 初始浮标 = 当前扳机值 (保持视觉连贯)
+        self._wheel_lt_marker_pos = self._wheel_lt
+        self._wheel_rt_marker_pos = self._wheel_rt
+        self._wheel_lmb_was_down = False
+        self._wheel_rmb_was_down = False
         wheel.set_visual(0.0, self._wheel_lt, self._wheel_rt, active=True)
+        self._sync_wheel_visual(wheel)
         gp = GamepadEngine.get()
         if gp is not None:
             gp.set_stick("L", 0.0, 0.0)
@@ -943,8 +992,27 @@ class RunController(QObject):
             return
         if _is_alive(wheel):
             wheel.set_visual(0.0, 0.0, 0.0, active=False)
+            if hasattr(wheel, 'set_markers'):
+                wheel.set_markers(None, None)
+            if hasattr(wheel, 'set_pressed_action'):
+                wheel.set_pressed_action(None, '')
         self._wheel_lt = 0.0
         self._wheel_rt = 0.0
+        self._wheel_lt_marker_pos = 0.0
+        self._wheel_rt_marker_pos = 0.0
+        self._wheel_lmb_was_down = False
+        self._wheel_rmb_was_down = False
+        self._wheel_mmb_was_down = False
+        self._wheel_x1_was_down = False
+        self._wheel_x2_was_down = False
+        # 释放所有 holding 的鼠标动作 (触发 'r' 防止键卡住)
+        for field, key_str in list(self._wheel_mouse_holding.items()):
+            try:
+                self.on_action_triggered(wheel.data if _is_alive(wheel) else None,
+                                          key_str, 'r')
+            except Exception:
+                pass
+        self._wheel_mouse_holding.clear()
         gp = GamepadEngine.get()
         if gp is not None:
             gp.set_stick("L", 0.0, 0.0)
@@ -953,7 +1021,7 @@ class RunController(QObject):
         self._active_gp_wheel = None
 
     def _update_wheel_steering(self, wheel, scene_pos, force_edge: bool):
-        """计算 steering 并写入引擎 (仅左摇杆 X 轴, Y 始终 0)"""
+        """计算 steering 并写入引擎 (仅左摇杆 X 轴, Y 始终 0); 含中心死区"""
         import math
         cx = wheel.rect_center_scene().x()
         half_w = max(1.0, wheel.half_width_scene())
@@ -961,6 +1029,14 @@ class RunController(QObject):
         val = max(-1.0, min(1.0, dx / half_w))
         if force_edge:
             val = max(-1.0, min(1.0, val))
+        # 死区: |val| < dz → 0; dz~1 重新映射成 0~1 (平滑过渡)
+        dz = max(0.0, min(0.95, getattr(wheel.data, 'dead_zone', 0.0)))
+        abs_v = abs(val)
+        if abs_v < dz:
+            val = 0.0
+        elif dz > 0:
+            val = math.copysign((abs_v - dz) / (1.0 - dz), val)
+        # 灵敏度曲线 (死区之后再施加, 让 dz~1 区段保持平方曲线特性)
         if wheel.data.sensitivity_curve == 'square':
             val = math.copysign(val * val, val)
         self._wheel_steering_last = val
@@ -979,7 +1055,13 @@ class RunController(QObject):
         rmb = (user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0
         dt_ms = max(1, self._timer.interval())
 
-        for prefix, val_attr in (('lt', '_wheel_lt'), ('rt', '_wheel_rt')):
+        # marker 模式: 边沿检测 (按下→ click 一次, 持续按住不重复)
+        lmb_edge_down = lmb and not self._wheel_lmb_was_down
+        rmb_edge_down = rmb and not self._wheel_rmb_was_down
+
+        for prefix, val_attr, marker_attr in (
+                ('lt', '_wheel_lt', '_wheel_lt_marker_pos'),
+                ('rt', '_wheel_rt', '_wheel_rt_marker_pos')):
             mode = getattr(wheel.data, f'{prefix}_mode')
             reverse = bool(getattr(wheel.data, f'{prefix}_reverse', False))
             cur = getattr(self, val_attr)
@@ -1000,18 +1082,111 @@ class RunController(QObject):
                     cur = min(1.0, cur + rate * dt_ms)
                 if sub_btn:
                     cur = max(0.0, cur - rate * dt_ms)
+            elif mode == 'marker':
+                # marker: 移动鼠标 → 浮标位置变 (不写扳机); 按对应键 → 扳机值 = 浮标位置
+                pct = max(0.05, min(0.95, getattr(wheel.data, f'{prefix}_marker_pct')))
+                px_per = max(1.0, wheel.data.w * pct)
+                sign = 1.0 if reverse else -1.0
+                m_pos = getattr(self, marker_attr)
+                m_pos = max(0.0, min(1.0, m_pos + sign * dy / px_per))
+                setattr(self, marker_attr, m_pos)
+                # 检查 click 锁定 (扳机配的键边沿按下时)
+                btn = getattr(wheel.data, f'{prefix}_marker_button', 'L')
+                clicked = (btn == 'L' and lmb_edge_down) or (btn == 'R' and rmb_edge_down)
+                if clicked:
+                    cur = m_pos    # 锁定扳机值到当前浮标位置
             # scroll 模式: 由 _dispatch_wheel 处理, 此处不动
             setattr(self, val_attr, cur)
 
+        # ── 其他鼠标按键 (优先级低于 LT/RT) ──
+        # 读 mmb/x1/x2 (lmb/rmb 已在上面读); 算占用集; 边沿触发对应动作
+        from scene.gp_stick_item import _gp_display
+        mmb = (user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0
+        x1 = (user32.GetAsyncKeyState(VK_XBUTTON1) & 0x8000) != 0
+        x2 = (user32.GetAsyncKeyState(VK_XBUTTON2) & 0x8000) != 0
+        occupied = _wheel_occupied_fields(wheel.data)
+        # 对每个鼠标按键: (字段名, 当前按下, 上次按下)
+        mouse_btn_events = (
+            ('lclick',   lmb, self._wheel_lmb_was_down),
+            ('rclick',   rmb, self._wheel_rmb_was_down),
+            ('mclick',   mmb, self._wheel_mmb_was_down),
+            ('xbutton1', x1,  self._wheel_x1_was_down),
+            ('xbutton2', x2,  self._wheel_x2_was_down),
+        )
+        for field, now_down, was_down in mouse_btn_events:
+            key_str = getattr(wheel.data, f'mouse_{field}', '') or ''
+            # 边沿按下: 字段未被占用 + 有映射 → 触发 'p' + 记 holding
+            if now_down and not was_down:
+                if field not in occupied and key_str:
+                    self._wheel_mouse_holding[field] = key_str
+                    self.on_action_triggered(wheel.data, key_str, 'p')
+            # 边沿松开: 若 holding 中有该字段 → 触发 'r'
+            elif (not now_down) and was_down and field in self._wheel_mouse_holding:
+                hk = self._wheel_mouse_holding.pop(field)
+                self.on_action_triggered(wheel.data, hk, 'r')
+
+        # 推 hub 视觉: 优先级 lclick > rclick > mclick > x1 > x2
+        # 持有中的第一个 → 中心 hub 着色 + 显示键文本; 都没持有 → 只清「按钮类」hub
+        # (滚轮类 wheelup/wheeldown 由 _dispatch_wheel_to_active_wheel 的 QTimer 自己清,
+        #  此处不能动, 否则下一 tick 立即覆盖掉滚轮闪烁)
+        if hasattr(wheel, 'set_pressed_action'):
+            shown = None
+            for f in ('lclick', 'rclick', 'mclick', 'xbutton1', 'xbutton2'):
+                if f in self._wheel_mouse_holding:
+                    shown = (f, _gp_display(self._wheel_mouse_holding[f]))
+                    break
+            if shown:
+                wheel.set_pressed_action(shown[0], shown[1])
+            else:
+                cur = getattr(wheel, '_pressed_action', None)
+                if cur in ('lclick', 'rclick', 'mclick', 'xbutton1', 'xbutton2'):
+                    wheel.set_pressed_action(None, '')
+
+        # 诊断日志: 任意鼠标键边沿事件都打一行, 帮排查"hub 不显示"问题
+        for field, now_down, was_down in mouse_btn_events:
+            if now_down != was_down:
+                key_str = getattr(wheel.data, f'mouse_{field}', '') or ''
+                blocked = field in occupied
+                fired = field in self._wheel_mouse_holding and now_down
+                logger.info(f"[wheel mouse] {field} {'↓' if now_down else '↑'} "
+                            f"key={key_str!r} blocked={blocked} fired_p={fired}")
+
+        # 记录本帧鼠标键状态供下帧边沿检测
+        self._wheel_lmb_was_down = lmb
+        self._wheel_rmb_was_down = rmb
+        self._wheel_mmb_was_down = mmb
+        self._wheel_x1_was_down = x1
+        self._wheel_x2_was_down = x2
+
+        # 鼠标动作叠加: 持有中的鼠标键如果映射了 gp:LT / gp:RT, 当前应为 1.0
+        # 跟 wheel 自己的 LT/RT 取 max → 互不影响进度条 (wheel 进度条只显示 _wheel_lt/_rt)
+        override_lt = 0.0
+        override_rt = 0.0
+        for field in ('lclick', 'rclick', 'mclick', 'xbutton1', 'xbutton2'):
+            if field in self._wheel_mouse_holding:
+                key = self._wheel_mouse_holding[field]
+                for p in key.split('+'):
+                    p = p.strip()
+                    if p == f'{GP_KEY_PREFIX}LT':
+                        override_lt = 1.0
+                    elif p == f'{GP_KEY_PREFIX}RT':
+                        override_rt = 1.0
+        final_lt = max(self._wheel_lt, override_lt)
+        final_rt = max(self._wheel_rt, override_rt)
+
         gp = GamepadEngine.get()
         if gp is not None:
-            gp.set_trigger("L", self._wheel_lt)
-            gp.set_trigger("R", self._wheel_rt)
+            gp.set_trigger("L", final_lt)
+            gp.set_trigger("R", final_rt)
 
     def _sync_wheel_visual(self, wheel):
-        """把 active 状态最新的 steering + LT + RT 同步到 item"""
+        """把 active 状态最新的 steering + LT + RT + marker 同步到 item"""
         steering = getattr(self, '_wheel_steering_last', 0.0)
         wheel.set_visual(steering, self._wheel_lt, self._wheel_rt, active=True)
+        if hasattr(wheel, 'set_markers'):
+            lt_m = self._wheel_lt_marker_pos if wheel.data.lt_mode == 'marker' else None
+            rt_m = self._wheel_rt_marker_pos if wheel.data.rt_mode == 'marker' else None
+            wheel.set_markers(lt_m, rt_m)
 
     def _dispatch_wheel_to_active_wheel(self, direction: str) -> bool:
         """方向盘 active 时, scroll 事件交给配 scroll 模式的 trigger; 返回 True 表示已消费"""
@@ -1042,7 +1217,23 @@ class RunController(QObject):
                 gp.set_trigger("R", self._wheel_rt)
                 gp.flush()
             self._sync_wheel_visual(wheel)
-        return handled
+            return True
+
+        # 没被 scroll 模式扳机消费 → 尝试触发 wheel.data.mouse_wheelup / mouse_wheeldown
+        # (优先级低于 LT/RT 的 scroll 模式; 若 LT/RT 任一 scroll, 占用所以这里已 return)
+        field = 'wheelup' if direction == 'up' else 'wheeldown'
+        key_str = getattr(wheel.data, f'mouse_{field}', '') or ''
+        if key_str:
+            # 滚轮事件 = 一次性 click; _smart_trigger 内 click 对 gp 走延迟 release
+            self._smart_trigger(key_str, 'click')
+            # hub 视觉闪一下 ~200ms (scroll 是瞬时事件没有 hold)
+            if hasattr(wheel, 'set_pressed_action'):
+                from scene.gp_stick_item import _gp_display
+                wheel.set_pressed_action(field, _gp_display(key_str))
+                QTimer.singleShot(200, lambda w=wheel:
+                                  w.set_pressed_action(None, '') if _is_alive(w) else None)
+            return True
+        return False
 
     def _find_macro(self, name: str, pool: str = 'kb'):
         """从当前 config 中查找宏。pool='kb' 查 macros, pool='gp' 查 gp_macros"""
