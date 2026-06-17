@@ -337,11 +337,16 @@ class GamepadInstallDialog(QDialog):
         )
 
     def _enter_needs_reboot(self, err: str = ""):
+        # 跟 DRIVER_BROKEN 走同一动作: 让用户直接「重新安装」一次,
+        # 多数场景下再装一遍服务就起来, 不必让用户去重启电脑;
+        # 仍不行用户可选「关闭」自己重启 PC 后再来。
         self._title_lbl.setText(t("gp_install.reboot_title"))
         self._body_lbl.setText(t("gp_install.reboot_body"))
         self._set_buttons(
-            primary_text=t("gp_install.btn_got_it"),
-            primary_cb=self.reject,  # 暂时切回键盘
+            primary_text=t("gp_install.btn_reinstall"),
+            primary_cb=self._start_install_offline,
+            secondary_text=t("gp_install.btn_close"),
+            secondary_cb=self.reject,
         )
 
     def _enter_done(self):

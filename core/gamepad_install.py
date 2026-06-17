@@ -191,10 +191,27 @@ def _installed_version() -> str | None:
 
 
 def _vgamepad_lib_available() -> bool:
-    """vgamepad 库能否 import (不含创建设备这步)。"""
-    try:
-        import vgamepad  # noqa: F401
+    """vgamepad 库是否真的安装在 site-packages / 打包 bundle 里。
+
+    历史上这里直接 `import vgamepad`, 但 vgamepad 的 __init__.py 顶层会执行
+    VBus() → vigem_connect(), 驱动一旦没就绪 import 就抛异常 → lib_ok=False。
+    结果"驱动有问题"被误判成"Python 库缺", 弹窗让用户去 pip install,
+    pip 装了也没用 (真因是驱动), 用户被坑。
+
+    现在改用 importlib.util.find_spec, 只检测包文件存在, 不触发 init。
+    真的有 "驱动没准备好" → 后续 _vgamepad_smoke_test() 会捕获 → DRIVER_BROKEN
+    (友好提示"重新安装一下"), 而不是误导到 LIB_MISSING。
+
+    打包用户 (sys.frozen): vgamepad 永远嵌在 _internal/vgamepad/, 没有缺失场景;
+    且 pip 安装路径在 .exe 进程里跑不起来, 必须从源头避开 LIB_MISSING 分支。
+    """
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包模式: vgamepad 跟程序文件一起发布, 必然存在;
+        # 兜底强制 True, 让流程永远不会进 LIB_MISSING (即使 find_spec 出意外)
         return True
+    try:
+        import importlib.util
+        return importlib.util.find_spec('vgamepad') is not None
     except Exception:
         return False
 

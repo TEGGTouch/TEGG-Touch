@@ -1,13 +1,12 @@
 """
 TEGG Touch (PyQt6) - views/diag_export_dialog.py
-诊断包导出弹窗 — 后台 QThread 打包最近 5 条日志 + 当前 settings + 当前激活方案
+诊断包导出弹窗 — 后台 QThread 打包最近 10 条日志 + 当前 settings + 当前激活方案
 到桌面 zip; 显示进度 + 完成后的操作 (打开所在文件夹 / 关闭)
+list_recent_log_paths(10) 返回 paths[:10], 实际不足 10 条时有多少打多少。
 """
 
 import os
-import sys
 import zipfile
-import datetime
 import subprocess
 import logging
 
@@ -48,8 +47,8 @@ def _collect_diag_files() -> list[tuple[str, str]]:
 
     items: list[tuple[str, str]] = []
 
-    # 最近 5 条日志
-    for p in list_recent_log_paths(5):
+    # 最近 10 条日志 (KEEP_SESSIONS=10, 本地最多就保留 10 条; 不足 10 条有多少打多少)
+    for p in list_recent_log_paths(10):
         items.append((p, f'logs/{os.path.basename(p)}'))
 
     # settings/hotkeys.json
@@ -199,8 +198,8 @@ class DiagExportDialog(QDialog):
         v.addLayout(self._btn_row)
 
     def _start(self):
-        ts = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-        fname = f'TEGG-Touch-诊断报告-{ts}.zip'
+        # 固定文件名: 桌面始终只保留一份最新诊断包, 重复导出直接覆盖
+        fname = '蛋挞debug日志.zip'
         dst = os.path.join(_desktop_path(), fname)
         self._dst_path = dst
 

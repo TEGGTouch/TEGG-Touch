@@ -24,7 +24,15 @@ user32.GetWindowLongW.restype = ctypes.c_long
 user32.SetWindowLongW.argtypes = [ctypes.wintypes.HWND, ctypes.c_int, ctypes.c_long]
 user32.SetWindowLongW.restype = ctypes.c_long
 
-user32.mouse_event.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD, ctypes.wintypes.DWORD, ctypes.POINTER(ctypes.c_ulong)]
+user32.mouse_event.argtypes = [
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
+    ctypes.wintypes.DWORD,
+    ctypes.c_size_t,   # dwExtraInfo: Win32 ULONG_PTR (指针大小的整数, 非指针);
+                       # 旧版用 POINTER(c_ulong) + 调用传 0 在 Python 3.14 严格 ctypes 下
+                       # 抛 "expected LP_c_ulong instance instead of int", 导致点击空白崩 app
+]
 user32.mouse_event.restype = None
 
 user32.GetCursorPos.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
