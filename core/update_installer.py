@@ -81,11 +81,19 @@ try {
     exit 1
 }
 
-$TopDirs = Get-ChildItem -Path $TmpRoot -Directory
-if ($TopDirs.Count -eq 0) {
+# Src 智能判定: 优先看 $TmpRoot 是否平铺有 TEGGTouch.exe; 若没有, 找包裹了 exe 的唯一子目录.
+# pack_release.bat 用 Compress-Archive '*' 打包 → zip 永远平铺, $TmpRoot 本身就是 src.
+$Src = $null
+if (Test-Path (Join-Path $TmpRoot "TEGGTouch.exe")) {
     $Src = $TmpRoot
 } else {
-    $Src = $TopDirs[0].FullName
+    foreach ($d in Get-ChildItem -Path $TmpRoot -Directory) {
+        if (Test-Path (Join-Path $d.FullName "TEGGTouch.exe")) { $Src = $d.FullName; break }
+    }
+}
+if (-not $Src) {
+    Log "ERROR: TEGGTouch.exe not found in extracted zip (tried root + 1 level subdirs)"
+    exit 2
 }
 Log "source dir: $Src"
 
@@ -274,12 +282,16 @@ def apply_update(zip_path: str) -> None:
     ]
     logger.info(f"spawning updater: {' '.join(cmd)}")
 
-    DETACHED_PROCESS = 0x00000008
-    CREATE_NEW_PROCESS_GROUP = 0x00000200
+    # 注意: DETACHED_PROCESS|CREATE_NEW_PROCESS_GROUP 在 Win11 上会让 powershell
+    # 秒退出 (v0.3.5/v0.3.6 测试版踩过的坑). 必须用 CREATE_NO_WINDOW 才能后台稳跑.
+    CREATE_NO_WINDOW = 0x08000000
     try:
         subprocess.Popen(
             cmd,
-            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            creationflags=CREATE_NO_WINDOW,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             close_fds=True,
         )
     except Exception as e:
