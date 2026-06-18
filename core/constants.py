@@ -15,7 +15,7 @@ else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # === 应用信息 ===
-APP_VERSION = "0.3.7"
+APP_VERSION = "0.3.8"
 CONFIG_FILE = "config.json"
 PROFILES_DIR = "profiles"
 PROFILES_INDEX = "_index.json"

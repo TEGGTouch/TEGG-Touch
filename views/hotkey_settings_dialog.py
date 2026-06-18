@@ -27,7 +27,7 @@ from core.constants import (
 from core.config_manager import load_hotkeys, save_hotkeys
 from scene.virtual_cursor_item import render_cursor_pixmap, clear_cursor_render_cache
 
-_ABOUT_LAST_UPDATE = "2026.06.18"
+_ABOUT_LAST_UPDATE = "2026.06.19"
 
 # ── 颜色 ──
 C_PM_BG = "#2D2D2D"
