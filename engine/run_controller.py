@@ -1088,11 +1088,16 @@ class RunController(QObject):
         if gp is not None:
             gp.set_trigger("R", self._easy_rt)
 
-        # ── 3) 左键 → S ──
-        lbtn_down = bool(user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
-        if lbtn_down != self._easy_brake_state:
-            trigger('s', 'p' if lbtn_down else 'r')
-            self._easy_brake_state = lbtn_down
+        # ── 3) 配置的鼠标键 → S (默认左键, 可在编辑器改成右/中/侧1/侧2) ──
+        _BRAKE_VK = {
+            'L': VK_LBUTTON, 'R': VK_RBUTTON, 'M': VK_MBUTTON,
+            'X1': VK_XBUTTON1, 'X2': VK_XBUTTON2,
+        }
+        brake_vk = _BRAKE_VK.get(getattr(d, 'easy_brake_button', 'L'), VK_LBUTTON)
+        brake_down = bool(user32.GetAsyncKeyState(brake_vk) & 0x8000)
+        if brake_down != self._easy_brake_state:
+            trigger('s', 'p' if brake_down else 'r')
+            self._easy_brake_state = brake_down
 
         # ── 4) 视觉转向: 速度模型 (deg/sec, 默认 max=180° → 锁 500ms / 回 250ms) ──
         # 按 A/D: ±360°/sec 滑向 ±max; 松开: 720°/sec 滑向 0; 跟 max_rotation_deg 解耦,

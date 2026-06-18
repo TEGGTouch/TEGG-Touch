@@ -108,12 +108,13 @@ class GamepadWheelData:
     mouse_wheeldown: str = ""
 
     # ── 操控模式 ──
-    # 'easy' (默认) = mouse-as-car: 鼠标 X→A/D 键盘, Y 速度→RT 累加, 左键→S 键盘
+    # 'easy' (默认) = mouse-as-car: 鼠标 X→A/D 键盘, Y 速度→RT 累加, 配置鼠标键→S 键盘
     # 'advanced' = 全套方向盘行为 (摇杆 LX + LT/RT 多模式)
     control_mode: str = "easy"
     easy_steering_deadzone: float = 0.08    # easy: 屏幕中线 ±dz%×半屏 内不发 A/D
     easy_throttle_sensitivity: float = 0.005  # easy: 鼠标上移每 1px 累加多少 RT (0~1)
     easy_show_indicator: bool = True        # easy: 是否仍绘制方向盘视觉指示器
+    easy_brake_button: str = "L"            # easy: 哪个鼠标键触发 S 刹车; 'L'/'R'/'M'/'X1'/'X2'
 
     def to_dict(self) -> dict:
         d = asdict(self)

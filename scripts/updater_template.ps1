@@ -29,21 +29,24 @@ try {
     $splash = New-Object System.Windows.Forms.Form
     $splash.Text = "TEGG Touch 升级中"
     $splash.Width = 520
-    $splash.Height = 220
+    $splash.Height = 200
     $splash.StartPosition = "CenterScreen"
-    $splash.FormBorderStyle = "FixedSingle"
+    # 无边框, 整窗一色深灰; 不要 Windows 默认的浅色标题栏
+    $splash.FormBorderStyle = "None"
     $splash.MaximizeBox = $false
     $splash.MinimizeBox = $false
     $splash.TopMost = $true
     $splash.ShowInTaskbar = $false
     $splash.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
+    # 微调: 用 1px 深色边框区隔背景
+    $splash.Padding = New-Object System.Windows.Forms.Padding(1)
 
     $title = New-Object System.Windows.Forms.Label
     $title.Text = "蛋挞 正在升级到新版本"
     $title.Font = New-Object System.Drawing.Font("Microsoft YaHei", 16, [System.Drawing.FontStyle]::Bold)
     $title.ForeColor = [System.Drawing.Color]::FromArgb(245, 158, 11)
     $title.AutoSize = $false
-    $title.Location = New-Object System.Drawing.Point(0, 36)
+    $title.Location = New-Object System.Drawing.Point(0, 30)
     $title.Width = $splash.ClientSize.Width
     $title.Height = 40
     $title.TextAlign = "MiddleCenter"
@@ -54,7 +57,7 @@ try {
     $status.Font = New-Object System.Drawing.Font("Microsoft YaHei", 11)
     $status.ForeColor = [System.Drawing.Color]::FromArgb(204, 204, 204)
     $status.AutoSize = $false
-    $status.Location = New-Object System.Drawing.Point(0, 100)
+    $status.Location = New-Object System.Drawing.Point(0, 88)
     $status.Width = $splash.ClientSize.Width
     $status.Height = 30
     $status.TextAlign = "MiddleCenter"
@@ -65,7 +68,7 @@ try {
     $hint.Font = New-Object System.Drawing.Font("Microsoft YaHei", 9)
     $hint.ForeColor = [System.Drawing.Color]::FromArgb(136, 136, 136)
     $hint.AutoSize = $false
-    $hint.Location = New-Object System.Drawing.Point(0, 140)
+    $hint.Location = New-Object System.Drawing.Point(0, 130)
     $hint.Width = $splash.ClientSize.Width
     $hint.Height = 20
     $hint.TextAlign = "MiddleCenter"

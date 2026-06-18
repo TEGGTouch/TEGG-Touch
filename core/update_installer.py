@@ -21,10 +21,15 @@ from core.constants import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-# 主下载源 + 国内镜像 fallback (前缀 + 原 URL 拼接)
-# ghproxy 系列的稳定性会变, 失败就顺序回退下一个
-_MIRRORS = [
-    "",                                  # 直连
+# 本地下载镜像 (大陆 OSS / CDN) — 不进 git, 从 core/_update_mirror.py 读
+# 文件不存在或未配置时 _OSS_BASE = "", 跳过 OSS 走 GH 直连 + ghproxy
+try:
+    from core._update_mirror import OSS_BASE as _OSS_BASE
+except ImportError:
+    _OSS_BASE = ""
+
+# ghproxy 系列国际镜像 fallback — 拼前缀到原 GH URL
+_GH_MIRROR_PREFIXES = [
     "https://ghproxy.com/",
     "https://gh-proxy.com/",
     "https://mirror.ghproxy.com/",
@@ -70,21 +75,22 @@ try {
     $splash = New-Object System.Windows.Forms.Form
     $splash.Text = "TEGG Touch 升级中"
     $splash.Width = 520
-    $splash.Height = 220
+    $splash.Height = 200
     $splash.StartPosition = "CenterScreen"
-    $splash.FormBorderStyle = "FixedSingle"
+    $splash.FormBorderStyle = "None"
     $splash.MaximizeBox = $false
     $splash.MinimizeBox = $false
     $splash.TopMost = $true
     $splash.ShowInTaskbar = $false
     $splash.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
+    $splash.Padding = New-Object System.Windows.Forms.Padding(1)
 
     $title = New-Object System.Windows.Forms.Label
     $title.Text = "蛋挞 正在升级到新版本"
     $title.Font = New-Object System.Drawing.Font("Microsoft YaHei", 16, [System.Drawing.FontStyle]::Bold)
     $title.ForeColor = [System.Drawing.Color]::FromArgb(245, 158, 11)
     $title.AutoSize = $false
-    $title.Location = New-Object System.Drawing.Point(0, 36)
+    $title.Location = New-Object System.Drawing.Point(0, 30)
     $title.Width = $splash.ClientSize.Width
     $title.Height = 40
     $title.TextAlign = "MiddleCenter"
@@ -95,7 +101,7 @@ try {
     $status.Font = New-Object System.Drawing.Font("Microsoft YaHei", 11)
     $status.ForeColor = [System.Drawing.Color]::FromArgb(204, 204, 204)
     $status.AutoSize = $false
-    $status.Location = New-Object System.Drawing.Point(0, 100)
+    $status.Location = New-Object System.Drawing.Point(0, 88)
     $status.Width = $splash.ClientSize.Width
     $status.Height = 30
     $status.TextAlign = "MiddleCenter"
@@ -106,7 +112,7 @@ try {
     $hint.Font = New-Object System.Drawing.Font("Microsoft YaHei", 9)
     $hint.ForeColor = [System.Drawing.Color]::FromArgb(136, 136, 136)
     $hint.AutoSize = $false
-    $hint.Location = New-Object System.Drawing.Point(0, 140)
+    $hint.Location = New-Object System.Drawing.Point(0, 130)
     $hint.Width = $splash.ClientSize.Width
     $hint.Height = 20
     $hint.TextAlign = "MiddleCenter"
@@ -233,27 +239,43 @@ def _download(url: str, dest: str, on_progress, timeout: int) -> int:
         return downloaded
 
 
+def _build_candidate_urls(gh_url: str) -> list[tuple[str, str]]:
+    """从 GH release asset URL 推导出全部候选下载源.
+    返回 [(name, url), ...] 顺序就是尝试顺序: 本地镜像 (若配置) → GH 直连 → ghproxy
+    """
+    candidates: list[tuple[str, str]] = []
+    # 本地镜像 (OSS/CDN, 大陆加速) — 仅当 core/_update_mirror.py 存在且 OSS_BASE 非空时
+    if _OSS_BASE:
+        fname = gh_url.rstrip("/").split("/")[-1]
+        if fname and fname.lower().endswith(".zip"):
+            candidates.append(("本地镜像", _OSS_BASE + fname))
+    # GH 直连
+    candidates.append(("GitHub 直连", gh_url))
+    # ghproxy 国际镜像 fallback
+    for prefix in _GH_MIRROR_PREFIXES:
+        candidates.append((f"GH 镜像 {prefix}", prefix + gh_url))
+    return candidates
+
+
 def download_with_fallback(url: str, dest: str, on_progress=None) -> str:
-    """按 _MIRRORS 顺序尝试. 返回下载后的文件路径 (= dest). 全失败抛 UpdateError."""
+    """按 OSS → GH 直连 → ghproxy 顺序尝试. 返回下载后的文件路径 (= dest). 全失败抛 UpdateError."""
     last_err: Exception | None = None
-    for prefix in _MIRRORS:
-        try_url = (prefix + url) if prefix else url
-        logger.info(f"downloading from: {try_url}")
+    for name, try_url in _build_candidate_urls(url):
+        logger.info(f"downloading from {name}: {try_url}")
         try:
             _download(try_url, dest, on_progress, _DOWNLOAD_TIMEOUT_PER_MIRROR)
-            logger.info(f"download succeeded: {try_url} → {dest}")
+            logger.info(f"download succeeded ({name}) → {dest}")
             return dest
         except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
             last_err = e
-            logger.warning(f"download failed via {prefix or 'direct'}: {e}")
-            # 清掉半截文件再试下一个镜像
+            logger.warning(f"download failed via {name}: {e}")
             try:
                 if os.path.exists(dest):
                     os.remove(dest)
             except Exception:
                 pass
             continue
-    raise UpdateError(f"all mirrors failed: {last_err}")
+    raise UpdateError(f"all sources failed: {last_err}")
 
 
 def verify_sha256(path: str, expected_hex: str) -> bool:

@@ -42,6 +42,15 @@ if exist "dist\%RELEASE_NAME%.zip" (
     echo.
     echo 文件: dist\%RELEASE_NAME%.zip
     echo.
+
+    :: ── (可选) 同步上传到本地镜像 (OSS/CDN, 大陆加速下载源) ──
+    :: 检测到 pack_release_oss.bat (gitignored 本地脚本) 才调用; 公开 fork 没有这个文件就跳过
+    :: 失败不阻断整个流程
+    if exist pack_release_oss.bat (
+        call pack_release_oss.bat "dist\%RELEASE_NAME%.zip"
+    )
+    echo.
+
     echo 用户使用方式:
     echo   1. 解压 ZIP 到任意目录
     echo   2. 双击 TEGGTouch.exe 即可运行

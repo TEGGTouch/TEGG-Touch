@@ -1039,6 +1039,13 @@ class GpWheelEditorDialog(QDialog):
         self._easy_dz_slider.setValue(int(round(self.data.easy_steering_deadzone * 100)))
         self._easy_sens_slider.setValue(int(round(self.data.easy_throttle_sensitivity * 1000)))
         self._easy_indicator_cb.setChecked(bool(self.data.easy_show_indicator))
+        # 刹车键
+        bk = getattr(self.data, 'easy_brake_button', 'L') or 'L'
+        if bk not in ('L', 'R', 'M', 'X1', 'X2'):
+            bk = 'L'
+        self._easy_brake_choice = bk
+        if hasattr(self, '_easy_brake_btns'):
+            self._refresh_easy_brake_btns()
         # 重新计算互斥 (mode 可能变了)
         self._validate_mutual_exclusion()
 
@@ -1132,6 +1139,7 @@ class GpWheelEditorDialog(QDialog):
         self.data.easy_steering_deadzone = self._easy_dz_slider.value() / 100.0
         self.data.easy_throttle_sensitivity = self._easy_sens_slider.value() / 1000.0
         self.data.easy_show_indicator = self._easy_indicator_cb.isChecked()
+        self.data.easy_brake_button = self._easy_brake_choice
 
     # ── 轻松操控 Tab UI ──
 
@@ -1154,8 +1162,9 @@ class GpWheelEditorDialog(QDialog):
             '&bull; 鼠标 <b>向上移动</b> &rarr; '
             f'<span style="color:{_MARKER_COLOR_RT}">RT 油门</span> 累加; '
             '<b>向下</b> &rarr; RT 减少<br>'
-            '&bull; 鼠标 <b>左键按下</b> &rarr; '
-            f'<span style="color:{_MARKER_COLOR_LT}">S 刹车</span> (键盘)'
+            '&bull; 鼠标 <b>指定键按下</b> &rarr; '
+            f'<span style="color:{_MARKER_COLOR_LT}">S 刹车</span> '
+            '(键盘, 默认左键, 可在下方改右/中/侧 1/侧 2)'
             '</div>'
         )
         tip = QLabel(tip_html)
@@ -1195,6 +1204,33 @@ class GpWheelEditorDialog(QDialog):
             _C_HINT, 12))
         v.addSpacing(20)
 
+        # 刹车键选择 (5 个鼠标键按钮组)
+        v.addWidget(_make_field_label(fn, "刹车 (S 键) 由哪个鼠标键触发"))
+        v.addSpacing(8)
+        brake_row = QHBoxLayout()
+        brake_row.setSpacing(8)
+        self._easy_brake_btns: dict = {}
+        cur_brake = getattr(self.data, 'easy_brake_button', 'L') or 'L'
+        if cur_brake not in ('L', 'R', 'M', 'X1', 'X2'):
+            cur_brake = 'L'
+        self._easy_brake_choice = cur_brake
+        for key, label in [('L', '左键'), ('R', '右键'), ('M', '中键'),
+                            ('X1', '侧键 1'), ('X2', '侧键 2')]:
+            b = QPushButton(label)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFont(_font(fn, 13, bold=True))
+            b.setFixedHeight(36)
+            b.clicked.connect(lambda _, k=key: self._on_easy_brake_choice(k))
+            brake_row.addWidget(b, 1)
+            self._easy_brake_btns[key] = b
+        v.addLayout(brake_row)
+        v.addSpacing(6)
+        v.addWidget(_make_label(
+            fn, "按下选中的鼠标键 = 持续按住 S 键 (刹车); 松开就释放",
+            _C_HINT, 12))
+        self._refresh_easy_brake_btns()
+        v.addSpacing(20)
+
         # 显示指示器
         self._easy_indicator_cb = QCheckBox("在屏幕上显示方向盘指示器 (HUD)")
         self._easy_indicator_cb.setFont(_font(fn, 13))
@@ -1215,6 +1251,26 @@ class GpWheelEditorDialog(QDialog):
 
         v.addStretch()
         return w
+
+    def _on_easy_brake_choice(self, key: str):
+        if key == self._easy_brake_choice:
+            return
+        self._easy_brake_choice = key
+        self._refresh_easy_brake_btns()
+
+    def _refresh_easy_brake_btns(self):
+        for k, b in self._easy_brake_btns.items():
+            selected = (k == self._easy_brake_choice)
+            if selected:
+                b.setStyleSheet(
+                    f"QPushButton {{ background: {C_CYBER}; color: #FFF;"
+                    f" border: none; border-radius: 6px; }}"
+                    f" QPushButton:hover {{ background: {C_CYBER_H}; }}")
+            else:
+                b.setStyleSheet(
+                    f"QPushButton {{ background: {C_GRAY}; color: #CCC;"
+                    f" border: none; border-radius: 6px; }}"
+                    f" QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}")
 
     # ── 左侧栏: 模式 Tab + 激活 tag ──
 
