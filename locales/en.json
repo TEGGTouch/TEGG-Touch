@@ -80,7 +80,7 @@
     "pt_off": "PT OFF [{key}]",
     "pt_block": "Block [{key}]",
     "stop": "Stop [{key}]",
-    "collapse": "Collapse [{key}]",
+    "collapse": "Bubble [{key}]",
     "profile_label": "Profile: {name}"
   },
   "tooltip": {
@@ -101,7 +101,7 @@
     "stop": "Stop and return to edit mode",
     "voice": "Configure voice commands to trigger keys by voice",
     "voice_run": "Voice recognition: trigger keys by speaking",
-    "collapse": "Collapse toolbar into a draggable bubble; double-click bubble to expand",
+    "collapse": "Show floating bubble: left-click toggles toolbar / right-click toggles buttons / middle-click stops; draggable",
     "add_gp_button": "Add gamepad button (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 etc.)",
     "add_gp_stick": "Add joystick (circular, simulates left/right stick)",
     "toggle_gp_wheel": "Steering Wheel (4×2 composite: LT + steering + RT, singleton, for racing games)"
@@ -157,7 +157,7 @@
     "desc_pt_off": "Buttons intercept input, empty areas pass through",
     "desc_pt_block": "Camera barely moves with mouse, but keys still work",
     "desc_stop": "Exit run mode and return to edit mode",
-    "desc_collapse": "Collapse the run toolbar into a draggable bubble; double-click bubble or press key again to expand"
+    "desc_collapse": "Toggle floating bubble; left-click bubble to show/hide toolbar, right-click to show/hide buttons, middle-click to stop running and return to edit mode; draggable"
   },
   "editor": {
     "title": "Edit Button",
@@ -325,10 +325,12 @@
   "gp_wheel_editor": {
     "title": "Steering Wheel Editor",
     "tip": "The wheel is a 4×2 singleton item composed of [Left LT bar + Center disk + Right RT bar]. The entire area responds to mouse: horizontal distance controls steering; LT/RT respond to the mode selected below.",
+    "tab_easy": "Easy Drive",
+    "tab_advanced": "Advanced",
     "section_wheel": "Wheel Parameters",
     "name": "Name",
     "name_placeholder": "Optional, for editor identification",
-    "release_threshold": "Release Threshold (× Half-Width)",
+    "release_threshold": "Active Zone (× Half-Width)",
     "release_threshold_hint": "When the cursor distance from the rectangle's horizontal center exceeds (half-width × threshold), steering + LT + RT all reset. Re-enter to reactivate.",
     "sensitivity": "Sensitivity Curve",
     "sens_linear": "Linear",

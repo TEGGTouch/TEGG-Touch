@@ -135,13 +135,18 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar.toggle_buttons_clicked.connect(self._toggle_buttons_visibility)
         self._run_toolbar.soft_keyboard_clicked.connect(self._toggle_soft_keyboard)
         self._run_toolbar.pt_clicked.connect(self._on_pt_clicked)
-        self._run_toolbar.collapse_clicked.connect(self._collapse_run_toolbar)
+        self._run_toolbar.collapse_clicked.connect(self._toggle_collapse_run_toolbar)
 
-        # 折叠悬浮方块
+        # 悬浮球 (运行时呼出, 左键切工具栏 / 右键切按键 / 中键停止)
         self._collapsed_bubble = CollapsedBubble(parent=self)
         self._collapsed_bubble.hide()
-        self._collapsed_bubble.expand_requested.connect(self._expand_run_toolbar)
-        self._run_collapsed = False
+        self._collapsed_bubble.toggle_toolbar_requested.connect(
+            self._toggle_run_toolbar_visibility)
+        self._collapsed_bubble.toggle_buttons_requested.connect(
+            self._toggle_buttons_visibility)
+        self._collapsed_bubble.stop_requested.connect(self.to_edit)
+        self._collapsed_bubble.moved.connect(self._on_bubble_moved)
+        self._run_collapsed = False                 # 悬浮球是否可见
 
         # 工具栏拖拽时同步软键盘位置 (匹配原版 _dm 中的 _position_above_toolbar 调用)
         self._edit_toolbar.moved.connect(self._sync_keyboard_to_toolbar)
@@ -351,6 +356,7 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar.hide()
         self._collapsed_bubble.hide()
         self._run_collapsed = False
+        self._run_toolbar.update_collapse_state(False)
         self._edit_toolbar.show()
         self._smart_pt_timer.start()
 
@@ -368,34 +374,54 @@ class OverlayWindow(QGraphicsView):
     }
 
     def _collapse_run_toolbar(self):
-        """折叠运行工具栏为悬浮方块"""
+        """呼出悬浮球 (工具栏不消失)。位置从 config 读取, 首次为工具栏左侧 20px。"""
         if self._current_mode != 'run' or self._run_collapsed:
             return
-        tb_geo = self._run_toolbar.frameGeometry()
-        # 把方块放在原工具栏的左上角附近
-        bx = tb_geo.x() + max(0, (tb_geo.width() - CollapsedBubble.SIZE) // 2)
-        by = tb_geo.y()
-        self._run_toolbar.hide()
+        cfg = self._scene.get_config() or {}
+        bx = cfg.get('bubble_x')
+        by = cfg.get('bubble_y')
+        if bx is None or by is None:
+            tb_geo = self._run_toolbar.frameGeometry()
+            bx = tb_geo.x() - CollapsedBubble.SIZE - 20
+            by = tb_geo.y() + max(0, (tb_geo.height() - CollapsedBubble.SIZE) // 2)
         self._collapsed_bubble.show_at(bx, by)
         self._run_collapsed = True
+        self._run_toolbar.update_collapse_state(True)
 
     def _expand_run_toolbar(self):
-        """展开运行工具栏"""
+        """收起悬浮球 (工具栏保持原状)。"""
         if not self._run_collapsed:
             return
         self._collapsed_bubble.hide()
-        self._run_toolbar.show()
-        self._run_toolbar.raise_()
         self._run_collapsed = False
+        self._run_toolbar.update_collapse_state(False)
 
     def _toggle_collapse_run_toolbar(self):
-        """F10: 折叠/展开切换"""
+        """F4: 切换悬浮球显隐"""
         if self._current_mode != 'run':
             return
         if self._run_collapsed:
             self._expand_run_toolbar()
         else:
             self._collapse_run_toolbar()
+
+    def _toggle_run_toolbar_visibility(self):
+        """悬浮球左键 → 切换运行工具栏显示/隐藏 (悬浮球本身不动)。"""
+        if self._current_mode != 'run':
+            return
+        if self._run_toolbar.isVisible():
+            self._run_toolbar.hide()
+        else:
+            self._run_toolbar.show()
+            self._run_toolbar.raise_()
+
+    def _on_bubble_moved(self, x: int, y: int):
+        """悬浮球拖拽结束 → 写入 config 持久化位置"""
+        cfg = self._scene.get_config()
+        if cfg is not None:
+            cfg['bubble_x'] = x
+            cfg['bubble_y'] = y
+            self._scene.save_config()
 
     def _on_pt_clicked(self, mode):
         """工具栏穿透按钮点击 → 同步 manager + toolbar + 光标"""

@@ -1,6 +1,7 @@
 """
 TEGG Touch 蛋挞 (PyQt6) - center_band_dialog.py
-回中带专用简化编辑弹窗 — 400×280, 无属性编辑字段。
+回中带专用简化编辑弹窗 — 复制 / 删除两个操作 + 说明文本，无属性编辑字段。
+视觉规范对齐 ButtonEditorDialog（标题 18 / 提示 14 / 关闭图标按钮 / C_PM_BG）。
 """
 
 from PyQt6.QtWidgets import (
@@ -8,9 +9,12 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QFrame, QApplication,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QFontDatabase
 
 from core.i18n import t, get_font
+from core.constants import (
+    C_PM_BG, C_GRAY, C_GRAY_H, C_CLOSE, C_CLOSE_H,
+)
 
 
 def _make_font(name, px, bold=False):
@@ -21,11 +25,31 @@ def _make_font(name, px, bold=False):
     return f
 
 
+_ICON_FONT = None
+
+def _detect_icon_font():
+    global _ICON_FONT
+    if _ICON_FONT is not None:
+        return _ICON_FONT
+    families = QFontDatabase.families()
+    if "Segoe Fluent Icons" in families:
+        _ICON_FONT = "Segoe Fluent Icons"
+    elif "Segoe MDL2 Assets" in families:
+        _ICON_FONT = "Segoe MDL2 Assets"
+    else:
+        _ICON_FONT = ""
+    return _ICON_FONT
+
+
 class CenterBandDialog(QDialog):
-    """回中带专用简化编辑弹窗 — 匹配原版 400×280 布局"""
+    """回中带专用简化编辑弹窗 — 视觉对齐 ButtonEditorDialog"""
 
     deleted = pyqtSignal(object)
     copied = pyqtSignal(object)
+
+    WIN_W = 420
+    WIN_H = 340
+    PADDING = 20
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -37,7 +61,7 @@ class CenterBandDialog(QDialog):
             | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(400, 280)
+        self.setFixedSize(self.WIN_W, self.WIN_H)
 
         self._init_ui()
         self._center_on_screen()
@@ -45,6 +69,7 @@ class CenterBandDialog(QDialog):
 
     def _init_ui(self):
         fn = get_font()
+        _detect_icon_font()
 
         # 外层透明
         outer = QVBoxLayout(self)
@@ -52,57 +77,61 @@ class CenterBandDialog(QDialog):
 
         container = QFrame()
         container.setObjectName("cb_container")
-        container.setStyleSheet("""
-            QFrame#cb_container {
-                background: #2D2D2D;
+        container.setStyleSheet(f"""
+            QFrame#cb_container {{
+                background: {C_PM_BG};
                 border-radius: 4px;
                 border: 1px solid #444;
-            }
+            }}
         """)
         outer.addWidget(container)
 
         root = QVBoxLayout(container)
-        root.setContentsMargins(20, 20, 20, 20)
-        root.setSpacing(12)
+        root.setContentsMargins(self.PADDING, self.PADDING, self.PADDING, self.PADDING)
+        root.setSpacing(0)
 
-        # ── 标题栏: 弹簧 + 关闭按钮 ──
-        header = QHBoxLayout()
-        header.addStretch()
-        close_btn = QPushButton("\u2715")
+        # ── 标题栏: 左标题 + 右关闭按钮 ──
+        title_row = QHBoxLayout()
+        title_lbl = QLabel(t("editor.center_band_title"))
+        title_lbl.setFont(_make_font(fn, 18, bold=True))
+        title_lbl.setStyleSheet("color: white; background: transparent;")
+        title_row.addWidget(title_lbl)
+        title_row.addStretch()
+
+        close_icon = "\uE711" if _ICON_FONT else "\u2715"
+        close_btn = QPushButton(close_icon)
         close_btn.setFixedSize(40, 40)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setFont(_make_font(fn, 14, bold=True))
-        close_btn.setStyleSheet("""
-            QPushButton {
-                background: #6E1E1E; color: #FFF;
+        if _ICON_FONT:
+            close_btn.setFont(_make_font(_ICON_FONT, 20))
+        else:
+            close_btn.setFont(_make_font(fn, 18, bold=True))
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CLOSE}; color: #FFF;
                 border: none; border-radius: 6px;
-            }
-            QPushButton:hover { background: #8B2020; }
+            }}
+            QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         close_btn.clicked.connect(self.reject)
-        header.addWidget(close_btn)
-        root.addLayout(header)
+        title_row.addWidget(close_btn)
+        root.addLayout(title_row)
 
-        # ── 绿色标题 ──
-        title = QLabel(t("editor.center_band_title"))
-        title.setFont(_make_font(fn, 14, bold=True))
-        title.setStyleSheet("color: #176F2C; background: transparent;")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(title)
+        root.addSpacing(16)
 
-        # ── 说明文字 ──
+        # ── 提示文字 (直接显示，主/副两行) ──
         desc = QLabel(t("editor.center_band_desc"))
-        desc.setFont(_make_font(fn, 13))
-        desc.setStyleSheet("color: #CCC; background: transparent;")
-        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc.setFont(_make_font(fn, 16))
+        desc.setStyleSheet("color: #E0E0E0; background: transparent;")
         desc.setWordWrap(True)
         root.addWidget(desc)
 
-        # ── 副标题 ──
+        root.addSpacing(6)
+
         sub = QLabel(t("editor.center_band_sub"))
-        sub.setFont(_make_font(fn, 11))
+        sub.setFont(_make_font(fn, 14))
         sub.setStyleSheet("color: #888; background: transparent;")
-        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub.setWordWrap(True)
         root.addWidget(sub)
 
         root.addStretch()
@@ -111,28 +140,30 @@ class CenterBandDialog(QDialog):
         copy_btn = QPushButton(t("editor.copy"))
         copy_btn.setFixedHeight(40)
         copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        copy_btn.setFont(_make_font(fn, 13))
-        copy_btn.setStyleSheet("""
-            QPushButton {
-                background: #3A3A3A; color: #E0E0E0;
+        copy_btn.setFont(_make_font(fn, 18))
+        copy_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
                 border: none; border-radius: 6px;
-            }
-            QPushButton:hover { background: #505050; }
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         copy_btn.clicked.connect(self._on_copy)
         root.addWidget(copy_btn)
+
+        root.addSpacing(8)
 
         # ── 删除按钮 ──
         del_btn = QPushButton(t("editor.delete"))
         del_btn.setFixedHeight(40)
         del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        del_btn.setFont(_make_font(fn, 13))
-        del_btn.setStyleSheet("""
-            QPushButton {
-                background: #6E1E1E; color: #FFF;
+        del_btn.setFont(_make_font(fn, 18, bold=True))
+        del_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CLOSE}; color: #FFF;
                 border: none; border-radius: 6px;
-            }
-            QPushButton:hover { background: #8B2020; }
+            }}
+            QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         del_btn.clicked.connect(self._on_delete)
         root.addWidget(del_btn)

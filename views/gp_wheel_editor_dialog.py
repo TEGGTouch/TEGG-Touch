@@ -81,6 +81,11 @@ def _font(name, px, bold=False):
     return f
 
 
+# 视觉旋转角度档位 (只允许这 5 档)
+_ROT_STOPS = (90, 180, 270, 360, 720)
+_ROT_DEFAULT_IDX = 1   # 180° 为默认
+
+
 class _DefaultMarkedSlider(QSlider):
     """slider 上方画 ▼ 三角; 当前值 == 默认值 → 蓝, 否则灰白 (复用 gp_stick_editor 模式)"""
     TRI_TOP = 4
@@ -569,9 +574,11 @@ class GpWheelEditorDialog(QDialog):
     saved = pyqtSignal(object)
     deleted = pyqtSignal(object)
 
-    WIN_W = 960
+    WIN_W = 1280
     WIN_H = 960
     PADDING = 20
+    SIDEBAR_W = 260
+    CONTENT_W = 960
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -629,14 +636,25 @@ class GpWheelEditorDialog(QDialog):
         root.addLayout(hdr)
         root.addSpacing(12)
 
-        # 提示 (HTML line-height 拉宽)
-        tip = QLabel(f'<div style="line-height:180%">{t("gp_wheel_editor.tip")}</div>')
-        tip.setTextFormat(Qt.TextFormat.RichText)
-        tip.setFont(_font(fn, 13))
-        tip.setStyleSheet(f"color: {_C_HINT}; background: transparent;")
-        tip.setWordWrap(True)
-        root.addWidget(tip)
-        root.addSpacing(20)
+        # ── columns: 左侧栏 (260) | 分隔线 | 内容 stack (960) ──
+        self._columns = QHBoxLayout()
+        self._columns.setSpacing(0)
+
+        # 左侧栏: [轻松操控][复杂设置] + 「激活」tag
+        self._columns.addWidget(self._build_mode_sidebar(fn))
+        self._columns.addSpacing(10)
+
+        # 垂直分隔线
+        sb_divider = QFrame()
+        sb_divider.setFixedWidth(1)
+        sb_divider.setStyleSheet("background: #444;")
+        self._columns.addWidget(sb_divider)
+        self._columns.addSpacing(10)
+
+        # 内容 Stack (固定宽 960)
+        self._mode_stack = QStackedWidget()
+        self._mode_stack.setFixedWidth(self.CONTENT_W)
+        self._mode_stack.setStyleSheet("background: transparent;")
 
         # 可滚动区域
         scroll = QScrollArea()
@@ -662,13 +680,7 @@ class GpWheelEditorDialog(QDialog):
         sc.addWidget(sec1)
         sc.addSpacing(10)
 
-        # ── 释放阈值 (1/2 左) + 死区 (1/2 右) 同一行 ──
-        two_col_rd = QHBoxLayout()
-        two_col_rd.setSpacing(20)
-
-        # 左: 释放阈值
-        rel_col = QVBoxLayout()
-        rel_col.setSpacing(0)
+        # ── 释放阈值 (独占一行) ──
         head, self._release_slider, _ = _make_value_slider(
             fn, t("gp_wheel_editor.release_threshold"),
             init=int(self.data.release_threshold_ratio * 100),
@@ -693,16 +705,19 @@ class GpWheelEditorDialog(QDialog):
         head.insertSpacing(1, 10)
         head.insertWidget(2, self._show_zone_cb)
         self._release_slider.valueChanged.connect(self._on_release_slider_changed)
-        rel_col.addLayout(head)
-        rel_col.addWidget(self._release_slider)
-        rel_col.addSpacing(6)
+        sc.addLayout(head)
+        sc.addWidget(self._release_slider)
+        sc.addSpacing(6)
         rel_hint = _make_label(fn, t("gp_wheel_editor.release_threshold_hint"),
                                 _C_HINT, 12)
-        rel_col.addWidget(rel_hint)
-        rel_col.addStretch()
-        two_col_rd.addLayout(rel_col, 1)
+        sc.addWidget(rel_hint)
+        sc.addSpacing(18)
 
-        # 右: 中心死区 (玫红色可视化)
+        # ── 中心死区 (1/2 左) + 视觉旋转角度 (1/2 右) 同一行 ──
+        two_col_dr = QHBoxLayout()
+        two_col_dr.setSpacing(20)
+
+        # 左: 中心死区 (玫红色可视化)
         _MARKER_ROSE = "#F43F5E"
         dz_col = QVBoxLayout()
         dz_col.setSpacing(0)
@@ -738,12 +753,71 @@ class GpWheelEditorDialog(QDialog):
             _C_HINT, 12)
         dz_col.addWidget(dz_hint)
         dz_col.addStretch()
-        two_col_rd.addLayout(dz_col, 1)
+        two_col_dr.addLayout(dz_col, 1)
 
-        sc.addLayout(two_col_rd)
+        # 右: 视觉旋转角度 (索引滑块, 仅 5 档: 90 / 180 / 270 / 360 / 720)
+        rot_col = QVBoxLayout()
+        rot_col.setSpacing(0)
+        cur_rot_deg = int(round(getattr(self.data, 'max_rotation_deg', 180.0)))
+        cur_idx = min(range(len(_ROT_STOPS)),
+                      key=lambda i: abs(_ROT_STOPS[i] - cur_rot_deg))
+
+        head_rot = QHBoxLayout()
+        head_rot.addWidget(_make_field_label(fn, "视觉旋转角度 (单边)"))
+        head_rot.addStretch()
+        self._rot_value_lbl = QLabel()
+        self._rot_value_lbl.setFont(_font(fn, 14, bold=True))
+        head_rot.addWidget(self._rot_value_lbl)
+
+        self._rot_slider = _DefaultMarkedSlider(
+            0, len(_ROT_STOPS) - 1, cur_idx, _ROT_DEFAULT_IDX)
+        self._rot_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{
+                background: #404040; height: 6px; border-radius: 3px;
+                margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
+            }}
+            QSlider::sub-page:horizontal {{
+                background: {_C_BLUE}; border-radius: 3px;
+                margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
+            }}
+            QSlider::add-page:horizontal {{
+                background: #404040; border-radius: 3px;
+                margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
+            }}
+            QSlider::handle:horizontal {{
+                background: #DDD; border: 1px solid #999;
+                width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
+            }}
+            QSlider::handle:horizontal:hover {{ background: {_C_BLUE}; border-color: {_C_BLUE_H}; }}
+        """)
+        self._rot_slider.setSingleStep(1)
+        self._rot_slider.setPageStep(1)
+
+        default_prefix = t("gp_stick_editor.default_prefix")
+        def _refresh_rot(idx):
+            deg = _ROT_STOPS[idx]
+            at_default = (idx == _ROT_DEFAULT_IDX)
+            text = f"{default_prefix} {deg}°" if at_default else f"{deg}°"
+            self._rot_value_lbl.setText(text)
+            color = _C_BLUE if at_default else _C_BLUE_H
+            self._rot_value_lbl.setStyleSheet(f"color: {color}; background: transparent;")
+        _refresh_rot(cur_idx)
+        self._rot_slider.valueChanged.connect(_refresh_rot)
+
+        rot_col.addLayout(head_rot)
+        rot_col.addWidget(self._rot_slider)
+        rot_col.addSpacing(6)
+        rot_hint = _make_label(
+            fn, "真车 90~180° 紧凑赛车手感; 360~540° 接近真车; 720° 模拟器整圈感",
+            _C_HINT, 12)
+        rot_col.addWidget(rot_hint)
+        rot_col.addStretch()
+        two_col_dr.addLayout(rot_col, 1)
+
+        sc.addLayout(two_col_dr)
         sc.addSpacing(18)
 
-        # 灵敏度曲线 (独立一行)
+        # ── 灵敏度曲线 (独立一行) ──
         sc.addWidget(_make_field_label(fn, t("gp_wheel_editor.sensitivity")))
         sc.addSpacing(8)
         sens_row = QHBoxLayout()
@@ -756,33 +830,6 @@ class GpWheelEditorDialog(QDialog):
         sens_row.addWidget(self._rb_linear); sens_row.addSpacing(16)
         sens_row.addWidget(self._rb_square); sens_row.addStretch()
         sc.addLayout(sens_row)
-        sc.addSpacing(18)
-
-        # 视觉旋转角度 (独立一行)
-        sc.addWidget(_make_field_label(fn, "视觉旋转角度 (单边)"))
-        sc.addSpacing(8)
-        rot_row = QHBoxLayout()
-        rot_row.setSpacing(8)
-        self._rot_btns: dict = {}
-        cur_rot = int(round(getattr(self.data, 'max_rotation_deg', 180.0)))
-        if cur_rot not in (90, 180, 270, 360, 720):
-            cur_rot = 180
-        self._current_max_rotation = cur_rot
-        for deg in (90, 180, 270, 360, 720):
-            b = QPushButton(f"{deg}°")
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.setFont(_font(fn, 14, bold=True))
-            b.setFixedHeight(36)
-            b.clicked.connect(lambda _, d=deg: self._on_rot_clicked(d))
-            rot_row.addWidget(b, 1)
-            self._rot_btns[deg] = b
-        sc.addLayout(rot_row)
-        sc.addSpacing(6)
-        rot_hint = _make_label(
-            fn, "真车 90~180° 紧凑赛车手感; 360~540° 接近真车; 720° 模拟器整圈感",
-            _C_HINT, 12)
-        sc.addWidget(rot_hint)
-        self._refresh_rot_btns()
         sc.addSpacing(SECTION_GAP)
 
         # 分隔线
@@ -812,10 +859,27 @@ class GpWheelEditorDialog(QDialog):
 
         sc.addStretch()
         scroll.setWidget(body)
-        root.addWidget(scroll, 1)
+
+        # 把 easy widget + advanced scroll 加入 Stack
+        easy_widget = self._build_easy_widget(fn)
+        self._mode_stack.addWidget(easy_widget)   # index 0 = easy
+        self._mode_stack.addWidget(scroll)        # index 1 = advanced
+
+        # 右列 (固定宽 960): stack + 底部按钮 (按钮稍后填入 self._right_panel_vbox)
+        self._right_panel_vbox = QVBoxLayout()
+        self._right_panel_vbox.setContentsMargins(0, 0, 0, 0)
+        self._right_panel_vbox.setSpacing(0)
+        self._right_panel_vbox.addWidget(self._mode_stack, 1)
+        right_panel_w = QWidget()
+        right_panel_w.setFixedWidth(self.CONTENT_W)
+        right_panel_w.setStyleSheet("background: transparent;")
+        right_panel_w.setLayout(self._right_panel_vbox)
+        self._columns.addWidget(right_panel_w)
+        root.addLayout(self._columns, 1)
 
         # 底部按钮: Delete | Save (跟 gp_stick 一致, 但去掉 Copy — 单例不允许复制)
-        root.addSpacing(12)
+        # 放在右列 vbox 内, 跟内容区对齐, 不通栏
+        self._right_panel_vbox.addSpacing(12)
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
         del_btn = QPushButton(t("gp_wheel_editor.delete"))
@@ -856,7 +920,11 @@ class GpWheelEditorDialog(QDialog):
         self._save_btn.clicked.connect(self._on_save)
         btn_row.addWidget(self._save_btn, 3)
         self._apply_save_button_style(enabled=True)
-        root.addLayout(btn_row)
+        self._right_panel_vbox.addLayout(btn_row)
+
+        # 初始选中 tab (必须放在 _mouse_cfg_btn 创建完之后, 才能正确同步可见性)
+        init_idx = 0 if getattr(self.data, 'control_mode', 'advanced') == 'easy' else 1
+        self._select_mode_tab(init_idx)
 
     # ── 互斥校验 (三选一: LT/RT 不能用同一种控制方式) ──
 
@@ -961,13 +1029,16 @@ class GpWheelEditorDialog(QDialog):
         (self._rb_square if self.data.sensitivity_curve == 'square'
          else self._rb_linear).setChecked(True)
         cur_rot = int(round(self.data.max_rotation_deg))
-        if cur_rot not in (90, 180, 270, 360, 720):
-            cur_rot = 180
-        self._current_max_rotation = cur_rot
-        self._refresh_rot_btns()
+        cur_idx = min(range(len(_ROT_STOPS)),
+                      key=lambda i: abs(_ROT_STOPS[i] - cur_rot))
+        self._rot_slider.setValue(cur_idx)
         # section 2/3
         self._lt_section.refresh_from_data()
         self._rt_section.refresh_from_data()
+        # easy 模式字段
+        self._easy_dz_slider.setValue(int(round(self.data.easy_steering_deadzone * 100)))
+        self._easy_sens_slider.setValue(int(round(self.data.easy_throttle_sensitivity * 1000)))
+        self._easy_indicator_cb.setChecked(bool(self.data.easy_show_indicator))
         # 重新计算互斥 (mode 可能变了)
         self._validate_mutual_exclusion()
 
@@ -1052,37 +1123,169 @@ class GpWheelEditorDialog(QDialog):
         self.data.release_threshold_ratio = self._release_slider.value() / 100.0
         self.data.dead_zone = self._dead_zone_slider.value() / 100.0
         self.data.sensitivity_curve = ('square' if self._rb_square.isChecked() else 'linear')
-        self.data.max_rotation_deg = float(self._current_max_rotation)
+        self.data.max_rotation_deg = float(_ROT_STOPS[self._rot_slider.value()])
         self._lt_section.apply_to_data()
         self._rt_section.apply_to_data()
+        # easy 模式字段
+        self.data.control_mode = ('easy' if self._mode_stack.currentIndex() == 0
+                                  else 'advanced')
+        self.data.easy_steering_deadzone = self._easy_dz_slider.value() / 100.0
+        self.data.easy_throttle_sensitivity = self._easy_sens_slider.value() / 1000.0
+        self.data.easy_show_indicator = self._easy_indicator_cb.isChecked()
 
-    # ── 视觉旋转角度 tab ──
+    # ── 轻松操控 Tab UI ──
 
-    def _on_rot_clicked(self, deg: int):
-        if deg == self._current_max_rotation:
-            return
-        self._current_max_rotation = deg
-        self._refresh_rot_btns()
+    def _build_easy_widget(self, fn):
+        """构建「轻松操控」Tab 内容"""
+        w = QWidget()
+        w.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(w)
+        v.setContentsMargins(0, 0, 12, 0)
+        v.setSpacing(0)
 
-    def _refresh_rot_btns(self):
-        for deg, b in self._rot_btns.items():
-            selected = (deg == self._current_max_rotation)
+        # 说明
+        tip_html = (
+            '<div style="line-height:180%">'
+            '<b>鼠标即方向盘</b> &nbsp; '
+            '<span style="color:#888">整个屏幕都是触发区域</span><br>'
+            '&bull; 鼠标 <b>横向移动</b> &rarr; '
+            f'<span style="color:{_C_BLUE_H}">A / D</span> 转向; '
+            '停下 &rarr; 方向盘自动回正<br>'
+            '&bull; 鼠标 <b>向上移动</b> &rarr; '
+            f'<span style="color:{_MARKER_COLOR_RT}">RT 油门</span> 累加; '
+            '<b>向下</b> &rarr; RT 减少<br>'
+            '&bull; 鼠标 <b>左键按下</b> &rarr; '
+            f'<span style="color:{_MARKER_COLOR_LT}">S 刹车</span> (键盘)'
+            '</div>'
+        )
+        tip = QLabel(tip_html)
+        tip.setTextFormat(Qt.TextFormat.RichText)
+        tip.setFont(_font(fn, 13))
+        tip.setStyleSheet(f"color: {_C_TEXT}; background: transparent;")
+        tip.setWordWrap(True)
+        v.addWidget(tip)
+        v.addSpacing(22)
+
+        # 转向死区
+        head_dz, self._easy_dz_slider, _ = _make_value_slider(
+            fn, "转向死区 (% 屏宽)",
+            init=int(round(self.data.easy_steering_deadzone * 100)),
+            min_v=0, max_v=30, default_v=8, suffix='%',
+        )
+        v.addLayout(head_dz)
+        v.addWidget(self._easy_dz_slider)
+        v.addSpacing(6)
+        v.addWidget(_make_label(
+            fn, "屏幕中线 ±死区% 范围内不发送 A/D, 避免静止时来回触发",
+            _C_HINT, 12))
+        v.addSpacing(20)
+
+        # RT 灵敏度 (千分之/像素)
+        cur_sens = int(round(self.data.easy_throttle_sensitivity * 1000))
+        cur_sens = max(1, min(20, cur_sens))
+        head_sens, self._easy_sens_slider, _ = _make_value_slider(
+            fn, "RT 油门灵敏度",
+            init=cur_sens, min_v=1, max_v=20, default_v=5, suffix='\u2030/px',
+        )
+        v.addLayout(head_sens)
+        v.addWidget(self._easy_sens_slider)
+        v.addSpacing(6)
+        v.addWidget(_make_label(
+            fn, "鼠标向上 1px → RT 累加 N\u2030 (千分之); 数值越大油门越敏感",
+            _C_HINT, 12))
+        v.addSpacing(20)
+
+        # 显示指示器
+        self._easy_indicator_cb = QCheckBox("在屏幕上显示方向盘指示器 (HUD)")
+        self._easy_indicator_cb.setFont(_font(fn, 13))
+        self._easy_indicator_cb.setChecked(bool(self.data.easy_show_indicator))
+        self._easy_indicator_cb.setStyleSheet(f"""
+            QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
+            QCheckBox::indicator {{
+                width: 16px; height: 16px; border-radius: 3px;
+                border: 2px solid #666; background: {_C_BG};
+            }}
+            QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+            QCheckBox::indicator:checked {{
+                background: {_C_BLUE}; border: 2px solid {_C_BLUE};
+                image: url({_CHECK_ICON_URL});
+            }}
+        """)
+        v.addWidget(self._easy_indicator_cb)
+
+        v.addStretch()
+        return w
+
+    # ── 左侧栏: 模式 Tab + 激活 tag ──
+
+    def _build_mode_sidebar(self, fn):
+        """左侧栏: [轻松操控][复杂设置] 两个按钮; 「激活」tag 内嵌行内右侧, 跟随选中项"""
+        sb = QWidget()
+        sb.setFixedWidth(self.SIDEBAR_W)
+        sb.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(sb)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(8)
+
+        self._sidebar_items = []  # [(btn, label, tag), ...]
+        for label_text, idx in [(t("gp_wheel_editor.tab_easy"), 0),
+                                 (t("gp_wheel_editor.tab_advanced"), 1)]:
+            # 用空 text 的 QPushButton 作底, 内部 layout 放 label + stretch + 激活 tag
+            btn = QPushButton()
+            btn.setFixedHeight(48)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda _, i=idx: self._select_mode_tab(i))
+
+            inner = QHBoxLayout(btn)
+            inner.setContentsMargins(16, 0, 14, 0)
+            inner.setSpacing(8)
+
+            label = QLabel(label_text)
+            label.setFont(_font(fn, 16, bold=True))
+            label.setStyleSheet("background: transparent;")
+            label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            inner.addWidget(label)
+            inner.addStretch()
+
+            tag = QLabel("激活")
+            tag.setFont(_font(fn, 10, bold=True))
+            tag.setFixedHeight(18)
+            tag.setStyleSheet(
+                "QLabel { background: #F59E0B; color: #000;"
+                " border-radius: 7px; padding: 0 8px; }"
+            )
+            tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            tag.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            tag.setVisible(False)
+            inner.addWidget(tag)
+
+            v.addWidget(btn)
+            self._sidebar_items.append((btn, label, tag))
+
+        v.addStretch()
+        return sb
+
+    def _select_mode_tab(self, idx: int):
+        """切换模式 tab: 0=轻松, 1=复杂. 切换即激活, 「激活」tag 跟随选中项."""
+        self._mode_stack.setCurrentIndex(idx)
+        for i, (btn, label, tag) in enumerate(self._sidebar_items):
+            selected = (i == idx)
             if selected:
-                b.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_CYBER}; color: #FFF;
-                        border: none; border-radius: 6px;
-                    }}
-                    QPushButton:hover {{ background: {C_CYBER_H}; }}
-                """)
+                btn.setStyleSheet(
+                    f"QPushButton {{ background: {C_CYBER};"
+                    f" border: none; border-radius: 6px; }}"
+                    f" QPushButton:hover {{ background: {C_CYBER_H}; }}")
+                label.setStyleSheet("color: #FFF; background: transparent;")
             else:
-                b.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_GRAY}; color: #CCC;
-                        border: none; border-radius: 6px;
-                    }}
-                    QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}
-                """)
+                btn.setStyleSheet(
+                    f"QPushButton {{ background: transparent;"
+                    f" border: none; border-radius: 6px; }}"
+                    f" QPushButton:hover {{ background: {C_GRAY_H}; }}")
+                label.setStyleSheet("color: #CCC; background: transparent;")
+            tag.setVisible(selected)
+        # 「其他鼠标按键配置」按钮仅复杂模式可见
+        if hasattr(self, '_mouse_cfg_btn'):
+            self._mouse_cfg_btn.setVisible(idx == 1)
 
     # ── 定位 + 拖拽 ──
 

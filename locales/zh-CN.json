@@ -80,7 +80,7 @@
     "pt_off": "穿透OFF [{key}]",
     "pt_block": "不穿透 [{key}]",
     "stop": "停止 [{key}]",
-    "collapse": "收起 [{key}]",
+    "collapse": "悬浮球 [{key}]",
     "profile_label": "方案：{name}"
   },
   "tooltip": {
@@ -101,7 +101,7 @@
     "stop": "停止运行，返回编辑模式",
     "voice": "配置语音指令，用语音触发按键操作",
     "voice_run": "语音识别: 开启后用语音触发按键",
-    "collapse": "收起工具栏为悬浮方块，双击方块可展开",
+    "collapse": "呼出悬浮球: 左键切工具栏 / 右键切按键 / 中键停止, 可拖动",
     "add_gp_button": "添加手柄键 (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 等)",
     "add_gp_stick": "添加摇杆 (圆形, 模拟左/右摇杆移动)",
     "toggle_gp_wheel": "方向盘 (4×2 复合: LT + 转向 + RT, 单例, 适合赛车游戏)"
@@ -157,7 +157,7 @@
     "desc_pt_off": "按钮覆盖的游戏画面不可被操作，空余区域可以",
     "desc_pt_block": "视角几乎不会随鼠标移动，但按键操作有效",
     "desc_stop": "退出运行模式，返回编辑界面",
-    "desc_collapse": "把运行工具栏收起为悬浮方块，双击方块或再次按键展开"
+    "desc_collapse": "呼出/收起悬浮球; 球左键切换工具栏显隐, 右键切换按键显隐, 中键停止运行返回编辑模式, 可拖动"
   },
   "editor": {
     "title": "编辑按钮",
@@ -325,10 +325,12 @@
   "gp_wheel_editor": {
     "title": "方向盘编辑器",
     "tip": "方向盘是 4×2 单例 item, 由「左 LT 条 + 中圆盘 + 右 RT 条」组成。整个区域响应鼠标:水平距离决定转向, LT/RT 通过下方选择的控制方式触发。",
+    "tab_easy": "轻松操控",
+    "tab_advanced": "复杂设置",
     "section_wheel": "方向盘参数",
     "name": "名称",
     "name_placeholder": "可选, 编辑时辨识用",
-    "release_threshold": "释放阈值 (× 半宽)",
+    "release_threshold": "响应有效区域 (× 半宽)",
     "release_threshold_hint": "鼠标距矩形横向中心 > 半宽 × 阈值 时 steering+LT+RT 全归零, 需重新入区激活",
     "sensitivity": "灵敏度曲线",
     "sens_linear": "线性",

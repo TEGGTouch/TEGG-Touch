@@ -153,15 +153,15 @@ class RunToolbar(QWidget):
         # 分隔线
         row.addWidget(_VSep())
 
-        # 收起 [F4] (折叠成悬浮方块)
-        collapse_btn = _IconTextBtn(
+        # 悬浮球 [F4] (激活后变琥珀色)
+        self._collapse_btn = _IconTextBtn(
             "", "⤓",
             t("run.collapse", key=_K_COLLAPSE),
             C_GRAY, C_GRAY_H)
-        collapse_btn.setToolTip(t("tooltip.collapse"))
-        self._install_tip(collapse_btn)
-        collapse_btn.clicked.connect(self.collapse_clicked.emit)
-        row.addWidget(collapse_btn)
+        self._collapse_btn.setToolTip(t("tooltip.collapse"))
+        self._install_tip(self._collapse_btn)
+        self._collapse_btn.clicked.connect(self.collapse_clicked.emit)
+        row.addWidget(self._collapse_btn)
 
         # 语音 [F5] (绿/灰 toggle, 默认灰色-关闭)
         self._voice_btn = _IconTextBtn(
@@ -262,6 +262,13 @@ class RunToolbar(QWidget):
             self._vis_btn.set_icon_text("\uE7B3", "\U0001F648")
         else:
             self._vis_btn.set_icon_text("\uED1A", "\U0001F441")
+
+    def update_collapse_state(self, active: bool):
+        """悬浮球是否处于激活状态: 激活 → 琥珀色; 否则恢复灰色"""
+        if active:
+            self._collapse_btn.set_colors(C_AMBER_D, C_AMBER)
+        else:
+            self._collapse_btn.set_colors(C_GRAY, C_GRAY_H)
 
     def update_pt_mode(self, mode):
         self._pt_mode = mode
@@ -400,11 +407,17 @@ class RunToolbar(QWidget):
 
 
 class CollapsedBubble(QWidget):
-    """折叠后的悬浮方块 — 显示"蛋挞"，可拖动，双击展开。"""
+    """悬浮球 — 显示"蛋挞"图标，可拖动。
+    左键单击 → 切换工具栏显示/隐藏；右键单击 → 切换按键显示/隐藏 (同 F7)。
+    """
 
-    expand_requested = pyqtSignal()
+    toggle_toolbar_requested = pyqtSignal()
+    toggle_buttons_requested = pyqtSignal()
+    stop_requested = pyqtSignal()
+    moved = pyqtSignal(int, int)         # 拖拽结束后发出 (x, y)
 
     SIZE = 56
+    DRAG_THRESHOLD = 4    # 鼠标移动 >4px 才视为拖拽, 否则当点击
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -416,7 +429,7 @@ class CollapsedBubble(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setFixedSize(self.SIZE, self.SIZE)
-        self.setToolTip("双击或 F10 展开工具栏")
+        self.setToolTip("左键: 工具栏显隐 | 右键: 按键显隐 (F7) | 中键: 停止 | 拖动: 移动")
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -457,6 +470,8 @@ class CollapsedBubble(QWidget):
 
         self._drag_pos = None
         self._moved = False
+        self._press_button = None
+        self._press_global_pos = None
 
     def show_at(self, x, y):
         from PyQt6.QtWidgets import QApplication
@@ -471,7 +486,12 @@ class CollapsedBubble(QWidget):
 
     def mousePressEvent(self, event):
         self.raise_()
-        if event.button() == Qt.MouseButton.LeftButton:
+        # 仅左键支持拖拽; 三个键按下都记录起点用于点击/拖拽判定
+        if event.button() in (Qt.MouseButton.LeftButton,
+                              Qt.MouseButton.RightButton,
+                              Qt.MouseButton.MiddleButton):
+            self._press_button = event.button()
+            self._press_global_pos = event.globalPosition().toPoint()
             self._drag_pos = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
@@ -479,10 +499,19 @@ class CollapsedBubble(QWidget):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        if self._drag_pos and event.buttons() & Qt.MouseButton.LeftButton:
+        if (self._drag_pos and getattr(self, '_press_button', None) == Qt.MouseButton.LeftButton
+                and event.buttons() & Qt.MouseButton.LeftButton):
+            # 越过阈值后才认为是拖拽
+            cur = event.globalPosition().toPoint()
+            if not self._moved:
+                dx = cur.x() - self._press_global_pos.x()
+                dy = cur.y() - self._press_global_pos.y()
+                if (dx * dx + dy * dy) < (self.DRAG_THRESHOLD * self.DRAG_THRESHOLD):
+                    super().mouseMoveEvent(event)
+                    return
             from PyQt6.QtWidgets import QApplication
             from PyQt6.QtCore import QRect
-            new_pos = event.globalPosition().toPoint() - self._drag_pos
+            new_pos = cur - self._drag_pos
             _ps = QApplication.primaryScreen()
             screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
             x = max(screen.left(), min(new_pos.x(), screen.right() - self.width() + 1))
@@ -492,10 +521,18 @@ class CollapsedBubble(QWidget):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
+        pressed_btn = getattr(self, '_press_button', None)
+        moved = self._moved
         self._drag_pos = None
+        self._press_button = None
+        # 未发生拖拽时按按钮派发: 左键→切工具栏, 右键→切按键, 中键→停止
+        if not moved and event.button() == pressed_btn:
+            if pressed_btn == Qt.MouseButton.LeftButton:
+                self.toggle_toolbar_requested.emit()
+            elif pressed_btn == Qt.MouseButton.RightButton:
+                self.toggle_buttons_requested.emit()
+            elif pressed_btn == Qt.MouseButton.MiddleButton:
+                self.stop_requested.emit()
+        elif moved:
+            self.moved.emit(self.x(), self.y())
         super().mouseReleaseEvent(event)
-
-    def mouseDoubleClickEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.expand_requested.emit()
-        super().mouseDoubleClickEvent(event)

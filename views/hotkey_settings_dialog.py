@@ -1479,6 +1479,7 @@ class HotkeySettingsDialog(QDialog):
             desc.setFont(_make_font(fn, 13))
             desc.setStyleSheet("color: #666; background: transparent;")
             desc.setContentsMargins(20, 0, 0, 0)
+            desc.setWordWrap(True)
             col.addWidget(desc)
 
         return col

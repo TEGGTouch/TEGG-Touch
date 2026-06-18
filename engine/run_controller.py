@@ -141,6 +141,19 @@ class RunController(QObject):
         self._wheel_x1_was_down = False
         self._wheel_x2_was_down = False
 
+        # 方向盘「轻松操控」模式状态 (control_mode == 'easy')
+        self._easy_last_y: int | None = None       # 上一帧鼠标 Y (用于速度映射)
+        self._easy_last_mx: int | None = None      # 上一帧鼠标 X (用于横向位移检测)
+        self._easy_smooth_dx: float = 0.0          # EMA 平滑后的 dx (过滤手抖)
+        self._easy_rt: float = 0.0                 # 当前累计的 RT (0~1)
+        self._easy_steer_state: int = 0            # -1=A 按住, 0=空, +1=D 按住 (键盘输出, 离散)
+        self._easy_a_until: float = 0.0            # A 按住的截止时间 (perf_counter)
+        self._easy_d_until: float = 0.0            # D 按住的截止时间
+        self._easy_brake_state: bool = False       # 左键 → S 按住状态
+        # 视觉转向值: -1~+1, 跟 _easy_steer_state 分离, 用线性插值平滑过渡
+        self._easy_visual_steer: float = 0.0
+        self._easy_last_tick: float | None = None  # 上次 tick 的 perf_counter, 用于算 dt
+
         # 快捷键定时器
         self._timer = QTimer(self)
         self._timer.setInterval(input_poll_interval_ms(UPDATE_INTERVAL))
@@ -189,6 +202,17 @@ class RunController(QObject):
         self._holding_lclick = None
         self._holding_rclick = None
         self._holding_mclick = None
+        # 轻松操控模式状态重置
+        self._easy_last_y = None
+        self._easy_last_mx = None
+        self._easy_smooth_dx = 0.0
+        self._easy_rt = 0.0
+        self._easy_steer_state = 0
+        self._easy_a_until = 0.0
+        self._easy_d_until = 0.0
+        self._easy_brake_state = False
+        self._easy_visual_steer = 0.0
+        self._easy_last_tick = None
         self._timer.start()
 
         # 启动语音引擎
@@ -230,6 +254,8 @@ class RunController(QObject):
             self._release_active_stick()
         if self._active_gp_wheel is not None:
             self._release_gp_wheel()
+        # 释放轻松操控模式残留的 A/D/S
+        self._release_easy_state()
         gp = GamepadEngine.get()
         if gp is not None:
             gp.release_all()
@@ -945,6 +971,15 @@ class RunController(QObject):
         except Exception:
             return
 
+        # ── 轻松操控模式分支: 全屏鼠标接管, 不走 in_rect / release zone 逻辑 ──
+        if (wheel is not None
+                and getattr(wheel.data, 'control_mode', 'advanced') == 'easy'):
+            self._poll_gp_wheel_easy(wheel, screen_pt)
+            gp = GamepadEngine.get()
+            if gp is not None:
+                gp.flush()
+            return
+
         active = self._active_gp_wheel
         if active is not None and not _is_alive(active):
             active = None
@@ -980,6 +1015,142 @@ class RunController(QObject):
         gp = GamepadEngine.get()
         if gp is not None:
             gp.flush()
+
+    # ── 轻松操控模式 (mouse-as-car) ──
+
+    def _poll_gp_wheel_easy(self, wheel, screen_pt: QPoint):
+        """全屏鼠标接管:
+        - X: 屏幕中线 ± 死区 → 不发; 左 → 按 A; 右 → 按 D
+        - Y: 上移 → RT 累加 (速度映射); 下移 → RT 减少; 累计值持续输出
+        - 鼠标左键: 按下 → 按 S, 松开 → 释放 S
+        - 视觉指示器: 按 easy_show_indicator 开关同步 wheel.set_visual
+        """
+        d = wheel.data
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            return
+        sg = screen.geometry()
+        sw, sh = sg.width(), sg.height()
+        if sw <= 0 or sh <= 0:
+            return
+        mx = screen_pt.x() - sg.left()
+        my = screen_pt.y() - sg.top()
+
+        # ── 1) 横向位移 → A / D (移动驱动, EMA 平滑过滤手抖) ──
+        # 单帧 dx 直接判定会被手腕/硬件 1-2px 抖动反复触发, 导致回中不完全.
+        # 用 EMA (alpha=0.5) 平滑近几帧 dx, 只对持续同向运动响应; 鼠标停 80ms 后释放.
+        import time as _t1
+        _HOLD_SEC = 0.080
+        _EMA_ALPHA = 0.5     # 越大越敏感, 越小越抗抖
+        _SMOOTH_TH = 1.5     # 平滑后 dx 超过此值 (px) 才视为有效移动
+        now_t = _t1.perf_counter()
+        if self._easy_last_mx is None:
+            self._easy_last_mx = mx
+            self._easy_smooth_dx = 0.0
+        dx_px = mx - self._easy_last_mx
+        self._easy_last_mx = mx
+        self._easy_smooth_dx = (
+            _EMA_ALPHA * self._easy_smooth_dx + (1.0 - _EMA_ALPHA) * dx_px)
+        if self._easy_smooth_dx <= -_SMOOTH_TH:
+            self._easy_a_until = now_t + _HOLD_SEC
+            self._easy_d_until = 0.0
+        elif self._easy_smooth_dx >= _SMOOTH_TH:
+            self._easy_d_until = now_t + _HOLD_SEC
+            self._easy_a_until = 0.0
+        # 根据 hold 截止时间决定当前状态
+        if now_t < self._easy_a_until:
+            new_steer = -1
+        elif now_t < self._easy_d_until:
+            new_steer = 1
+        else:
+            new_steer = 0
+        if new_steer != self._easy_steer_state:
+            # 先释放上一个键, 再按新键 (避免 A+D 同时按)
+            if self._easy_steer_state == -1:
+                trigger('a', 'r')
+            elif self._easy_steer_state == 1:
+                trigger('d', 'r')
+            if new_steer == -1:
+                trigger('a', 'p')
+            elif new_steer == 1:
+                trigger('d', 'p')
+            self._easy_steer_state = new_steer
+
+        # ── 2) 纵向速度 → RT 累加 ──
+        sens = float(getattr(d, 'easy_throttle_sensitivity', 0.005))
+        if self._easy_last_y is None:
+            self._easy_last_y = my
+        dy = my - self._easy_last_y      # 屏幕坐标: 向上是负
+        self._easy_last_y = my
+        # 上移 (dy<0) → RT 增加
+        self._easy_rt = max(0.0, min(1.0, self._easy_rt - dy * sens))
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.set_trigger("R", self._easy_rt)
+
+        # ── 3) 左键 → S ──
+        lbtn_down = bool(user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
+        if lbtn_down != self._easy_brake_state:
+            trigger('s', 'p' if lbtn_down else 'r')
+            self._easy_brake_state = lbtn_down
+
+        # ── 4) 视觉转向: 速度模型 (deg/sec, 默认 max=180° → 锁 500ms / 回 250ms) ──
+        # 按 A/D: ±360°/sec 滑向 ±max; 松开: 720°/sec 滑向 0; 跟 max_rotation_deg 解耦,
+        # 用户调大幅度 (e.g. 720°) 时, 锁入/回正自动变成 2s / 1s, 保持物理速度恒定.
+        import time as _time
+        _LOCK_DEG_PER_SEC = 360.0
+        _RETURN_DEG_PER_SEC = 720.0
+        max_deg = float(getattr(d, 'max_rotation_deg', 180.0)) or 180.0
+        lock_norm = _LOCK_DEG_PER_SEC / max_deg
+        return_norm = _RETURN_DEG_PER_SEC / max_deg
+
+        now = _time.perf_counter()
+        if self._easy_last_tick is None:
+            dt = 0.0
+        else:
+            dt = min(0.05, now - self._easy_last_tick)   # 夹紧避免假死后突跳
+        self._easy_last_tick = now
+        target = float(self._easy_steer_state)
+        cur = self._easy_visual_steer
+        speed = return_norm if target == 0.0 else lock_norm
+        delta = speed * dt
+        if cur < target:
+            cur = min(target, cur + delta)
+        elif cur > target:
+            cur = max(target, cur - delta)
+        self._easy_visual_steer = cur
+
+        # ── 5) 视觉指示器同步 ──
+        if getattr(d, 'easy_show_indicator', True):
+            if hasattr(wheel, 'set_visual'):
+                wheel.set_visual(
+                    cur,
+                    1.0 if self._easy_brake_state else 0.0,
+                    self._easy_rt,
+                    active=True,
+                )
+
+    def _release_easy_state(self):
+        """退出 easy 模式或停止运行时调用: 释放 A/D/S, RT 归零, 视觉状态重置"""
+        if self._easy_steer_state == -1:
+            trigger('a', 'r')
+        elif self._easy_steer_state == 1:
+            trigger('d', 'r')
+        if self._easy_brake_state:
+            trigger('s', 'r')
+        self._easy_steer_state = 0
+        self._easy_a_until = 0.0
+        self._easy_d_until = 0.0
+        self._easy_brake_state = False
+        self._easy_rt = 0.0
+        self._easy_last_y = None
+        self._easy_last_mx = None
+        self._easy_smooth_dx = 0.0
+        self._easy_visual_steer = 0.0
+        self._easy_last_tick = None
+        gp = GamepadEngine.get()
+        if gp is not None:
+            gp.set_trigger("R", 0.0)
 
     def _activate_gp_wheel(self, wheel):
         """入区瞬移光标到矩形中心 + steering = 0; LT/RT 值保持上次"""
