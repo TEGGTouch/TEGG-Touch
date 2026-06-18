@@ -343,7 +343,9 @@ def apply_update(zip_path: str) -> None:
     tmp_dir = os.path.join(tempfile.gettempdir(), "teggtouch_update")
     os.makedirs(tmp_dir, exist_ok=True)
     ps1_path = os.path.join(tmp_dir, "updater.ps1")
-    with open(ps1_path, "w", encoding="utf-8") as f:
+    # 必须用 utf-8-sig (带 BOM); Windows PowerShell 5.x 默认读 .ps1 是系统 codepage,
+    # 没 BOM 时中文字符会被当 GBK 解析, 整个脚本语法被破坏, splash 看不到 / exe 启动失败.
+    with open(ps1_path, "w", encoding="utf-8-sig") as f:
         f.write(_UPDATER_PS1)
 
     main_pid = os.getpid()
