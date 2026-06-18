@@ -59,24 +59,40 @@ from views.overlay_window import OverlayWindow
 
 
 def _check_for_updates(parent):
-    """启动后台更新检查，有新版本时弹窗提示。"""
+    """启动后台更新检查，有新版本时弹窗提示, 用户点立即更新走自动下载 + 安装流程。"""
     from core.update_checker import UpdateChecker
     from views.update_dialog import UpdateDialog
+    from core.update_installer import UpdateInstaller, apply_update
 
     checker = UpdateChecker(parent)
 
     def _on_update(version, url, body):
         dlg = UpdateDialog(version, url, body, parent)
         dlg.show()
-        # 强制顶到最上层 (跟 overlay 一样 WindowStaysOnTopHint, 不 raise 会被同级 overlay 压住)
         dlg.raise_()
         dlg.activateWindow()
-        # 保持引用防止被 GC (show 是非模态)
         parent._update_dialog = dlg
+
+        def _start_install(zip_url):
+            installer = UpdateInstaller(zip_url, parent=parent)
+            installer.progress.connect(dlg.on_progress)
+
+            def _on_finished_ok(zip_path):
+                dlg.on_applying()
+                try:
+                    apply_update(zip_path)
+                except Exception as e:
+                    dlg.on_failed(f"启动升级器失败: {e}")
+
+            installer.finished_ok.connect(_on_finished_ok)
+            installer.failed.connect(dlg.on_failed)
+            installer.start()
+            parent._update_installer = installer
+
+        dlg.install_requested.connect(_start_install)
 
     checker.update_available.connect(_on_update)
     checker.start()
-    # 保持引用防止被 GC
     parent._update_checker = checker
 
 

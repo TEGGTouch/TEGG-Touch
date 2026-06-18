@@ -489,6 +489,12 @@
     "new_version": "v{version} Released",
     "current_version": "Current: v{version}",
     "download": "Download",
-    "skip": "Later"
+    "skip": "Later",
+    "install_now": "Update Now",
+    "downloading": "Downloading…",
+    "downloading_progress": "Downloading… {done} / {total} MB",
+    "downloading_unknown": "Downloading… {done} MB",
+    "applying": "Restarting to apply update…",
+    "failed": "Update failed: {error}"
   }
 }

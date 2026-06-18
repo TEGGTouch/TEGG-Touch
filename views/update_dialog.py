@@ -1,22 +1,19 @@
 """
 TEGG Touch (PyQt6) - update_dialog.py
-新版本提示弹窗 — 与 AboutDialog 同风格的深色无边框窗口。
+新版本提示弹窗 — 与 AboutDialog 同风格的深色无边框窗口.
+点「立即更新」会发 install_requested(zip_url) 信号, 由 main.py 接到, 启动后台 UpdateInstaller.
 """
-
-import webbrowser
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QFrame, QApplication,
+    QLabel, QPushButton, QFrame, QApplication, QProgressBar,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from core.i18n import t, get_font
 from core.constants import APP_VERSION
 
-
-# 复用编辑工具栏的图标字体检测 + 字体工厂 + 颜色常量
 from views.edit_toolbar import (
     _detect_icon_font, _make_font,
     C_CLOSE, C_CLOSE_H,
@@ -25,19 +22,22 @@ from core.constants import C_PM_BG, C_CYBER, C_CYBER_H, C_GRAY
 
 
 class UpdateDialog(QDialog):
-    """新版本提示弹窗"""
+    """新版本提示弹窗 + 内嵌升级流程 UI."""
+
+    # 用户点「立即更新」时发出, payload = zip 直链 URL
+    install_requested = pyqtSignal(str)
 
     def __init__(self, version: str, url: str, body: str, parent=None):
         super().__init__(parent)
         self._url = url
-        # 故意不用 Qt.WindowType.Tool — 它在 Windows 上会阻止窗口被 activate, 导致顶不上去
+        self._version = version
         self.setWindowFlags(
             Qt.WindowType.Dialog |
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(560, 440)
+        self.setFixedSize(560, 460)
         self._init_ui(version, body)
         self._center_on_screen()
         self._drag_pos = None
@@ -47,7 +47,6 @@ class UpdateDialog(QDialog):
         _detect_icon_font()
         from views.edit_toolbar import _ICON_FONT
 
-        # 外层透明, 内层 QFrame 容器
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
 
@@ -67,7 +66,7 @@ class UpdateDialog(QDialog):
         layout.setContentsMargins(28, 20, 28, 24)
         layout.setSpacing(14)
 
-        # ── 标题栏: 标题 + 关闭按钮 ──
+        # ── 标题栏 ──
         header = QHBoxLayout()
         title = QLabel(t("update.title"))
         title.setStyleSheet(f"""
@@ -77,27 +76,27 @@ class UpdateDialog(QDialog):
         header.addWidget(title)
         header.addStretch()
 
-        close_btn = QPushButton()
-        close_btn.setFixedSize(40, 40)
-        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn = QPushButton()
+        self._close_btn.setFixedSize(40, 40)
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         if _ICON_FONT:
-            close_btn.setText("\uE711")
-            close_btn.setFont(_make_font(_ICON_FONT, 18))
+            self._close_btn.setText("\uE711")
+            self._close_btn.setFont(_make_font(_ICON_FONT, 18))
         else:
-            close_btn.setText("\u2715")
-            close_btn.setFont(_make_font(font_name, 16, bold=True))
-        close_btn.setStyleSheet(f"""
+            self._close_btn.setText("\u2715")
+            self._close_btn.setFont(_make_font(font_name, 16, bold=True))
+        self._close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
                 border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
-        close_btn.clicked.connect(self.close)
-        header.addWidget(close_btn)
+        self._close_btn.clicked.connect(self.close)
+        header.addWidget(self._close_btn)
         layout.addLayout(header)
 
-        # ── 分隔线 ──
+        # 分隔线
         sep = QLabel()
         sep.setFixedHeight(1)
         sep.setStyleSheet("background: #444;")
@@ -118,7 +117,7 @@ class UpdateDialog(QDialog):
         cur_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(cur_label)
 
-        # ── 更新说明 (放大显示区, 容纳更多内容) ──
+        # ── 更新说明 ──
         if body and body.strip():
             notes = QLabel(body.strip()[:1200])
             notes.setStyleSheet(f"""
@@ -133,14 +132,35 @@ class UpdateDialog(QDialog):
             notes.setAlignment(Qt.AlignmentFlag.AlignTop)
             layout.addWidget(notes, 1)
 
+        # ── 进度区 (默认隐藏, 下载中显示) ──
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(f"color: #BBB; font-size: 13px; font-family: '{font_name}';")
+        self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status_lbl.setVisible(False)
+        layout.addWidget(self._status_lbl)
+
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setFixedHeight(8)
+        self._progress_bar.setTextVisible(False)
+        self._progress_bar.setStyleSheet(f"""
+            QProgressBar {{
+                background: #1F1F1F; border: none; border-radius: 4px;
+            }}
+            QProgressBar::chunk {{
+                background: {C_CYBER}; border-radius: 4px;
+            }}
+        """)
+        self._progress_bar.setVisible(False)
+        layout.addWidget(self._progress_bar)
+
         # ── 按钮行 ──
         btn_row = QHBoxLayout()
         btn_row.setSpacing(14)
 
-        skip_btn = QPushButton(t("update.skip"))
-        skip_btn.setFixedHeight(44)
-        skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        skip_btn.setStyleSheet(f"""
+        self._skip_btn = QPushButton(t("update.skip"))
+        self._skip_btn.setFixedHeight(44)
+        self._skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._skip_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #CCC;
                 border: none; border-radius: 6px;
@@ -148,29 +168,73 @@ class UpdateDialog(QDialog):
             }}
             QPushButton:hover {{ background: #505050; }}
         """)
-        skip_btn.clicked.connect(self.close)
-        btn_row.addWidget(skip_btn)
+        self._skip_btn.clicked.connect(self.close)
+        btn_row.addWidget(self._skip_btn)
 
-        dl_btn = QPushButton(t("update.download"))
-        dl_btn.setFixedHeight(44)
-        dl_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        dl_btn.setStyleSheet(f"""
+        self._install_btn = QPushButton(t("update.install_now"))
+        self._install_btn.setFixedHeight(44)
+        self._install_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._install_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER}; color: #FFF;
                 border: none; border-radius: 6px;
                 padding: 0 28px; font-size: 16px; font-weight: bold;
             }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
+            QPushButton:disabled {{
+                background: #2A4A5E; color: #888;
+            }}
         """)
-        dl_btn.clicked.connect(self._open_download)
-        btn_row.addWidget(dl_btn, 1)
+        self._install_btn.clicked.connect(self._on_install_clicked)
+        btn_row.addWidget(self._install_btn, 1)
 
         layout.addLayout(btn_row)
 
-    def _open_download(self):
-        if self._url:
-            webbrowser.open(self._url)
-        self.close()
+    def _on_install_clicked(self):
+        if not self._url:
+            return
+        self._install_btn.setEnabled(False)
+        self._skip_btn.setEnabled(False)
+        self._status_lbl.setText(t("update.downloading"))
+        self._status_lbl.setVisible(True)
+        self._progress_bar.setRange(0, 0)   # indeterminate 直到拿到 Content-Length
+        self._progress_bar.setVisible(True)
+        self.install_requested.emit(self._url)
+
+    # ── 由 main.py 在下载进度变化时回调 ──
+
+    def on_progress(self, downloaded: int, total: int):
+        if total > 0:
+            self._progress_bar.setRange(0, total)
+            self._progress_bar.setValue(downloaded)
+            mb_d = downloaded / 1024 / 1024
+            mb_t = total / 1024 / 1024
+            self._status_lbl.setText(
+                t("update.downloading_progress", done=f"{mb_d:.1f}", total=f"{mb_t:.1f}")
+            )
+        else:
+            # 未知总大小, 用 indeterminate 模式
+            mb_d = downloaded / 1024 / 1024
+            self._status_lbl.setText(
+                t("update.downloading_unknown", done=f"{mb_d:.1f}")
+            )
+
+    def on_applying(self):
+        """下载完, 准备 spawn updater + quit 主程序."""
+        self._progress_bar.setRange(0, 100)
+        self._progress_bar.setValue(100)
+        self._status_lbl.setText(t("update.applying"))
+
+    def on_failed(self, msg: str):
+        self._install_btn.setEnabled(True)
+        self._skip_btn.setEnabled(True)
+        self._progress_bar.setVisible(False)
+        self._status_lbl.setText(t("update.failed", error=msg))
+        self._status_lbl.setStyleSheet(
+            f"color: #F87171; font-size: 13px; font-family: '{get_font()}';"
+        )
+
+    # ── 定位 + 拖拽 ──
 
     def _center_on_screen(self):
         from PyQt6.QtCore import QRect
@@ -180,7 +244,6 @@ class UpdateDialog(QDialog):
         y = (screen.height() - self.height()) // 2
         self.move(x, y)
 
-    # ── 拖拽 ──
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()

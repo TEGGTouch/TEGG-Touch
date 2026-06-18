@@ -489,6 +489,12 @@
     "new_version": "v{version} 已发布",
     "current_version": "当前版本: v{version}",
     "download": "前往下载",
-    "skip": "稍后再说"
+    "skip": "稍后再说",
+    "install_now": "立即更新",
+    "downloading": "正在下载…",
+    "downloading_progress": "正在下载… {done} / {total} MB",
+    "downloading_unknown": "正在下载… {done} MB",
+    "applying": "正在重启完成升级…",
+    "failed": "升级失败: {error}"
   }
 }
