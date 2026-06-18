@@ -296,6 +296,15 @@ class UpdateInstaller(QThread):
         try:
             tmp_dir = os.path.join(tempfile.gettempdir(), "teggtouch_update")
             os.makedirs(tmp_dir, exist_ok=True)
+            # 清掉上次升级失败遗留的 zip / ps1 (每个 zip ~148MB, 累积几次就把 C 盘吃干)
+            for f in os.listdir(tmp_dir):
+                fp = os.path.join(tmp_dir, f)
+                if os.path.isfile(fp):
+                    try:
+                        os.remove(fp)
+                        logger.info(f"cleaned old temp file: {f}")
+                    except Exception as e:
+                        logger.debug(f"failed to clean {f}: {e}")
             # 用 URL 的文件名 (TEGGTouch_v{V}.zip), 防重名加 PID
             filename = self._zip_url.rstrip("/").split("/")[-1] or "TEGGTouch_update.zip"
             dest = os.path.join(tmp_dir, filename)
