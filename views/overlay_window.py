@@ -1145,8 +1145,4 @@ class OverlayWindow(QGraphicsView):
         QApplication.quit()
 
     def keyPressEvent(self, event):
-        """Esc 键退出"""
-        if event.key() == Qt.Key.Key_Escape:
-            self.close()
-        else:
-            super().keyPressEvent(event)
+        super().keyPressEvent(event)
