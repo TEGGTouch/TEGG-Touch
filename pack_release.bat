@@ -43,8 +43,8 @@ if exist "dist\%RELEASE_NAME%.zip" (
     echo 文件: dist\%RELEASE_NAME%.zip
     echo.
 
-    if exist pack_release_oss.bat (
-        call pack_release_oss.bat "dist\%RELEASE_NAME%.zip"
+    if exist "%~dp0pack_release_oss.bat" (
+        call "%~dp0pack_release_oss.bat" "dist\%RELEASE_NAME%.zip"
     )
     echo.
 
