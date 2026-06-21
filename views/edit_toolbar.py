@@ -180,7 +180,7 @@ class EditToolbar(QWidget):
     run_clicked = pyqtSignal()
     wheel_clicked = pyqtSignal()
     opacity_changed = pyqtSignal(float)
-    grid_changed = pyqtSignal(int)
+    scene_scale_changed = pyqtSignal(int)   # 百分比 50-200
     profile_clicked = pyqtSignal()
     settings_clicked = pyqtSignal()
     minimize_clicked = pyqtSignal()
@@ -446,21 +446,21 @@ class EditToolbar(QWidget):
         r2.addWidget(_VSep())
         r2.addSpacing(14)
 
-        # 网格标签
-        grid_lbl = QLabel(t("toolbar.grid"))
-        grid_lbl.setFont(_make_font(fn, 14, bold=True))
-        grid_lbl.setStyleSheet("color: #AAA; background: transparent;")
-        r2.addWidget(grid_lbl)
+        # 场景缩放标签
+        scale_lbl = QLabel(t("toolbar.scale"))
+        scale_lbl.setFont(_make_font(fn, 14, bold=True))
+        scale_lbl.setStyleSheet("color: #AAA; background: transparent;")
+        r2.addWidget(scale_lbl)
         r2.addSpacing(12)
 
-        # 网格滑块 (50-100, step 10)
-        self._grid_slider = QSlider(Qt.Orientation.Horizontal)
-        self._grid_slider.setFixedHeight(24)
-        self._grid_slider.setRange(60, 100)
-        self._grid_slider.setSingleStep(10)
-        self._grid_slider.setPageStep(10)
-        self._grid_slider.setValue(100)
-        self._grid_slider.setStyleSheet("""
+        # 场景缩放滑块 (50-200%, step 10%)
+        self._scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self._scale_slider.setFixedHeight(24)
+        self._scale_slider.setRange(50, 200)
+        self._scale_slider.setSingleStep(10)
+        self._scale_slider.setPageStep(10)
+        self._scale_slider.setValue(100)
+        self._scale_slider.setStyleSheet("""
             QSlider::groove:horizontal {
                 background: #404040; height: 8px; border-radius: 4px;
             }
@@ -478,19 +478,19 @@ class EditToolbar(QWidget):
                 background: #10B981; border-color: #059669;
             }
         """)
-        self._grid_slider.valueChanged.connect(self._on_grid_changed)
-        r2.addWidget(self._grid_slider, 1)
+        self._scale_slider.valueChanged.connect(self._on_scale_changed)
+        r2.addWidget(self._scale_slider, 1)
 
         r2.addSpacing(8)
 
-        # 网格数值 (px)
-        self._grid_val_lbl = QLabel("100px")
-        self._grid_val_lbl.setFont(_make_font(fn, 14, bold=True))
-        self._grid_val_lbl.setStyleSheet("color: #10B981; background: transparent;")
-        self._grid_val_lbl.setFixedWidth(48)
-        self._grid_val_lbl.setAlignment(
+        # 缩放数值 (%)
+        self._scale_val_lbl = QLabel("100%")
+        self._scale_val_lbl.setFont(_make_font(fn, 14, bold=True))
+        self._scale_val_lbl.setStyleSheet("color: #10B981; background: transparent;")
+        self._scale_val_lbl.setFixedWidth(48)
+        self._scale_val_lbl.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        r2.addWidget(self._grid_val_lbl)
+        r2.addWidget(self._scale_val_lbl)
 
         main.addLayout(r2)
 
@@ -598,16 +598,16 @@ class EditToolbar(QWidget):
         self._val_lbl.setText(f"{value}%")
         self.opacity_changed.emit(value / 100.0)
 
-    def _on_grid_changed(self, value):
-        """网格滑块回调 — 吸附到 10px 步进"""
+    def _on_scale_changed(self, value):
+        """场景缩放滑块回调 — 吸附到 10% 步进"""
         snapped = round(value / 10) * 10
-        snapped = max(60, min(100, snapped))
+        snapped = max(50, min(200, snapped))
         if snapped != value:
-            self._grid_slider.blockSignals(True)
-            self._grid_slider.setValue(snapped)
-            self._grid_slider.blockSignals(False)
-        self._grid_val_lbl.setText(f"{snapped}px")
-        self.grid_changed.emit(snapped)
+            self._scale_slider.blockSignals(True)
+            self._scale_slider.setValue(snapped)
+            self._scale_slider.blockSignals(False)
+        self._scale_val_lbl.setText(f"{snapped}%")
+        self.scene_scale_changed.emit(snapped)
 
     def set_opacity(self, value: float):
         """外部设置透明度 (0.1~0.9)，同步滑块和标签"""
@@ -617,13 +617,13 @@ class EditToolbar(QWidget):
         self._slider.blockSignals(False)
         self._val_lbl.setText(f"{int_val}%")
 
-    def set_grid_size(self, gs: int):
-        """外部设置网格大小 (60-100)，同步滑块和标签"""
-        gs = max(60, min(100, round(gs / 10) * 10))
-        self._grid_slider.blockSignals(True)
-        self._grid_slider.setValue(gs)
-        self._grid_slider.blockSignals(False)
-        self._grid_val_lbl.setText(f"{gs}px")
+    def set_scene_scale(self, percent: int):
+        """外部设置场景缩放百分比 (50-200)，同步滑块和标签"""
+        percent = max(50, min(200, round(percent / 10) * 10))
+        self._scale_slider.blockSignals(True)
+        self._scale_slider.setValue(percent)
+        self._scale_slider.blockSignals(False)
+        self._scale_val_lbl.setText(f"{percent}%")
 
     # ── 定位 ─────────────────────────────────────────────────
 

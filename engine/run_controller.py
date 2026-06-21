@@ -1560,4 +1560,8 @@ class RunController(QObject):
         elif action == 'release':
             self._smart_trigger(keys, 'r')
         self.voice_command_triggered.emit(phrase, keys, action)
-        logger.info(f"语音指令触发: '{phrase}' → keys='{keys}', action='{action}'")
+        # 把前景窗口一起打到日志: 失焦时 SendInput 会把按键送到错的窗口,
+        # 此时 exe 名不是预期的游戏 → 一眼能看出来
+        from core.focus_debug import format_foreground
+        logger.info("语音指令触发: '%s' → keys='%s', action='%s' | %s",
+                    phrase, keys, action, format_foreground())

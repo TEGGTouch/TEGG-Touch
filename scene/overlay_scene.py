@@ -278,39 +278,52 @@ class OverlayScene(QGraphicsScene):
     # ── 背景绘制 ──
 
     def drawBackground(self, painter: QPainter, rect: QRectF):
-        """编辑模式下绘制网格背景 — 自动调用，无需手动管理"""
+        """编辑模式下绘制网格背景 — 自动调用，无需手动管理
+
+        使用传入的 expose `rect` (视口映射到场景的可见区域) 而非 sceneRect 作为
+        绘制边界, 这样缩放 <100% (场景比视口小) 或 >100% (场景比视口大) 时,
+        遮罩与网格都能正确覆盖到视口可见范围。
+        """
         super().drawBackground(painter, rect)
 
         if self.mode != 'edit':
             return
 
-        # 20% 黑色遮罩
+        # 20% 黑色遮罩 — 覆盖整个可见视口区域
         painter.fillRect(rect, QColor(0, 0, 0, 50))
 
+        import math
         scene_rect = self.sceneRect()
         cx = scene_rect.width() / 2
         cy = scene_rect.height() / 2
         gs = self.grid_size
 
-        # 普通网格线
+        left = rect.left()
+        right = rect.right()
+        top = rect.top()
+        bottom = rect.bottom()
+
+        # 普通网格线 — 以中心为基准 (cx + k*gs), 覆盖整个 rect
         pen = QPen(QColor("#2A2A2A"), 1)
         painter.setPen(pen)
 
-        x = cx % gs
-        while x <= scene_rect.width():
-            painter.drawLine(int(x), 0, int(x), int(scene_rect.height()))
+        k0 = math.floor((left - cx) / gs)
+        x = cx + k0 * gs
+        while x <= right:
+            painter.drawLine(int(x), int(top), int(x), int(bottom))
             x += gs
 
-        y = cy % gs
-        while y <= scene_rect.height():
-            painter.drawLine(0, int(y), int(scene_rect.width()), int(y))
+        k0 = math.floor((top - cy) / gs)
+        y = cy + k0 * gs
+        while y <= bottom:
+            painter.drawLine(int(left), int(y), int(right), int(y))
             y += gs
 
         # 中心十字线（稍亮）
         center_pen = QPen(QColor("#444444"), 2)
         painter.setPen(center_pen)
-        painter.drawLine(int(cx), 0, int(cx), int(scene_rect.height()))
-        painter.drawLine(0, int(cy), int(scene_rect.width()), int(cy))
+        painter.drawLine(int(cx), int(top), int(cx), int(bottom))
+        painter.drawLine(int(left), int(cy), int(right), int(cy))
 
     # ── 配置加载/保存 ──
 
@@ -626,8 +639,9 @@ class OverlayScene(QGraphicsScene):
         self._config['wheel_center_ring_visible'] = self._wheel_center_ring_visible
         self._config['wheel_middle_ring_visible'] = self._wheel_middle_ring_visible
         self._config['wheel_offset'] = self._wheel_offset
-        # 网格大小
+        # 网格大小 (吸附粒度)
         self._config['grid_size'] = self.grid_size
+        # scene_scale 由 OverlayWindow.set_scene_scale 实时写入 _config, 这里不动
         # 语音配置透传（voice_commands 等字段已在 _config 中，无需额外处理）
 
         profile_name = get_active_profile_name()
@@ -1071,34 +1085,12 @@ class OverlayScene(QGraphicsScene):
         self.button_double_clicked.emit(item)
 
     def set_grid_size(self, new_gs: int):
-        """动态修改网格大小 — 先算格子数，再乘新 grid（以屏幕中心为原点）"""
-        old_gs = self.grid_size
-        if new_gs == old_gs:
+        """动态修改网格吸附粒度 — 仅影响吸附与背景网格线, 不触动按钮数据。
+        (旧版会遍历改 button.data.x/y/w/h 当缩放用; 现在缩放走 view.setTransform
+        的 scene_scale, 数据保持不变。)"""
+        if new_gs == self.grid_size:
             return
         self.grid_size = new_gs
-
-        # 格子数不变，只是每格像素变了
-        for item in self.button_items:
-            cell_x = round(item.data.x / old_gs)
-            cell_y = round(item.data.y / old_gs)
-            cell_w = max(1, round(item.data.w / old_gs))
-            cell_h = max(1, round(item.data.h / old_gs))
-            item.data.x = cell_x * new_gs
-            item.data.y = cell_y * new_gs
-            item.data.w = cell_w * new_gs
-            item.data.h = cell_h * new_gs
-            item.setPos(item.data.x + item._offset_x, item.data.y + item._offset_y)
-            item.prepareGeometryChange()
-            # 不同 item 类的缩放手柄方法名不同 (touch_button/center_band: _update_handle_pos;
-            # gp_stick/gp_wheel: _update_resize_handle_pos)
-            for m in ('_update_handle_pos', '_update_resize_handle_pos'):
-                fn = getattr(item, m, None)
-                if callable(fn):
-                    fn()
-                    break
-            item.update()
-
-        # 重绘网格
         self.invalidate()
 
     def _find_empty_slot(self, w, h, start_x=0, start_y=0):

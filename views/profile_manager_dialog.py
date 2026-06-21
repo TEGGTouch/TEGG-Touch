@@ -587,7 +587,7 @@ _VOICE_FIELDS = (
     'voice_mic_device', 'voice_auto_start',
 )
 _GLOBAL_FIELDS = (
-    'geometry', 'transparency', 'click_through', 'grid_size',
+    'geometry', 'transparency', 'click_through', 'grid_size', 'scene_scale',
     'sim_mode', 'run_toolbar_x', 'run_toolbar_y',
     'wheel_style', 'cursor_styles',
 )
@@ -1424,6 +1424,12 @@ class _ProfileDetailPanel(QFrame):
         lay.addWidget(_make_kv_label(
             "穿透模式", ct_map.get(cfg.get('click_through', ''), str(cfg.get('click_through', '')))))
         lay.addWidget(_make_kv_label("网格", f"{cfg.get('grid_size') or '默认'}px"))
+        sc = cfg.get('scene_scale', 1.0)
+        try:
+            sc_pct = int(round(float(sc) * 100))
+        except (TypeError, ValueError):
+            sc_pct = 100
+        lay.addWidget(_make_kv_label("缩放", f"{sc_pct}%"))
         lay.addSpacing(8)
         lay.addWidget(_make_section_header("模拟", -1))
         sm = cfg.get('sim_mode')

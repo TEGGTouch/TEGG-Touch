@@ -11,7 +11,11 @@ from PyQt6.QtCore import Qt, QTimer, QEvent
 from PyQt6.QtGui import QPainter, QIcon
 
 from core.i18n import t, load_locale
-from core.constants import APP_VERSION, APP_DIR, PT_ON, PT_OFF, PT_BLOCK, DEFAULT_TRANSPARENCY, DEFAULT_GRID_SIZE
+from core.constants import (
+    APP_VERSION, APP_DIR, PT_ON, PT_OFF, PT_BLOCK,
+    DEFAULT_TRANSPARENCY, DEFAULT_GRID_SIZE,
+    DEFAULT_SCENE_SCALE, SCENE_SCALE_MIN, SCENE_SCALE_MAX,
+)
 from core.system_tuning import frame_interval_ms
 from core.config_manager import (
     init_profiles, load_hotkeys, get_active_profile_name,
@@ -50,6 +54,7 @@ class OverlayWindow(QGraphicsView):
         self._buttons_hidden = False
         self._profile_name = ''
         self._current_opacity = DEFAULT_TRANSPARENCY
+        self._scene_scale = DEFAULT_SCENE_SCALE
 
         # 弹窗单例引用 — 防止重复打开
         self._dlg_profile = None
@@ -118,7 +123,7 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.run_clicked.connect(self.to_run)
         self._edit_toolbar.wheel_clicked.connect(self._on_toggle_wheel)
         self._edit_toolbar.opacity_changed.connect(self._on_opacity_changed)
-        self._edit_toolbar.grid_changed.connect(self._on_grid_changed)
+        self._edit_toolbar.scene_scale_changed.connect(self._on_scene_scale_changed)
         self._edit_toolbar.profile_clicked.connect(self._open_profile_manager)
         self._edit_toolbar.settings_clicked.connect(self._open_hotkey_settings)
         self._edit_toolbar.quit_clicked.connect(self.close)
@@ -215,18 +220,20 @@ class OverlayWindow(QGraphicsView):
         """加载方案配置，创建场景中的按钮"""
         profile_name, config = init_profiles()
         self._profile_name = profile_name
-        # 恢复网格大小 — 必须在 load_from_config 之前设置，
-        # 否则 set_grid_size 会对已经正确的坐标做二次比例缩放
+        # grid_size 仅是吸附粒度, 默认 100; 旧字段值在 config_manager 迁移时已规范化
         saved_grid = config.get('grid_size', DEFAULT_GRID_SIZE)
-        if isinstance(saved_grid, (int, float)):
-            saved_grid = max(60, min(100, round(int(saved_grid) / 10) * 10))
-        else:
+        if not isinstance(saved_grid, (int, float)):
             saved_grid = DEFAULT_GRID_SIZE
-        self._scene.grid_size = saved_grid  # 直接赋值，不触发缩放
+        self._scene.grid_size = int(saved_grid)
         self._scene.load_from_config(config)
+        # scene_scale: view 层缩放; load_from_config 后再 set, 保证写入正确的 _config
+        saved_scale = config.get('scene_scale', DEFAULT_SCENE_SCALE)
+        if not isinstance(saved_scale, (int, float)):
+            saved_scale = DEFAULT_SCENE_SCALE
+        self.set_scene_scale(float(saved_scale))
         self._edit_toolbar.set_profile_name(profile_name)
         self._run_toolbar.set_profile_name(profile_name)
-        self._edit_toolbar.set_grid_size(saved_grid)
+        self._edit_toolbar.set_scene_scale(int(round(self._scene_scale * 100)))
         # 同步轮盘按钮状态到工具栏
         self._edit_toolbar.set_wheel_state(self._scene.wheel_visible)
         # 同步方向盘 toggle 状态 (profile 加载后, 若已存在 gp_wheel item 则显玫红)
@@ -334,7 +341,8 @@ class OverlayWindow(QGraphicsView):
         # 启动虚拟光标跟踪
         self._virtual_cursor.start_tracking()
 
-        logger.info("Entered run mode")
+        from core.focus_debug import format_foreground
+        logger.info("Entered run mode | %s", format_foreground())
 
     def to_edit(self):
         """切换到编辑模式"""
@@ -364,7 +372,8 @@ class OverlayWindow(QGraphicsView):
         self._virtual_cursor.stop_tracking()
         self._virtual_keyboard.hide()
 
-        logger.info("Entered edit mode")
+        from core.focus_debug import format_foreground
+        logger.info("Entered edit mode | %s", format_foreground())
 
     # PT 模式 → 光标类型映射
     _PT_CURSOR_MAP = {
@@ -492,7 +501,8 @@ class OverlayWindow(QGraphicsView):
             self._run_controller._stop_voice()
             self._voice_active = False
             self._run_toolbar.update_voice_state(False)
-            logger.info("Voice recognition disabled")
+            from core.focus_debug import format_foreground
+            logger.info("Voice OFF | %s", format_foreground())
         else:
             # 开启语音 — 检查是否有配置指令
             if not commands:
@@ -513,7 +523,9 @@ class OverlayWindow(QGraphicsView):
             self._run_controller._start_voice(voice_config)
             self._voice_active = True
             self._run_toolbar.update_voice_state(True)
-            logger.info("Voice recognition enabled: %d commands", len(commands))
+            from core.focus_debug import format_foreground
+            logger.info("Voice ON | %d commands | %s",
+                        len(commands), format_foreground())
 
     def _toggle_auto_center(self):
         """切换自动回中"""
@@ -716,11 +728,21 @@ class OverlayWindow(QGraphicsView):
         # Bug 8 fix: 同步工具栏轮盘按钮状态
         self._edit_toolbar.set_wheel_state(visible)
 
-    def _on_grid_changed(self, gs):
-        """网格滑块回调 — 缩放按钮并持久化"""
-        self._scene.set_grid_size(gs)
+    def _on_scene_scale_changed(self, percent: int):
+        """场景缩放滑块回调 — view.setTransform, 不动按钮数据"""
+        self.set_scene_scale(percent / 100.0)
+
+    def set_scene_scale(self, scale: float):
+        """应用场景缩放: view 层 transform + 持久化到 config"""
+        from PyQt6.QtGui import QTransform
+        scale = max(SCENE_SCALE_MIN, min(SCENE_SCALE_MAX, float(scale)))
+        self._scene_scale = scale
+        self.setTransform(QTransform().scale(scale, scale))
+        # setTransform 从原点缩放, 需手动把场景中心对齐到视口中心,
+        # 否则 <100% 时场景偏左上、>100% 时中心十字偏移到右下
+        self.centerOn(self._scene.sceneRect().center())
         if self._scene.get_config():
-            self._scene.get_config()['grid_size'] = gs
+            self._scene.get_config()['scene_scale'] = scale
 
     def _on_opacity_changed(self, value):
         """编辑模式背景透明度调整 — 仅影响按钮/轮盘，不影响虚拟光标"""
@@ -902,17 +924,17 @@ class OverlayWindow(QGraphicsView):
         # 加载新方案
         config = load_profile(name)
         self._profile_name = name
-        # 恢复网格大小 — 必须在 load_from_config 之前设置，
-        # 否则 set_grid_size 会对已经正确的坐标做二次比例缩放
         saved_grid = config.get('grid_size', DEFAULT_GRID_SIZE)
-        if isinstance(saved_grid, (int, float)):
-            saved_grid = max(60, min(100, round(int(saved_grid) / 10) * 10))
-        else:
+        if not isinstance(saved_grid, (int, float)):
             saved_grid = DEFAULT_GRID_SIZE
-        self._scene.grid_size = saved_grid  # 直接赋值，不触发缩放
+        self._scene.grid_size = int(saved_grid)
         self._scene.load_from_config(config)
+        saved_scale = config.get('scene_scale', DEFAULT_SCENE_SCALE)
+        if not isinstance(saved_scale, (int, float)):
+            saved_scale = DEFAULT_SCENE_SCALE
+        self.set_scene_scale(float(saved_scale))
         self._wire_button_signals()
-        self._edit_toolbar.set_grid_size(saved_grid)
+        self._edit_toolbar.set_scene_scale(int(round(self._scene_scale * 100)))
         # 恢复新方案的透明度
         saved_opacity = config.get('transparency', DEFAULT_TRANSPARENCY)
         if isinstance(saved_opacity, (int, float)):
@@ -1016,15 +1038,16 @@ class OverlayWindow(QGraphicsView):
         if self._scene.get_config():
             self._scene.get_config()['run_toolbar_x'] = None
             self._scene.get_config()['run_toolbar_y'] = None
-        # 重置网格大小
+        # 重置网格 + 场景缩放
         self._scene.set_grid_size(DEFAULT_GRID_SIZE)
-        self._edit_toolbar.set_grid_size(DEFAULT_GRID_SIZE)
         if self._scene.get_config():
             self._scene.get_config()['grid_size'] = DEFAULT_GRID_SIZE
+        self.set_scene_scale(DEFAULT_SCENE_SCALE)
+        self._edit_toolbar.set_scene_scale(int(round(DEFAULT_SCENE_SCALE * 100)))
         # 重置运行工具栏到默认居中位置
         self._run_toolbar._position_toolbar()
-        logger.info("Defaults reset: transparency=%.2f, grid=%d, run_toolbar position cleared",
-                     default_opacity, DEFAULT_GRID_SIZE)
+        logger.info("Defaults reset: transparency=%.2f, grid=%d, scene_scale=%.2f, run_toolbar position cleared",
+                     default_opacity, DEFAULT_GRID_SIZE, DEFAULT_SCENE_SCALE)
 
     def _on_language_changed(self, lang):
         """语言切换后刷新 UI"""

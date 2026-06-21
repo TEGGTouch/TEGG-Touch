@@ -421,13 +421,18 @@ class CollapsedBubble(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # WindowDoesNotAcceptFocus: 在 Win32 层设 WS_EX_NOACTIVATE,
+        # 让点击/拖动悬浮球时不抢前台焦点 — 否则游戏会失焦暂停,
+        # 配合 Special K 禁鼠标时还会切不回游戏。
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool
+            | Qt.WindowType.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setFixedSize(self.SIZE, self.SIZE)
         self.setToolTip("左键: 工具栏显隐 | 右键: 按键显隐 (F7) | 中键: 停止 | 拖动: 移动")
 

@@ -15,7 +15,7 @@ else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # === 应用信息 ===
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 CONFIG_FILE = "config.json"
 PROFILES_DIR = "profiles"
 PROFILES_INDEX = "_index.json"
@@ -340,10 +340,16 @@ MIN_BTN_SIZE = 100
 RESIZE_HANDLE_SIZE = 30       # 调整手柄尺寸 (直角三角形 30x30)
 CHAMFER_SIZE = 8
 GRID_SIZE = 100               # 网格吸附尺寸 (100px) — 旧版兼容，新代码用 DEFAULT_GRID_SIZE
-DEFAULT_GRID_SIZE = 100       # 默认网格大小
-MIN_GRID_SIZE = 60            # 最小网格
+DEFAULT_GRID_SIZE = 100       # 默认网格大小 (仅用于吸附粒度)
+MIN_GRID_SIZE = 60            # 最小网格 (保留兼容旧迁移路径)
 MAX_GRID_SIZE = 100           # 最大网格
 GRID_STEP = 10                # 网格步进
+
+# 场景缩放 (替代旧版"用 grid_size 当缩放"做法 — view.setTransform)
+DEFAULT_SCENE_SCALE = 1.0
+SCENE_SCALE_MIN = 0.5
+SCENE_SCALE_MAX = 2.0
+SCENE_SCALE_STEP = 0.1
 BTN_MARGIN = 5                # 按钮边距
 BTN_RADIUS = 10               # 按钮圆角半径
 

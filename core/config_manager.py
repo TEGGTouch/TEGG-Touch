@@ -36,6 +36,21 @@ logger = logging.getLogger(__name__)
 
 # ─── 坐标系迁移 ──────────────────────────────────────────────
 
+def _migrate_to_scene_scale(data: dict) -> bool:
+    """旧 profile 用 grid_size (60-100) 兼做缩放; 新系统拆开:
+       - grid_size 固定 100 (吸附粒度)
+       - scene_scale 默认 1.0 (view 层缩放, 不动按钮数据)
+    按钮数据保持现状, 避免对已被旧滑块缩过的数据再做转换。"""
+    if 'scene_scale' in data:
+        return False
+    old_gs = data.get('grid_size')
+    if old_gs and old_gs != 100:
+        logger.info(f"迁移 scene_scale: 旧 grid_size={old_gs} 重置 100, scene_scale=1.0")
+    data['grid_size'] = 100
+    data['scene_scale'] = 1.0
+    return True
+
+
 def _migrate_to_center_coords(data: dict) -> bool:
     """将旧版左上角原点坐标迁移为中心原点坐标。
     
@@ -224,8 +239,10 @@ def load_config_from_file(filepath: str) -> dict:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
+        # 自动迁移: grid_size 旧缩放语义 → scene_scale + 固定网格 100
+        migrated_scale = _migrate_to_scene_scale(data)
         # 自动迁移旧坐标系（左上角原点 → 中心原点）
-        if _migrate_to_center_coords(data):
+        if _migrate_to_center_coords(data) or migrated_scale:
             # 迁移后立即回写文件，避免重复迁移
             try:
                 with open(filepath, 'w', encoding='utf-8') as fw:
@@ -286,8 +303,9 @@ def load_config_from_file(filepath: str) -> dict:
         # 运行工具栏位置（按方案记忆）
         result['run_toolbar_x'] = data.get('run_toolbar_x', None)
         result['run_toolbar_y'] = data.get('run_toolbar_y', None)
-        # 网格大小
+        # 网格大小 (吸附粒度) + 场景缩放 (view transform)
         result['grid_size'] = data.get('grid_size', None)
+        result['scene_scale'] = data.get('scene_scale', None)
         # 坐标格式标记（cells=格子数，无=旧像素格式）
         result['coord_format'] = data.get('coord_format', None)
         # 语音识别
@@ -348,6 +366,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          run_toolbar_x=None,
                          run_toolbar_y=None,
                          grid_size=None,
+                         scene_scale=None,
                          coord_format=None,
                          coord_system=None,
                          voice_enabled=None,
@@ -409,6 +428,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
     }
     if grid_size is not None:
         data['grid_size'] = grid_size
+    if scene_scale is not None:
+        data['scene_scale'] = scene_scale
     if coord_format:
         data['coord_format'] = coord_format
     if clean_sectors:
