@@ -45,6 +45,7 @@ C_CAT_LABEL = "#888888"
 
 # 各热键字段的强调色
 HOTKEY_COLORS = {
+    'cursor':         '#0D9488',
     'collapse':       '#9333EA',
     'voice':          '#10B981',
     'auto_center':    '#176F2C',
@@ -402,6 +403,7 @@ class HotkeySettingsDialog(QDialog):
         # 中间内容 (Stacked)
         labels = get_hotkey_labels()
         descriptions = {
+            'cursor': t("hotkey.desc_cursor"),
             'collapse': t("hotkey.desc_collapse"),
             'voice': t("hotkey.desc_voice"),
             'auto_center': t("hotkey.desc_auto_center"),
@@ -563,10 +565,12 @@ class HotkeySettingsDialog(QDialog):
         v.setSpacing(0)
 
         hotkey_fields = [
-            'collapse', 'voice', 'auto_center', 'toggle_buttons', 'soft_keyboard',
-            'pt_on', 'pt_off', 'pt_block', 'stop',
+            'cursor', 'collapse', 'voice', 'auto_center', 'toggle_buttons',
+            'soft_keyboard', 'pt_on', 'pt_off', 'pt_block', 'stop',
         ]
 
+        v.addLayout(self._build_hotkey_row(fn, 'cursor', labels, descriptions))
+        v.addSpacing(10)
         v.addLayout(self._build_hotkey_row(fn, 'collapse', labels, descriptions))
         v.addSpacing(10)
         v.addLayout(self._build_hotkey_row(fn, 'voice', labels, descriptions))
@@ -576,7 +580,7 @@ class HotkeySettingsDialog(QDialog):
         v.addLayout(self._build_delay_slider(
             fn, t("hotkey.auto_center_delay"), HOTKEY_COLORS['auto_center']))
         v.addSpacing(14)
-        for field in hotkey_fields[3:]:
+        for field in hotkey_fields[4:]:
             v.addLayout(self._build_hotkey_row(fn, field, labels, descriptions))
             v.addSpacing(10)
 

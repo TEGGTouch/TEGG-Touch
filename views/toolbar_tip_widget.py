@@ -82,10 +82,12 @@ class ToolbarTipWidget(QLabel):
 
         self.setText(text)
 
-        # 计算尺寸
+        # 计算尺寸 (支持 \n 多行: 宽取最长行, 高按行数)
         fm = self.fontMetrics()
-        tw = fm.horizontalAdvance(text) + _PAD_H * 2 + 4
-        th = fm.height() + _PAD_V * 2 + 4
+        lines = text.split('\n')
+        line_w = max(fm.horizontalAdvance(ln) for ln in lines)
+        tw = line_w + _PAD_H * 2 + 4
+        th = fm.height() * len(lines) + _PAD_V * 2 + 4
         self.setFixedSize(tw, th)
 
         # 获取工具栏的全局坐标

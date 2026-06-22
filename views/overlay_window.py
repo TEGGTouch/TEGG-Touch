@@ -109,6 +109,7 @@ class OverlayWindow(QGraphicsView):
             self._pt_manager.update_smart_passthrough)
         self._run_controller.request_toggle_voice.connect(self._toggle_voice)
         self._run_controller.request_toggle_collapse.connect(self._toggle_collapse_run_toolbar)
+        self._run_controller.request_toggle_cursor.connect(self._toggle_cursor_visibility)
 
         # ── 工具栏 (parent=self ensures Z-order above overlay) ──
         self._edit_toolbar = EditToolbar(parent=self)
@@ -151,7 +152,9 @@ class OverlayWindow(QGraphicsView):
             self._toggle_buttons_visibility)
         self._collapsed_bubble.stop_requested.connect(self.to_edit)
         self._collapsed_bubble.moved.connect(self._on_bubble_moved)
+        self._run_toolbar.cursor_toggle_clicked.connect(self._toggle_cursor_visibility)
         self._run_collapsed = False                 # 悬浮球是否可见
+        self._cursor_visible = True                 # 自绘光标是否显示 (F3, per-profile)
 
         # 工具栏拖拽时同步软键盘位置 (匹配原版 _dm 中的 _position_above_toolbar 调用)
         self._edit_toolbar.moved.connect(self._sync_keyboard_to_toolbar)
@@ -323,6 +326,7 @@ class OverlayWindow(QGraphicsView):
                     'voice_commands': cfg_voice['voice_commands'],
                     'voice_language': cfg_voice.get('voice_language', 'zh-CN'),
                     'voice_mic_device': cfg_voice.get('voice_mic_device', None),
+                    'voice_chunk_size': cfg_voice.get('voice_chunk_size', None),
                 }
                 self._run_controller._start_voice(voice_config)
                 self._voice_active = True
@@ -338,8 +342,21 @@ class OverlayWindow(QGraphicsView):
         if self._virtual_keyboard.isVisible():
             self._virtual_keyboard.position_above_toolbar(self._run_toolbar)
 
-        # 启动虚拟光标跟踪
-        self._virtual_cursor.start_tracking()
+        # 启动虚拟光标跟踪 (按 per-profile cursor_visible 决定是否显示)
+        cfg_cur = self._scene.get_config() or {}
+        self._cursor_visible = cfg_cur.get('cursor_visible', True)
+        self._set_drawn_cursor(self._cursor_visible)
+        self._run_toolbar.update_cursor_state(self._cursor_visible)
+
+        # 恢复保存的运行时界面状态 (per-profile): 按键隐藏 / 工具栏隐藏 / 折叠悬浮球
+        # 顺序: 先隐按键, 再隐工具栏, 最后呼出悬浮球 → 还原「只剩悬浮球」这类组合
+        cfg_view = self._scene.get_config() or {}
+        if cfg_view.get('buttons_hidden', False):
+            self._toggle_buttons_visibility()   # _buttons_hidden False→True
+        if cfg_view.get('run_toolbar_hidden', False):
+            self._run_toolbar.hide()
+        if cfg_view.get('bubble_collapsed', False):
+            self._collapse_run_toolbar()        # 呼出悬浮球到保存位置
 
         from core.focus_debug import format_foreground
         logger.info("Entered run mode | %s", format_foreground())
@@ -368,8 +385,8 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.show()
         self._smart_pt_timer.start()
 
-        # 停止虚拟光标和软键盘
-        self._virtual_cursor.stop_tracking()
+        # 编辑模式也显示自绘光标 (并藏掉真实箭头, 让自绘光标盖在最上层)
+        self._set_drawn_cursor(True)
         self._virtual_keyboard.hide()
 
         from core.focus_debug import format_foreground
@@ -396,6 +413,7 @@ class OverlayWindow(QGraphicsView):
         self._collapsed_bubble.show_at(bx, by)
         self._run_collapsed = True
         self._run_toolbar.update_collapse_state(True)
+        self._persist_view_state('bubble_collapsed', True)
 
     def _expand_run_toolbar(self):
         """收起悬浮球 (工具栏保持原状)。"""
@@ -404,6 +422,7 @@ class OverlayWindow(QGraphicsView):
         self._collapsed_bubble.hide()
         self._run_collapsed = False
         self._run_toolbar.update_collapse_state(False)
+        self._persist_view_state('bubble_collapsed', False)
 
     def _toggle_collapse_run_toolbar(self):
         """F4: 切换悬浮球显隐"""
@@ -423,6 +442,7 @@ class OverlayWindow(QGraphicsView):
         else:
             self._run_toolbar.show()
             self._run_toolbar.raise_()
+        self._persist_view_state('run_toolbar_hidden', not self._run_toolbar.isVisible())
 
     def _on_bubble_moved(self, x: int, y: int):
         """悬浮球拖拽结束 → 写入 config 持久化位置"""
@@ -431,6 +451,34 @@ class OverlayWindow(QGraphicsView):
             cfg['bubble_x'] = x
             cfg['bubble_y'] = y
             self._scene.save_config()
+
+    def _persist_view_state(self, key: str, value):
+        """持久化单个运行时界面状态 (折叠/工具栏隐/按键隐) 到当前 profile。"""
+        cfg = self._scene.get_config()
+        if cfg is not None:
+            cfg[key] = value
+            self._scene.save_config()
+
+    def _set_drawn_cursor(self, on: bool):
+        """on=True: 显示自绘光标 + 把真实 OS 箭头设为 BlankCursor 藏掉 (自绘光标盖在最上层);
+        on=False: 停掉自绘光标 + 恢复真实箭头。
+        注: 穿透(click-through)模式下光标属于下层游戏, 这里藏不掉 — 仅对非穿透/编辑模式生效。
+        """
+        if on:
+            self._virtual_cursor.start_tracking()
+            self.viewport().setCursor(Qt.CursorShape.BlankCursor)
+        else:
+            self._virtual_cursor.stop_tracking()
+            self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+
+    def _toggle_cursor_visibility(self):
+        """F3 / 光标按钮 → 切换自绘光标显隐 (per-profile 持久化)。"""
+        if self._current_mode != 'run':
+            return
+        self._cursor_visible = not self._cursor_visible
+        self._set_drawn_cursor(self._cursor_visible)
+        self._run_toolbar.update_cursor_state(self._cursor_visible)
+        self._persist_view_state('cursor_visible', self._cursor_visible)
 
     def _on_pt_clicked(self, mode):
         """工具栏穿透按钮点击 → 同步 manager + toolbar + 光标"""
@@ -468,6 +516,7 @@ class OverlayWindow(QGraphicsView):
         else:
             self._scene._update_ring_visibility()
         self._run_toolbar.update_buttons_visibility(self._buttons_hidden)
+        self._persist_view_state('buttons_hidden', self._buttons_hidden)
 
     @staticmethod
     def _check_microphone() -> bool:
@@ -519,6 +568,7 @@ class OverlayWindow(QGraphicsView):
                 'voice_commands': commands,
                 'voice_language': language,
                 'voice_mic_device': config.get('voice_mic_device', None),
+                'voice_chunk_size': config.get('voice_chunk_size', None),
             }
             self._run_controller._start_voice(voice_config)
             self._voice_active = True
@@ -970,8 +1020,9 @@ class OverlayWindow(QGraphicsView):
         voice_language = config.get('voice_language', None)
         voice_mic_device = config.get('voice_mic_device', None)
         voice_auto_start = config.get('voice_auto_start', True)
+        voice_chunk_size = config.get('voice_chunk_size', None)
         macros = config.get('macros', [])
-        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, macros=macros, voice_auto_start=voice_auto_start)
+        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, macros=macros, voice_auto_start=voice_auto_start, voice_chunk_size=voice_chunk_size)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_voice'))
         dialog.settings_saved.connect(self._on_voice_settings_saved)
@@ -989,6 +1040,7 @@ class OverlayWindow(QGraphicsView):
                 self._scene.get_config()['voice_enabled'] = result.get('voice_enabled', False)
                 self._scene.get_config()['voice_mic_device'] = result.get('voice_mic_device')
                 self._scene.get_config()['voice_auto_start'] = result.get('voice_auto_start', True)
+                self._scene.get_config()['voice_chunk_size'] = result.get('voice_chunk_size', None)
             self._scene.save_config()
             logger.info("Voice settings saved: %d commands", len(result.get('voice_commands', [])))
 

@@ -224,6 +224,14 @@ def load_config_from_file(filepath: str) -> dict:
         'voice_commands': [],
         'voice_mic_device': None,
         'voice_auto_start': True,
+        'voice_chunk_size': None,   # None = 用引擎默认 VOICE_CHUNK_SIZE
+        # 运行时界面状态 (per-profile, 进运行模式时恢复)
+        'bubble_x': None,
+        'bubble_y': None,
+        'bubble_collapsed': False,      # 是否呼出悬浮球
+        'run_toolbar_hidden': False,    # 运行工具栏是否隐藏 (球左键)
+        'buttons_hidden': False,        # UI 按键是否隐藏 (球右键 / F7)
+        'cursor_visible': True,         # 自绘光标是否显示 (F3, 默认显示)
         # 自定义宏 (kb / gp 两池, per-profile)
         'macros': [],
         'gp_macros': [],
@@ -316,6 +324,14 @@ def load_config_from_file(filepath: str) -> dict:
             result['voice_commands'] = raw_vc
         result['voice_mic_device'] = data.get('voice_mic_device', None)
         result['voice_auto_start'] = data.get('voice_auto_start', True)
+        result['voice_chunk_size'] = data.get('voice_chunk_size', None)
+        # 运行时界面状态
+        result['bubble_x'] = data.get('bubble_x', None)
+        result['bubble_y'] = data.get('bubble_y', None)
+        result['bubble_collapsed'] = data.get('bubble_collapsed', False)
+        result['run_toolbar_hidden'] = data.get('run_toolbar_hidden', False)
+        result['buttons_hidden'] = data.get('buttons_hidden', False)
+        result['cursor_visible'] = data.get('cursor_visible', True)
         # 自定义宏 (kb / gp 两池)
         raw_macros = data.get('macros', [])
         if isinstance(raw_macros, list):
@@ -374,6 +390,13 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          voice_commands=None,
                          voice_mic_device=None,
                          voice_auto_start=None,
+                         voice_chunk_size=None,
+                         bubble_x=None,
+                         bubble_y=None,
+                         bubble_collapsed=False,
+                         run_toolbar_hidden=False,
+                         buttons_hidden=False,
+                         cursor_visible=True,
                          macros=None,
                          gp_macros=None,
                          sim_mode=None,
@@ -425,6 +448,12 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         'wheel_middle_ring_visible': wheel_middle_ring_visible,
         'run_toolbar_x': run_toolbar_x,
         'run_toolbar_y': run_toolbar_y,
+        'bubble_x': bubble_x,
+        'bubble_y': bubble_y,
+        'bubble_collapsed': bubble_collapsed,
+        'run_toolbar_hidden': run_toolbar_hidden,
+        'buttons_hidden': buttons_hidden,
+        'cursor_visible': cursor_visible,
     }
     if grid_size is not None:
         data['grid_size'] = grid_size
@@ -468,6 +497,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['voice_mic_device'] = voice_mic_device
     if voice_auto_start is not None:
         data['voice_auto_start'] = voice_auto_start
+    if voice_chunk_size is not None:
+        data['voice_chunk_size'] = voice_chunk_size
 
     # 自定义宏 (kb / gp 两池)
     if macros is not None:

@@ -111,7 +111,9 @@ class GamepadWheelData:
     # 'easy' (默认) = mouse-as-car: 鼠标 X→A/D 键盘, Y 速度→RT 累加, 配置鼠标键→S 键盘
     # 'advanced' = 全套方向盘行为 (摇杆 LX + LT/RT 多模式)
     control_mode: str = "easy"
-    easy_steering_deadzone: float = 0.08    # easy: 屏幕中线 ±dz%×半屏 内不发 A/D
+    # 注: 轻松模式转向是「增量」式 (dx=mx-last_mx → A/D), 无定点死区。
+    # easy_steer_threshold = 「增量死区」: 平滑后移动量(px)超过此值才触发 A/D。
+    easy_steer_threshold: float = 1.0       # easy: 触发 A/D 的最小移动量 (px, 越大越抗抖)
     easy_throttle_sensitivity: float = 0.005  # easy: 鼠标上移每 1px 累加多少 RT (0~1)
     easy_show_indicator: bool = True        # easy: 是否仍绘制方向盘视觉指示器
     easy_brake_button: str = "L"            # easy: 哪个鼠标键触发 S 刹车; 'L'/'R'/'M'/'X1'/'X2'

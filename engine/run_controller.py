@@ -89,6 +89,7 @@ class RunController(QObject):
     auto_center_progress = pyqtSignal(float, float, float)  # progress, x, y
     voice_command_triggered = pyqtSignal(str, str, str)  # phrase, keys, action
     request_toggle_collapse = pyqtSignal()  # F10: 折叠/展开运行工具栏
+    request_toggle_cursor = pyqtSignal()    # F3: 切换自绘光标显隐
 
     def __init__(self, scene, window):
         super().__init__()
@@ -517,6 +518,10 @@ class RunController(QObject):
         # 收起/展开 (默认 F4)
         if _debounced('collapse', hk.get('collapse', 'f4')):
             self.request_toggle_collapse.emit()
+
+        # 光标显隐 (默认 F3)
+        if _debounced('cursor', hk.get('cursor', 'f3')):
+            self.request_toggle_cursor.emit()
 
         # 穿透模式快捷键
         if _debounced('pt_on', hk.get('pt_on', 'f9')):
@@ -1020,7 +1025,8 @@ class RunController(QObject):
 
     def _poll_gp_wheel_easy(self, wheel, screen_pt: QPoint):
         """全屏鼠标接管:
-        - X: 屏幕中线 ± 死区 → 不发; 左 → 按 A; 右 → 按 D
+        - X: 增量式 — 鼠标左移(dx<0) → 按 A, 右移(dx>0) → 按 D; 不动则不发。
+             防抖靠 EMA 平滑 + _SMOOTH_TH 阈值, 无定点死区 (固定位置时 dx≈0 自然不触发)
         - Y: 上移 → RT 累加 (速度映射); 下移 → RT 减少; 累计值持续输出
         - 鼠标左键: 按下 → 按 S, 松开 → 释放 S
         - 视觉指示器: 按 easy_show_indicator 开关同步 wheel.set_visual
@@ -1042,7 +1048,8 @@ class RunController(QObject):
         import time as _t1
         _HOLD_SEC = 0.080
         _EMA_ALPHA = 0.5     # 越大越敏感, 越小越抗抖
-        _SMOOTH_TH = 1.5     # 平滑后 dx 超过此值 (px) 才视为有效移动
+        # 平滑后 dx 超过此值 (px) 才视为有效移动 = 「增量死区」, 用户可在编辑器调
+        _SMOOTH_TH = float(getattr(d, 'easy_steer_threshold', 1.0))
         now_t = _t1.perf_counter()
         if self._easy_last_mx is None:
             self._easy_last_mx = mx
@@ -1525,6 +1532,7 @@ class RunController(QObject):
         commands = voice_config.get('voice_commands', [])
         language = voice_config.get('voice_language', 'zh-CN')
         mic_device = voice_config.get('voice_mic_device', None)
+        chunk_size = voice_config.get('voice_chunk_size', None)
         if not commands:
             return
 
@@ -1534,7 +1542,7 @@ class RunController(QObject):
             self._voice_engine.command_recognized.connect(self._on_voice_command)
             self._voice_engine.error_occurred.connect(
                 lambda e: logger.warning(f"语音引擎错误: {e}"))
-            self._voice_engine.start(commands, language, mic_device=mic_device)
+            self._voice_engine.start(commands, language, mic_device=mic_device, chunk_size=chunk_size)
         except Exception as e:
             logger.warning(f"语音引擎启动失败: {e}")
             self._voice_engine = None

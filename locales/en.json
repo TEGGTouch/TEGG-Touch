@@ -82,7 +82,8 @@
     "pt_block": "Block [{key}]",
     "stop": "Stop [{key}]",
     "collapse": "Bubble [{key}]",
-    "profile_label": "Profile: {name}"
+    "profile_label": "Profile: {name}",
+    "cursor": "Cursor [{key}]"
   },
   "tooltip": {
     "about": "About TEGG Touch",
@@ -105,7 +106,8 @@
     "collapse": "Show floating bubble: left-click toggles toolbar / right-click toggles buttons / middle-click stops; draggable",
     "add_gp_button": "Add gamepad button (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 etc.)",
     "add_gp_stick": "Add joystick (circular, simulates left/right stick)",
-    "toggle_gp_wheel": "Steering Wheel (4×2 composite: LT + steering + RT, singleton, for racing games)"
+    "toggle_gp_wheel": "Steering Wheel (4×2 composite: LT + steering + RT, singleton, for racing games)",
+    "cursor": "Show or hide the drawn cursor (shown by default)"
   },
   "hotkey": {
     "title": "Settings",
@@ -158,7 +160,9 @@
     "desc_pt_off": "Buttons intercept input, empty areas pass through",
     "desc_pt_block": "Camera barely moves with mouse, but keys still work",
     "desc_stop": "Exit run mode and return to edit mode",
-    "desc_collapse": "Toggle floating bubble; left-click bubble to show/hide toolbar, right-click to show/hide buttons, middle-click to stop running and return to edit mode; draggable"
+    "desc_collapse": "Toggle floating bubble; left-click bubble to show/hide toolbar, right-click to show/hide buttons, middle-click to stop running and return to edit mode; draggable",
+    "cursor": "Cursor Visibility",
+    "desc_cursor": "Toggle the on-screen drawn cursor; turn it off if you don't need it (shown by default)"
   },
   "editor": {
     "title": "Edit Button",
@@ -437,7 +441,16 @@
     "copy": "Duplicate",
     "test_cmd": "Test Command",
     "language_zh": "Chinese",
-    "language_en": "English"
+    "language_en": "English",
+    "chunk_tooltip": "Recognition latency",
+    "chunk_title": "Recognition Latency",
+    "chunk_desc": "How often a slice of audio is sent for recognition. Lower = the command fires sooner after you speak (snappier), but too low can jitter and mistake noise for commands. Higher = more stable but slower to respond. The default 100ms suits most cases.",
+    "chunk_unit": "{ms} ms",
+    "chunk_samples": "{n} samples/frame",
+    "chunk_faster": "Faster · jittery",
+    "chunk_slower": "Stabler · slower",
+    "chunk_reset": "Reset to default",
+    "chunk_cancel": "Cancel"
   },
   "macro": {
     "tab_keys": "Keys",

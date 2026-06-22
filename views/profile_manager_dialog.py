@@ -584,7 +584,7 @@ _WHEEL_FIELDS = (
 )
 _VOICE_FIELDS = (
     'voice_enabled', 'voice_language', 'voice_commands',
-    'voice_mic_device', 'voice_auto_start',
+    'voice_mic_device', 'voice_auto_start', 'voice_chunk_size',
 )
 _GLOBAL_FIELDS = (
     'geometry', 'transparency', 'click_through', 'grid_size', 'scene_scale',

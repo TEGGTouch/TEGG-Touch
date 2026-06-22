@@ -82,7 +82,8 @@
     "pt_block": "不穿透 [{key}]",
     "stop": "停止 [{key}]",
     "collapse": "悬浮球 [{key}]",
-    "profile_label": "方案：{name}"
+    "profile_label": "方案：{name}",
+    "cursor": "光标 [{key}]"
   },
   "tooltip": {
     "about": "关于 TEGG Touch",
@@ -105,7 +106,8 @@
     "collapse": "呼出悬浮球: 左键切工具栏 / 右键切按键 / 中键停止, 可拖动",
     "add_gp_button": "添加手柄键 (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 等)",
     "add_gp_stick": "添加摇杆 (圆形, 模拟左/右摇杆移动)",
-    "toggle_gp_wheel": "方向盘 (4×2 复合: LT + 转向 + RT, 单例, 适合赛车游戏)"
+    "toggle_gp_wheel": "方向盘 (4×2 复合: LT + 转向 + RT, 单例, 适合赛车游戏)",
+    "cursor": "显示/隐藏自绘光标 (默认显示, 不需要可关闭)"
   },
   "hotkey": {
     "title": "设置",
@@ -158,7 +160,9 @@
     "desc_pt_off": "按钮覆盖的游戏画面不可被操作，空余区域可以",
     "desc_pt_block": "视角几乎不会随鼠标移动，但按键操作有效",
     "desc_stop": "退出运行模式，返回编辑界面",
-    "desc_collapse": "呼出/收起悬浮球; 球左键切换工具栏显隐, 右键切换按键显隐, 中键停止运行返回编辑模式, 可拖动"
+    "desc_collapse": "呼出/收起悬浮球; 球左键切换工具栏显隐, 右键切换按键显隐, 中键停止运行返回编辑模式, 可拖动",
+    "cursor": "光标显隐",
+    "desc_cursor": "切换我们自绘光标的显示/隐藏; 不需要光标出现的用户可关闭 (默认显示)"
   },
   "editor": {
     "title": "编辑按钮",
@@ -437,7 +441,16 @@
     "copy": "复制",
     "test_cmd": "测试指令",
     "language_zh": "中文",
-    "language_en": "English"
+    "language_en": "English",
+    "chunk_tooltip": "识别延迟设置",
+    "chunk_title": "识别延迟",
+    "chunk_desc": "决定每隔多久把一段录音送去识别。值越小，从说出指令到触发越快（更跟手），但太小可能抖动、把噪音误当指令；值越大越稳，但响应变慢。默认 100ms 适合大多数情况。",
+    "chunk_unit": "{ms} ms",
+    "chunk_samples": "每帧 {n} 采样",
+    "chunk_faster": "更快 · 易误触",
+    "chunk_slower": "更稳 · 略慢",
+    "chunk_reset": "重置默认",
+    "chunk_cancel": "取消"
   },
   "macro": {
     "tab_keys": "常规按键",

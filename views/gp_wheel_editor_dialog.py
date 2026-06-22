@@ -1036,7 +1036,7 @@ class GpWheelEditorDialog(QDialog):
         self._lt_section.refresh_from_data()
         self._rt_section.refresh_from_data()
         # easy 模式字段
-        self._easy_dz_slider.setValue(int(round(self.data.easy_steering_deadzone * 100)))
+        self._easy_th_slider.setValue(int(round(getattr(self.data, 'easy_steer_threshold', 1.0))))
         self._easy_sens_slider.setValue(int(round(self.data.easy_throttle_sensitivity * 1000)))
         self._easy_indicator_cb.setChecked(bool(self.data.easy_show_indicator))
         # 刹车键
@@ -1136,7 +1136,7 @@ class GpWheelEditorDialog(QDialog):
         # easy 模式字段
         self.data.control_mode = ('easy' if self._mode_stack.currentIndex() == 0
                                   else 'advanced')
-        self.data.easy_steering_deadzone = self._easy_dz_slider.value() / 100.0
+        self.data.easy_steer_threshold = float(self._easy_th_slider.value())
         self.data.easy_throttle_sensitivity = self._easy_sens_slider.value() / 1000.0
         self.data.easy_show_indicator = self._easy_indicator_cb.isChecked()
         self.data.easy_brake_button = self._easy_brake_choice
@@ -1175,17 +1175,18 @@ class GpWheelEditorDialog(QDialog):
         v.addWidget(tip)
         v.addSpacing(22)
 
-        # 转向死区
-        head_dz, self._easy_dz_slider, _ = _make_value_slider(
-            fn, "转向死区 (% 屏宽)",
-            init=int(round(self.data.easy_steering_deadzone * 100)),
-            min_v=0, max_v=30, default_v=8, suffix='%',
+        # 转向触发阈值 (增量死区, px) — 平滑后鼠标移动量超过此值才触发 A/D
+        head_th, self._easy_th_slider, _ = _make_value_slider(
+            fn, "转向触发阈值",
+            init=int(round(getattr(self.data, 'easy_steer_threshold', 1.0))),
+            min_v=1, max_v=5, default_v=1, suffix='px',
         )
-        v.addLayout(head_dz)
-        v.addWidget(self._easy_dz_slider)
+        v.addLayout(head_th)
+        v.addWidget(self._easy_th_slider)
         v.addSpacing(6)
         v.addWidget(_make_label(
-            fn, "屏幕中线 ±死区% 范围内不发送 A/D, 避免静止时来回触发",
+            fn, "鼠标移动量超过此像素才触发 A/D — 相当于「增量死区」: "
+            "越大越抗抖、越迟钝, 越小越灵敏、越易被手抖触发",
             _C_HINT, 12))
         v.addSpacing(20)
 

@@ -8,12 +8,13 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QWidget, QScrollArea, QFrame, QApplication, QLineEdit,
     QComboBox, QStackedWidget, QListWidget, QListWidgetItem,
-    QMessageBox,
+    QMessageBox, QSlider,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font, get_lang
+from core.constants import VOICE_SAMPLE_RATE
 
 # Reuse shared components from existing dialogs
 from views.button_editor_dialog import (
@@ -288,6 +289,221 @@ class _CommandRow(QFrame):
         }
 
 
+# ── 识别延迟 (chunk size) 调整子弹窗 ──
+class _ChunkSizeDialog(QDialog):
+    """调整 VOICE_CHUNK_SIZE — 滑块(按 10ms 步进) + 说明 + 重置 + 保存/取消。
+
+    返回值 (get_value): int 采样数; 若等于引擎默认则返回 None (表示「用默认」,
+    这样不会把默认值写进 profile 文件, reset 后文件保持干净)。
+    """
+
+    def __init__(self, current_chunk, parent=None):
+        super().__init__(parent)
+        from core.constants import (
+            VOICE_CHUNK_SIZE, VOICE_CHUNK_MIN, VOICE_CHUNK_MAX, VOICE_CHUNK_STEP)
+        self._DEFAULT = VOICE_CHUNK_SIZE
+        self._MIN = VOICE_CHUNK_MIN
+        self._MAX = VOICE_CHUNK_MAX
+        self._STEP = VOICE_CHUNK_STEP
+        self._result = None
+        self._drag_pos = None
+
+        # None / 非法 → 默认; 夹到范围内
+        cur = current_chunk if isinstance(current_chunk, int) and current_chunk > 0 else self._DEFAULT
+        cur = max(self._MIN, min(self._MAX, cur))
+
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Dialog
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        self.setFixedWidth(440)
+        _detect_icon_font()
+        self._build_ui(cur)
+        self._center_on_parent()
+
+    def _build_ui(self, cur):
+        fn = get_font()
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        container = QFrame()
+        container.setObjectName("cs_container")
+        container.setStyleSheet(f"""
+            QFrame#cs_container {{
+                background: {C_PM_BG};
+                border-radius: 8px; border: 1px solid #444;
+            }}
+        """)
+        outer.addWidget(container)
+
+        root = QVBoxLayout(container)
+        root.setContentsMargins(20, 18, 20, 18)
+        root.setSpacing(12)
+
+        # 标题
+        title = QLabel(t("voice_dialog.chunk_title"))
+        title.setFont(_make_font(fn, 17, bold=True))
+        title.setStyleSheet("color: #FFF; background: transparent;")
+        root.addWidget(title)
+
+        # 说明
+        desc = QLabel(t("voice_dialog.chunk_desc"))
+        desc.setFont(_make_font(fn, 13))
+        desc.setStyleSheet("color: #999; background: transparent;")
+        desc.setWordWrap(True)
+        root.addWidget(desc)
+
+        # 当前值 (大字)
+        self._value_lbl = QLabel("")
+        self._value_lbl.setFont(_make_font(fn, 22, bold=True))
+        self._value_lbl.setStyleSheet(f"color: {C_GREEN}; background: transparent;")
+        self._value_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        root.addWidget(self._value_lbl)
+
+        self._samples_lbl = QLabel("")
+        self._samples_lbl.setFont(_make_font(fn, 12))
+        self._samples_lbl.setStyleSheet("color: #777; background: transparent;")
+        self._samples_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        root.addWidget(self._samples_lbl)
+
+        # 滑块 (单位 = STEP 采样 = 10ms) — 尺寸样式与工具栏滑块一致, 填充用亮绿
+        self._slider = QSlider(Qt.Orientation.Horizontal)
+        self._slider.setFixedHeight(24)
+        self._slider.setMinimum(self._MIN // self._STEP)
+        self._slider.setMaximum(self._MAX // self._STEP)
+        self._slider.setSingleStep(1)
+        self._slider.setPageStep(1)
+        self._slider.setValue(cur // self._STEP)
+        self._slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{
+                background: #404040; height: 8px; border-radius: 4px;
+            }}
+            QSlider::sub-page:horizontal {{
+                background: {C_GREEN}; border-radius: 4px;
+            }}
+            QSlider::add-page:horizontal {{
+                background: #404040; border-radius: 4px;
+            }}
+            QSlider::handle:horizontal {{
+                background: #DDD; border: 1px solid #999;
+                width: 18px; height: 18px; margin: -5px 0; border-radius: 9px;
+            }}
+            QSlider::handle:horizontal:hover {{
+                background: {C_GREEN}; border-color: {C_GREEN_H};
+            }}
+        """)
+        self._slider.valueChanged.connect(self._on_slider_changed)
+        root.addWidget(self._slider)
+
+        # 两端标签: 更快 / 更稳
+        ends = QHBoxLayout()
+        faster = QLabel(t("voice_dialog.chunk_faster"))
+        faster.setFont(_make_font(fn, 11))
+        faster.setStyleSheet("color: #777; background: transparent;")
+        ends.addWidget(faster)
+        ends.addStretch()
+        slower = QLabel(t("voice_dialog.chunk_slower"))
+        slower.setFont(_make_font(fn, 11))
+        slower.setStyleSheet("color: #777; background: transparent;")
+        ends.addWidget(slower)
+        root.addLayout(ends)
+
+        root.addSpacing(4)
+
+        # 底部按钮: 重置 | 取消 · 保存
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        reset_btn = QPushButton(t("voice_dialog.chunk_reset"))
+        reset_btn.setFixedHeight(36)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setFont(_make_font(fn, 13))
+        reset_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px; padding: 0 14px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        reset_btn.clicked.connect(
+            lambda: self._slider.setValue(self._DEFAULT // self._STEP))
+        btn_row.addWidget(reset_btn)
+        btn_row.addStretch()
+
+        cancel_btn = QPushButton(t("voice_dialog.chunk_cancel"))
+        cancel_btn.setFixedHeight(36)
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setFont(_make_font(fn, 13))
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px; padding: 0 18px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+
+        save_btn = QPushButton(t("voice_dialog.save"))
+        save_btn.setFixedHeight(36)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setFont(_make_font(fn, 14, bold=True))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CYBER}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 22px;
+            }}
+            QPushButton:hover {{ background: {C_CYBER_H}; }}
+        """)
+        save_btn.clicked.connect(self._on_save)
+        btn_row.addWidget(save_btn)
+        root.addLayout(btn_row)
+
+        self._on_slider_changed(self._slider.value())  # 初始化显示
+
+    def _on_slider_changed(self, val):
+        chunk = val * self._STEP
+        ms = chunk * 1000 // VOICE_SAMPLE_RATE
+        self._value_lbl.setText(t("voice_dialog.chunk_unit", ms=ms))
+        self._samples_lbl.setText(t("voice_dialog.chunk_samples", n=chunk))
+
+    def _on_save(self):
+        chunk = self._slider.value() * self._STEP
+        # 等于默认值 → 存 None (不写进 profile, 保持「用默认」语义)
+        self._result = None if chunk == self._DEFAULT else chunk
+        self.accept()
+
+    def get_value(self):
+        return self._result
+
+    def _center_on_parent(self):
+        p = self.parent()
+        if p is not None:
+            geo = p.frameGeometry()
+            self.adjustSize()
+            x = geo.center().x() - self.width() // 2
+            y = geo.center().y() - self.height() // 2
+            self.move(x, y)
+
+    # 允许拖动 (无边框)
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        super().mouseReleaseEvent(event)
+
+
 # ── 主弹窗类 ──
 class VoiceSettingsDialog(QDialog):
     """语音指令设置弹窗 — 双栏布局"""
@@ -303,7 +519,7 @@ class VoiceSettingsDialog(QDialog):
     WIN_H = 960
     COL3_W = WIN_W - PADDING * 2 - COL1_W - COL2_W - GUTTER * 2 - 2  # = 538
 
-    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, macros=None, voice_auto_start=True):
+    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, macros=None, voice_auto_start=True, voice_chunk_size=None):
         super().__init__(parent)
         self._macros = list(macros) if macros else []
         # 深拷贝防止编辑过程影响外部数据 (失败时还能 cancel)
@@ -311,6 +527,7 @@ class VoiceSettingsDialog(QDialog):
         self._language = voice_language or get_lang()
         self._saved_mic_device = voice_mic_device  # 之前保存的麦克风设备名
         self._auto_start = voice_auto_start
+        self._chunk_size = voice_chunk_size  # None = 用引擎默认 (VOICE_CHUNK_SIZE)
         self._focus_widget = None
         self._current_idx = -1   # 当前选中指令在 _commands 中的索引; -1 表示未选中
         self._drag_pos = None
@@ -528,6 +745,29 @@ class VoiceSettingsDialog(QDialog):
         """)
         col.addWidget(self._mic_combo)
 
+        # 测试指令按钮 + 左侧「识别延迟」齿轮小按钮
+        test_row = QHBoxLayout()
+        test_row.setSpacing(6)
+
+        self._chunk_btn = QPushButton("" if _ICON_FONT else "⚙")
+        self._chunk_btn.setFixedSize(32, 32)
+        self._chunk_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._chunk_btn.setToolTip(t("voice_dialog.chunk_tooltip"))
+        if _ICON_FONT:
+            self._chunk_btn.setText("")  # Segoe Fluent/MDL2 设置齿轮
+            self._chunk_btn.setFont(_make_font(_ICON_FONT, 14))
+        else:
+            self._chunk_btn.setFont(_make_font(fn, 14))
+        self._chunk_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        self._chunk_btn.clicked.connect(self._on_open_chunk_dialog)
+        test_row.addWidget(self._chunk_btn)
+
         # 测试指令按钮
         self._test_btn = QPushButton(t("voice_dialog.test_cmd"))
         self._test_btn.setFixedHeight(32)
@@ -541,7 +781,8 @@ class VoiceSettingsDialog(QDialog):
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         self._test_btn.clicked.connect(self._on_test_commands)
-        col.addWidget(self._test_btn)
+        test_row.addWidget(self._test_btn, 1)
+        col.addLayout(test_row)
 
         # 自动启用音频
         self._auto_start_cb = _CheckToggle(
@@ -985,6 +1226,12 @@ class VoiceSettingsDialog(QDialog):
         self._test_dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self._test_dlg.destroyed.connect(lambda: setattr(self, '_test_dlg', None))
         self._test_dlg.show()
+
+    def _on_open_chunk_dialog(self):
+        """打开「识别延迟」调整子弹窗。"""
+        dlg = _ChunkSizeDialog(self._chunk_size, parent=self)
+        if dlg.exec():
+            self._chunk_size = dlg.get_value()  # int 或 None(=默认)
 
     def get_selected_mic(self):
         """返回当前选中的麦克风设备名; 「系统默认」返回 None"""
@@ -1477,6 +1724,7 @@ class VoiceSettingsDialog(QDialog):
             'voice_enabled': len(getattr(self, '_result_commands', [])) > 0,
             'voice_mic_device': self.get_selected_mic(),
             'voice_auto_start': self._auto_start_cb.isChecked(),
+            'voice_chunk_size': self._chunk_size,
         }
 
     # ── Positioning ──

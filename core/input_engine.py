@@ -235,7 +235,11 @@ _HOOKPROC = ctypes.CFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int, ctypes.c_size_t, ct
 
 # mouse_event 比 SendInput 快得多（无需创建 ctypes 结构体）
 _mouse_event = ctypes.windll.user32.mouse_event
-_mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.POINTER(ctypes.c_ulong)]
+# dwExtraInfo 是 Win32 ULONG_PTR (指针大小的整数, 非指针)。必须与 passthrough_manager
+# 对同一个 user32.mouse_event 的声明一致 (c_size_t) —— 二者共享同一个缓存函数对象,
+# argtypes 互相覆盖; 若这里用 POINTER(c_ulong)+传指针, 运行态被 passthrough 的 c_size_t
+# 覆盖后会抛 "argument 5: LP_c_ulong cannot be interpreted as an integer", 滚轮全失效。
+_mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_size_t]
 _mouse_event.restype = None
 
 _CallNextHookEx = ctypes.windll.user32.CallNextHookEx
@@ -282,8 +286,7 @@ def mouse_press(button: str):
         logger.debug(f"未知鼠标按钮: '{button}'")
         return
     down_flag, _, mouse_data = entry
-    extra = ctypes.c_ulong(0)
-    _mouse_event(down_flag, 0, 0, mouse_data, ctypes.pointer(extra))
+    _mouse_event(down_flag, 0, 0, mouse_data, 0)  # dwExtraInfo=0 (无)
 
 
 def mouse_release(button: str):
@@ -293,15 +296,13 @@ def mouse_release(button: str):
         logger.debug(f"未知鼠标按钮: '{button}'")
         return
     _, up_flag, mouse_data = entry
-    extra = ctypes.c_ulong(0)
-    _mouse_event(up_flag, 0, 0, mouse_data, ctypes.pointer(extra))
+    _mouse_event(up_flag, 0, 0, mouse_data, 0)  # dwExtraInfo=0 (无)
 
 
 def mouse_wheel(direction: str):
     """模拟鼠标滚轮。direction: 'up' 或 'down'"""
     delta = WHEEL_DELTA if direction.lower() == 'up' else -WHEEL_DELTA
-    extra = ctypes.c_ulong(0)
-    _mouse_event(MOUSEEVENTF_WHEEL, 0, 0, ctypes.c_ulong(delta & 0xFFFFFFFF), ctypes.pointer(extra))
+    _mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta & 0xFFFFFFFF, 0)  # dwExtraInfo=0 (无)
 
 
 def _mouse_hook_proc(nCode, wParam, lParam):

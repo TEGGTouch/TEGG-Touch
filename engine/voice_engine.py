@@ -152,11 +152,13 @@ class _VoiceThread(QThread):
     error_occurred = pyqtSignal(str)
     audio_data_ready = pyqtSignal(bytes)  # PCM 数据（声波可视化）
 
-    def __init__(self, commands: list, language: str, mic_device_index=None, parent=None):
+    def __init__(self, commands: list, language: str, mic_device_index=None, chunk_size=None, parent=None):
         super().__init__(parent)
         self._commands = commands
         self._language = language
         self._mic_device_index = mic_device_index  # int or None
+        # None / 非法值 → 回退引擎默认; 仅接受合理范围内的值
+        self._chunk_size = chunk_size if isinstance(chunk_size, int) and chunk_size > 0 else VOICE_CHUNK_SIZE
         self._running = False
         self._audio_queue = queue.Queue()
         self._emit_audio = True  # 控制音频信号发射，stop 时置 False
@@ -231,7 +233,7 @@ class _VoiceThread(QThread):
         try:
             sd_kwargs = dict(
                 samplerate=VOICE_SAMPLE_RATE,
-                blocksize=VOICE_CHUNK_SIZE,
+                blocksize=self._chunk_size,
                 dtype='int16',
                 channels=1,
                 callback=self._audio_callback,
@@ -342,13 +344,14 @@ class VoiceEngine(QObject):
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.isRunning()
 
-    def start(self, commands: list, language: str = 'zh-CN', mic_device=None):
+    def start(self, commands: list, language: str = 'zh-CN', mic_device=None, chunk_size=None):
         """启动语音识别
 
         Args:
             commands: [{'phrase': ..., 'keys': ..., 'action': ...}, ...]
             language: 'zh-CN' | 'en'
             mic_device: 麦克风设备名(str)、设备索引(int)或 None(系统默认)
+            chunk_size: 音频块采样数 (识别延迟); None → 引擎默认 VOICE_CHUNK_SIZE
         """
         if self.is_running:
             self.stop()
@@ -369,7 +372,7 @@ class VoiceEngine(QObject):
                 logger.warning(f"Mic device '{mic_device}' not found, using default")
         # None → 系统默认
 
-        self._thread = _VoiceThread(commands, language, mic_index, parent=self)
+        self._thread = _VoiceThread(commands, language, mic_index, chunk_size, parent=self)
 
         # 连接信号（注意: _VoiceThread 的信号在子线程 emit，
         # 连接到主线程的 VoiceEngine 是自动 QueuedConnection）
@@ -380,7 +383,7 @@ class VoiceEngine(QObject):
 
         self._thread.start()
         logger.info(f"VoiceEngine started: lang={language}, cmds={len(commands)}, "
-                     f"mic={mic_device}→idx={mic_index}")
+                     f"mic={mic_device}→idx={mic_index}, chunk={self._thread._chunk_size}")
 
     def stop(self):
         """停止语音识别 — 安全地清理线程和信号"""

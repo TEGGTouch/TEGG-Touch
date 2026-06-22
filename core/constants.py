@@ -28,6 +28,7 @@ def get_app_title():
 
 # === 默认快捷键映射 ===
 DEFAULT_HOTKEYS = {
+    "cursor":         "f3",
     "collapse":       "f4",
     "voice":          "f5",
     "auto_center":    "f6",
@@ -59,6 +60,7 @@ DEFAULT_WHEEL_STYLE = {
 def get_hotkey_labels():
     """返回本地化的快捷键显示名称（运行时求值）。"""
     return {
+        "cursor":         t("hotkey.cursor"),
         "collapse":       t("hotkey.collapse"),
         "voice":          t("hotkey.voice"),
         "auto_center":    t("hotkey.auto_center"),
@@ -417,7 +419,11 @@ VOICE_MODEL_MAP = {
     "en":    "vosk-model-small-en-us-0.15",
 }
 VOICE_SAMPLE_RATE = 16000       # 推荐采样率
-VOICE_CHUNK_SIZE = 1600         # 每次读取的采样数 (~100ms @16kHz)
+VOICE_CHUNK_SIZE = 1600         # 每次读取的采样数 (~100ms @16kHz) — per-profile 可覆盖的默认值
+# 用户可调范围 (语音设置弹窗里的滑块): 30ms ~ 200ms, 步进 10ms
+VOICE_CHUNK_MIN = 480           # 30ms  @16kHz — 最低延迟, 但易抖/误触
+VOICE_CHUNK_MAX = 3200          # 200ms @16kHz — 最稳, 但明显慢
+VOICE_CHUNK_STEP = 160          # 10ms  @16kHz — 滑块步进
 
 # 按钮可选字段及默认值 (兼容旧配置)
 BUTTON_OPTIONAL_DEFAULTS = {

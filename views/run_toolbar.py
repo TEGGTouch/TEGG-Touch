@@ -47,6 +47,7 @@ class RunToolbar(QWidget):
     soft_keyboard_clicked = pyqtSignal()
     pt_clicked = pyqtSignal(str)
     collapse_clicked = pyqtSignal()
+    cursor_toggle_clicked = pyqtSignal()  # 切换自绘光标显隐
     moved = pyqtSignal()  # 工具栏被拖拽移动时发出，用于同步软键盘位置
     position_changed = pyqtSignal(int, int)  # 拖拽结束后发出 (x, y)，用于持久化
 
@@ -84,6 +85,7 @@ class RunToolbar(QWidget):
         except Exception:
             pass
 
+        _K_CURSOR = hotkeys.get('cursor', 'F3').upper()
         _K_COLLAPSE = hotkeys.get('collapse', 'F4').upper()
         _K_VOICE = hotkeys.get('voice', 'F5').upper()
         _K_AC = hotkeys.get('auto_center', 'F6').upper()
@@ -152,6 +154,16 @@ class RunToolbar(QWidget):
 
         # 分隔线
         row.addWidget(_VSep())
+
+        # 光标 [F3] (眼睛图标; 隐藏时琥珀高亮+闭眼)
+        self._cursor_btn = _IconTextBtn(
+            "", "\U0001F441",
+            t("run.cursor", key=_K_CURSOR),
+            C_GRAY, C_GRAY_H)
+        self._cursor_btn.setToolTip(t("tooltip.cursor"))
+        self._install_tip(self._cursor_btn)
+        self._cursor_btn.clicked.connect(self.cursor_toggle_clicked.emit)
+        row.addWidget(self._cursor_btn)
 
         # 悬浮球 [F4] (激活后变琥珀色)
         self._collapse_btn = _IconTextBtn(
@@ -269,6 +281,13 @@ class RunToolbar(QWidget):
             self._collapse_btn.set_colors(C_AMBER_D, C_AMBER)
         else:
             self._collapse_btn.set_colors(C_GRAY, C_GRAY_H)
+
+    def update_cursor_state(self, visible: bool):
+        """自绘光标显隐: 仅切图标 (睁眼/闭眼), 颜色恒为灰 — 与 F7 一致"""
+        if visible:
+            self._cursor_btn.set_icon_text("", "\U0001F441")
+        else:
+            self._cursor_btn.set_icon_text("", "\U0001F648")
 
     def update_pt_mode(self, mode):
         self._pt_mode = mode
@@ -434,12 +453,22 @@ class CollapsedBubble(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setFixedSize(self.SIZE, self.SIZE)
-        self.setToolTip("左键: 工具栏显隐 | 右键: 按键显隐 (F7) | 中键: 停止 | 拖动: 移动")
+        # hover 提示文字 (多行, 列出三键 + 拖动); 用自定义浮窗显示 (原生 tooltip
+        # 在 WA_ShowWithoutActivating 的 overlay 窗口上弹不出来)
+        self._tip_text = (
+            "左键 · 工具栏显隐\n"
+            "右键 · 按键显隐 (F7)\n"
+            "中键 · 停止运行\n"
+            "拖动 · 移动位置"
+        )
+        self._tip = ToolbarTipWidget()
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
 
         frame = QFrame(self)
+        self._frame = frame
+        frame.installEventFilter(self)
         frame.setObjectName("bubble")
         # hover 比常态背景加深 ~12%，可感知但不刺眼
         frame.setStyleSheet(f"""
@@ -489,6 +518,24 @@ class CollapsedBubble(QWidget):
         self.show()
         self.raise_()
 
+    # ── hover 提示 ──────────────────────────────────────────
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj is self._frame:
+            if event.type() == QEvent.Type.Enter:
+                self._tip.show_tip(self._tip_text, self)
+            elif event.type() == QEvent.Type.Leave:
+                self._tip.hide_tip()
+        return super().eventFilter(obj, event)
+
+    def hideEvent(self, event):
+        self._tip.hide_tip()
+        super().hideEvent(event)
+
+    def closeEvent(self, event):
+        self._tip.close()
+        super().closeEvent(event)
+
     def mousePressEvent(self, event):
         self.raise_()
         # 仅左键支持拖拽; 三个键按下都记录起点用于点击/拖拽判定
@@ -523,6 +570,7 @@ class CollapsedBubble(QWidget):
             y = max(screen.top(), min(new_pos.y(), screen.bottom() - self.height() + 1))
             self.move(x, y)
             self._moved = True
+            self._tip.hide_tip()   # 拖动时不显示提示
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
