@@ -10,14 +10,8 @@ from PyQt6.QtGui import QPainter, QPainterPath, QColor, QCursor
 from core.constants import (
     DEFAULT_GRID_SIZE, BTN_TYPE_CENTER_BAND,
     BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL,
-    COLOR_GP_BTN_BORDER,
 )
-
-
-# 缩放手柄颜色: 跟随按钮类型, 视觉一致
-_COLOR_HANDLE_DEFAULT = "#555555"
-_COLOR_HANDLE_CENTER_BAND = "#176F2C"        # 与回中带边框一致
-_COLOR_HANDLE_GP = COLOR_GP_BTN_BORDER       # 与手柄键/摇杆边框一致 (蓝)
+from core import button_theme
 
 
 class ResizeHandleItem(QGraphicsItem):
@@ -45,15 +39,17 @@ class ResizeHandleItem(QGraphicsItem):
         path.lineTo(s, s)
         path.lineTo(0, s)
         path.closeSubpath()
-        # 手柄颜色跟随按钮类型: 回中带绿 / 手柄键 + 摇杆蓝 / 其他灰
+        # 手柄颜色跟随各组「描边色」(用户可调): 回中带 / 手柄(键+摇杆) / 方向盘 / 其他(按键)
         btn_type = (getattr(self._parent_btn.data, 'btn_type', '')
                     if hasattr(self._parent_btn, 'data') else '')
         if btn_type == BTN_TYPE_CENTER_BAND:
-            color = _COLOR_HANDLE_CENTER_BAND
-        elif btn_type in (BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL):
-            color = _COLOR_HANDLE_GP
+            color = button_theme.center_band()['border']
+        elif btn_type in (BTN_TYPE_GP_BUTTON, BTN_TYPE_GP_STICK):
+            color = button_theme.gamepad()['border']
+        elif btn_type == BTN_TYPE_GP_WHEEL:
+            color = button_theme.wheel()['border']
         else:
-            color = _COLOR_HANDLE_DEFAULT
+            color = button_theme.keyboard()['border']
         painter.fillPath(path, QColor(color))
 
     def mousePressEvent(self, event):

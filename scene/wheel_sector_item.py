@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt, QRectF, QTimer, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPainter, QPainterPath, QPen, QBrush, QColor, QFont
 
 from core.i18n import get_font
+from core import button_theme
 from core.constants import WHEEL_GAP_PX, WHEEL_VISUAL_INSET
 from models.wheel_model import WheelSectorData
 from engine.hover_state_machine import HoverStateMachine
@@ -180,8 +181,13 @@ class WheelSectorItem(QGraphicsObject):
     def paint(self, painter: QPainter, option, widget=None):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        fill_str, border_str = _SECTOR_COLORS.get(
-            self._visual_state, _SECTOR_COLORS['normal'])
+        if self._visual_state == 'normal':
+            # 中心轮盘 normal 跟「按键」组同配色 (用户可调); active 走反馈色
+            fam = button_theme.keyboard()
+            fill_str, border_str = fam['fill'], fam['border']
+        else:
+            fill_str, border_str = _SECTOR_COLORS.get(
+                self._visual_state, _SECTOR_COLORS['normal'])
 
         painter.setPen(QPen(QColor(border_str), 2))
         painter.setBrush(QBrush(QColor(fill_str)))
@@ -213,7 +219,7 @@ class WheelSectorItem(QGraphicsObject):
             self._text_font_name = font_name
             self._text_font_cache = QFont(font_name, 10, QFont.Weight.Bold)
         painter.setFont(self._text_font_cache)
-        painter.setPen(QColor("#FFFFFF"))
+        painter.setPen(QColor(button_theme.keyboard()['text']))
         text_rect = QRectF(tx - 24, ty - 12, 48, 24)
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter,
                          self.data.name[:4])

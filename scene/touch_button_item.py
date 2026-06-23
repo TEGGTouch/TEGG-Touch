@@ -14,6 +14,7 @@ from core.constants import (
     GP_KEY_PREFIX, GP_KEY_TO_LABEL, DEFAULT_GRID_SIZE,
 )
 from core.i18n import t, get_font
+from core import button_theme
 from models.button_model import ButtonData
 from engine.hover_state_machine import HoverStateMachine
 from scene.tooltip_item import build_edit_tooltip
@@ -202,17 +203,23 @@ class TouchButtonItem(QGraphicsObject):
         is_gp = self.data.btn_type == BTN_TYPE_GP_BUTTON
 
         if is_band:
-            # 回中带：深绿背景 + 绿色边框 + 明亮绿文字
-            fill = QColor(COLOR_CENTER_BAND_BG)
-            border = QColor(COLOR_CENTER_BAND)
-            text_color = QColor(COLOR_CENTER_BAND_TEXT)
+            # 回中带：用户可调配色 (默认深绿)
+            fam = button_theme.center_band()
+            fill = QColor(fam['fill'])
+            border = QColor(fam['border'])
+            text_color = QColor(fam['text'])
         elif is_gp and self._visual_state == 'normal':
-            # 手柄键 normal: 蓝紫调; active 状态仍走 STATE_COLORS 反馈
-            fill = QColor(COLOR_GP_BTN_BG)
-            border = QColor(COLOR_GP_BTN_BORDER)
-            text_color = QColor(COLOR_GP_BTN_TEXT)
+            # 手柄键 normal: 用户可调配色 (默认蓝); active 状态仍走 STATE_COLORS 反馈
+            fam = button_theme.gamepad()
+            fill = QColor(fam['fill'])
+            border = QColor(fam['border'])
+            text_color = QColor(fam['text'])
         elif self._visual_state == 'normal':
-            fill, border, text_color = STATE_COLORS['normal']
+            # 普通按键 + 中心轮盘 normal: 用户可调配色 (默认深灰)
+            fam = button_theme.keyboard()
+            fill = QColor(fam['fill'])
+            border = QColor(fam['border'])
+            text_color = QColor(fam['text'])
         else:
             fill, border, text_color = STATE_COLORS.get(
                 self._visual_state, STATE_COLORS['normal'])

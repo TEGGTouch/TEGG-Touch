@@ -429,21 +429,21 @@ class HotkeySettingsDialog(QDialog):
         self._cursor_page = self._build_cursor_page(fn)
         self._stack.addWidget(self._cursor_page)
 
-        # 页 2: 方向盘样式
-        self._wheel_page = self._build_wheel_page(fn)
-        self._stack.addWidget(self._wheel_page)
-
-        # 页 3: 语言设置
+        # 页 2: 语言设置
         self._language_page = self._build_language_page(fn)
         self._stack.addWidget(self._language_page)
 
-        # 页 4: 日志 (诊断报告)
+        # 页 3: 日志 (诊断报告)
         self._log_page = self._build_log_page(fn)
         self._stack.addWidget(self._log_page)
 
-        # 页 5: 关于蛋挞
+        # 页 4: 关于蛋挞
         self._about_page = self._build_about_page(fn)
         self._stack.addWidget(self._about_page)
+
+        # 页 5: 按钮配色 (含方向盘)
+        self._button_color_page = self._build_button_color_page(fn)
+        self._stack.addWidget(self._button_color_page)
 
         ll.addWidget(self._stack)
 
@@ -510,10 +510,10 @@ class HotkeySettingsDialog(QDialog):
         items = [
             (t("hotkey.menu_hotkeys"), 0),
             (t("hotkey.menu_cursor"), 1),
-            ("方向盘配色", 2),
-            (t("hotkey.menu_language"), 3),
-            (t("hotkey.menu_log"), 4),
-            (t("hotkey.menu_about"), 5),
+            (t("hotkey.menu_button_colors"), 5),
+            (t("hotkey.menu_language"), 2),
+            (t("hotkey.menu_log"), 3),
+            (t("hotkey.menu_about"), 4),
         ]
         for label_text, idx in items:
             b = QPushButton(label_text)
@@ -522,16 +522,16 @@ class HotkeySettingsDialog(QDialog):
             b.setFont(_make_font(fn, 15, bold=True))
             b.clicked.connect(lambda _, i=idx: self._select_page(i))
             v.addWidget(b)
-            self._sidebar_btns.append(b)
+            self._sidebar_btns.append((idx, b))
 
         v.addStretch()
         return sb
 
     def _select_page(self, idx):
         self._stack.setCurrentIndex(idx)
-        # 高亮选中项
-        for i, b in enumerate(self._sidebar_btns):
-            selected = (i == idx)
+        # 高亮选中项 (按各按钮存的 page idx 匹配, 非显示顺序)
+        for page_i, b in self._sidebar_btns:
+            selected = (page_i == idx)
             bg = C_CYBER if selected else "transparent"
             bg_h = C_CYBER_H if selected else C_GRAY_H
             fg = "#FFF" if selected else "#CCC"
@@ -546,9 +546,9 @@ class HotkeySettingsDialog(QDialog):
         # 仅快捷键页(0)显示右侧键位面板; 其余页隐藏 right_wrapper → 两列
         if hasattr(self, '_right_wrapper'):
             self._right_wrapper.setVisible(idx == 0)
-        # 光标(1) / 方向盘(2) / 日志(4) / 关于(5) 页拉宽 left_wrapper 和 stack
+        # 光标(1) / 按钮配色(5) / 日志(3) / 关于(4) 页拉宽 left_wrapper 和 stack
         if hasattr(self, '_left_wrapper'):
-            if idx in (1, 2, 4, 5):
+            if idx in (1, 3, 4, 5):
                 self._stack.setFixedWidth(self.WIDE_CONTENT_W)
                 self._left_wrapper.setFixedWidth(self.WIDE_LEFT_W)
             else:
@@ -738,6 +738,15 @@ class HotkeySettingsDialog(QDialog):
             "background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 6px;")
         cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
 
+        # 调节控件容器 (未激活组收起, 只留上面的样式预览)
+        controls = QWidget()
+        controls.setStyleSheet("background: transparent;")
+        cl_inner = QVBoxLayout(controls)
+        cl_inner.setContentsMargins(0, 0, 0, 0)
+        cl_inner.setSpacing(12)
+        _col_layout = cl   # 原列布局 (放预览的)
+        cl = cl_inner      # 下面的行都加进 controls
+
         # 底色行
         fill_row = self._build_color_row(fn, ct, 'fill', t("hotkey.cursor_fill"))
         cl.addLayout(fill_row)
@@ -788,11 +797,12 @@ class HotkeySettingsDialog(QDialog):
         scale_slider.valueChanged.connect(
             lambda v, c=ct: self._on_cursor_scale_changed(c, v))
         cl.addWidget(scale_slider)
+        _col_layout.addWidget(controls)   # 控件容器加回列布局
 
         # 存引用 + 初始预览
         self._cursor_widgets[ct] = {
             'preview': preview, 'scale_slider': scale_slider,
-            'scale_value_lbl': scale_value_lbl,
+            'scale_value_lbl': scale_value_lbl, 'controls': controls,
         }
         self._refresh_cursor_preview(ct)
         return col
@@ -923,17 +933,23 @@ class HotkeySettingsDialog(QDialog):
         header.mousePressEvent = lambda e, s=shape: self._on_shape_selected(s)
         gl.addWidget(header)
 
-        # 3 列编辑区
-        cols = QHBoxLayout()
+        # 3 列编辑区 — 放进可收起 body, 仅激活组展开 (控制弹窗高度)
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        cols = QHBoxLayout(body)
+        cols.setContentsMargins(0, 0, 0, 0)
         cols.setSpacing(24)
         for ct, label_text in items:
             if is_ball:
                 cols.addWidget(self._build_ball_column(fn, ct, label_text), 1)
             else:
                 cols.addWidget(self._build_cursor_column(fn, ct, label_text), 1)
-        gl.addLayout(cols)
+        gl.addWidget(body)
 
-        self._shape_groups[shape] = {'frame': frame, 'tag': tag, 'hint': hint}
+        # 整张卡片可点激活 (滑块/取色按钮会自己消费点击, 不冒泡; 其余区域冒泡到此)
+        frame.mousePressEvent = lambda e, s=shape: self._on_shape_selected(s)
+
+        self._shape_groups[shape] = {'frame': frame, 'tag': tag, 'hint': hint, 'body': body}
         return frame
 
     def _on_shape_selected(self, shape: str):
@@ -945,6 +961,11 @@ class HotkeySettingsDialog(QDialog):
             active = (s == self._cursor_shape)
             g['tag'].setVisible(active)
             g['hint'].setVisible(not active)
+            # 卡片(含三列样式预览)始终显示; 仅激活组展开「底色/描边/透明度/大小」控件
+            wmap = self._cursor_widgets if s == 'arrow' else self._ball_widgets
+            for ct, w in wmap.items():
+                if w.get('controls'):
+                    w['controls'].setVisible(active)
             border = "#F59E0B" if active else "#3A3A3A"
             bg = "#2A2620" if active else "#1E1E1E"
             g['frame'].setStyleSheet(
@@ -974,6 +995,15 @@ class HotkeySettingsDialog(QDialog):
         preview.setStyleSheet(
             "background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 6px;")
         cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        # 调节控件容器 (未激活组收起, 只留预览)
+        controls = QWidget()
+        controls.setStyleSheet("background: transparent;")
+        cl_inner = QVBoxLayout(controls)
+        cl_inner.setContentsMargins(0, 0, 0, 0)
+        cl_inner.setSpacing(12)
+        _col_layout = cl
+        cl = cl_inner
 
         # 颜色行
         cl.addLayout(self._build_ball_color_row(fn, ct))
@@ -1021,10 +1051,11 @@ class HotkeySettingsDialog(QDialog):
         scale_slider.setStyleSheet(self._slider_qss())
         scale_slider.valueChanged.connect(lambda v, c=ct: self._on_ball_scale_changed(c, v))
         cl.addWidget(scale_slider)
+        _col_layout.addWidget(controls)
 
         self._ball_widgets[ct] = {
             'preview': preview, 'alpha_slider': alpha_slider, 'alpha_val': a_val,
-            'scale_slider': scale_slider, 'scale_val': s_val,
+            'scale_slider': scale_slider, 'scale_val': s_val, 'controls': controls,
         }
         self._refresh_ball_preview(ct)
         return col
@@ -1124,14 +1155,272 @@ class HotkeySettingsDialog(QDialog):
                 w['scale_slider'].setValue(int(round(float(style.get('scale', 1.0)) * 100)))
             self._refresh_ball_preview(ct)
 
-    # ── 方向盘样式页 ──
+    # ── 按钮配色页 ──
+
+    def _ensure_button_colors_buf(self):
+        if not hasattr(self, '_button_colors_buf'):
+            from core.button_theme import DEFAULT_BUTTON_COLORS
+            existing = (load_hotkeys() or {}).get('button_colors') or {}
+            self._button_colors_buf = {}
+            for g in ('keyboard', 'gamepad', 'center_band'):
+                base = existing.get(g) or DEFAULT_BUTTON_COLORS[g]
+                self._button_colors_buf[g] = base.upper()
+
+    def _build_button_color_page(self, fn):
+        self._ensure_button_colors_buf()
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        tip = QLabel(t("hotkey.button_colors_tip"))
+        tip.setFont(_make_font(fn, 13))
+        tip.setStyleSheet("color: #888; background: transparent;")
+        tip.setWordWrap(True)
+        v.addWidget(tip)
+        v.addSpacing(20)
+
+        # 第一行: 三组按钮配色
+        cols = QHBoxLayout()
+        cols.setSpacing(24)
+        self._bc_widgets = {}
+        for g, label in (('keyboard', t("hotkey.bc_keyboard")),
+                         ('gamepad', t("hotkey.bc_gamepad")),
+                         ('center_band', t("hotkey.bc_center_band"))):
+            cols.addWidget(self._build_bc_column(fn, g, label), 1)
+        v.addLayout(cols)
+        v.addSpacing(16)
+
+        # 第二行: 方向盘 (整行通栏, 预览画出方向盘 + 左右扳机)
+        v.addWidget(self._build_wheel_card(fn))
+        v.addStretch()
+
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        save_btn = QPushButton(t("hotkey.save"))
+        save_btn.setFixedHeight(40)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setFont(_make_font(fn, 14, bold=True))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CYBER}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 24px;
+            }}
+            QPushButton:hover {{ background: {C_CYBER_H}; }}
+        """)
+        save_btn.clicked.connect(self._on_save)
+        bottom.addWidget(save_btn)
+        v.addLayout(bottom)
+        return page
+
+    def _build_bc_column(self, fn, g: str, label_text: str):
+        col = QFrame()
+        col.setStyleSheet(
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+        cl = QVBoxLayout(col)
+        cl.setContentsMargins(20, 18, 20, 18)
+        cl.setSpacing(12)
+
+        title = QLabel(label_text)
+        title.setFont(_make_font(fn, 15, bold=True))
+        title.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cl.addWidget(title)
+
+        # 预览 (用派生族渲染: 填充底 + 描边 + 字色示例)
+        preview = QLabel("Aa")
+        preview.setFixedSize(160, 90)
+        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview.setFont(_make_font(fn, 22, bold=True))
+        cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        # 基色行
+        row = QHBoxLayout()
+        lbl = QLabel(t("hotkey.bc_base"))
+        lbl.setFont(_make_font(fn, 14))
+        lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        row.addWidget(lbl)
+        row.addStretch()
+        btn = QPushButton()
+        btn.setFixedSize(96, 28)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_color_btn_style(btn, self._button_colors_buf[g])
+        btn.clicked.connect(lambda _, gg=g, b=btn: self._on_bc_pick(gg, b))
+        row.addWidget(btn)
+        cl.addLayout(row)
+
+        # 重置该组
+        reset = QPushButton(t("hotkey.bc_reset"))
+        reset.setFixedHeight(32)
+        reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset.setFont(_make_font(fn, 13))
+        reset.setStyleSheet(f"""
+            QPushButton {{ background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px; }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        reset.clicked.connect(lambda _, gg=g: self._on_bc_reset(gg))
+        cl.addWidget(reset)
+
+        self._bc_widgets[g] = {'preview': preview, 'btn': btn}
+        self._refresh_bc_preview(g)
+        return col
+
+    def _refresh_bc_preview(self, g: str):
+        from core.button_theme import derive_family
+        fam = derive_family(g, self._button_colors_buf[g])
+        prev = self._bc_widgets.get(g, {}).get('preview')
+        if prev:
+            prev.setStyleSheet(
+                f"background: {fam['fill']}; color: {fam['text']}; "
+                f"border: 2px solid {fam['border']}; border-radius: 6px;")
+
+    def _on_bc_pick(self, g: str, btn: QPushButton):
+        initial = QColor(self._button_colors_buf[g])
+        color = QColorDialog.getColor(
+            initial, self, t("hotkey.bc_base"),
+            QColorDialog.ColorDialogOption.DontUseNativeDialog)
+        if not color.isValid():
+            return
+        hex_val = color.name(QColor.NameFormat.HexRgb).upper()
+        self._button_colors_buf[g] = hex_val
+        self._apply_color_btn_style(btn, hex_val)
+        self._refresh_bc_preview(g)
+
+    def _on_bc_reset(self, g: str):
+        from core.button_theme import DEFAULT_BUTTON_COLORS
+        base = DEFAULT_BUTTON_COLORS[g].upper()
+        self._button_colors_buf[g] = base
+        btn = self._bc_widgets.get(g, {}).get('btn')
+        if btn:
+            self._apply_color_btn_style(btn, base)
+        self._refresh_bc_preview(g)
+
+    # ── 方向盘卡片 (并入按钮配色页第二行) ──
+
+    def _build_wheel_card(self, fn):
+        self._ensure_wheel_buf()
+        col = QFrame()
+        col.setStyleSheet(
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+        cl = QVBoxLayout(col)
+        cl.setContentsMargins(20, 18, 20, 18)
+        cl.setSpacing(12)
+
+        title = QLabel(t("hotkey.bc_wheel"))
+        title.setFont(_make_font(fn, 15, bold=True))
+        title.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cl.addWidget(title)
+
+        preview = QLabel()
+        preview.setFixedHeight(320)   # 通栏: 宽度自适应, 高度决定方向盘大小
+        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview.setStyleSheet(
+            "background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 6px;")
+        cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._wheel_card_preview = preview
+
+        row = QHBoxLayout()
+        lbl = QLabel(t("hotkey.bc_base"))
+        lbl.setFont(_make_font(fn, 14))
+        lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        row.addWidget(lbl)
+        row.addStretch()
+        btn = QPushButton()
+        btn.setFixedSize(96, 28)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_color_btn_style(btn, self._wheel_buf.get('color', '#3B82F6'))
+        btn.clicked.connect(self._on_wheel_card_pick)
+        row.addWidget(btn)
+        self._wheel_card_btn = btn
+        cl.addLayout(row)
+
+        reset = QPushButton(t("hotkey.bc_reset"))
+        reset.setFixedHeight(32)
+        reset.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset.setFont(_make_font(fn, 13))
+        reset.setStyleSheet(f"""
+            QPushButton {{ background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px; }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        reset.clicked.connect(self._on_wheel_card_reset)
+        cl.addWidget(reset)
+
+        self._refresh_wheel_card_preview()
+        return col
+
+    def _render_wheel_card_preview(self):
+        """用真实 GpWheelItem (run 态: 方向盘 + 真实 LT/RT 扳机, 无外框/手柄) 渲染预览。"""
+        from PyQt6.QtGui import QPixmap, QPainter
+        from PyQt6.QtCore import QRectF
+        from PyQt6.QtWidgets import QGraphicsScene
+        from scene.gp_wheel_item import GpWheelItem
+        from core.constants import DEFAULT_GRID_SIZE
+        from models.gamepad_model import GamepadWheelData
+        color = self._wheel_buf.get('color', '#3B82F6')
+        data = GamepadWheelData()
+        data.w = data.h = 4 * DEFAULT_GRID_SIZE
+        item = GpWheelItem(data)
+        item._mode = 'run'                       # 无外框/手柄, 只有盘 + 扳机
+        item._resize_handle.setVisible(False)
+        item._lt, item._rt = 0.55, 0.8           # 让扳机条有填充, 展示配色
+        item.set_preview_color(color)
+        sc = QGraphicsScene()
+        sc.addItem(item)
+        rect = item.boundingRect()
+        W = max(1, int(rect.width())); H = max(1, int(rect.height()))
+        pm = QPixmap(W, H)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        sc.render(p, QRectF(0, 0, W, H), rect)
+        p.end()
+        sc.removeItem(item)
+        # 按预览高度缩放 (宽度通栏自适应, 高度固定 → 大小稳定)
+        prev = getattr(self, '_wheel_card_preview', None)
+        target_h = (prev.height() - 12) if prev else 300
+        if target_h > 8 and pm.height() > 0:
+            pm = pm.scaledToHeight(target_h, Qt.TransformationMode.SmoothTransformation)
+        return pm
+
+    def _refresh_wheel_card_preview(self):
+        if getattr(self, '_wheel_card_preview', None):
+            self._wheel_card_preview.setPixmap(self._render_wheel_card_preview())
+
+    def _on_wheel_card_pick(self):
+        initial = QColor(self._wheel_buf.get('color', '#3B82F6'))
+        color = QColorDialog.getColor(
+            initial, self, t("hotkey.bc_wheel"),
+            QColorDialog.ColorDialogOption.DontUseNativeDialog)
+        if not color.isValid():
+            return
+        hex_val = color.name(QColor.NameFormat.HexRgb).upper()
+        self._wheel_buf['color'] = hex_val
+        self._apply_color_btn_style(self._wheel_card_btn, hex_val)
+        from scene.gp_wheel_item import clear_wheel_render_cache
+        clear_wheel_render_cache()
+        self._refresh_wheel_card_preview()
+
+    def _on_wheel_card_reset(self):
+        from core.constants import DEFAULT_WHEEL_STYLE
+        base = DEFAULT_WHEEL_STYLE['color'].upper()
+        self._wheel_buf['color'] = base
+        self._apply_color_btn_style(self._wheel_card_btn, base)
+        from scene.gp_wheel_item import clear_wheel_render_cache
+        clear_wheel_render_cache()
+        self._refresh_wheel_card_preview()
+
+    # ── 方向盘样式页 (旧, 已并入按钮配色页, 不再注册到侧栏) ──
 
     def _ensure_wheel_buf(self):
         if not hasattr(self, '_wheel_buf'):
             from core.constants import DEFAULT_WHEEL_STYLE
             existing = (load_hotkeys() or {}).get('wheel_style') or {}
             buf = dict(DEFAULT_WHEEL_STYLE)
-            # 老的 variant 字段静默忽略 (现在只配 color, fill 走按钮 bg)
             c = existing.get('color')
             if isinstance(c, str) and c.startswith('#') and len(c) == 7:
                 buf['color'] = c.upper()
@@ -1184,6 +1473,25 @@ class HotkeySettingsDialog(QDialog):
         self._wheel_color_btn.clicked.connect(self._on_wheel_color_pick)
         color_row.addWidget(self._wheel_color_btn)
         cl.addLayout(color_row)
+
+        # LT / RT 扳机色行
+        for key, label in (('lt_color', "LT 扳机色"), ('rt_color', "RT 扳机色")):
+            r = QHBoxLayout()
+            lb = QLabel(label)
+            lb.setFont(_make_font(fn, 14))
+            lb.setStyleSheet("color: #CCC; background: transparent; border: none;")
+            r.addWidget(lb)
+            r.addStretch()
+            b = QPushButton()
+            b.setFixedSize(96, 28)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._apply_color_btn_style(b, self._wheel_buf[key])
+            b.clicked.connect(lambda _, k=key, bb=b: self._on_wheel_trigger_pick(k, bb))
+            r.addWidget(b)
+            cl.addLayout(r)
+            if not hasattr(self, '_wheel_trigger_btns'):
+                self._wheel_trigger_btns = {}
+            self._wheel_trigger_btns[key] = b
 
         # 卡片居左
         wrap = QHBoxLayout()
@@ -1256,10 +1564,23 @@ class HotkeySettingsDialog(QDialog):
         self._apply_color_btn_style(self._wheel_color_btn, hex_val)
         self._refresh_wheel_preview()
 
+    def _on_wheel_trigger_pick(self, key: str, btn: QPushButton):
+        initial = QColor(self._wheel_buf.get(key, '#0284C7'))
+        color = QColorDialog.getColor(
+            initial, self, "扳机色",
+            QColorDialog.ColorDialogOption.DontUseNativeDialog)
+        if not color.isValid():
+            return
+        hex_val = color.name(QColor.NameFormat.HexRgb).upper()
+        self._wheel_buf[key] = hex_val
+        self._apply_color_btn_style(btn, hex_val)
+
     def _on_wheel_reset(self):
         from core.constants import DEFAULT_WHEEL_STYLE
         self._wheel_buf = dict(DEFAULT_WHEEL_STYLE)
         self._apply_color_btn_style(self._wheel_color_btn, self._wheel_buf['color'])
+        for key, b in getattr(self, '_wheel_trigger_btns', {}).items():
+            self._apply_color_btn_style(b, self._wheel_buf[key])
         self._refresh_wheel_preview()
 
     # ── 语言页 ──
@@ -1946,6 +2267,9 @@ class HotkeySettingsDialog(QDialog):
             data['wheel_style'] = self._wheel_buf
             from scene.gp_wheel_item import clear_wheel_render_cache
             clear_wheel_render_cache()
+        # 按钮配色 (三组基色)
+        if hasattr(self, '_button_colors_buf'):
+            data['button_colors'] = self._button_colors_buf
 
         save_hotkeys(data)
 

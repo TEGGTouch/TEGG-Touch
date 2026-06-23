@@ -242,6 +242,7 @@ def load_config_from_file(filepath: str) -> dict:
         'cursor_styles': None,
         'ball_styles': None,
         'cursor_shape': None,   # None=回退全局; 'arrow'|'ball'
+        'button_colors': None,  # {keyboard/gamepad/center_band: 基色}; None=默认
     }
     if not os.path.exists(filepath):
         return result
@@ -357,6 +358,9 @@ def load_config_from_file(filepath: str) -> dict:
             result['ball_styles'] = raw_bs
         if data.get('cursor_shape') in ('arrow', 'ball'):
             result['cursor_shape'] = data.get('cursor_shape')
+        raw_bc = data.get('button_colors')
+        if isinstance(raw_bc, dict):
+            result['button_colors'] = raw_bc
         logger.info(f"配置加载成功: {filepath}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"配置文件格式错误: {filepath}: {e}")
@@ -410,7 +414,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          wheel_style=None,
                          cursor_styles=None,
                          ball_styles=None,
-                         cursor_shape=None) -> bool:
+                         cursor_shape=None,
+                         button_colors=None) -> bool:
     """保存配置到指定文件。"""
     # Bug 5 fix: geometry 为 None 时使用当前屏幕尺寸作为 fallback
     if geometry is None:
@@ -528,6 +533,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['ball_styles'] = ball_styles
     if cursor_shape in ('arrow', 'ball'):
         data['cursor_shape'] = cursor_shape
+    if isinstance(button_colors, dict):
+        data['button_colors'] = button_colors
 
     try:
         os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)
@@ -804,6 +811,8 @@ def load_hotkeys() -> dict:
             result['ball_styles'] = data['ball_styles']
         if data.get('cursor_shape') in ('arrow', 'ball'):
             result['cursor_shape'] = data['cursor_shape']
+        if 'button_colors' in data:
+            result['button_colors'] = data['button_colors']
         # 保留 sim_mode (作为 per-profile sim_mode 缺失时的全局回退) 与 gamepad_install_seen (全局)
         if 'sim_mode' in data:
             result['sim_mode'] = data['sim_mode']

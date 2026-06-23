@@ -58,7 +58,7 @@ def _get_key_categories():
             (t("key_cat.functions"), ["space", "enter", "esc", "tab", "backspace"]),
             (t("key_cat.punctuation"), [",", ".", "/", ";", "'", "[", "]", "\\", "-", "=", "`"]),
             (t("key_cat.other"), ["home", "end", "pageup", "pagedown", "insert", "delete",
-                                   "print screen", "scroll lock", "pause"]),
+                                   "print screen", "scroll lock"]),
             (t("key_cat.numpad"), [f"num {i}" for i in range(10)] + ["num lock",
                                     "num *", "num +", "num -", "num /", "num .", "num enter"]),
             (t("key_cat.media"), ["play/pause media", "stop media", "next track", "previous track",

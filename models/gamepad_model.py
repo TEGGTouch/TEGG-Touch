@@ -115,7 +115,10 @@ class GamepadWheelData:
     # easy_steer_threshold = 「增量死区」: 平滑后移动量(px)超过此值才触发 A/D。
     easy_steer_threshold: float = 1.0       # easy: 触发 A/D 的最小移动量 (px, 越大越抗抖)
     easy_throttle_sensitivity: float = 0.005  # easy: 鼠标上移每 1px 累加多少 RT (0~1)
-    easy_show_indicator: bool = True        # easy: 是否仍绘制方向盘视觉指示器
+    # 触发/释放延迟 (ms): 类按钮 — fill 从 0 涨到 1(触发)按下 A/D, 退回 0(释放)松开;
+    # 反向立即取消, 释放中再触发回填。让左右更平滑。
+    easy_trigger_delay: int = 0             # easy: 触发延迟 (ms, 默认无)
+    easy_release_delay: int = 500           # easy: 释放延迟 (ms, 默认 500)
     easy_brake_button: str = "L"            # easy: 哪个鼠标键触发 S 刹车; 'L'/'R'/'M'/'X1'/'X2'
 
     def to_dict(self) -> dict:

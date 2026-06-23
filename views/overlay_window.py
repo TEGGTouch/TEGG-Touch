@@ -187,6 +187,7 @@ class OverlayWindow(QGraphicsView):
         self._cursor_styles = dict(DEFAULT_CURSOR_STYLES)
         self._ball_styles = {k: dict(v) for k, v in DEFAULT_BALL_STYLES.items()}
         self._cursor_shape = DEFAULT_CURSOR_SHAPE
+        self._button_colors = None   # {group: 基色} or None(默认)
         self._wheel_style = dict(DEFAULT_WHEEL_STYLE)
         _initial_style = self._cursor_styles.get(
             'cursor', DEFAULT_CURSOR_STYLES['cursor'])
@@ -732,6 +733,14 @@ class OverlayWindow(QGraphicsView):
             sh = legacy if legacy in ('arrow', 'ball') else DEFAULT_CURSOR_SHAPE
             cfg['cursor_shape'] = sh
         self._cursor_shape = sh
+        # button_colors (按钮配色三组基色) — profile→全局→None(默认)
+        bc = cfg.get('button_colors')
+        if not isinstance(bc, dict):
+            legacy = (hotkeys or {}).get('button_colors')
+            bc = legacy if isinstance(legacy, dict) else None
+            if bc is not None:
+                cfg['button_colors'] = bc
+        self._button_colors = bc
 
     def _apply_appearance_to_items(self):
         """把当前 _wheel_style / _cursor_styles 推给场景里的 item (清缓存 + apply);
@@ -747,6 +756,14 @@ class OverlayWindow(QGraphicsView):
         except Exception as e:
             logger.warning(f"apply cursor styles 失败: {e}")
         self._apply_wheel_style_to_current_item()
+        # 按钮配色: 设进运行时主题 + 重绘所有场景 item
+        try:
+            from core import button_theme
+            button_theme.set_button_colors(self._button_colors)
+            button_theme.set_wheel_color((self._wheel_style or {}).get('color'))
+            self._scene.update()
+        except Exception as e:
+            logger.warning(f"apply button colors 失败: {e}")
         # 镜像到 hotkeys (设置弹窗读 hotkeys)
         try:
             from core.config_manager import save_hotkeys
@@ -755,6 +772,7 @@ class OverlayWindow(QGraphicsView):
                 'ball_styles': self._ball_styles,
                 'cursor_shape': self._cursor_shape,
                 'wheel_style': self._wheel_style,
+                'button_colors': self._button_colors,
             })
         except Exception as e:
             logger.warning(f"mirror 外观到 hotkeys 失败: {e}")
@@ -768,6 +786,7 @@ class OverlayWindow(QGraphicsView):
                 cfg['cursor_styles'] = self._cursor_styles
                 cfg['ball_styles'] = self._ball_styles
                 cfg['cursor_shape'] = self._cursor_shape
+                cfg['button_colors'] = self._button_colors
                 self._scene.save_config()
         except Exception as e:
             logger.warning(f"保存外观到 profile 失败: {e}")
@@ -1107,6 +1126,8 @@ class OverlayWindow(QGraphicsView):
             {k: dict(v) for k, v in DEFAULT_BALL_STYLES.items()}
         sh = hk.get('cursor_shape')
         self._cursor_shape = sh if sh in ('arrow', 'ball') else DEFAULT_CURSOR_SHAPE
+        bc = hk.get('button_colors')
+        self._button_colors = bc if isinstance(bc, dict) else None
         self._persist_appearance_to_profile()
         self._apply_appearance_to_items()
 
@@ -1118,6 +1139,7 @@ class OverlayWindow(QGraphicsView):
         self._ball_styles = {k: dict(v) for k, v in DEFAULT_BALL_STYLES.items()}
         self._cursor_shape = DEFAULT_CURSOR_SHAPE
         self._wheel_style = dict(DEFAULT_WHEEL_STYLE)
+        self._button_colors = None
         self._persist_appearance_to_profile()
         self._apply_appearance_to_items()
         default_opacity = DEFAULT_TRANSPARENCY

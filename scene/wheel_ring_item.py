@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt, QRectF, QTimer, pyqtSignal, pyqtProperty
 from PyQt6.QtGui import QPainter, QPainterPath, QPen, QBrush, QColor, QFont
 
 from core.i18n import get_font
+from core import button_theme
 from core.constants import WHEEL_VISUAL_INSET
 from models.wheel_model import WheelRingData
 from engine.hover_state_machine import HoverStateMachine
@@ -108,8 +109,12 @@ class WheelRingItem(QGraphicsObject):
     def paint(self, painter: QPainter, option, widget=None):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        fill_str, border_str = _RING_COLORS.get(
-            self._visual_state, _RING_COLORS['normal'])
+        if self._visual_state == 'normal':
+            fam = button_theme.keyboard()
+            fill_str, border_str = fam['fill'], fam['border']
+        else:
+            fill_str, border_str = _RING_COLORS.get(
+                self._visual_state, _RING_COLORS['normal'])
 
         painter.setPen(QPen(QColor(border_str), 2))
         painter.setBrush(QBrush(QColor(fill_str)))

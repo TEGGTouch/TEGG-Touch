@@ -65,7 +65,7 @@ DEFAULT_BALL_STYLES = {
 # === 方向盘样式 (全局, 跟 cursor 一样存 hotkeys.json) ===
 # 用户只配 stroke 色; fill 色用按钮 bg (COLOR_GP_BTN_BG); active 100%, idle 50% alpha
 DEFAULT_WHEEL_STYLE = {
-    "color": "#3B82F6",      # 描边色, 默认按钮 border 蓝
+    "color": "#3B82F6",      # 方向盘唯一基色: 描边/填充(压暗)/扳机/字 全派生自它
 }
 
 def get_hotkey_labels():

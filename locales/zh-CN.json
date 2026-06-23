@@ -170,7 +170,15 @@
     "cursor_reset_arrow": "重置箭头",
     "cursor_reset_ball": "重置圆球",
     "shape_active_tag": "✓ 激活",
-    "shape_click_activate": "点击启用"
+    "shape_click_activate": "点击启用",
+    "menu_button_colors": "按钮配色",
+    "button_colors_tip": "每组只调一个基色, 填充/描边/字色/摇杆小球自动派生; 触发反馈色与阈值区不变。",
+    "bc_keyboard": "按键 / 中心轮盘",
+    "bc_gamepad": "手柄 / 摇杆",
+    "bc_center_band": "回中带",
+    "bc_base": "基色",
+    "bc_reset": "重置该组",
+    "bc_wheel": "方向盘"
   },
   "editor": {
     "title": "编辑按钮",

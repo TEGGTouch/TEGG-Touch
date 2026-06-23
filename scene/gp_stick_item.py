@@ -24,6 +24,7 @@ from core.constants import (
     STICK_ID_LEFT, STICK_ID_RIGHT,
     ACTION_COLORS, GP_KEY_PREFIX, GP_KEY_TO_LABEL,
 )
+from core import button_theme
 
 # 小球颜色: 默认 (跟按钮 hover 蓝一致); 鼠标动作触发时按 ACTION_COLORS 切换
 _BALL_COLOR_OVERRIDE = "#0284C7"
@@ -166,22 +167,29 @@ class GpStickItem(QGraphicsObject):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         cx, cy, r = self.circle_geom()
 
+        # 手柄组用户可调配色 (idle 边框/填充/字色/小球); active/死区辅助/警告仍硬编码
+        _fam = button_theme.gamepad()
+        _idle_border = QColor(_fam['border'])
+        _fill_c = QColor(_fam['fill'])
+        _text_c = QColor(_fam['text'])
+        _ball_c = QColor(_fam.get('ball', _BALL_COLOR_OVERRIDE))
+
         # 选边框色 (sticking 时不再变黄, 改用进度条表达; 边框保持 active 蓝)
         if self._state in ('active', 'sticking'):
             border_color = _BORDER_ACTIVE
             border_width = 3
         else:
-            border_color = _BORDER_IDLE
+            border_color = _idle_border
             border_width = 2
 
         # 填充圆
         painter.setPen(QPen(border_color, border_width))
-        painter.setBrush(QBrush(_FILL))
+        painter.setBrush(QBrush(_fill_c))
         painter.drawEllipse(QPointF(cx, cy), r, r)
 
         # 死区圈 (仅编辑模式可见, 虚线辅助; 加粗 + 蓝色, 醒目)
         if self._mode == 'edit' and self.data.dead_zone > 0:
-            painter.setPen(QPen(_AUX_COLOR, 1, Qt.PenStyle.DashLine))
+            painter.setPen(QPen(_idle_border, 1, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             dz_r = r * self.data.dead_zone
             painter.drawEllipse(QPointF(cx, cy), dz_r, dz_r)
@@ -193,14 +201,14 @@ class GpStickItem(QGraphicsObject):
         font.setPixelSize(max(14, int(r * 0.35)))
         font.setWeight(QFont.Weight.Bold)
         painter.setFont(font)
-        painter.setPen(_TEXT)
+        painter.setPen(_text_c)
         # 标签放圆心稍上方 (active 时小球会盖到圆心区域, 标签留在上半)
         text_rect = QRectF(0, cy - r * 0.55, self.data.w, r * 0.5)
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, label)
 
         # 八方向锁定时的 8 个指示扇区分隔线 (仅编辑模式; 死区内不画, 起点 = 死区圈外缘)
         if self._mode == 'edit' and self.data.eight_way:
-            painter.setPen(QPen(_AUX_COLOR, 1, Qt.PenStyle.DashLine))
+            painter.setPen(QPen(_idle_border, 1, Qt.PenStyle.DashLine))
             inner = r * max(0.0, self.data.dead_zone)
             for i in range(8):
                 ang = i * math.pi / 4
@@ -220,7 +228,7 @@ class GpStickItem(QGraphicsObject):
             if self._pressed_action:
                 ball_color = QColor(ACTION_COLORS.get(self._pressed_action, _BALL_COLOR_OVERRIDE))
             else:
-                ball_color = _BALL
+                ball_color = _ball_c
 
             # sticking: 在圆外画一个完整 360° 蓝色圆环, 向外径向扩展 (类似中心环 hover 充能效果)
             # 内半径 = R (紧贴圆边缘), 外半径 = R + progress × max_extension
@@ -236,9 +244,9 @@ class GpStickItem(QGraphicsObject):
                     ring_path = ring_outer.subtracted(ring_inner)
                     # 进度 ≥ 90% 变玫红警示, 否则蓝
                     if self._sticking_progress >= _STICK_WARN_THRESHOLD:
-                        ring_color = QColor(_STICK_WARN_COLOR)
+                        ring_color = QColor(_STICK_WARN_COLOR)   # 警告永远红
                     else:
-                        ring_color = QColor(_BALL_COLOR_OVERRIDE)
+                        ring_color = QColor(_idle_border)        # 阈值区用描边色
                     ring_color.setAlphaF(0.5)   # 50% 透明
                     painter.setPen(Qt.PenStyle.NoPen)
                     painter.setBrush(QBrush(ring_color))

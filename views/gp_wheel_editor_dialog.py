@@ -1038,7 +1038,8 @@ class GpWheelEditorDialog(QDialog):
         # easy 模式字段
         self._easy_th_slider.setValue(int(round(getattr(self.data, 'easy_steer_threshold', 1.0))))
         self._easy_sens_slider.setValue(int(round(self.data.easy_throttle_sensitivity * 1000)))
-        self._easy_indicator_cb.setChecked(bool(self.data.easy_show_indicator))
+        self._easy_trig_slider.setValue(int(getattr(self.data, 'easy_trigger_delay', 0)))
+        self._easy_rel_slider.setValue(int(getattr(self.data, 'easy_release_delay', 500)))
         # 刹车键
         bk = getattr(self.data, 'easy_brake_button', 'L') or 'L'
         if bk not in ('L', 'R', 'M', 'X1', 'X2'):
@@ -1138,7 +1139,8 @@ class GpWheelEditorDialog(QDialog):
                                   else 'advanced')
         self.data.easy_steer_threshold = float(self._easy_th_slider.value())
         self.data.easy_throttle_sensitivity = self._easy_sens_slider.value() / 1000.0
-        self.data.easy_show_indicator = self._easy_indicator_cb.isChecked()
+        self.data.easy_trigger_delay = int(self._easy_trig_slider.value())
+        self.data.easy_release_delay = int(self._easy_rel_slider.value())
         self.data.easy_brake_button = self._easy_brake_choice
 
     # ── 轻松操控 Tab UI ──
@@ -1232,23 +1234,32 @@ class GpWheelEditorDialog(QDialog):
         self._refresh_easy_brake_btns()
         v.addSpacing(20)
 
-        # 显示指示器
-        self._easy_indicator_cb = QCheckBox("在屏幕上显示方向盘指示器 (HUD)")
-        self._easy_indicator_cb.setFont(_font(fn, 13))
-        self._easy_indicator_cb.setChecked(bool(self.data.easy_show_indicator))
-        self._easy_indicator_cb.setStyleSheet(f"""
-            QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
-            QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
-                border: 2px solid #666; background: {_C_BG};
-            }}
-            QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
-            QCheckBox::indicator:checked {{
-                background: {_C_BLUE}; border: 2px solid {_C_BLUE};
-                image: url({_CHECK_ICON_URL});
-            }}
-        """)
-        v.addWidget(self._easy_indicator_cb)
+        # 触发延迟 (ms)
+        head_td, self._easy_trig_slider, _ = _make_value_slider(
+            fn, "触发延迟",
+            init=int(getattr(self.data, 'easy_trigger_delay', 0)),
+            min_v=0, max_v=500, default_v=0, suffix='ms',
+        )
+        v.addLayout(head_td)
+        v.addWidget(self._easy_trig_slider)
+        v.addSpacing(6)
+        v.addWidget(_make_label(
+            fn, "转向触发的缓冲: 0=立即按 A/D; 越大方向盘从中心发散填满越慢",
+            _C_HINT, 12))
+        v.addSpacing(20)
+
+        # 释放延迟 (ms)
+        head_rd, self._easy_rel_slider, _ = _make_value_slider(
+            fn, "释放延迟",
+            init=int(getattr(self.data, 'easy_release_delay', 500)),
+            min_v=0, max_v=1500, default_v=500, suffix='ms',
+        )
+        v.addLayout(head_rd)
+        v.addWidget(self._easy_rel_slider)
+        v.addSpacing(6)
+        v.addWidget(_make_label(
+            fn, "松手后 A/D 维持多久再回中 (填充倒退); 越大左右越平滑",
+            _C_HINT, 12))
 
         v.addStretch()
         return w

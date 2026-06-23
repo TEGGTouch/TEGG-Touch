@@ -170,7 +170,15 @@
     "cursor_reset_arrow": "Reset Arrow",
     "cursor_reset_ball": "Reset Ball",
     "shape_active_tag": "✓ Active",
-    "shape_click_activate": "Click to enable"
+    "shape_click_activate": "Click to enable",
+    "menu_button_colors": "Button Colors",
+    "button_colors_tip": "One base color per group derives fill/stroke/text/stick-ball; trigger feedback & threshold zones unchanged.",
+    "bc_keyboard": "Keys / Center Wheel",
+    "bc_gamepad": "Gamepad / Stick",
+    "bc_center_band": "Center Band",
+    "bc_base": "Base color",
+    "bc_reset": "Reset group",
+    "bc_wheel": "Steering Wheel"
   },
   "editor": {
     "title": "Edit Button",

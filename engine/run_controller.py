@@ -147,13 +147,13 @@ class RunController(QObject):
         self._easy_last_mx: int | None = None      # 上一帧鼠标 X (用于横向位移检测)
         self._easy_smooth_dx: float = 0.0          # EMA 平滑后的 dx (过滤手抖)
         self._easy_rt: float = 0.0                 # 当前累计的 RT (0~1)
-        self._easy_steer_state: int = 0            # -1=A 按住, 0=空, +1=D 按住 (键盘输出, 离散)
-        self._easy_a_until: float = 0.0            # A 按住的截止时间 (perf_counter)
-        self._easy_d_until: float = 0.0            # D 按住的截止时间
+        # 转向延迟状态机: fill 0~1 (引擎量), dir 当前方向, key_down 实际按下的键
+        self._easy_dir: int = 0                    # -1=左/A, 0=空, +1=右/D
+        self._easy_fill: float = 0.0               # 0~1, 触发涨/释放退
+        self._easy_key_down: int = 0               # 当前实际按下的键 (-1/0/+1)
+        self._easy_steer_tick: float | None = None # 转向状态机 dt 计时
         self._easy_brake_state: bool = False       # 左键 → S 按住状态
-        # 视觉转向值: -1~+1, 跟 _easy_steer_state 分离, 用线性插值平滑过渡
-        self._easy_visual_steer: float = 0.0
-        self._easy_last_tick: float | None = None  # 上次 tick 的 perf_counter, 用于算 dt
+        self._easy_visual_steer: float = 0.0       # 视觉转向值 = dir×fill
 
         # 快捷键定时器
         self._timer = QTimer(self)
@@ -208,12 +208,12 @@ class RunController(QObject):
         self._easy_last_mx = None
         self._easy_smooth_dx = 0.0
         self._easy_rt = 0.0
-        self._easy_steer_state = 0
-        self._easy_a_until = 0.0
-        self._easy_d_until = 0.0
+        self._easy_dir = 0
+        self._easy_fill = 0.0
+        self._easy_key_down = 0
+        self._easy_steer_tick = None
         self._easy_brake_state = False
         self._easy_visual_steer = 0.0
-        self._easy_last_tick = None
         self._timer.start()
 
         # 启动语音引擎
@@ -1029,7 +1029,7 @@ class RunController(QObject):
              防抖靠 EMA 平滑 + _SMOOTH_TH 阈值, 无定点死区 (固定位置时 dx≈0 自然不触发)
         - Y: 上移 → RT 累加 (速度映射); 下移 → RT 减少; 累计值持续输出
         - 鼠标左键: 按下 → 按 S, 松开 → 释放 S
-        - 视觉指示器: 按 easy_show_indicator 开关同步 wheel.set_visual
+        - A/D 带触发/释放延迟 (fill 状态机); 视觉: 旋转(dir×fill) + 径向填充(fill)
         """
         d = wheel.data
         screen = QApplication.primaryScreen()
@@ -1042,13 +1042,12 @@ class RunController(QObject):
         mx = screen_pt.x() - sg.left()
         my = screen_pt.y() - sg.top()
 
-        # ── 1) 横向位移 → A / D (移动驱动, EMA 平滑过滤手抖) ──
-        # 单帧 dx 直接判定会被手腕/硬件 1-2px 抖动反复触发, 导致回中不完全.
-        # 用 EMA (alpha=0.5) 平滑近几帧 dx, 只对持续同向运动响应; 鼠标停 80ms 后释放.
+        # ── 1) 横向位移 → A/D, 触发/释放延迟状态机 (fill 0~1, 类按钮) ──
+        # EMA 平滑近几帧 dx 过滤手抖; 本帧输入方向驱动 fill 涨/退:
+        #   fill 涨满(过触发延迟)→按下 A/D; fill 退到 0(过释放延迟)→松开;
+        #   反向立即取消当前键并清 fill; 释放中再触发同向则回填。
         import time as _t1
-        _HOLD_SEC = 0.080
-        _EMA_ALPHA = 0.5     # 越大越敏感, 越小越抗抖
-        # 平滑后 dx 超过此值 (px) 才视为有效移动 = 「增量死区」, 用户可在编辑器调
+        _EMA_ALPHA = 0.5
         _SMOOTH_TH = float(getattr(d, 'easy_steer_threshold', 1.0))
         now_t = _t1.perf_counter()
         if self._easy_last_mx is None:
@@ -1059,29 +1058,46 @@ class RunController(QObject):
         self._easy_smooth_dx = (
             _EMA_ALPHA * self._easy_smooth_dx + (1.0 - _EMA_ALPHA) * dx_px)
         if self._easy_smooth_dx <= -_SMOOTH_TH:
-            self._easy_a_until = now_t + _HOLD_SEC
-            self._easy_d_until = 0.0
+            input_dir = -1
         elif self._easy_smooth_dx >= _SMOOTH_TH:
-            self._easy_d_until = now_t + _HOLD_SEC
-            self._easy_a_until = 0.0
-        # 根据 hold 截止时间决定当前状态
-        if now_t < self._easy_a_until:
-            new_steer = -1
-        elif now_t < self._easy_d_until:
-            new_steer = 1
+            input_dir = 1
         else:
-            new_steer = 0
-        if new_steer != self._easy_steer_state:
-            # 先释放上一个键, 再按新键 (避免 A+D 同时按)
-            if self._easy_steer_state == -1:
+            input_dir = 0
+        # dt (转向状态机专用)
+        if self._easy_steer_tick is None:
+            sdt = 0.0
+        else:
+            sdt = min(0.1, now_t - self._easy_steer_tick)
+        self._easy_steer_tick = now_t
+        tt = max(0.0, float(getattr(d, 'easy_trigger_delay', 0)) / 1000.0)
+        rr = max(0.0, float(getattr(d, 'easy_release_delay', 500)) / 1000.0)
+
+        def _rel(k):
+            if k == -1:
                 trigger('a', 'r')
-            elif self._easy_steer_state == 1:
+            elif k == 1:
                 trigger('d', 'r')
-            if new_steer == -1:
-                trigger('a', 'p')
-            elif new_steer == 1:
-                trigger('d', 'p')
-            self._easy_steer_state = new_steer
+
+        if input_dir != 0:
+            if self._easy_dir != 0 and input_dir != self._easy_dir:
+                # 反向: 立即取消当前键 + 清 fill (不走释放延迟)
+                _rel(self._easy_key_down)
+                self._easy_key_down = 0
+                self._easy_fill = 0.0
+            self._easy_dir = input_dir
+            self._easy_fill = 1.0 if tt <= 0 else min(1.0, self._easy_fill + sdt / tt)
+        elif self._easy_dir != 0:
+            self._easy_fill = 0.0 if rr <= 0 else max(0.0, self._easy_fill - sdt / rr)
+            if self._easy_fill <= 0.0:
+                self._easy_dir = 0
+        # 键实际按下/松开
+        if self._easy_fill >= 1.0 and self._easy_dir != 0 and self._easy_key_down != self._easy_dir:
+            _rel(self._easy_key_down)
+            trigger('a' if self._easy_dir == -1 else 'd', 'p')
+            self._easy_key_down = self._easy_dir
+        elif self._easy_fill <= 0.0 and self._easy_key_down != 0:
+            _rel(self._easy_key_down)
+            self._easy_key_down = 0
 
         # ── 2) 纵向速度 → RT 累加 ──
         sens = float(getattr(d, 'easy_throttle_sensitivity', 0.005))
@@ -1106,60 +1122,54 @@ class RunController(QObject):
             trigger('s', 'p' if brake_down else 'r')
             self._easy_brake_state = brake_down
 
-        # ── 4) 视觉转向: 速度模型 (deg/sec, 默认 max=180° → 锁 500ms / 回 250ms) ──
-        # 按 A/D: ±360°/sec 滑向 ±max; 松开: 720°/sec 滑向 0; 跟 max_rotation_deg 解耦,
-        # 用户调大幅度 (e.g. 720°) 时, 锁入/回正自动变成 2s / 1s, 保持物理速度恒定.
-        import time as _time
+        # ── 4) 视觉旋转: 恒定角速模型滑向 key_down 目标 (与 fill 解耦) ──
+        # fill 只驱动圆心填充动画 (触发/释放缓冲); 旋转跟「实际按键态」走:
+        #   触发 → fill 填满 → key_down 置位 → 方向盘按 ±360°/s 滑向 ±max;
+        #   保持触发 (含释放延迟内 key_down 仍在) → 稳在满舵不抖;
+        #   fill 归 0 松键 → key_down=0 → 方向盘按 720°/s 滑回中。
         _LOCK_DEG_PER_SEC = 360.0
         _RETURN_DEG_PER_SEC = 720.0
         max_deg = float(getattr(d, 'max_rotation_deg', 180.0)) or 180.0
         lock_norm = _LOCK_DEG_PER_SEC / max_deg
         return_norm = _RETURN_DEG_PER_SEC / max_deg
-
-        now = _time.perf_counter()
-        if self._easy_last_tick is None:
-            dt = 0.0
-        else:
-            dt = min(0.05, now - self._easy_last_tick)   # 夹紧避免假死后突跳
-        self._easy_last_tick = now
-        target = float(self._easy_steer_state)
+        target = float(self._easy_key_down)
         cur = self._easy_visual_steer
-        speed = return_norm if target == 0.0 else lock_norm
-        delta = speed * dt
+        speed = lock_norm if target != 0.0 else return_norm
+        delta = speed * sdt
         if cur < target:
             cur = min(target, cur + delta)
         elif cur > target:
             cur = max(target, cur - delta)
         self._easy_visual_steer = cur
-
-        # ── 5) 视觉指示器同步 ──
-        if getattr(d, 'easy_show_indicator', True):
-            if hasattr(wheel, 'set_visual'):
-                wheel.set_visual(
-                    cur,
-                    1.0 if self._easy_brake_state else 0.0,
-                    self._easy_rt,
-                    active=True,
-                )
+        if hasattr(wheel, 'set_visual'):
+            wheel.set_visual(
+                cur,
+                1.0 if self._easy_brake_state else 0.0,
+                self._easy_rt,
+                active=True,
+            )
+        # fill 圆心填充动画暂时隐藏 (保留状态机逻辑, 仅不推送视觉)
+        # if hasattr(wheel, 'set_easy_fill'):
+        #     wheel.set_easy_fill(self._easy_fill)
 
     def _release_easy_state(self):
         """退出 easy 模式或停止运行时调用: 释放 A/D/S, RT 归零, 视觉状态重置"""
-        if self._easy_steer_state == -1:
+        if self._easy_key_down == -1:
             trigger('a', 'r')
-        elif self._easy_steer_state == 1:
+        elif self._easy_key_down == 1:
             trigger('d', 'r')
         if self._easy_brake_state:
             trigger('s', 'r')
-        self._easy_steer_state = 0
-        self._easy_a_until = 0.0
-        self._easy_d_until = 0.0
+        self._easy_dir = 0
+        self._easy_fill = 0.0
+        self._easy_key_down = 0
+        self._easy_steer_tick = None
         self._easy_brake_state = False
         self._easy_rt = 0.0
         self._easy_last_y = None
         self._easy_last_mx = None
         self._easy_smooth_dx = 0.0
         self._easy_visual_steer = 0.0
-        self._easy_last_tick = None
         gp = GamepadEngine.get()
         if gp is not None:
             gp.set_trigger("R", 0.0)

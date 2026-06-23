@@ -87,10 +87,14 @@ KEYEVENTF_SCANCODE = 0x0008
 KEYEVENTF_KEYUP = 0x0002
 
 # 按键名 → 是否为扩展键（与小键盘共享扫描码，需要 EXTENDEDKEY 标志区分）
+# 注: 仅用于 keyboard 库返回「低字节扫描码」的键 (如 up=72); 对返回 e0 编码
+# (如 windows=0xE05B) 的键, _resolve_scan 会自动识别, 无需列在此。
 _EXTENDED_KEY_NAMES = {
     "up", "down", "left", "right",           # 方向键 (vs Numpad 8/2/4/6)
     "insert", "delete", "home", "end",        # 编辑键 (vs Numpad 0/./7/1)
     "page up", "page down", "pgup", "pgdn",   # 翻页键 (vs Numpad 9/3)
+    "pageup", "pagedown",                      # 面板用的无空格写法 (键位面板)
+    "num enter",                               # 小键盘回车 (0xE01C, 但 keyboard 返回低字节 28)
     "right ctrl", "right alt",                 # 右侧修饰键
     "left windows", "right windows",           # Win 键
 }
@@ -117,6 +121,39 @@ def get_scan_code(key_name: str) -> int:
     except Exception:
         logger.debug(f"无法获取按键 '{key_name}' 的扫描码")
         return 0
+
+
+# keyboard 库对个别特殊键返回的 [0] 扫描码不对, 这里硬覆盖为正确的 (scan, extended)
+_SCAN_OVERRIDE = {
+    "scroll lock": (0x46, False),   # 库返回 0xE046(=Break), 真值 0x46 非扩展
+    "print screen": (0x37, True),   # 库返回 0x54(=SysRq), 真值 0xE037
+    # pause/break 是多扫描码序列 (0xE11D45), 单次 SendInput scancode 无法正确表达, 不支持
+}
+
+
+def _resolve_scan(key_name: str):
+    """按键名 → (扫描码低字节, 是否扩展键)。
+
+    keyboard 库返回的扫描码不一致:
+      - 部分键返回「低字节」(如 up=72), 扩展与否查 _EXTENDED_KEY_NAMES;
+      - 部分键返回「e0 编码」(如 windows=0xE05B / 媒体键=0xE0xx), 直接据此识别;
+      - 个别特殊键 (scroll lock / print screen) 库返回值不对, 用 _SCAN_OVERRIDE 硬覆盖。
+    两种都归一到 (低字节, extended), 再由 press_key 加 EXTENDEDKEY 标志, 保证
+    Win/菜单/媒体/小键盘除号回车 等扩展键正确发送。
+    """
+    if not _keyboard_available:
+        return 0, False
+    ov = _SCAN_OVERRIDE.get(key_name.lower())
+    if ov is not None:
+        return ov
+    try:
+        raw = _kb.key_to_scan_codes(key_name)[0]
+    except Exception:
+        logger.debug(f"无法获取按键 '{key_name}' 的扫描码")
+        return 0, False
+    if raw >= 0xE000:                    # e0 前缀的扩展键
+        return raw & 0xFF, True
+    return raw, key_name.lower() in _EXTENDED_KEY_NAMES
 
 
 def press_key(scan_code: int, extended: bool = False):
@@ -190,10 +227,9 @@ def trigger(keys: str, action: str):
         return
     try:
         for k in key_list:
-            sc = get_scan_code(k)
+            sc, ext = _resolve_scan(k)
             if sc == 0:
                 continue
-            ext = k.lower() in _EXTENDED_KEY_NAMES
             if action == 'p':
                 press_key(sc, ext)
             elif action == 'r':

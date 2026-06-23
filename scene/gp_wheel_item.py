@@ -65,8 +65,10 @@ def render_wheel_pixmap(color: str) -> QPixmap:
     p = QPainter(pm)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-    # 1) fill 层 (按钮 bg 色) — 让方向盘永远不透
-    fill_ok = _render_one_svg_layer(_WHEEL_FILL_SVG, COLOR_GP_BTN_BG, p)
+    # 1) fill 层: 用户色的同色系深暗版 (而非固定深蓝), 让方向盘永远不透且随色变
+    from core import button_theme
+    fill_hex = button_theme.derive_shades(color)['fill']
+    fill_ok = _render_one_svg_layer(_WHEEL_FILL_SVG, fill_hex, p)
     # 2) stroke 层 (用户色) — 描边压在 fill 上面
     stroke_ok = _render_one_svg_layer(_WHEEL_STROKE_SVG, color, p)
     p.end()
@@ -130,6 +132,10 @@ class GpWheelItem(QGraphicsObject):
         self._active = False
         # 方向盘样式 (variant + color); overlay_window 在加载完成后会调 apply_style 覆盖
         self._style = dict(DEFAULT_WHEEL_STYLE)
+        # 设置弹窗预览专用: 实例级颜色覆盖, 不读全局 button_theme, 不污染实时场景
+        self._preview_color: str | None = None
+        # 轻松模式触发/释放引擎量 (0~1) → 圆心发散填充视觉
+        self._easy_fill: float = 0.0
         # 编辑器预览态: 显示鼠标有效区域 (释放阈值边界) — 30% 透明蓝方块
         # _preview_release_ratio = None 时用 data.release_threshold_ratio, 不为 None 时用预览值
         self._show_release_zone: bool = False
@@ -228,7 +234,14 @@ class GpWheelItem(QGraphicsObject):
         w = self.data.w
         bar_w = self._bar_width()
         is_edit = (self._mode == 'edit')
-        border_color = _BORDER_ACTIVE if self._active else _BORDER_IDLE
+        # 方向盘整体配色: 单一基色派生 (描边/填充压暗/字), 编辑态与扳机都跟它走
+        from core import button_theme
+        self._fam = (button_theme.derive_shades(self._preview_color)
+                     if self._preview_color else button_theme.wheel())
+        c_border = QColor(self._fam['border'])
+        c_fill = QColor(self._fam['fill'])
+        c_text = QColor(self._fam['text'])
+        border_color = _BORDER_ACTIVE if self._active else c_border
 
         # ── LT 视觉条 (左, 浮挂在方形外, 1 格宽); marker 玫瑰红 ──
         lt_rect = QRectF(-bar_w + 6, 6, bar_w - 12, w - 12)
@@ -260,7 +273,7 @@ class GpWheelItem(QGraphicsObject):
             outline_path.closeSubpath()
             border_w_v = 3 if self._active else 2
             painter.setPen(QPen(border_color, border_w_v))
-            painter.setBrush(QBrush(_FILL))
+            painter.setBrush(QBrush(c_fill))
             painter.drawPath(outline_path)
 
             # 中心死区: 编辑器勾选「显示死区」后才画 — 玫红色双竖线 + 50% 半透明填充
@@ -314,7 +327,7 @@ class GpWheelItem(QGraphicsObject):
         angle_deg = self._steering * max_deg
 
         if r > 0:
-            color = self._style.get("color", DEFAULT_WHEEL_STYLE["color"])
+            color = self._preview_color or self._style.get("color", DEFAULT_WHEEL_STYLE["color"])
             pixmap = render_wheel_pixmap(color)
 
             if pixmap is not None:
@@ -337,6 +350,15 @@ class GpWheelItem(QGraphicsObject):
                 painter.setPen(QPen(fallback, max(3.0, r * 0.08)))
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawEllipse(QPointF(cx, cy), r - 4, r - 4)
+
+        # ── 轻松模式: 引擎量 fill → 从圆心发散的半透明实心圆 (随方向盘配色) ──
+        if self._easy_fill > 0.001 and r > 0:
+            fc = QColor(self._fam['border'])
+            fc.setAlphaF(0.38)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(fc))
+            fr = r * max(0.0, min(1.0, self._easy_fill))
+            painter.drawEllipse(QPointF(cx, cy), fr, fr)
 
         # ── 鼠标动作按下视觉: 方向盘中心 hub 实底着色 + 键文本 ──
         if self._pressed_action and r > 0:
@@ -365,7 +387,7 @@ class GpWheelItem(QGraphicsObject):
             f = QFont(fn)
             f.setPixelSize(12)
             painter.setFont(f)
-            painter.setPen(_TEXT)
+            painter.setPen(c_text)
             painter.drawText(
                 QRectF(0, 4, w, 16),
                 Qt.AlignmentFlag.AlignCenter, self.data.name)
@@ -373,20 +395,24 @@ class GpWheelItem(QGraphicsObject):
     def _paint_trigger_bar(self, painter: QPainter, rect: QRectF,
                            value: float, label: str,
                            marker: float = None, marker_color: str = None):
-        """绘制单个 LT / RT 进度条 (底部往上填充)
+        """绘制单个 LT / RT 进度条 (底部往上填充) — 边框/底色/填充/字 全跟方向盘基色派生。
         marker: 浮标位置 0~1, None 不画; marker_color: 浮标线颜色 (hex)"""
+        fam = getattr(self, '_fam', None) or {'fill': '#1A1E2E', 'border': '#3B82F6', 'text': '#93C5FD'}
+        c_border = QColor(fam['border'])
+        c_bg = QColor(fam['fill'])
+        c_text = QColor(fam['text'])
         # 背景
-        painter.setPen(QPen(_BORDER_IDLE, 1))
-        painter.setBrush(QBrush(_PROGRESS_BG))
+        painter.setPen(QPen(c_border, 1))
+        painter.setBrush(QBrush(c_bg))
         painter.drawRoundedRect(rect, 6, 6)
 
-        # 填充 (从底往上)
+        # 填充 (从底往上) — 用基色(描边色)
         v = max(0.0, min(1.0, value))
         if v > 0.01:
             fill_h = rect.height() * v
             fill_rect = QRectF(rect.x(), rect.bottom() - fill_h,
                                 rect.width(), fill_h)
-            color = QColor(_PROGRESS)
+            color = QColor(c_border)
             color.setAlphaF(0.85)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(color))
@@ -407,7 +433,7 @@ class GpWheelItem(QGraphicsObject):
         f.setPixelSize(14)
         f.setWeight(QFont.Weight.Bold)
         painter.setFont(f)
-        painter.setPen(_TEXT)
+        painter.setPen(c_text)
         painter.drawText(
             QRectF(rect.x(), rect.y() + 4, rect.width(), 20),
             Qt.AlignmentFlag.AlignCenter, label)
@@ -415,7 +441,7 @@ class GpWheelItem(QGraphicsObject):
         f.setPixelSize(11)
         f.setWeight(QFont.Weight.Normal)
         painter.setFont(f)
-        painter.setPen(_TEXT)
+        painter.setPen(c_text)
         painter.drawText(
             QRectF(rect.x(), rect.bottom() - 18, rect.width(), 14),
             Qt.AlignmentFlag.AlignCenter, f"{int(v * 100)}%")
@@ -433,6 +459,14 @@ class GpWheelItem(QGraphicsObject):
         self._lt = lt
         self._rt = rt
         self._active = active
+        self.update()
+
+    def set_easy_fill(self, fill: float):
+        """轻松模式: 触发/释放引擎量 (0~1), 圆心发散填充视觉。"""
+        fill = max(0.0, min(1.0, float(fill)))
+        if abs(fill - self._easy_fill) < 0.001:
+            return
+        self._easy_fill = fill
         self.update()
 
     def set_pressed_action(self, action: str, key_display: str = ''):
@@ -480,10 +514,15 @@ class GpWheelItem(QGraphicsObject):
         if not isinstance(style, dict):
             return
         merged = dict(DEFAULT_WHEEL_STYLE)
-        col = style.get("color")
-        if isinstance(col, str) and col.startswith("#") and len(col) == 7:
-            merged["color"] = col.upper()
+        v = style.get("color")
+        if isinstance(v, str) and v.startswith("#") and len(v) == 7:
+            merged["color"] = v.upper()
         self._style = merged
+        self.update()
+
+    def set_preview_color(self, color: str | None):
+        """设置弹窗预览专用: 用实例级颜色覆盖渲染 (描边/填充/扳机/字 全派生), 不读全局。"""
+        self._preview_color = color.upper() if isinstance(color, str) else None
         self.update()
 
     def set_mode(self, mode: str):
