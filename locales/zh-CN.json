@@ -162,7 +162,15 @@
     "desc_stop": "退出运行模式，返回编辑界面",
     "desc_collapse": "呼出/收起悬浮球; 球左键切换工具栏显隐, 右键切换按键显隐, 中键停止运行返回编辑模式, 可拖动",
     "cursor": "光标显隐",
-    "desc_cursor": "切换我们自绘光标的显示/隐藏; 不需要光标出现的用户可关闭 (默认显示)"
+    "desc_cursor": "切换我们自绘光标的显示/隐藏; 不需要光标出现的用户可关闭 (默认显示)",
+    "shape_arrow": "箭头",
+    "shape_ball": "圆球",
+    "cursor_alpha": "透明度",
+    "cursor_color": "颜色",
+    "cursor_reset_arrow": "重置箭头",
+    "cursor_reset_ball": "重置圆球",
+    "shape_active_tag": "✓ 激活",
+    "shape_click_activate": "点击启用"
   },
   "editor": {
     "title": "编辑按钮",

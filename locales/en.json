@@ -162,7 +162,15 @@
     "desc_stop": "Exit run mode and return to edit mode",
     "desc_collapse": "Toggle floating bubble; left-click bubble to show/hide toolbar, right-click to show/hide buttons, middle-click to stop running and return to edit mode; draggable",
     "cursor": "Cursor Visibility",
-    "desc_cursor": "Toggle the on-screen drawn cursor; turn it off if you don't need it (shown by default)"
+    "desc_cursor": "Toggle the on-screen drawn cursor; turn it off if you don't need it (shown by default)",
+    "shape_arrow": "Arrow",
+    "shape_ball": "Ball",
+    "cursor_alpha": "Opacity",
+    "cursor_color": "Color",
+    "cursor_reset_arrow": "Reset Arrow",
+    "cursor_reset_ball": "Reset Ball",
+    "shape_active_tag": "✓ Active",
+    "shape_click_activate": "Click to enable"
   },
   "editor": {
     "title": "Edit Button",

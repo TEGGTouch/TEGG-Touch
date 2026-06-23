@@ -240,6 +240,8 @@ def load_config_from_file(filepath: str) -> dict:
         # 外观 (per-profile, None 表示该 profile 未设置, 调用方回退全局 hotkeys 做一次性迁移)
         'wheel_style': None,
         'cursor_styles': None,
+        'ball_styles': None,
+        'cursor_shape': None,   # None=回退全局; 'arrow'|'ball'
     }
     if not os.path.exists(filepath):
         return result
@@ -350,6 +352,11 @@ def load_config_from_file(filepath: str) -> dict:
         raw_cs = data.get('cursor_styles')
         if isinstance(raw_cs, dict):
             result['cursor_styles'] = raw_cs
+        raw_bs = data.get('ball_styles')
+        if isinstance(raw_bs, dict):
+            result['ball_styles'] = raw_bs
+        if data.get('cursor_shape') in ('arrow', 'ball'):
+            result['cursor_shape'] = data.get('cursor_shape')
         logger.info(f"配置加载成功: {filepath}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"配置文件格式错误: {filepath}: {e}")
@@ -401,7 +408,9 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          gp_macros=None,
                          sim_mode=None,
                          wheel_style=None,
-                         cursor_styles=None) -> bool:
+                         cursor_styles=None,
+                         ball_styles=None,
+                         cursor_shape=None) -> bool:
     """保存配置到指定文件。"""
     # Bug 5 fix: geometry 为 None 时使用当前屏幕尺寸作为 fallback
     if geometry is None:
@@ -515,6 +524,10 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['wheel_style'] = wheel_style
     if isinstance(cursor_styles, dict):
         data['cursor_styles'] = cursor_styles
+    if isinstance(ball_styles, dict):
+        data['ball_styles'] = ball_styles
+    if cursor_shape in ('arrow', 'ball'):
+        data['cursor_shape'] = cursor_shape
 
     try:
         os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)
@@ -784,9 +797,13 @@ def load_hotkeys() -> dict:
         # 保留 language 字段（不在 DEFAULT_HOTKEYS 中）
         if 'language' in data:
             result['language'] = data['language']
-        # 保留 cursor_styles 字段
+        # 保留 cursor_styles / ball_styles / cursor_shape 字段 (全局光标配置)
         if 'cursor_styles' in data:
             result['cursor_styles'] = data['cursor_styles']
+        if 'ball_styles' in data:
+            result['ball_styles'] = data['ball_styles']
+        if data.get('cursor_shape') in ('arrow', 'ball'):
+            result['cursor_shape'] = data['cursor_shape']
         # 保留 sim_mode (作为 per-profile sim_mode 缺失时的全局回退) 与 gamepad_install_seen (全局)
         if 'sim_mode' in data:
             result['sim_mode'] = data['sim_mode']

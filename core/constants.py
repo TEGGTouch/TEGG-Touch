@@ -51,6 +51,17 @@ DEFAULT_CURSOR_STYLES = {
     "cursor_block": {"stroke": "#FFFFFF", "fill": "#E69318", "scale": 1.0},
 }
 
+# === 圆球光标 (半透明实心圆, 类 iPadOS 指针; 圆心对齐真实光标顶点) ===
+# 形状: 'arrow' (默认箭头) | 'ball' (圆球)
+DEFAULT_CURSOR_SHAPE = "arrow"
+BALL_BASE_SIZE = 28     # 1x 圆球直径 (px); 按 scale 放大
+# 三种穿透各一套 {color, alpha(0~1), scale}; 默认黑/蓝/黄半透明, 与箭头 fill 同色系
+DEFAULT_BALL_STYLES = {
+    "cursor":       {"color": "#FFFFFF", "alpha": 0.6, "scale": 1.0},
+    "cursor_off":   {"color": "#005291", "alpha": 0.6, "scale": 1.0},
+    "cursor_block": {"color": "#E69318", "alpha": 0.6, "scale": 1.0},
+}
+
 # === 方向盘样式 (全局, 跟 cursor 一样存 hotkeys.json) ===
 # 用户只配 stroke 色; fill 色用按钮 bg (COLOR_GP_BTN_BG); active 100%, idle 50% alpha
 DEFAULT_WHEEL_STYLE = {

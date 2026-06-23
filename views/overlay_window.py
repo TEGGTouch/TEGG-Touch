@@ -182,8 +182,11 @@ class OverlayWindow(QGraphicsView):
 
         # ── 虚拟光标 + 方向盘样式 (per-profile, _load_profile 之后用 _resolve_*_from_profile 更新) ──
         # 这里先用全局默认建虚拟光标 item; profile 加载后 _on_settings_saved-style flow 会重设
-        from core.constants import DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE
+        from core.constants import (DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE,
+                                     DEFAULT_BALL_STYLES, DEFAULT_CURSOR_SHAPE)
         self._cursor_styles = dict(DEFAULT_CURSOR_STYLES)
+        self._ball_styles = {k: dict(v) for k, v in DEFAULT_BALL_STYLES.items()}
+        self._cursor_shape = DEFAULT_CURSOR_SHAPE
         self._wheel_style = dict(DEFAULT_WHEEL_STYLE)
         _initial_style = self._cursor_styles.get(
             'cursor', DEFAULT_CURSOR_STYLES['cursor'])
@@ -484,9 +487,10 @@ class OverlayWindow(QGraphicsView):
         """工具栏穿透按钮点击 → 同步 manager + toolbar + 光标"""
         self._pt_manager.set_mode(mode)
         self._run_toolbar.update_pt_mode(mode)
-        # 同步虚拟光标类型 + 应用对应类型的 style
+        # 同步虚拟光标类型 + 应用当前形状对应类型的 style
         cursor_type = self._PT_CURSOR_MAP.get(mode, 'cursor')
-        self._virtual_cursor.apply_styles_map(self._cursor_styles, cursor_type)
+        self._virtual_cursor.apply_shape_and_style(
+            self._cursor_shape, self._active_cursor_map(), cursor_type)
 
     def _toggle_buttons_visibility(self):
         """隐藏/显示所有按钮（含轮盘扇区和圆环 — 匹配原版 toggle_buttons_visibility）"""
@@ -681,10 +685,15 @@ class OverlayWindow(QGraphicsView):
             return legacy
         return 'keyboard'
 
+    def _active_cursor_map(self):
+        """当前激活形状对应的样式集 (ball → ball_styles, 否则 cursor_styles)。"""
+        return self._ball_styles if self._cursor_shape == 'ball' else self._cursor_styles
+
     def _resolve_appearance_from_profile(self, hotkeys: dict):
         """从当前 profile 读 wheel_style + cursor_styles; 无则回退老 hotkeys (一次性迁移),
         若迁移了就写回 profile config, 下次 save 落盘。"""
-        from core.constants import DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE
+        from core.constants import (DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE,
+                                     DEFAULT_BALL_STYLES, DEFAULT_CURSOR_SHAPE)
         cfg = self._scene.get_config() or {}
         # wheel_style
         ws = cfg.get('wheel_style')
@@ -706,6 +715,23 @@ class OverlayWindow(QGraphicsView):
             else:
                 cs = dict(DEFAULT_CURSOR_STYLES)
         self._cursor_styles = cs
+        # ball_styles (圆球配色) — 同 cursor_styles 的 profile→全局→默认 解析
+        bs = cfg.get('ball_styles')
+        if not isinstance(bs, dict):
+            legacy = (hotkeys or {}).get('ball_styles')
+            if isinstance(legacy, dict):
+                bs = legacy
+                cfg['ball_styles'] = bs
+            else:
+                bs = {k: dict(v) for k, v in DEFAULT_BALL_STYLES.items()}
+        self._ball_styles = bs
+        # cursor_shape (激活形状)
+        sh = cfg.get('cursor_shape')
+        if sh not in ('arrow', 'ball'):
+            legacy = (hotkeys or {}).get('cursor_shape')
+            sh = legacy if legacy in ('arrow', 'ball') else DEFAULT_CURSOR_SHAPE
+            cfg['cursor_shape'] = sh
+        self._cursor_shape = sh
 
     def _apply_appearance_to_items(self):
         """把当前 _wheel_style / _cursor_styles 推给场景里的 item (清缓存 + apply);
@@ -716,7 +742,8 @@ class OverlayWindow(QGraphicsView):
         clear_wheel_render_cache()
         cur_type = getattr(self._virtual_cursor, '_cursor_type', 'cursor')
         try:
-            self._virtual_cursor.apply_styles_map(self._cursor_styles, cur_type)
+            self._virtual_cursor.apply_shape_and_style(
+                self._cursor_shape, self._active_cursor_map(), cur_type)
         except Exception as e:
             logger.warning(f"apply cursor styles 失败: {e}")
         self._apply_wheel_style_to_current_item()
@@ -725,6 +752,8 @@ class OverlayWindow(QGraphicsView):
             from core.config_manager import save_hotkeys
             save_hotkeys({
                 'cursor_styles': self._cursor_styles,
+                'ball_styles': self._ball_styles,
+                'cursor_shape': self._cursor_shape,
                 'wheel_style': self._wheel_style,
             })
         except Exception as e:
@@ -737,6 +766,8 @@ class OverlayWindow(QGraphicsView):
             if cfg is not None:
                 cfg['wheel_style'] = self._wheel_style
                 cfg['cursor_styles'] = self._cursor_styles
+                cfg['ball_styles'] = self._ball_styles
+                cfg['cursor_shape'] = self._cursor_shape
                 self._scene.save_config()
         except Exception as e:
             logger.warning(f"保存外观到 profile 失败: {e}")
@@ -1063,20 +1094,29 @@ class OverlayWindow(QGraphicsView):
         """设置保存后: 热键读 hotkeys; 外观 (cursor + wheel_style) 从 hotkeys 拿了写回 active profile"""
         # 运行控制器重新读取热键
         self._run_controller.reload_hotkeys()
-        from core.constants import DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE
+        from core.constants import (DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE,
+                                     DEFAULT_BALL_STYLES, DEFAULT_CURSOR_SHAPE)
         hk = load_hotkeys() or {}
         # 外观: 设置弹窗刚把新值写到 hotkeys, 这里拷到 active profile (per-profile 的真源头)
         new_cursor = hk.get('cursor_styles', None) or dict(DEFAULT_CURSOR_STYLES)
         new_wheel = hk.get('wheel_style', None) or dict(DEFAULT_WHEEL_STYLE)
         self._cursor_styles = new_cursor
         self._wheel_style = new_wheel
+        new_ball = hk.get('ball_styles', None)
+        self._ball_styles = new_ball if isinstance(new_ball, dict) else \
+            {k: dict(v) for k, v in DEFAULT_BALL_STYLES.items()}
+        sh = hk.get('cursor_shape')
+        self._cursor_shape = sh if sh in ('arrow', 'ball') else DEFAULT_CURSOR_SHAPE
         self._persist_appearance_to_profile()
         self._apply_appearance_to_items()
 
     def _on_defaults_reset(self):
         """设置面板重置默认 → 重置透明度 + 清除运行工具栏保存的位置"""
-        from core.constants import DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE
+        from core.constants import (DEFAULT_CURSOR_STYLES, DEFAULT_WHEEL_STYLE,
+                                     DEFAULT_BALL_STYLES, DEFAULT_CURSOR_SHAPE)
         self._cursor_styles = dict(DEFAULT_CURSOR_STYLES)
+        self._ball_styles = {k: dict(v) for k, v in DEFAULT_BALL_STYLES.items()}
+        self._cursor_shape = DEFAULT_CURSOR_SHAPE
         self._wheel_style = dict(DEFAULT_WHEEL_STYLE)
         self._persist_appearance_to_profile()
         self._apply_appearance_to_items()

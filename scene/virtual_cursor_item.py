@@ -12,7 +12,7 @@ from PyQt6.QtCore import QRectF, QTimer, Qt, QByteArray
 from PyQt6.QtGui import QPainter, QPainterPath, QPen, QColor, QCursor, QPixmap
 from PyQt6.QtSvg import QSvgRenderer
 
-from core.constants import APP_DIR, DEFAULT_CURSOR_STYLES, CURSOR_BASE_SIZE
+from core.constants import APP_DIR, DEFAULT_CURSOR_STYLES, CURSOR_BASE_SIZE, BALL_BASE_SIZE
 from core.system_tuning import frame_interval_ms
 
 # SVG viewBox 比例 (左上指针, 非正方形)
@@ -116,11 +116,14 @@ class VirtualCursorItem(QGraphicsItem):
         self.setZValue(100)  # 始终在最上层
 
         self._cursor_type = cursor_type  # 'cursor' | 'cursor_off' | 'cursor_block'
+        self._shape = 'arrow'            # 'arrow' | 'ball'
         self._style = dict(style) if style else dict(
             DEFAULT_CURSOR_STYLES.get(cursor_type, {}))
         self._pixmap: QPixmap | None = None
         self._w = int(CURSOR_BASE_SIZE * CURSOR_VIEWBOX_W / CURSOR_VIEWBOX_H)
         self._h = CURSOR_BASE_SIZE
+        self._hx = 0.0   # 热点偏移 (arrow: 左上角=0; ball: 圆心 → -w/2,-h/2)
+        self._hy = 0.0
 
         self._refresh_pixmap()
 
@@ -130,14 +133,50 @@ class VirtualCursorItem(QGraphicsItem):
         self._tracker.timeout.connect(self._update_pos)
 
     def _refresh_pixmap(self):
-        """按当前 style 重新渲染 pixmap, 更新 bounding box 尺寸。"""
-        pm = render_cursor_pixmap(self._cursor_type, self._style)
-        self._pixmap = pm if pm and not pm.isNull() else None
+        """按当前 shape + style 重新渲染 pixmap, 更新 bounding box 尺寸与热点。"""
         scale = float(self._style.get('scale', 1.0))
-        self.prepareGeometryChange()
-        self._h = max(1, int(round(CURSOR_BASE_SIZE * scale)))
-        self._w = max(1, int(round(self._h * CURSOR_VIEWBOX_W / CURSOR_VIEWBOX_H)))
+        if self._shape == 'ball':
+            pm, d = self._render_ball()
+            self._pixmap = pm
+            self.prepareGeometryChange()
+            self._w = self._h = d
+            # 圆心对齐光标 → 整体左上偏移半径
+            self._hx = -d / 2.0
+            self._hy = -d / 2.0
+        else:
+            pm = render_cursor_pixmap(self._cursor_type, self._style)
+            self._pixmap = pm if pm and not pm.isNull() else None
+            self.prepareGeometryChange()
+            self._h = max(1, int(round(CURSOR_BASE_SIZE * scale)))
+            self._w = max(1, int(round(self._h * CURSOR_VIEWBOX_W / CURSOR_VIEWBOX_H)))
+            self._hx = 0.0   # 箭头尖即左上角, 无偏移
+            self._hy = 0.0
         self.update()
+
+    def _render_ball(self):
+        """渲染半透明实心圆 → (QPixmap, 直径px)。颜色取 style.color + style.alpha。"""
+        color = self._style.get('color', '#000000')
+        alpha = max(0.0, min(1.0, float(self._style.get('alpha', 0.6))))
+        scale = float(self._style.get('scale', 1.0))
+        d = max(2, int(round(BALL_BASE_SIZE * scale)))
+        pm = QPixmap(d, d)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        c = QColor(color)
+        c.setAlphaF(alpha)
+        p.setBrush(c)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(0, 0, d, d)
+        p.end()
+        return pm, d
+
+    def set_shape(self, shape: str):
+        """切换光标形状 ('arrow' | 'ball')。"""
+        new_shape = 'ball' if shape == 'ball' else 'arrow'
+        if new_shape != self._shape:
+            self._shape = new_shape
+            self._refresh_pixmap()
 
     def boundingRect(self) -> QRectF:
         return QRectF(0, 0, self._w, self._h)
@@ -176,6 +215,15 @@ class VirtualCursorItem(QGraphicsItem):
         self._style = dict(styles_map.get(self._cursor_type, {}))
         self._refresh_pixmap()
 
+    def apply_shape_and_style(self, shape: str, styles_map: dict,
+                              current_type: str | None = None):
+        """一次性设置形状(arrow/ball) + 当前穿透类型的样式, 只刷新一次。"""
+        self._shape = 'ball' if shape == 'ball' else 'arrow'
+        if current_type:
+            self._cursor_type = current_type
+        self._style = dict(styles_map.get(self._cursor_type, {}))
+        self._refresh_pixmap()
+
     def start_tracking(self):
         """开始跟踪光标位置"""
         self._tracker.start()
@@ -198,4 +246,5 @@ class VirtualCursorItem(QGraphicsItem):
         global_pos = QCursor.pos()
         view_pos = view.mapFromGlobal(global_pos)
         scene_pos = view.mapToScene(view_pos)
-        self.setPos(scene_pos.x(), scene_pos.y())
+        # 加热点偏移: 箭头(0,0) 左上对齐; 圆球(-r,-r) 圆心对齐光标顶点
+        self.setPos(scene_pos.x() + self._hx, scene_pos.y() + self._hy)

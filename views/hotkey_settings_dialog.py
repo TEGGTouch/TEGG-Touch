@@ -626,13 +626,25 @@ class HotkeySettingsDialog(QDialog):
     # 当前编辑中的 styles (保存按钮才写盘)
     def _ensure_cursor_buf(self):
         if not hasattr(self, '_cursor_buf'):
-            existing = (load_hotkeys() or {}).get('cursor_styles') or {}
-            # 默认值兜底
+            from core.constants import DEFAULT_BALL_STYLES, DEFAULT_CURSOR_SHAPE
+            hk = load_hotkeys() or {}
+            existing = hk.get('cursor_styles') or {}
+            # 箭头组默认值兜底
             self._cursor_buf = {}
             for ct in ('cursor', 'cursor_off', 'cursor_block'):
                 d = dict(DEFAULT_CURSOR_STYLES[ct])
                 d.update(existing.get(ct, {}))
                 self._cursor_buf[ct] = d
+            # 圆球组默认值兜底
+            existing_ball = hk.get('ball_styles') or {}
+            self._ball_buf = {}
+            for ct in ('cursor', 'cursor_off', 'cursor_block'):
+                d = dict(DEFAULT_BALL_STYLES[ct])
+                d.update(existing_ball.get(ct, {}))
+                self._ball_buf[ct] = d
+            # 激活形状
+            sh = hk.get('cursor_shape')
+            self._cursor_shape = sh if sh in ('arrow', 'ball') else DEFAULT_CURSOR_SHAPE
 
     def _build_cursor_page(self, fn):
         self._ensure_cursor_buf()
@@ -647,42 +659,45 @@ class HotkeySettingsDialog(QDialog):
         tip.setStyleSheet("color: #888; background: transparent;")
         tip.setWordWrap(True)
         v.addWidget(tip)
-        v.addSpacing(20)
-
-        # 三栏并列
-        cols = QHBoxLayout()
-        cols.setSpacing(24)
-
-        self._cursor_widgets = {}   # ct → {'preview': QLabel, 'fill_btn': ..., 'stroke_btn': ..., 'scale_combo': ...}
+        v.addSpacing(14)
 
         items = [
             ('cursor',       t("hotkey.cursor_default")),
             ('cursor_off',   t("hotkey.cursor_off_label")),
             ('cursor_block', t("hotkey.cursor_block_label")),
         ]
-        for ct, label_text in items:
-            cols.addWidget(self._build_cursor_column(fn, ct, label_text), 1)
+        self._cursor_widgets = {}
+        self._ball_widgets = {}
+        self._shape_groups = {}   # shape → {'frame', 'tag', 'hint'}
 
-        v.addLayout(cols)
+        # 上下两组展开: 箭头组 (上) + 圆球组 (下), 点击组头部激活, 激活组带 tag
+        v.addWidget(self._build_shape_group(
+            fn, 'arrow', t("hotkey.shape_arrow"), items, is_ball=False))
+        v.addSpacing(14)
+        v.addWidget(self._build_shape_group(
+            fn, 'ball', t("hotkey.shape_ball"), items, is_ball=True))
+        self._refresh_shape_groups()
         v.addStretch()
 
-        # 底部: 重置全部 + 保存
+        # 底部: 重置箭头 | 重置圆球 | 保存
         bottom = QHBoxLayout()
         bottom.addStretch()
-        reset_btn = QPushButton(t("hotkey.cursor_reset_all"))
-        reset_btn.setFixedHeight(40)
-        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        reset_btn.setFont(_make_font(fn, 14, bold=True))
-        reset_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C_GRAY}; color: #FFF;
-                border: none; border-radius: 6px; padding: 0 18px;
-            }}
-            QPushButton:hover {{ background: {C_GRAY_H}; }}
-        """)
-        reset_btn.clicked.connect(self._on_cursor_reset_all)
-        bottom.addWidget(reset_btn)
-        bottom.addSpacing(10)
+        for label_key, slot in (("hotkey.cursor_reset_arrow", self._on_arrow_reset),
+                                 ("hotkey.cursor_reset_ball", self._on_ball_reset)):
+            rbtn = QPushButton(t(label_key))
+            rbtn.setFixedHeight(40)
+            rbtn.setCursor(Qt.CursorShape.PointingHandCursor)
+            rbtn.setFont(_make_font(fn, 14, bold=True))
+            rbtn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C_GRAY}; color: #FFF;
+                    border: none; border-radius: 6px; padding: 0 16px;
+                }}
+                QPushButton:hover {{ background: {C_GRAY_H}; }}
+            """)
+            rbtn.clicked.connect(slot)
+            bottom.addWidget(rbtn)
+            bottom.addSpacing(10)
         save_btn = QPushButton(t("hotkey.save"))
         save_btn.setFixedHeight(40)
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -860,7 +875,7 @@ class HotkeySettingsDialog(QDialog):
                     "background: #1A1A1A; color: #888; "
                     "border: 1px solid #2A2A2A; border-radius: 6px;")
 
-    def _on_cursor_reset_all(self):
+    def _on_arrow_reset(self):
         self._cursor_buf = {ct: dict(DEFAULT_CURSOR_STYLES[ct])
                             for ct in ('cursor', 'cursor_off', 'cursor_block')}
         for ct, style in self._cursor_buf.items():
@@ -874,6 +889,240 @@ class HotkeySettingsDialog(QDialog):
             if slider:
                 slider.setValue(int(round(float(style.get('scale', 1.0)) * 100)))
             self._refresh_cursor_preview(ct)
+
+    # ── 形状切换卡片 ──────────────────────────────────────────
+
+    def _build_shape_group(self, fn, shape: str, title: str, items, is_ball: bool):
+        """一个展开的形状组卡片: 头部(标题 + 激活tag/提示) + 3 列编辑区; 点头部即激活。"""
+        frame = QFrame()
+        frame.setObjectName(f"shape_group_{shape}")
+        gl = QVBoxLayout(frame)
+        gl.setContentsMargins(16, 12, 16, 16)
+        gl.setSpacing(10)
+
+        # 头部 (整行可点 → 激活该组)
+        header = QWidget()
+        header.setStyleSheet("background: transparent;")
+        header.setCursor(Qt.CursorShape.PointingHandCursor)
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(0, 0, 0, 0); hl.setSpacing(8)
+        tlbl = QLabel(title)
+        tlbl.setFont(_make_font(fn, 15, bold=True))
+        tlbl.setStyleSheet("color: #FFF; background: transparent;")
+        hl.addWidget(tlbl)
+        tag = QLabel(t("hotkey.shape_active_tag"))
+        tag.setFont(_make_font(fn, 11, bold=True))
+        tag.setStyleSheet(
+            f"color: #000; background: #F59E0B; border-radius: 9px; padding: 1px 10px;")
+        hl.addWidget(tag)
+        hl.addStretch()
+        hint = QLabel(t("hotkey.shape_click_activate"))
+        hint.setFont(_make_font(fn, 11))
+        hint.setStyleSheet("color: #777; background: transparent;")
+        hl.addWidget(hint)
+        header.mousePressEvent = lambda e, s=shape: self._on_shape_selected(s)
+        gl.addWidget(header)
+
+        # 3 列编辑区
+        cols = QHBoxLayout()
+        cols.setSpacing(24)
+        for ct, label_text in items:
+            if is_ball:
+                cols.addWidget(self._build_ball_column(fn, ct, label_text), 1)
+            else:
+                cols.addWidget(self._build_cursor_column(fn, ct, label_text), 1)
+        gl.addLayout(cols)
+
+        self._shape_groups[shape] = {'frame': frame, 'tag': tag, 'hint': hint}
+        return frame
+
+    def _on_shape_selected(self, shape: str):
+        self._cursor_shape = shape
+        self._refresh_shape_groups()
+
+    def _refresh_shape_groups(self):
+        for s, g in self._shape_groups.items():
+            active = (s == self._cursor_shape)
+            g['tag'].setVisible(active)
+            g['hint'].setVisible(not active)
+            border = "#F59E0B" if active else "#3A3A3A"
+            bg = "#2A2620" if active else "#1E1E1E"
+            g['frame'].setStyleSheet(
+                f"QFrame#shape_group_{s} {{ background: {bg}; "
+                f"border: 2px solid {border}; border-radius: 10px; }}")
+
+    # ── 圆球组列 ──────────────────────────────────────────────
+
+    def _build_ball_column(self, fn, ct: str, label_text: str):
+        col = QFrame()
+        col.setStyleSheet(
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+        cl = QVBoxLayout(col)
+        cl.setContentsMargins(20, 18, 20, 18)
+        cl.setSpacing(12)
+
+        title = QLabel(label_text)
+        title.setFont(_make_font(fn, 15, bold=True))
+        title.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cl.addWidget(title)
+
+        # 预览 (黑底, 与箭头光标预览一致)
+        preview = QLabel()
+        preview.setFixedSize(160, 160)
+        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview.setStyleSheet(
+            "background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 6px;")
+        cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        # 颜色行
+        cl.addLayout(self._build_ball_color_row(fn, ct))
+
+        # 透明度行
+        alpha_top = QHBoxLayout()
+        a_lbl = QLabel(t("hotkey.cursor_alpha"))
+        a_lbl.setFont(_make_font(fn, 14))
+        a_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        alpha_top.addWidget(a_lbl)
+        alpha_top.addStretch()
+        cur_alpha = int(round(float(self._ball_buf[ct].get('alpha', 0.6)) * 100))
+        a_val = QLabel(f"{cur_alpha}%")
+        a_val.setFont(_make_font(fn, 13, bold=True))
+        a_val.setStyleSheet(f"color: {C_CYBER_H}; background: transparent; border: none;")
+        a_val.setFixedWidth(50)
+        a_val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        alpha_top.addWidget(a_val)
+        cl.addLayout(alpha_top)
+        alpha_slider = QSlider(Qt.Orientation.Horizontal)
+        alpha_slider.setRange(10, 100)
+        alpha_slider.setValue(cur_alpha)
+        alpha_slider.setStyleSheet(self._slider_qss())
+        alpha_slider.valueChanged.connect(lambda v, c=ct: self._on_ball_alpha_changed(c, v))
+        cl.addWidget(alpha_slider)
+
+        # 大小行
+        scale_top = QHBoxLayout()
+        s_lbl = QLabel(t("hotkey.cursor_scale"))
+        s_lbl.setFont(_make_font(fn, 14))
+        s_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        scale_top.addWidget(s_lbl)
+        scale_top.addStretch()
+        cur_scale = int(round(float(self._ball_buf[ct].get('scale', 1.0)) * 100))
+        s_val = QLabel(f"{cur_scale}%")
+        s_val.setFont(_make_font(fn, 13, bold=True))
+        s_val.setStyleSheet(f"color: {C_CYBER_H}; background: transparent; border: none;")
+        s_val.setFixedWidth(50)
+        s_val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        scale_top.addWidget(s_val)
+        cl.addLayout(scale_top)
+        scale_slider = QSlider(Qt.Orientation.Horizontal)
+        scale_slider.setRange(100, 400)
+        scale_slider.setValue(cur_scale)
+        scale_slider.setStyleSheet(self._slider_qss())
+        scale_slider.valueChanged.connect(lambda v, c=ct: self._on_ball_scale_changed(c, v))
+        cl.addWidget(scale_slider)
+
+        self._ball_widgets[ct] = {
+            'preview': preview, 'alpha_slider': alpha_slider, 'alpha_val': a_val,
+            'scale_slider': scale_slider, 'scale_val': s_val,
+        }
+        self._refresh_ball_preview(ct)
+        return col
+
+    def _slider_qss(self):
+        return f"""
+            QSlider::groove:horizontal {{ background: #404040; height: 8px; border-radius: 4px; }}
+            QSlider::sub-page:horizontal {{ background: {C_CYBER_H}; border-radius: 4px; }}
+            QSlider::add-page:horizontal {{ background: #404040; border-radius: 4px; }}
+            QSlider::handle:horizontal {{ background: #DDD; border: none;
+                width: 16px; height: 16px; margin: -4px 0; border-radius: 8px; }}
+            QSlider::handle:horizontal:hover {{ background: {C_CYBER_H}; }}
+        """
+
+    def _build_ball_color_row(self, fn, ct: str):
+        row = QHBoxLayout()
+        lbl = QLabel(t("hotkey.cursor_color"))
+        lbl.setFont(_make_font(fn, 14))
+        lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        row.addWidget(lbl)
+        row.addStretch()
+        btn = QPushButton()
+        btn.setFixedSize(96, 28)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_color_btn_style(btn, self._ball_buf[ct].get('color', '#000000'))
+        btn.clicked.connect(lambda _, c=ct, b=btn: self._on_ball_pick_color(c, b))
+        row.addWidget(btn)
+        if not hasattr(self, '_ball_color_btns'):
+            self._ball_color_btns = {}
+        self._ball_color_btns[ct] = btn
+        return row
+
+    def _on_ball_pick_color(self, ct: str, btn: QPushButton):
+        initial = QColor(self._ball_buf[ct].get('color', '#000000'))
+        color = QColorDialog.getColor(
+            initial, self, t("hotkey.cursor_color"),
+            QColorDialog.ColorDialogOption.DontUseNativeDialog)
+        if not color.isValid():
+            return
+        hex_val = color.name(QColor.NameFormat.HexRgb).upper()
+        self._ball_buf[ct]['color'] = hex_val
+        self._apply_color_btn_style(btn, hex_val)
+        self._refresh_ball_preview(ct)
+
+    def _on_ball_alpha_changed(self, ct: str, value: int):
+        self._ball_buf[ct]['alpha'] = value / 100.0
+        w = self._ball_widgets.get(ct, {})
+        if w.get('alpha_val'):
+            w['alpha_val'].setText(f"{value}%")
+        self._refresh_ball_preview(ct)
+
+    def _on_ball_scale_changed(self, ct: str, value: int):
+        self._ball_buf[ct]['scale'] = value / 100.0
+        w = self._ball_widgets.get(ct, {})
+        if w.get('scale_val'):
+            w['scale_val'].setText(f"{value}%")
+        self._refresh_ball_preview(ct)
+
+    def _refresh_ball_preview(self, ct: str):
+        pm = self._render_ball_pixmap(self._ball_buf[ct])
+        w = self._ball_widgets.get(ct, {})
+        preview = w.get('preview')
+        if preview and pm and not pm.isNull():
+            preview.setPixmap(pm)
+
+    def _render_ball_pixmap(self, style: dict):
+        from PyQt6.QtGui import QPixmap, QPainter
+        from core.constants import BALL_BASE_SIZE
+        color = style.get('color', '#000000')
+        alpha = max(0.0, min(1.0, float(style.get('alpha', 0.6))))
+        scale = float(style.get('scale', 1.0))
+        d = max(2, int(round(BALL_BASE_SIZE * scale)))
+        pm = QPixmap(d, d)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        c = QColor(color)
+        c.setAlphaF(alpha)
+        p.setBrush(c)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(0, 0, d, d)
+        p.end()
+        return pm
+
+    def _on_ball_reset(self):
+        from core.constants import DEFAULT_BALL_STYLES
+        self._ball_buf = {ct: dict(DEFAULT_BALL_STYLES[ct])
+                          for ct in ('cursor', 'cursor_off', 'cursor_block')}
+        for ct, style in self._ball_buf.items():
+            btn = getattr(self, '_ball_color_btns', {}).get(ct)
+            if btn:
+                self._apply_color_btn_style(btn, style['color'])
+            w = self._ball_widgets.get(ct, {})
+            if w.get('alpha_slider'):
+                w['alpha_slider'].setValue(int(round(float(style.get('alpha', 0.6)) * 100)))
+            if w.get('scale_slider'):
+                w['scale_slider'].setValue(int(round(float(style.get('scale', 1.0)) * 100)))
+            self._refresh_ball_preview(ct)
 
     # ── 方向盘样式页 ──
 
@@ -1687,6 +1936,11 @@ class HotkeySettingsDialog(QDialog):
         if hasattr(self, '_cursor_buf'):
             data['cursor_styles'] = self._cursor_buf
             clear_cursor_render_cache()
+        # 圆球配色 + 激活形状
+        if hasattr(self, '_ball_buf'):
+            data['ball_styles'] = self._ball_buf
+        if hasattr(self, '_cursor_shape'):
+            data['cursor_shape'] = self._cursor_shape
         # 方向盘样式
         if hasattr(self, '_wheel_buf'):
             data['wheel_style'] = self._wheel_buf
