@@ -1186,11 +1186,22 @@ class OverlayWindow(QGraphicsView):
         if event.type() == QEvent.Type.WindowStateChange:
             # 从最小化恢复 → 重新显示当前模式的工具栏
             if not (self.windowState() & Qt.WindowState.WindowMinimized):
-                if self._current_mode == 'edit':
-                    self._edit_toolbar.show()
-                else:
-                    self._run_toolbar.show()
+                self._restore_toolbars_for_mode()
         super().changeEvent(event)
+
+    def _restore_toolbars_for_mode(self):
+        """从最小化 / Win+D 隐藏桌面恢复后, 按当前模式还原工具栏显示。
+        运行模式需尊重已保存的隐藏/折叠状态, 否则 Win+D 恢复后会错误地
+        冒出编辑工具栏, 或把用户已隐藏的运行工具栏/悬浮球弹回来。"""
+        if self._current_mode == 'edit':
+            self._edit_toolbar.show()
+            return
+        # 运行模式: 工具栏仅在未被隐藏时显示; 悬浮球按折叠状态恢复
+        cfg = self._scene.get_config() or {}
+        if not cfg.get('run_toolbar_hidden', False):
+            self._run_toolbar.show()
+        if self._run_collapsed:
+            self._collapsed_bubble.show()
 
     # ── 事件处理 ──
 
@@ -1226,7 +1237,9 @@ class OverlayWindow(QGraphicsView):
         super().showEvent(event)
         self._pt_manager.init_hwnd()
         self._force_taskbar_visible()
-        self._edit_toolbar.show()
+        # 按当前模式显示对应工具栏 — 修 bug: Win+D 隐藏桌面后恢复时,
+        # 不能无条件显示编辑工具栏,否则运行模式下会错误地冒出编辑工具栏。
+        self._restore_toolbars_for_mode()
         if self._current_mode == 'edit':
             self._smart_pt_timer.start()
 
