@@ -182,6 +182,8 @@
   },
   "editor": {
     "title": "Edit Button",
+    "gp_driver_needed": "Gamepad driver required. Install it to map gamepad buttons and use gamepad mode.",
+    "gp_install_btn": "Install Gamepad Driver",
     "name": "Name",
     "hover": "Hover",
     "hover_delay": "Hover Trigger Delay",
@@ -471,6 +473,7 @@
   "macro": {
     "tab_keys": "Keys",
     "tab_mouse": "Mouse",
+    "tab_gp": "Gamepad",
     "tab_macros": "Macros",
     "macro_list_label": "Macro List",
     "manage": "Manage",
@@ -481,6 +484,7 @@
     "editor_title": "Macro Editor",
     "editor_title_kb": "Keyboard Macro Editor",
     "editor_title_gp": "Gamepad Macro Editor",
+    "editor_title_mix": "Macro Editor",
     "name_label": "Macro Name",
     "name_placeholder": "Enter macro name",
     "add_key_step": "+ Add Key Step",

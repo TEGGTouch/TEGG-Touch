@@ -28,6 +28,7 @@ from core.constants import (
 )
 from views.button_editor_dialog import (
     TagInput, _FlowWidget, _ColorDot, _make_font, _detect_icon_font, _ICON_FONT,
+    _get_key_categories, _get_mouse_keys, populate_gp_palette,
 )
 
 
@@ -110,6 +111,7 @@ class GpStickEditorDialog(QDialog):
     saved = pyqtSignal(object)
     deleted = pyqtSignal(object)
     copied = pyqtSignal(object)
+    xmacros_changed = pyqtSignal(list)   # 统一混合宏池变更
 
     LEFT_W = 440
     RIGHT_W = 560
@@ -117,13 +119,14 @@ class GpStickEditorDialog(QDialog):
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20  # 1040
     WIN_H = 960
 
-    def __init__(self, item, parent=None, gp_macros=None):
+    def __init__(self, item, parent=None, xmacros=None):
         super().__init__(parent)
         self._item = item
         self.data = item.data
         self._focus_widget = None
         self._tag_inputs: dict[str, TagInput] = {}
-        self._macros = list(gp_macros) if gp_macros else []
+        # 统一混合宏池 (xmacros) — 兼容旧 gp_macros (已在 config 加载时迁入)
+        self._macros = list(xmacros) if xmacros else []
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -317,7 +320,7 @@ class GpStickEditorDialog(QDialog):
         outer.addLayout(self._build_bottom_buttons(fn))
         return outer
 
-    # ── 右栏: 键位面板 ──
+    # ── 右栏: 四类候选面板 [常规按键 / 鼠标 / 手柄按钮 / 宏] ──
 
     def _build_right(self, fn):
         wrap = QFrame()
@@ -327,32 +330,36 @@ class GpStickEditorDialog(QDialog):
         wlay.setContentsMargins(0, 0, 0, 0)
         wlay.setSpacing(8)
 
-        # Tab 按钮
+        # Tab 按钮 (4 个)
         tab_row = QHBoxLayout()
         tab_row.setSpacing(8)
-        self._tab_keys_btn = QPushButton(t("gp_stick_editor.tab_keys"))
-        self._tab_macros_btn = QPushButton(t("gp_stick_editor.tab_macros"))
-        for b in (self._tab_keys_btn, self._tab_macros_btn):
+        self._tab_keys_btn = QPushButton(t("macro.tab_keys"))
+        self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
+        self._tab_gp_btn = QPushButton(t("macro.tab_gp"))
+        self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
+        self._tab_btns = (self._tab_keys_btn, self._tab_mouse_btn,
+                          self._tab_gp_btn, self._tab_macros_btn)
+        for i, b in enumerate(self._tab_btns):
             b.setFixedHeight(34)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setFont(_font(fn, 14, bold=True))
-        self._tab_keys_btn.clicked.connect(lambda: self._switch_tab(0))
-        self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(1))
-        tab_row.addWidget(self._tab_keys_btn)
-        tab_row.addWidget(self._tab_macros_btn)
+            b.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
+            tab_row.addWidget(b)
         tab_row.addStretch()
         wlay.addLayout(tab_row)
 
         self._tab_stack = QStackedWidget()
         self._tab_stack.setStyleSheet("background: transparent;")
-        self._tab_stack.addWidget(self._build_gp_keys_tab(fn))
-        self._tab_stack.addWidget(self._build_gp_macros_tab(fn))
+        self._tab_stack.addWidget(self._build_keys_tab(fn))      # 0 常规按键
+        self._tab_stack.addWidget(self._build_mouse_tab(fn))     # 1 鼠标
+        self._tab_stack.addWidget(self._build_gp_keys_tab(fn))   # 2 手柄按钮
+        self._tab_stack.addWidget(self._build_macros_tab(fn))    # 3 宏
         wlay.addWidget(self._tab_stack, 1)
 
         self._switch_tab(0)
         return wrap
 
-    def _build_gp_keys_tab(self, fn):
+    def _scroll_area(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -363,33 +370,74 @@ class GpStickEditorDialog(QDialog):
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
+        return scroll
+
+    def _build_keys_tab(self, fn):
+        scroll = self._scroll_area()
         body = QWidget()
         body.setStyleSheet("background: transparent;")
         lay = QVBoxLayout(body)
         lay.setContentsMargins(10, 0, 10, 10)
         lay.setSpacing(0)
-
-        cat = QLabel(f"── {t('key_cat.gp_buttons')} ──")
-        cat.setFont(_font(fn, 14, bold=True))
-        cat.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
-        lay.addWidget(cat)
-        lay.addSpacing(8)
-
-        labels = [label for _, label in GP_BUTTONS]
-        flow = _FlowWidget(labels, self._on_gp_key_clicked, fn)
-        lay.addWidget(flow)
+        for i, (cat_name, keys) in enumerate(_get_key_categories()):
+            if i > 0:
+                lay.addSpacing(20)
+            cat = QLabel(f"── {cat_name} ──")
+            cat.setFont(_font(fn, 14, bold=True))
+            cat.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+            lay.addWidget(cat)
+            lay.addSpacing(8)
+            container = QWidget()
+            container.setStyleSheet("background: transparent;")
+            flow = _FlowWidget(keys, self._on_key_clicked, fn, container)
+            c_lay = QVBoxLayout(container)
+            c_lay.setContentsMargins(0, 0, 0, 0)
+            c_lay.setSpacing(0)
+            c_lay.addWidget(flow)
+            lay.addWidget(container)
         lay.addStretch()
         scroll.setWidget(body)
         return scroll
 
-    def _build_gp_macros_tab(self, fn):
+    def _build_mouse_tab(self, fn):
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(10, 0, 10, 10)
+        lay.setSpacing(0)
+        cat = QLabel(f"── {t('key_cat.mouse_buttons')} ──")
+        cat.setFont(_font(fn, 14, bold=True))
+        cat.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+        lay.addWidget(cat)
+        lay.addSpacing(8)
+        mouse_keys = _get_mouse_keys()
+        names = [label for label, _ in mouse_keys]
+        self._mouse_name_to_tag = {label: tag for label, tag in mouse_keys}
+        flow = _FlowWidget(names, self._on_mouse_key_clicked, fn)
+        lay.addWidget(flow)
+        lay.addStretch()
+        return page
+
+    def _build_gp_keys_tab(self, fn):
+        scroll = self._scroll_area()
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(body)
+        lay.setContentsMargins(10, 0, 10, 10)
+        lay.setSpacing(0)
+        self._gp_palette_layout = lay
+        populate_gp_palette(lay, fn, self._on_gp_key_clicked, self)
+        scroll.setWidget(body)
+        return scroll
+
+    def _build_macros_tab(self, fn):
         page = QWidget()
         page.setStyleSheet("background: transparent;")
         lay = QVBoxLayout(page)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
 
-        cat = QLabel(f"── {t('gp_stick_editor.tab_macros_hdr')} ──")
+        cat = QLabel(f"── {t('macro.macro_list_label')} ──")
         cat.setFont(_font(fn, 14, bold=True))
         cat.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
         cat.setContentsMargins(10, 0, 0, 0)
@@ -408,12 +456,17 @@ class GpStickEditorDialog(QDialog):
         """)
         lay.addWidget(self._macro_list, 1)
 
-        hint = QLabel(t("gp_stick_editor.macros_manage_hint"))
-        hint.setFont(_font(fn, 11))
-        hint.setStyleSheet(f"color: {_C_HINT}; background: transparent;")
-        hint.setWordWrap(True)
-        hint.setContentsMargins(10, 0, 0, 0)
-        lay.addWidget(hint)
+        # 新建宏按钮 (紫色)
+        new_btn = QPushButton(t("macro.new"))
+        new_btn.setFixedHeight(38)
+        new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        new_btn.setFont(_font(fn, 15, bold=True))
+        new_btn.setStyleSheet(f"""
+            QPushButton {{ background: {_C_MACRO}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton:hover {{ background: #7C3AED; }}
+        """)
+        new_btn.clicked.connect(self._new_macro)
+        lay.addWidget(new_btn)
 
         QTimer.singleShot(0, self._rebuild_macro_list)
         return page
@@ -426,14 +479,14 @@ class GpStickEditorDialog(QDialog):
             item.setSizeHint(QSize(0, 80))
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self._macro_list.addItem(item)
-            empty = QLabel(t("gp_stick_editor.macros_empty"))
+            empty = QLabel(t("macro.no_macros_hint"))
             empty.setFont(_font(fn, 13))
             empty.setStyleSheet("color: #666; background: transparent;")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty.setWordWrap(True)
             self._macro_list.setItemWidget(item, empty)
             return
-        for m in self._macros:
+        for i, m in enumerate(self._macros):
             name = m.get('name', '')
             row = QFrame()
             row.setFixedHeight(40)
@@ -449,10 +502,65 @@ class GpStickEditorDialog(QDialog):
             lbl.setStyleSheet("color: white; background: transparent;")
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             rl.addWidget(lbl, 1)
+            for icon_glyph, fallback, slot in (
+                ("", "✎", lambda _i=i: self._edit_macro(_i)),
+                ("", "✕", lambda _i=i: self._delete_macro(_i)),
+            ):
+                b = QPushButton()
+                b.setFixedSize(30, 30)
+                b.setCursor(Qt.CursorShape.PointingHandCursor)
+                if _ICON_FONT:
+                    b.setText("" if ord(fallback) == 0x270E else "")
+                    b.setFont(_font(_ICON_FONT, 14))
+                else:
+                    b.setText(fallback); b.setFont(_font(fn, 13))
+                b.setStyleSheet("""
+                    QPushButton { color: white; background: transparent; border: none; }
+                    QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+                """)
+                b.clicked.connect(slot)
+                rl.addWidget(b)
             row.mousePressEvent = lambda e, n=name: self._insert_macro_tag(n)
             it = QListWidgetItem(); it.setSizeHint(QSize(0, 50))
             self._macro_list.addItem(it)
             self._macro_list.setItemWidget(it, row)
+
+    # ── 宏增删改 (统一 xmacros 池, mode='mix') ──
+
+    def _new_macro(self):
+        from views.macro_editor_dialog import MacroEditorDialog
+        names = [m.get('name', '') for m in self._macros]
+        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix')
+        dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
+        dlg.exec()
+
+    def _edit_macro(self, idx):
+        import copy
+        from views.macro_editor_dialog import MacroEditorDialog
+        data = copy.deepcopy(self._macros[idx])
+        names = [m.get('name', '') for m in self._macros]
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix')
+        dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
+        dlg.exec()
+
+    def _delete_macro(self, idx):
+        from views.profile_manager_dialog import _StyledConfirmDialog
+        name = self._macros[idx].get('name', '')
+        msg = t("macro.confirm_delete").replace("{name}", name)
+        dlg = _StyledConfirmDialog(
+            t("macro.confirm_delete_title"), msg, parent=self, accent_color=_C_MACRO)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._macros.pop(idx)
+            self._rebuild_macro_list()
+            self.xmacros_changed.emit(self._macros)
+
+    def _on_macro_editor_saved(self, data, idx):
+        if 0 <= idx < len(self._macros):
+            self._macros[idx] = data
+        else:
+            self._macros.append(data)
+        self._rebuild_macro_list()
+        self.xmacros_changed.emit(self._macros)
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
@@ -466,17 +574,24 @@ class GpStickEditorDialog(QDialog):
             border-bottom: 2px solid transparent;
             border-radius: 0; padding: 0 14px 4px 14px;
         }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        self._tab_keys_btn.setStyleSheet(sel if idx == 0 else off)
-        self._tab_macros_btn.setStyleSheet(sel if idx == 1 else off)
+        for ix, b in enumerate(self._tab_btns):
+            b.setStyleSheet(sel if idx == ix else off)
 
     # ── 面板点击 / 焦点 ──
+
+    def _on_key_clicked(self, key_name):
+        self._insert_to_focused(key_name)
+
+    def _on_mouse_key_clicked(self, display_name):
+        tag = self._mouse_name_to_tag.get(display_name, display_name)
+        self._insert_to_focused(tag)
 
     def _on_gp_key_clicked(self, label):
         storage = GP_LABEL_TO_KEY.get(label, label)
         self._insert_to_focused(GP_KEY_PREFIX + storage)
 
     def _insert_macro_tag(self, macro_name):
-        self._insert_to_focused(f"gpmacro:{macro_name}")
+        self._insert_to_focused(f"xmacro:{macro_name}")
 
     def _insert_to_focused(self, tag: str):
         w = self._focus_widget

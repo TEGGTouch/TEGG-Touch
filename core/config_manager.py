@@ -86,6 +86,85 @@ def _migrate_to_center_coords(data: dict) -> bool:
     return True
 
 
+def _rewrite_macro_tokens(obj, gp_name_map: dict):
+    """递归改写 config 中所有字符串叶子: macro:X→xmacro:X, gpmacro:Y→xmacro:Y'。
+
+    Y' 取 gp_name_map.get(Y, Y) (处理同名冲突后的新名)。按 '+' 分割逐 token 处理,
+    覆盖按钮字段 / 轮盘扇区 / 中心环 / gp_stick / gp_wheel / 以及 xmacros 步骤内嵌套引用。
+    """
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            obj[k] = _rewrite_macro_tokens(v, gp_name_map)
+        return obj
+    if isinstance(obj, list):
+        return [_rewrite_macro_tokens(v, gp_name_map) for v in obj]
+    if isinstance(obj, str) and ('macro:' in obj):
+        out = []
+        for part in obj.split('+'):
+            ps = part.strip()
+            if ps.startswith('gpmacro:'):
+                out.append('xmacro:' + gp_name_map.get(ps[8:], ps[8:]))
+            elif ps.startswith('macro:'):
+                out.append('xmacro:' + ps[6:])
+            else:
+                out.append(part)
+        return '+'.join(out)
+    return obj
+
+
+def _migrate_to_xmacros(result: dict) -> bool:
+    """将旧双宏池 (macros / gp_macros) 合并进统一池 xmacros, 并改写所有 macro:/gpmacro: 引用。
+
+    - kb 宏名优先; gp 宏与 kb 同名时加后缀 ' (手柄)' 保证唯一。
+    - 改写覆盖整个 config 的字符串叶子 (按钮/轮盘/嵌套宏步骤)。
+    - 迁移后清空 macros / gp_macros (运行层仍保留旧前缀解析作兼容网)。
+    - 幂等: 旧池均空时直接返回。
+
+    Returns True if migration performed.
+    """
+    macros = result.get('macros') or []
+    gp_macros = result.get('gp_macros') or []
+    if not macros and not gp_macros:
+        return False
+
+    xmacros = list(result.get('xmacros') or [])
+    existing_names = {m.get('name', '') for m in xmacros}
+
+    # kb 宏先并入
+    for m in macros:
+        nm = m.get('name', '')
+        if nm in existing_names:
+            continue
+        xmacros.append(m)
+        existing_names.add(nm)
+
+    # gp 宏并入, 同名冲突加后缀
+    gp_name_map = {}  # 旧 gp 宏名 → 新名
+    for m in gp_macros:
+        nm = m.get('name', '')
+        new = nm
+        if new in existing_names:
+            base = f"{nm} (手柄)"
+            new = base
+            n = 2
+            while new in existing_names:
+                new = f"{base}{n}"
+                n += 1
+        gp_name_map[nm] = new
+        mm = dict(m)
+        mm['name'] = new
+        xmacros.append(mm)
+        existing_names.add(new)
+
+    result['xmacros'] = xmacros
+    result['macros'] = []
+    result['gp_macros'] = []
+    # 改写所有引用 (包括刚并入的 xmacros 步骤内的嵌套宏)
+    _rewrite_macro_tokens(result, gp_name_map)
+    logger.info(f"宏池迁移完成: 合并 {len(macros)} kb + {len(gp_macros)} gp → {len(xmacros)} xmacros")
+    return True
+
+
 # ─── 内部工具 ────────────────────────────────────────────────
 
 def _validate_geometry(geo: str) -> str:
@@ -232,9 +311,10 @@ def load_config_from_file(filepath: str) -> dict:
         'run_toolbar_hidden': False,    # 运行工具栏是否隐藏 (球左键)
         'buttons_hidden': False,        # UI 按键是否隐藏 (球右键 / F7)
         'cursor_visible': True,         # 自绘光标是否显示 (F3, 默认显示)
-        # 自定义宏 (kb / gp 两池, per-profile)
+        # 自定义宏: 统一混合池 xmacros (新); macros/gp_macros 仅兼容旧数据 (加载时迁入 xmacros)
         'macros': [],
         'gp_macros': [],
+        'xmacros': [],
         # 模拟模式 (per-profile): 'keyboard' | 'gamepad'; None 表示该 profile 未设置, 调用方回退
         'sim_mode': None,
         # 外观 (per-profile, None 表示该 profile 未设置, 调用方回退全局 hotkeys 做一次性迁移)
@@ -342,6 +422,9 @@ def load_config_from_file(filepath: str) -> dict:
         raw_gp_macros = data.get('gp_macros', [])
         if isinstance(raw_gp_macros, list):
             result['gp_macros'] = raw_gp_macros
+        raw_xmacros = data.get('xmacros', [])
+        if isinstance(raw_xmacros, list):
+            result['xmacros'] = raw_xmacros
         # 模拟模式 (per-profile)
         raw_sim = data.get('sim_mode')
         if raw_sim in ('keyboard', 'gamepad'):
@@ -361,6 +444,8 @@ def load_config_from_file(filepath: str) -> dict:
         raw_bc = data.get('button_colors')
         if isinstance(raw_bc, dict):
             result['button_colors'] = raw_bc
+        # 宏池统一迁移: macros/gp_macros → xmacros (含按钮/轮盘绑定改写)
+        _migrate_to_xmacros(result)
         logger.info(f"配置加载成功: {filepath}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logger.error(f"配置文件格式错误: {filepath}: {e}")
@@ -410,6 +495,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          cursor_visible=True,
                          macros=None,
                          gp_macros=None,
+                         xmacros=None,
                          sim_mode=None,
                          wheel_style=None,
                          cursor_styles=None,
@@ -514,11 +600,13 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
     if voice_chunk_size is not None:
         data['voice_chunk_size'] = voice_chunk_size
 
-    # 自定义宏 (kb / gp 两池)
+    # 自定义宏: 统一池 xmacros + 兼容旧双池 (迁移后旧池为空)
     if macros is not None:
         data['macros'] = macros
     if gp_macros is not None:
         data['gp_macros'] = gp_macros
+    if xmacros is not None:
+        data['xmacros'] = xmacros
 
     # 模拟模式 (per-profile)
     if sim_mode in ('keyboard', 'gamepad'):

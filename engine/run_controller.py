@@ -670,12 +670,15 @@ class RunController(QObject):
         parts = [p.strip() for p in key_str.split('+')]
         normal_keys = []
         macro_names = []
-        gp_macro_names = []  # gpmacro:Name (手柄宏池)
+        gp_macro_names = []  # gpmacro:Name (手柄宏池, 兼容旧数据)
+        x_macro_names = []   # xmacro:Name (统一混合宏池)
         mouse_buttons = []   # mouse:left, mouse:right, mouse:middle, mouse:x1, mouse:x2
         mouse_wheels = []    # mouse:wheelup, mouse:wheeldown
         gp_labels = []       # gp:A, gp:LB, gp:LT 等
         for p in parts:
-            if p.startswith('gpmacro:'):
+            if p.startswith('xmacro:'):
+                x_macro_names.append(p[7:])
+            elif p.startswith('gpmacro:'):
                 gp_macro_names.append(p[8:])
             elif p.startswith('macro:'):
                 macro_names.append(p[6:])
@@ -737,7 +740,7 @@ class RunController(QObject):
                 else:
                     logger.warning("Macro not found: '%s'", name)
 
-        # 手柄宏: 同上, 查 gp_macros 池
+        # 手柄宏: 同上, 查 gp_macros 池 (兼容旧数据)
         if gp_macro_names and action in ('p', 'click'):
             for name in gp_macro_names:
                 macro_data = self._find_macro(name, pool='gp')
@@ -745,6 +748,15 @@ class RunController(QObject):
                     self._execute_macro(macro_data)
                 else:
                     logger.warning("GP Macro not found: '%s'", name)
+
+        # 统一混合宏: 查 xmacros 池
+        if x_macro_names and action in ('p', 'click'):
+            for name in x_macro_names:
+                macro_data = self._find_macro(name, pool='x')
+                if macro_data:
+                    self._execute_macro(macro_data)
+                else:
+                    logger.warning("X Macro not found: '%s'", name)
 
     # ── 摇杆轮询: 状态机 + 跨摇杆切换 + SetCursorPos 圆心 + gp engine ──
 
@@ -1456,9 +1468,9 @@ class RunController(QObject):
         return False
 
     def _find_macro(self, name: str, pool: str = 'kb'):
-        """从当前 config 中查找宏。pool='kb' 查 macros, pool='gp' 查 gp_macros"""
+        """从当前 config 中查找宏。pool='x' 查 xmacros (统一池), 'gp' 查 gp_macros, 其余查 macros"""
         config = self._scene.get_config() if hasattr(self._scene, 'get_config') else {}
-        field = 'gp_macros' if pool == 'gp' else 'macros'
+        field = {'x': 'xmacros', 'gp': 'gp_macros'}.get(pool, 'macros')
         for m in config.get(field, []):
             if m.get('name') == name:
                 return m

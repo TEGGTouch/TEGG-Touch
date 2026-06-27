@@ -182,6 +182,8 @@
   },
   "editor": {
     "title": "编辑按钮",
+    "gp_driver_needed": "需要安装手柄驱动，安装后即可映射手柄按钮，让你使用手柄模式",
+    "gp_install_btn": "安装手柄驱动",
     "name": "按钮名称",
     "hover": "悬停时",
     "hover_delay": "悬停-触发延迟",
@@ -471,6 +473,7 @@
   "macro": {
     "tab_keys": "常规按键",
     "tab_mouse": "鼠标操作",
+    "tab_gp": "手柄按钮",
     "tab_macros": "自定义宏",
     "macro_list_label": "宏列表",
     "manage": "管理宏",
@@ -481,6 +484,7 @@
     "editor_title": "宏编辑器",
     "editor_title_kb": "键盘 宏编辑器",
     "editor_title_gp": "手柄 宏编辑器",
+    "editor_title_mix": "宏编辑器",
     "name_label": "宏名称",
     "name_placeholder": "输入宏名称",
     "add_key_step": "+ 新增指令",

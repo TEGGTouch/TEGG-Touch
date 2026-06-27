@@ -8,6 +8,7 @@ TEGG Touch 蛋挞 (PyQt6) - button_editor_dialog.py
 """
 
 import copy
+import logging
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QLabel, QSlider, QPushButton, QWidget,
@@ -25,6 +26,8 @@ from core.constants import (
     BTN_TYPE_GP_BUTTON, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
 )
 from models.button_model import ButtonData
+
+logger = logging.getLogger(__name__)
 
 # 鼠标按键 (mouse: 前缀, 与 macro: 前缀对齐) — 惰性初始化，避免模块加载时 t() 未就绪
 _MOUSE_KEYS_CACHE = None
@@ -244,6 +247,89 @@ class _FocusLineEdit(QLineEdit):
 
 
 # ═══════════════════════════════════════════════════════════════
+# 共享: 手柄按钮候选面板 (驱动门控) — 供 button / stick / wheel-mouse / voice 复用
+# ═══════════════════════════════════════════════════════════════
+
+def populate_gp_palette(layout, fn, on_gp_click, dialog):
+    """填充/重建「手柄按钮」候选面板到 layout (须为 QVBoxLayout)。
+
+    驱动就绪 → GP_BUTTONS 按钮网格 (点击回调 on_gp_click(label), 由调用方做 label→key+gp: 转换);
+    未就绪   → 驱动安装引导 (复用 GamepadInstallDialog; 装完热重载并就地重建本面板)。
+    dialog 作为安装弹窗的 parent。可重复调用 (会先清空 layout)。
+    """
+    while layout.count():
+        it = layout.takeAt(0)
+        w = it.widget()
+        if w is not None:
+            w.deleteLater()
+
+    ready = False
+    try:
+        from core.gamepad_install import detect_status, Status
+        st, _ = detect_status()
+        ready = (st == Status.READY_OK)
+    except Exception as e:
+        logger.warning("手柄驱动检测失败: %s", e)
+
+    if ready:
+        cat_lbl = QLabel(f"── {t('key_cat.gp_buttons')} ──")
+        cat_lbl.setFont(_make_font(fn, 14, bold=True))
+        cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+        layout.addWidget(cat_lbl)
+        layout.addSpacing(8)
+        labels = [label for _, label in GP_BUTTONS]
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        flow = _FlowWidget(labels, on_gp_click, fn, container)
+        c_lay = QVBoxLayout(container)
+        c_lay.setContentsMargins(0, 0, 0, 0)
+        c_lay.setSpacing(0)
+        c_lay.addWidget(flow)
+        layout.addWidget(container)
+        layout.addStretch()
+    else:
+        layout.addStretch()
+        tip = QLabel(t("editor.gp_driver_needed"))
+        tip.setFont(_make_font(fn, 15))
+        tip.setStyleSheet("color: #E0E0E0; background: transparent;")
+        tip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tip.setWordWrap(True)
+        layout.addWidget(tip)
+        layout.addSpacing(16)
+        install_btn = QPushButton(t("editor.gp_install_btn"))
+        install_btn.setFixedHeight(44)
+        install_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        install_btn.setFont(_make_font(fn, 16, bold=True))
+        install_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CYBER}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 24px;
+            }}
+            QPushButton:hover {{ background: {C_CYBER_H}; }}
+        """)
+
+        def _on_install():
+            from views.gamepad_install_dialog import GamepadInstallDialog
+            dlg = GamepadInstallDialog(dialog)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                try:
+                    from engine.gamepad_engine import retry_import, GamepadEngine
+                    retry_import()
+                    GamepadEngine.reset_init_failed()
+                except Exception as e:
+                    logger.warning("手柄引擎热重载失败: %s", e)
+                populate_gp_palette(layout, get_font(), on_gp_click, dialog)
+
+        install_btn.clicked.connect(_on_install)
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(install_btn)
+        row.addStretch()
+        layout.addLayout(row)
+        layout.addStretch()
+
+
+# ═══════════════════════════════════════════════════════════════
 # ButtonEditorDialog — 主弹窗
 # ═══════════════════════════════════════════════════════════════
 
@@ -253,8 +339,9 @@ class ButtonEditorDialog(QDialog):
     saved = pyqtSignal(object)
     deleted = pyqtSignal(object)
     copied = pyqtSignal(object)
-    macros_changed = pyqtSignal(list)     # 键盘宏列表变更
-    gp_macros_changed = pyqtSignal(list)  # 手柄宏列表变更 (gp button 编辑时用)
+    macros_changed = pyqtSignal(list)     # (旧) 键盘宏列表变更, 保留兼容
+    gp_macros_changed = pyqtSignal(list)  # (旧) 手柄宏列表变更, 保留兼容
+    xmacros_changed = pyqtSignal(list)    # 统一混合宏池变更
 
     LEFT_W = 340
     RIGHT_W = 560
@@ -265,21 +352,17 @@ class ButtonEditorDialog(QDialog):
     MAX_MACROS = 20
     C_MACRO = "#8B5CF6"  # 宏 tag 紫色
 
-    def __init__(self, item, parent=None, macros=None, gp_macros=None):
+    def __init__(self, item, parent=None, macros=None, gp_macros=None, xmacros=None):
         super().__init__(parent)
         self._item = item
         self.data = item.data
         self._focus_widget = None  # 当前聚焦的输入控件
         self._is_wheel = not hasattr(self.data, 'btn_type')
-        # 手柄键模式: 键位面板换成手柄按键, on_click 加 'gp:' 前缀, 宏池取 gp_macros
+        # 候选键位已统一: 所有按钮类型都给 [常规按键/鼠标/手柄按钮/宏] 全套, 不再按类型隔离
         self._is_gp = (not self._is_wheel
                        and getattr(self.data, 'btn_type', '') == BTN_TYPE_GP_BUTTON)
-        # 活跃宏池: gp 按钮 → gp_macros, 其他 → macros (键盘宏)
-        # self._macros 是 UI 渲染/CRUD 的统一引用; 保存时按 _is_gp 发对应信号
-        if self._is_gp:
-            self._macros = list(gp_macros) if gp_macros else []
-        else:
-            self._macros = list(macros) if macros else []
+        # 统一混合宏池 (xmacros) — UI 渲染/CRUD 引用; 兼容旧 macros/gp_macros (已在加载时迁入)
+        self._macros = list(xmacros) if xmacros else []
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -753,11 +836,8 @@ class ButtonEditorDialog(QDialog):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
 
-        # 手柄键模式: 只显示手柄按键分类 (用显示 label, 点击时反查存储 key)
-        if self._is_gp:
-            cats = [(t("key_cat.gp_buttons"), [label for _, label in GP_BUTTONS])]
-        else:
-            cats = _get_key_categories()
+        # 统一: 常规按键 Tab 恒为键盘分类 (手柄按钮已独立成单独 Tab)
+        cats = _get_key_categories()
 
         for i, (cat_name, keys) in enumerate(cats):
             # 分类标签
@@ -789,18 +869,19 @@ class ButtonEditorDialog(QDialog):
         return container
 
     def _on_key_clicked(self, key_name):
-        """键位面板点击 → 插入到聚焦的输入控件
-        手柄模式: 显示 label 反查存储 key, 加 'gp:' 前缀 (例如 '左肩 LB' → 'gp:LB')"""
+        """常规按键/鼠标面板点击 → 插入到聚焦的输入控件 (无前缀, 鼠标已带 mouse:)"""
         w = self._focus_widget
         if w is None:
             return
-        if self._is_gp:
-            storage_key = GP_LABEL_TO_KEY.get(key_name, key_name)
-            key_name = GP_KEY_PREFIX + storage_key
         if isinstance(w, TagInput):
             w.add_tag(key_name)
         elif isinstance(w, (_FocusLineEdit, QLineEdit)):
             w.insert(key_name)
+
+    def _on_gp_key_clicked(self, label):
+        """手柄按钮面板点击 → 反查存储 key 加 'gp:' 前缀插入 (例如 '左肩 LB' → 'gp:LB')"""
+        storage_key = GP_LABEL_TO_KEY.get(label, label)
+        self._on_key_clicked(GP_KEY_PREFIX + storage_key)
 
     def _on_focus_changed(self, widget):
         self._focus_widget = widget
@@ -945,64 +1026,41 @@ class ButtonEditorDialog(QDialog):
     # ── 右栏 Tab 面板 ────────────────────────────────────────
 
     def _build_right_tabbed_panel(self, fn):
-        """构建右栏: Tab 切换 [常规按键] [鼠标操作] [自定义宏]"""
+        """构建右栏: 统一 4 Tab [常规按键] [鼠标] [手柄按钮] [自定义宏]"""
         panel = QWidget()
         panel.setStyleSheet("background: transparent;")
         panel_lay = QVBoxLayout(panel)
         panel_lay.setContentsMargins(0, 0, 0, 0)
         panel_lay.setSpacing(8)
 
-        # Tab 按钮行 (3 个; 手柄模式只显示常规按键)
+        # Tab 按钮行 (统一 4 个)
         tab_row = QHBoxLayout()
         tab_row.setSpacing(8)
 
         self._tab_keys_btn = QPushButton(t("macro.tab_keys"))
-        self._tab_keys_btn.setFixedHeight(34)
-        self._tab_keys_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tab_keys_btn.setFont(_make_font(fn, 14, bold=True))
-        self._tab_keys_btn.clicked.connect(lambda: self._switch_tab(0))
-        tab_row.addWidget(self._tab_keys_btn)
-
         self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
-        self._tab_mouse_btn.setFixedHeight(34)
-        self._tab_mouse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tab_mouse_btn.setFont(_make_font(fn, 14, bold=True))
-        self._tab_mouse_btn.clicked.connect(lambda: self._switch_tab(1))
-        tab_row.addWidget(self._tab_mouse_btn)
-
+        self._tab_gp_btn = QPushButton(t("macro.tab_gp"))
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
-        self._tab_macros_btn.setFixedHeight(34)
-        self._tab_macros_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tab_macros_btn.setFont(_make_font(fn, 14, bold=True))
-        self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(2))
-        tab_row.addWidget(self._tab_macros_btn)
+        for i, btn in enumerate((self._tab_keys_btn, self._tab_mouse_btn,
+                                 self._tab_gp_btn, self._tab_macros_btn)):
+            btn.setFixedHeight(34)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFont(_make_font(fn, 14, bold=True))
+            btn.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
+            tab_row.addWidget(btn)
 
         tab_row.addStretch()
         panel_lay.addLayout(tab_row)
         panel_lay.addSpacing(10)
 
-        # Stacked widget
+        # Stacked widget — 固定 4 页
         self._tab_stack = QStackedWidget()
         self._tab_stack.setStyleSheet("background: transparent;")
-
-        # Page 0: 常规按键 (键盘 / 手柄都有)
-        self._tab_stack.addWidget(self._build_key_palette(fn))
-
-        # 手柄模式: 隐藏鼠标 tab (鼠标输出不适用), 保留宏 tab (走 gp_macros 池)
-        # 此时宏 page 在 index 1; 键盘模式宏 page 在 index 2
-        if self._is_gp:
-            self._tab_mouse_btn.setVisible(False)
-            self._tab_stack.addWidget(self._build_macro_tab(fn))
-            self._macro_tab_idx = 1
-            # tab_macros_btn 默认绑定 _switch_tab(2), 改成 1
-            self._tab_macros_btn.clicked.disconnect()
-            self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(1))
-        else:
-            # Page 1: 鼠标操作
-            self._tab_stack.addWidget(self._build_mouse_palette(fn))
-            # Page 2: 自定义宏
-            self._tab_stack.addWidget(self._build_macro_tab(fn))
-            self._macro_tab_idx = 2
+        self._tab_stack.addWidget(self._build_key_palette(fn))    # 0 常规按键
+        self._tab_stack.addWidget(self._build_mouse_palette(fn))  # 1 鼠标
+        self._tab_stack.addWidget(self._build_gp_palette(fn))     # 2 手柄按钮
+        self._tab_stack.addWidget(self._build_macro_tab(fn))      # 3 宏
+        self._macro_tab_idx = 3
 
         panel_lay.addWidget(self._tab_stack, 1)
 
@@ -1021,12 +1079,24 @@ class ButtonEditorDialog(QDialog):
             border: none; border-bottom: 2px solid transparent;
             border-radius: 0; padding: 0 14px 4px 14px;
         }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        self._tab_keys_btn.setStyleSheet(sel_style if idx == 0 else off_style)
-        # 手柄模式无鼠标 tab; 键盘模式鼠标 tab 在 idx==1
-        if not getattr(self, '_is_gp', False):
-            self._tab_mouse_btn.setStyleSheet(sel_style if idx == 1 else off_style)
-        self._tab_macros_btn.setStyleSheet(
-            sel_style if idx == getattr(self, '_macro_tab_idx', 2) else off_style)
+        for ix, btn in enumerate((self._tab_keys_btn, self._tab_mouse_btn,
+                                  self._tab_gp_btn, self._tab_macros_btn)):
+            btn.setStyleSheet(sel_style if idx == ix else off_style)
+
+    def _build_gp_palette(self, fn):
+        """手柄按钮 Tab: 驱动就绪→按钮网格; 未就绪→安装引导。"""
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(10, 0, 10, 10)
+        lay.setSpacing(0)
+        self._gp_palette_layout = lay
+        self._build_gp_palette_content(fn)
+        return page
+
+    def _build_gp_palette_content(self, fn):
+        """填充/重建手柄 Tab 内容 — 委托共享 populate_gp_palette (驱动门控 + 安装热重载)。"""
+        populate_gp_palette(self._gp_palette_layout, fn, self._on_gp_key_clicked, self)
 
     def _build_mouse_palette(self, fn):
         """构建鼠标操作 Tab: 分类标签 + 5 个鼠标按键 flow"""
@@ -1267,24 +1337,19 @@ class ButtonEditorDialog(QDialog):
             self._macro_list.setItemWidget(item, row)
 
     def _emit_macros_changed(self):
-        """按当前按钮类型发对应宏列表变更信号 (gp → gp_macros_changed, 其他 → macros_changed)"""
-        if self._is_gp:
-            self.gp_macros_changed.emit(self._macros)
-        else:
-            self.macros_changed.emit(self._macros)
+        """发统一宏池变更信号"""
+        self.xmacros_changed.emit(self._macros)
 
     def _insert_macro_tag(self, macro_name):
-        """点击宏行 → 添加 macro:name (或 gpmacro:name) 到当前 TagInput"""
+        """点击宏行 → 添加 xmacro:name 到当前 TagInput"""
         w = self._focus_widget
         if w and isinstance(w, TagInput):
-            prefix = "gpmacro:" if self._is_gp else "macro:"
-            w.add_tag(f"{prefix}{macro_name}")
+            w.add_tag(f"xmacro:{macro_name}")
 
     def _new_macro(self):
         from views.macro_editor_dialog import MacroEditorDialog
         names = [m.get('name', '') for m in self._macros]
-        mode = 'gp' if self._is_gp else 'kb'
-        dlg = MacroEditorDialog(existing_names=names, parent=self, mode=mode)
+        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix')
         dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
         dlg.exec()
 
@@ -1292,8 +1357,7 @@ class ButtonEditorDialog(QDialog):
         from views.macro_editor_dialog import MacroEditorDialog
         data = copy.deepcopy(self._macros[idx])
         names = [m.get('name', '') for m in self._macros]
-        mode = 'gp' if self._is_gp else 'kb'
-        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode=mode)
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix')
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
         dlg.exec()
 

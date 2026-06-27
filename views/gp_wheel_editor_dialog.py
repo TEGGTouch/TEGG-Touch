@@ -1066,17 +1066,29 @@ class GpWheelEditorDialog(QDialog):
     def _on_open_mouse_cfg(self):
         """打开 GpWheelMouseDialog — 配置 wheel active 时其他鼠标按键映射"""
         from views.gp_wheel_mouse_dialog import GpWheelMouseDialog
-        # 拿当前方向盘 gp_macros (跟 gp_stick 编辑器一致, 从 scene 当前 profile 拿)
-        gp_macros = []
+        # 拿当前统一混合宏池 xmacros (从 scene 当前 profile)
+        xmacros = []
         try:
             sc = self._item.scene()
             if sc is not None and hasattr(sc, 'get_config'):
                 cfg = sc.get_config() or {}
-                gp_macros = list(cfg.get('gp_macros', []) or [])
+                xmacros = list(cfg.get('xmacros', []) or [])
         except Exception:
             pass
-        dlg = GpWheelMouseDialog(self._item, parent=self, gp_macros=gp_macros)
+        dlg = GpWheelMouseDialog(self._item, parent=self, xmacros=xmacros)
+        dlg.xmacros_changed.connect(self._on_xmacros_changed)
         dlg.exec()      # 模态; 弹窗 _on_save 内部已写回 self._item.data
+
+    def _on_xmacros_changed(self, xmacros_list):
+        """嵌套鼠标键弹窗里的宏增删改 → 写回 scene config 并保存"""
+        try:
+            sc = self._item.scene()
+            if sc is not None and hasattr(sc, 'get_config') and sc.get_config() is not None:
+                sc.get_config()['xmacros'] = xmacros_list
+                if hasattr(sc, 'save_config'):
+                    sc.save_config()
+        except Exception:
+            pass
 
     # ── 释放阈值预览 (鼠标有效区域显示) ──
 

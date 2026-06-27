@@ -906,9 +906,10 @@ class OverlayWindow(QGraphicsView):
         if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_GP_STICK:
             from views.gp_stick_editor_dialog import GpStickEditorDialog
             cfg = self._scene.get_config()
-            gp_macros = cfg.get('gp_macros', [])
-            dialog = GpStickEditorDialog(item, self, gp_macros=gp_macros)
+            xmacros = cfg.get('xmacros', [])
+            dialog = GpStickEditorDialog(item, self, xmacros=xmacros)
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            dialog.xmacros_changed.connect(self._on_xmacros_changed)
             dialog.saved.connect(lambda it: self._on_button_saved(it))
             dialog.deleted.connect(lambda it: self._on_button_deleted(it))
             dialog.copied.connect(lambda it: self._on_button_copied(it))
@@ -926,12 +927,10 @@ class OverlayWindow(QGraphicsView):
             dialog.show()
             return
         cfg = self._scene.get_config()
-        macros = cfg.get('macros', [])
-        gp_macros = cfg.get('gp_macros', [])
-        dialog = ButtonEditorDialog(item, self, macros=macros, gp_macros=gp_macros)
+        xmacros = cfg.get('xmacros', [])
+        dialog = ButtonEditorDialog(item, self, xmacros=xmacros)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.macros_changed.connect(self._on_macros_changed)
-        dialog.gp_macros_changed.connect(self._on_gp_macros_changed)
+        dialog.xmacros_changed.connect(self._on_xmacros_changed)
         dialog.saved.connect(lambda data: self._on_button_saved(item))
         dialog.deleted.connect(lambda it: self._on_button_deleted(it))
         dialog.copied.connect(lambda it: self._on_button_copied(it))
@@ -974,6 +973,13 @@ class OverlayWindow(QGraphicsView):
             self._scene.get_config()['gp_macros'] = gp_macros_list
             self._scene.save_config()
             logger.info("GP Macros updated: %d macros", len(gp_macros_list))
+
+    def _on_xmacros_changed(self, xmacros_list):
+        """统一混合宏池变更 → 写入 config 并保存"""
+        if self._scene.get_config() is not None:
+            self._scene.get_config()['xmacros'] = xmacros_list
+            self._scene.save_config()
+            logger.info("XMacros updated: %d macros", len(xmacros_list))
 
     def _on_dialog_destroyed(self, attr_name):
         """弹窗销毁时清理引用的统一槽方法"""
@@ -1071,10 +1077,11 @@ class OverlayWindow(QGraphicsView):
         voice_mic_device = config.get('voice_mic_device', None)
         voice_auto_start = config.get('voice_auto_start', True)
         voice_chunk_size = config.get('voice_chunk_size', None)
-        macros = config.get('macros', [])
-        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, macros=macros, voice_auto_start=voice_auto_start, voice_chunk_size=voice_chunk_size)
+        xmacros = config.get('xmacros', [])
+        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, xmacros=xmacros, voice_auto_start=voice_auto_start, voice_chunk_size=voice_chunk_size)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_voice'))
+        dialog.xmacros_changed.connect(self._on_xmacros_changed)
         dialog.settings_saved.connect(self._on_voice_settings_saved)
         self._dlg_voice = dialog
         dialog.show()

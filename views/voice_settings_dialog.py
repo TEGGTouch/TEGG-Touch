@@ -14,11 +14,13 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font, get_lang
-from core.constants import VOICE_SAMPLE_RATE
+from core.constants import (
+    VOICE_SAMPLE_RATE, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
+)
 
 # Reuse shared components from existing dialogs
 from views.button_editor_dialog import (
-    TagInput, _FlowWidget, _get_key_categories, _get_mouse_keys,
+    TagInput, _FlowWidget, _get_key_categories, _get_mouse_keys, populate_gp_palette,
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL,
@@ -508,7 +510,7 @@ class _ChunkSizeDialog(QDialog):
 class VoiceSettingsDialog(QDialog):
     """语音指令设置弹窗 — 双栏布局"""
     settings_saved = pyqtSignal()
-    macros_changed = pyqtSignal(list)
+    xmacros_changed = pyqtSignal(list)   # 统一混合宏池变更
 
     # 三列布局: 列表 / 编辑 / 候选按键面板
     COL1_W = 280     # 指令列表 + 底部 mic/test/language
@@ -519,9 +521,10 @@ class VoiceSettingsDialog(QDialog):
     WIN_H = 960
     COL3_W = WIN_W - PADDING * 2 - COL1_W - COL2_W - GUTTER * 2 - 2  # = 538
 
-    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, macros=None, voice_auto_start=True, voice_chunk_size=None):
+    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, xmacros=None, voice_auto_start=True, voice_chunk_size=None):
         super().__init__(parent)
-        self._macros = list(macros) if macros else []
+        # 统一混合宏池 (xmacros) — 兼容旧 macros (已在 config 加载时迁入)
+        self._macros = list(xmacros) if xmacros else []
         # 深拷贝防止编辑过程影响外部数据 (失败时还能 cancel)
         self._commands = [dict(c) for c in (voice_commands or [])]
         self._language = voice_language or get_lang()
@@ -1296,45 +1299,62 @@ class VoiceSettingsDialog(QDialog):
         tab_row = QHBoxLayout()
         tab_row.setSpacing(8)
         self._tab_keys_btn = QPushButton(t("macro.tab_keys"))
-        self._tab_keys_btn.setFixedHeight(34)
-        self._tab_keys_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tab_keys_btn.setFont(_make_font(fn, 14, bold=True))
-        self._tab_keys_btn.clicked.connect(lambda: self._switch_tab(0))
-        tab_row.addWidget(self._tab_keys_btn)
-
         self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
-        self._tab_mouse_btn.setFixedHeight(34)
-        self._tab_mouse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tab_mouse_btn.setFont(_make_font(fn, 14, bold=True))
-        self._tab_mouse_btn.clicked.connect(lambda: self._switch_tab(1))
-        tab_row.addWidget(self._tab_mouse_btn)
-
+        self._tab_gp_btn = QPushButton(t("macro.tab_gp"))
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
-        self._tab_macros_btn.setFixedHeight(34)
-        self._tab_macros_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._tab_macros_btn.setFont(_make_font(fn, 14, bold=True))
-        self._tab_macros_btn.clicked.connect(lambda: self._switch_tab(2))
-        tab_row.addWidget(self._tab_macros_btn)
+        self._tab_btns = (self._tab_keys_btn, self._tab_mouse_btn,
+                          self._tab_gp_btn, self._tab_macros_btn)
+        for i, b in enumerate(self._tab_btns):
+            b.setFixedHeight(34)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFont(_make_font(fn, 14, bold=True))
+            b.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
+            tab_row.addWidget(b)
         tab_row.addStretch()
         panel_lay.addLayout(tab_row)
         panel_lay.addSpacing(10)
 
         self._tab_stack = QStackedWidget()
         self._tab_stack.setStyleSheet("background: transparent;")
-        self._tab_stack.addWidget(self._build_key_palette(fn))
-        self._tab_stack.addWidget(self._build_mouse_palette(fn))
-        self._tab_stack.addWidget(self._build_macro_browse(fn))
+        self._tab_stack.addWidget(self._build_key_palette(fn))      # 0 常规按键
+        self._tab_stack.addWidget(self._build_mouse_palette(fn))    # 1 鼠标
+        self._tab_stack.addWidget(self._build_gp_palette(fn))       # 2 手柄按钮
+        self._tab_stack.addWidget(self._build_macro_browse(fn))     # 3 宏
         panel_lay.addWidget(self._tab_stack, 1)
         self._switch_tab(0)
         return panel
+
+    def _build_gp_palette(self, fn):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("""
+            QScrollArea { background: transparent; border: none; }
+            QScrollBar:vertical { background: transparent; width: 8px; border: none; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+        """)
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(body)
+        lay.setContentsMargins(10, 0, 10, 10)
+        lay.setSpacing(0)
+        self._gp_palette_layout = lay
+        populate_gp_palette(lay, fn, self._on_gp_key_clicked, self)
+        scroll.setWidget(body)
+        return scroll
+
+    def _on_gp_key_clicked(self, label):
+        storage = GP_LABEL_TO_KEY.get(label, label)
+        self._on_key_clicked(GP_KEY_PREFIX + storage)
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
         sel = f"QPushButton {{ background: transparent; color: #FFF; border: none; border-bottom: 2px solid {C_CYBER_H}; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #FFF; }}"
         off = f"QPushButton {{ background: transparent; color: #AAA; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #E0E0E0; }}"
-        self._tab_keys_btn.setStyleSheet(sel if idx == 0 else off)
-        self._tab_mouse_btn.setStyleSheet(sel if idx == 1 else off)
-        self._tab_macros_btn.setStyleSheet(sel if idx == 2 else off)
+        for ix, b in enumerate(self._tab_btns):
+            b.setStyleSheet(sel if idx == ix else off)
 
     def _build_mouse_palette(self, fn):
         """构建鼠标操作 Tab: 分类标签 + 5 个鼠标按键 flow"""
@@ -1546,12 +1566,12 @@ class VoiceSettingsDialog(QDialog):
 
     def _insert_macro_tag(self, macro_name):
         if self._focus_widget and isinstance(self._focus_widget, TagInput):
-            self._focus_widget.add_tag(f"macro:{macro_name}")
+            self._focus_widget.add_tag(f"xmacro:{macro_name}")
 
     def _new_macro(self):
         from views.macro_editor_dialog import MacroEditorDialog
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(existing_names=names, parent=self)
+        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix')
         dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
         dlg.exec()
 
@@ -1559,7 +1579,7 @@ class VoiceSettingsDialog(QDialog):
         from views.macro_editor_dialog import MacroEditorDialog
         data = copy.deepcopy(self._macros[idx])
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self)
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix')
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
         dlg.exec()
 
@@ -1573,7 +1593,7 @@ class VoiceSettingsDialog(QDialog):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self._macros.pop(idx)
             self._rebuild_macro_list()
-            self.macros_changed.emit(self._macros)
+            self.xmacros_changed.emit(self._macros)
 
     def _on_macro_editor_saved(self, data, idx):
         if 0 <= idx < len(self._macros):
@@ -1581,7 +1601,7 @@ class VoiceSettingsDialog(QDialog):
         else:
             self._macros.append(data)
         self._rebuild_macro_list()
-        self.macros_changed.emit(self._macros)
+        self.xmacros_changed.emit(self._macros)
 
     def _on_key_clicked(self, key_name):
         if self._focus_widget and isinstance(self._focus_widget, TagInput):

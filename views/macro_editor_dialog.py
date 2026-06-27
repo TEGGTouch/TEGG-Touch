@@ -289,13 +289,13 @@ class MacroEditorDialog(QDialog):
                  parent=None, mode: str = 'kb'):
         super().__init__(parent)
         # macro_data: {"name": "...", "steps": [...]} or None for new
-        # mode: 'kb' (键盘宏, 默认) | 'gp' (手柄宏); 决定标题 + 键位面板 + 点击插入前缀
+        # mode: 'kb'(键盘) | 'gp'(手柄) | 'mix'(统一混合, 键盘+鼠标+手柄全套); 决定候选面板
         self._macro = macro_data or {"name": "", "steps": []}
         self._step_rows: list[_StepRow] = []
         self._focus_widget = None
         self._existing_names = set(existing_names or [])
         self._original_name = self._macro.get('name', '')
-        self._mode = mode if mode in ('kb', 'gp') else 'kb'
+        self._mode = mode if mode in ('kb', 'gp', 'mix') else 'kb'
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -333,7 +333,10 @@ class MacroEditorDialog(QDialog):
 
         # ── 标题栏 (按 mode 切标题) ──
         title_row = QHBoxLayout()
-        title_key = "macro.editor_title_gp" if self._mode == 'gp' else "macro.editor_title_kb"
+        title_key = {
+            'gp': "macro.editor_title_gp",
+            'mix': "macro.editor_title_mix",
+        }.get(self._mode, "macro.editor_title_kb")
         title_lbl = QLabel(t(title_key))
         title_lbl.setFont(_make_font(fn, 18, bold=True))
         title_lbl.setStyleSheet("color: white; background: transparent;")
@@ -545,24 +548,11 @@ class MacroEditorDialog(QDialog):
 
         from core.i18n import t as _t
 
-        if self._mode == 'gp':
-            # ── 手柄模式: 仅显示手柄按键面板 (label → storage key + gp: 前缀) ──
-            cat_lbl_gp = QLabel(f"── {_t('key_cat.gp_buttons')} ──")
-            cat_lbl_gp.setFont(_make_font(fn, 13, bold=True))
-            cat_lbl_gp.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
-            layout.addWidget(cat_lbl_gp)
-            layout.addSpacing(6)
-            gp_labels = [label for _, label in GP_BUTTONS]
-            gp_container = QWidget()
-            gp_container.setStyleSheet("background: transparent;")
-            gp_flow = _FlowWidget(gp_labels, self._on_key_clicked, fn, gp_container)
-            gc_lay = QVBoxLayout(gp_container)
-            gc_lay.setContentsMargins(0, 0, 0, 0)
-            gc_lay.setSpacing(0)
-            gc_lay.addWidget(gp_flow)
-            layout.addWidget(gp_container)
-        else:
-            # ── 键盘模式: 鼠标 + 键盘分类 (原行为) ──
+        show_kb = self._mode in ('kb', 'mix')   # 键盘 + 鼠标
+        show_gp = self._mode in ('gp', 'mix')   # 手柄按钮
+
+        if show_kb:
+            # ── 鼠标 + 键盘分类 ──
             mouse_keys = _get_mouse_keys()
             mouse_display_names = [label for label, _ in mouse_keys]
             mouse_tag_values = [tag for _, tag in mouse_keys]
@@ -604,18 +594,38 @@ class MacroEditorDialog(QDialog):
                 c_lay.addWidget(flow)
                 layout.addWidget(container)
 
+        if show_gp:
+            # ── 手柄按钮 (label → storage key + gp: 前缀) ──
+            if show_kb:
+                layout.addSpacing(16)
+            cat_lbl_gp = QLabel(f"── {_t('key_cat.gp_buttons')} ──")
+            cat_lbl_gp.setFont(_make_font(fn, 13, bold=True))
+            cat_lbl_gp.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+            layout.addWidget(cat_lbl_gp)
+            layout.addSpacing(6)
+            gp_labels = [label for _, label in GP_BUTTONS]
+            gp_container = QWidget()
+            gp_container.setStyleSheet("background: transparent;")
+            gp_flow = _FlowWidget(gp_labels, self._on_gp_key_clicked, fn, gp_container)
+            gc_lay = QVBoxLayout(gp_container)
+            gc_lay.setContentsMargins(0, 0, 0, 0)
+            gc_lay.setSpacing(0)
+            gc_lay.addWidget(gp_flow)
+            layout.addWidget(gp_container)
+
         layout.addStretch()
         scroll.setWidget(content)
         return scroll
 
     def _on_key_clicked(self, key_name):
-        """键位面板点击 → 填入当前聚焦的 TagInput
-        手柄模式: 反查 label → storage key + 加 'gp:' 前缀 (例如 '左肩 LB' → 'gp:LB')"""
-        if self._mode == 'gp':
-            storage_key = GP_LABEL_TO_KEY.get(key_name, key_name)
-            key_name = GP_KEY_PREFIX + storage_key
+        """键盘/鼠标面板点击 → 填入当前聚焦的 TagInput (无前缀, 鼠标已带 mouse:)"""
         if self._focus_widget and isinstance(self._focus_widget, TagInput):
             self._focus_widget.add_tag(key_name)
+
+    def _on_gp_key_clicked(self, label):
+        """手柄按钮面板点击 → 反查 label → storage key + 'gp:' 前缀 (例如 '左肩 LB' → 'gp:LB')"""
+        storage_key = GP_LABEL_TO_KEY.get(label, label)
+        self._on_key_clicked(GP_KEY_PREFIX + storage_key)
 
     def _on_mouse_key_clicked(self, display_name):
         """鼠标面板点击 → 将 display_name 映射为 mouse:xxx tag 后填入 TagInput"""
