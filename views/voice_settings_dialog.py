@@ -75,7 +75,7 @@ class _LangBtn(QPushButton):
 class _CheckToggle(QWidget):
     """带勾号的自定义 checkbox — 点击切换选中状态。"""
 
-    def __init__(self, text, fn, checked=True, parent=None):
+    def __init__(self, text, fn, checked=True, parent=None, label_px=14):
         super().__init__(parent)
         self._checked = checked
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -85,19 +85,20 @@ class _CheckToggle(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
 
-        # 方框 + 勾
+        # 方框 + 勾 (随字号缩放)
+        bs = label_px + 5
         self._box = QLabel()
-        self._box.setFixedSize(18, 18)
+        self._box.setFixedSize(bs, bs)
         self._box.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._box.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         if _ICON_FONT:
-            self._box.setFont(_make_font(_ICON_FONT, 13))
+            self._box.setFont(_make_font(_ICON_FONT, label_px))
         else:
-            self._box.setFont(_make_font(fn, 13, bold=True))
+            self._box.setFont(_make_font(fn, label_px - 1, bold=True))
         lay.addWidget(self._box)
 
         lbl = QLabel(text)
-        lbl.setFont(_make_font(fn, 14))
+        lbl.setFont(_make_font(fn, label_px))
         lbl.setStyleSheet("color: #CCC; background: transparent;")
         lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         lay.addWidget(lbl)
@@ -723,6 +724,10 @@ class VoiceSettingsDialog(QDialog):
         self._mic_lbl.setStyleSheet("color: #AAA; background: transparent;")
         mic_row.addWidget(self._mic_lbl)
         mic_row.addStretch()
+        # 运行时启用语音 — 右对齐到麦克风状态行, 字号与左侧一致 (省一行)
+        self._auto_start_cb = _CheckToggle(
+            t("voice_dialog.auto_start"), fn, checked=self._auto_start, label_px=11)
+        mic_row.addWidget(self._auto_start_cb)
         col.addLayout(mic_row)
 
         self._mic_combo = QComboBox()
@@ -752,19 +757,16 @@ class VoiceSettingsDialog(QDialog):
         test_row = QHBoxLayout()
         test_row.setSpacing(6)
 
-        self._chunk_btn = QPushButton("" if _ICON_FONT else "⚙")
-        self._chunk_btn.setFixedSize(32, 32)
+        # 设置 (识别延迟) — 齿轮 + 「设置」文本, 略宽以放下文本
+        self._chunk_btn = QPushButton(f"⚙ {t('voice_dialog.settings_btn')}")
+        self._chunk_btn.setFixedHeight(32)
         self._chunk_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._chunk_btn.setToolTip(t("voice_dialog.chunk_tooltip"))
-        if _ICON_FONT:
-            self._chunk_btn.setText("")  # Segoe Fluent/MDL2 设置齿轮
-            self._chunk_btn.setFont(_make_font(_ICON_FONT, 14))
-        else:
-            self._chunk_btn.setFont(_make_font(fn, 14))
+        self._chunk_btn.setFont(_make_font(fn, 13))
         self._chunk_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 6px; padding: 0 14px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -778,19 +780,14 @@ class VoiceSettingsDialog(QDialog):
         self._test_btn.setFont(_make_font(fn, 13))
         self._test_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_GRAY}; color: #E0E0E0;
+                background: {C_GREEN}; color: #333333;
                 border: none; border-radius: 6px;
             }}
-            QPushButton:hover {{ background: {C_GRAY_H}; }}
+            QPushButton:hover {{ background: #34D399; }}
         """)
         self._test_btn.clicked.connect(self._on_test_commands)
         test_row.addWidget(self._test_btn, 1)
         col.addLayout(test_row)
-
-        # 自动启用音频
-        self._auto_start_cb = _CheckToggle(
-            t("voice_dialog.auto_start"), fn, checked=self._auto_start)
-        col.addWidget(self._auto_start_cb)
 
         # 语言下拉 (识别语言)
         lang_row = QHBoxLayout()

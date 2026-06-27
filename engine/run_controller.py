@@ -710,12 +710,15 @@ class RunController(QObject):
         if normal_keys:
             trigger('+'.join(normal_keys), 'c' if action == 'click' else action)
 
-        # 鼠标按钮: press → mouse_press, release → mouse_release
+        # 鼠标按钮: press → mouse_press, release → mouse_release, click → 按下+延迟释放
         for mb in mouse_buttons:
             if action == 'p':
                 mouse_press(mb)
             elif action == 'r':
                 mouse_release(mb)
+            elif action == 'click':
+                mouse_press(mb)
+                QTimer.singleShot(40, lambda b=mb: mouse_release(b))
 
         # 鼠标滚轮: 仅在 press/click 时触发一次 (release 忽略)
         if mouse_wheels and action in ('p', 'click'):
@@ -1667,8 +1670,9 @@ class RunController(QObject):
         if not self._active or not keys:
             return
         if action == 'click':
-            self._smart_trigger(keys, 'p')
-            self._smart_trigger(keys, 'r')
+            # 统一 click 语义: 键盘=按下+短延迟+释放, 手柄=press+flush+延迟release,
+            # 鼠标键=按下+延迟释放。直接 p 紧跟 r 会因无间隔被游戏/驱动丢弃。
+            self._smart_trigger(keys, 'click')
         elif action == 'press':
             self._smart_trigger(keys, 'p')
         elif action == 'release':

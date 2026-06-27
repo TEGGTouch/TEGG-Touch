@@ -460,7 +460,7 @@
     "action_click_desc": "按下后立即释放",
     "action_press_desc": "按下并保持",
     "action_release_desc": "释放之前按下的键",
-    "auto_start": "运行时启用音频",
+    "auto_start": "运行时启用语音",
     "unnamed": "未命名",
     "select_hint": "在左侧选择或新建一条指令",
     "copy": "复制",
@@ -475,7 +475,8 @@
     "chunk_faster": "更快 · 易误触",
     "chunk_slower": "更稳 · 略慢",
     "chunk_reset": "重置默认",
-    "chunk_cancel": "取消"
+    "chunk_cancel": "取消",
+    "settings_btn": "设置"
   },
   "macro": {
     "tab_keys": "键盘",

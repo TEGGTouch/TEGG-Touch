@@ -460,7 +460,7 @@
     "action_click_desc": "Press and release immediately",
     "action_press_desc": "Press and hold",
     "action_release_desc": "Release previously pressed key",
-    "auto_start": "Auto-enable audio in run mode",
+    "auto_start": "Enable voice on run",
     "unnamed": "Untitled",
     "select_hint": "Select or create a command on the left",
     "copy": "Duplicate",
@@ -475,7 +475,8 @@
     "chunk_faster": "Faster · jittery",
     "chunk_slower": "Stabler · slower",
     "chunk_reset": "Reset to default",
-    "chunk_cancel": "Cancel"
+    "chunk_cancel": "Cancel",
+    "settings_btn": "Settings"
   },
   "macro": {
     "tab_keys": "Keyboard",
