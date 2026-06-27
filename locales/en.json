@@ -5,7 +5,12 @@
     "error_title": "Critical Error",
     "error_msg": "Unhandled exception:\n{error}\nCheck teggtouch.log",
     "dep_missing_title": "Missing Dependency",
-    "dep_missing_msg": "Error: keyboard library not found\nRun: pip install keyboard"
+    "dep_missing_msg": "Error: keyboard library not found\nRun: pip install keyboard",
+    "tab": "Apps",
+    "search_placeholder": "Search apps…",
+    "refresh": "Refresh",
+    "loading": "Scanning local apps…",
+    "empty": "No apps found"
   },
   "toolbar": {
     "add_button": "Btn",

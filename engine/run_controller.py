@@ -12,6 +12,7 @@ TEGG Touch 蛋挞 (PyQt6) - run_controller.py
 import ctypes
 import ctypes.wintypes
 import logging
+import os
 import threading
 import time as _time
 
@@ -25,7 +26,7 @@ from core.input_engine import (
 from core.config_manager import load_hotkeys
 from core.constants import (
     UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC,
-    GP_KEY_PREFIX,
+    GP_KEY_PREFIX, APP_PREFIX,
 )
 from core.system_tuning import input_poll_interval_ms
 from engine.gamepad_engine import GamepadEngine
@@ -135,6 +136,8 @@ class RunController(QObject):
         self._active_gp_stick = None  # GpStickItem | None
         # WASD 模式当前按住的方向集 ({'up','down','left','right'} 子集), 用于边沿 press/release
         self._stick_wasd_held: set = set()
+        # 应用启动冷却 {path: 上次启动时间}, 防长按/连点重复启动
+        self._app_cooldown: dict = {}
 
         # 方向盘单例状态 + LT/RT 持久值
         self._active_gp_wheel = None  # GpWheelItem | None
@@ -688,8 +691,11 @@ class RunController(QObject):
         mouse_buttons = []   # mouse:left, mouse:right, mouse:middle, mouse:x1, mouse:x2
         mouse_wheels = []    # mouse:wheelup, mouse:wheeldown
         gp_labels = []       # gp:A, gp:LB, gp:LT 等
+        app_targets = []     # app:<应用名> 启动本地应用
         for p in parts:
-            if p.startswith('xmacro:'):
+            if p.startswith(APP_PREFIX):
+                app_targets.append(p[len(APP_PREFIX):])
+            elif p.startswith('xmacro:'):
                 x_macro_names.append(p[7:])
             elif p.startswith('gpmacro:'):
                 gp_macro_names.append(p[8:])
@@ -773,6 +779,34 @@ class RunController(QObject):
                     self._execute_macro(macro_data)
                 else:
                     logger.warning("X Macro not found: '%s'", name)
+
+        # 本地应用: 启动程序与"点击/长按/释放"动作无关, 任意动作都启动;
+        # 靠 _launch_app 的冷却去重 (一次点击发 p+r 两次 → 只开一次)
+        if app_targets:
+            for name in app_targets:
+                self._launch_app(name)
+
+    def _find_app(self, name: str):
+        """解析 app:<name> → 启动路径 (先 profile apps 池, 再回退全局扫描缓存)。"""
+        from core.app_scanner import find_app_path
+        config = self._scene.get_config() if hasattr(self._scene, 'get_config') else {}
+        return find_app_path(name, (config or {}).get('apps', []))
+
+    def _launch_app(self, name: str):
+        """启动本地应用 (os.startfile 解析 .lnk/.exe), 带 ~1.5s 冷却防重复。"""
+        path = self._find_app(name)
+        if not path:
+            logger.warning("应用未找到/路径失效: '%s'", name)
+            return
+        now = _time.time()
+        if now - self._app_cooldown.get(path, 0.0) < 1.5:
+            return
+        self._app_cooldown[path] = now
+        try:
+            os.startfile(path)
+            logger.info("启动应用: '%s' → %s", name, path)
+        except Exception as e:
+            logger.warning("启动应用失败 '%s' (%s): %s", name, path, e)
 
     # ── 摇杆轮询: 状态机 + 跨摇杆切换 + SetCursorPos 圆心 + gp engine ──
 

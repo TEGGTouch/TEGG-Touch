@@ -15,7 +15,7 @@ from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font, get_lang
 from core.constants import (
-    VOICE_SAMPLE_RATE, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
+    VOICE_SAMPLE_RATE, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX,
 )
 
 # Reuse shared components from existing dialogs
@@ -508,11 +508,37 @@ class _ChunkSizeDialog(QDialog):
         super().mouseReleaseEvent(event)
 
 
+class _CommandList(QListWidget):
+    """指令列表: 有竖向滚动条时条目右侧留 10px (与滚动条间距);
+    无滚动条时贴右边缘 (与下方「添加指令」按钮右对齐)。条目下间距固定 5px。"""
+
+    def __init__(self, base_qss, parent=None):
+        super().__init__(parent)
+        self._base_qss = base_qss
+        self._sb_margin = -1   # 当前右间距, -1 触发首次刷新
+        self.setStyleSheet(base_qss)
+        self.verticalScrollBar().rangeChanged.connect(self._refresh_sb_margin)
+        self._refresh_sb_margin()
+
+    def _refresh_sb_margin(self, *args):
+        r = 10 if self.verticalScrollBar().maximum() > 0 else 0
+        if r == self._sb_margin:
+            return
+        self._sb_margin = r
+        self.setStyleSheet(
+            self._base_qss + f"\nQListWidget::item {{ margin: 0px {r}px 5px 0px; }}")
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._refresh_sb_margin()
+
+
 # ── 主弹窗类 ──
 class VoiceSettingsDialog(QDialog):
     """语音指令设置弹窗 — 双栏布局"""
     settings_saved = pyqtSignal()
     xmacros_changed = pyqtSignal(list)   # 统一混合宏池变更
+    apps_changed = pyqtSignal(list)      # 应用池变更
 
     # 三列布局: 列表 / 编辑 / 候选按键面板
     COL1_W = 280     # 指令列表 + 底部 mic/test/language
@@ -523,10 +549,12 @@ class VoiceSettingsDialog(QDialog):
     WIN_H = 960
     COL3_W = WIN_W - PADDING * 2 - COL1_W - COL2_W - GUTTER * 2 - 2  # = 538
 
-    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, xmacros=None, voice_auto_start=True, voice_chunk_size=None):
+    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, xmacros=None, voice_auto_start=True, voice_chunk_size=None, apps=None):
         super().__init__(parent)
         # 统一混合宏池 (xmacros) — 兼容旧 macros (已在 config 加载时迁入)
         self._macros = list(xmacros) if xmacros else []
+        # 应用池 (apps) — [{name, path}]
+        self._apps = [dict(a) for a in apps] if apps else []
         # 深拷贝防止编辑过程影响外部数据 (失败时还能 cancel)
         self._commands = [dict(c) for c in (voice_commands or [])]
         self._language = voice_language or get_lang()
@@ -658,16 +686,16 @@ class VoiceSettingsDialog(QDialog):
         v.setSpacing(8)
 
         # 指令列表
-        self._cmd_list = QListWidget()
-        # 列表本身无底色/无边框; 每个条目=灰底小圆角矩形, 条目间距 5px
-        self._cmd_list.setStyleSheet(f"""
+        # 列表本身无底色/无边框; 每个条目=灰底小圆角矩形 (条目 margin 由 _CommandList
+        # 动态控制: 有滚动条时右留 10px, 无则贴边)
+        _cmd_qss = f"""
             QListWidget {{
                 background: transparent; border: none;
                 color: #E0E0E0; outline: none;
             }}
             QListWidget::item {{
                 background: {C_GRAY}; border-radius: 6px;
-                padding: 8px 10px; margin-bottom: 5px;
+                padding: 8px 10px;
             }}
             QListWidget::item:selected {{
                 background: {C_GREEN}; color: #1A1A1A;
@@ -681,7 +709,8 @@ class VoiceSettingsDialog(QDialog):
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
-        """)
+        """
+        self._cmd_list = _CommandList(_cmd_qss)
         self._cmd_list.setFont(_make_font(fn, 14))
         self._cmd_list.currentRowChanged.connect(self._on_list_row_changed)
         v.addWidget(self._cmd_list, 1)
@@ -1314,8 +1343,10 @@ class VoiceSettingsDialog(QDialog):
         self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
         self._tab_gp_btn = QPushButton(t("macro.tab_gp"))
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
+        self._tab_app_btn = QPushButton(t("app.tab"))
         self._tab_btns = (self._tab_keys_btn, self._tab_gp_btn,
-                          self._tab_mouse_btn, self._tab_macros_btn)
+                          self._tab_mouse_btn, self._tab_macros_btn,
+                          self._tab_app_btn)
         for i, b in enumerate(self._tab_btns):
             b.setFixedHeight(34)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1332,6 +1363,7 @@ class VoiceSettingsDialog(QDialog):
         self._tab_stack.addWidget(self._build_gp_palette(fn))       # 1 手柄
         self._tab_stack.addWidget(self._build_mouse_palette(fn))    # 2 鼠标
         self._tab_stack.addWidget(self._build_macro_browse(fn))     # 3 宏
+        self._tab_stack.addWidget(self._build_app_tab(fn))          # 4 应用
         panel_lay.addWidget(self._tab_stack, 1)
         self._switch_tab(0)
         return panel
@@ -1360,6 +1392,26 @@ class VoiceSettingsDialog(QDialog):
     def _on_gp_key_clicked(self, label):
         storage = GP_LABEL_TO_KEY.get(label, label)
         self._on_key_clicked(GP_KEY_PREFIX + storage)
+
+    def _build_app_tab(self, fn):
+        from views.app_palette import AppPaletteWidget
+        w = AppPaletteWidget(fn)
+        w.app_clicked.connect(self._on_app_clicked)
+        return w
+
+    def _on_app_clicked(self, app: dict):
+        name = app.get('name', '')
+        path = app.get('path', '')
+        if not name:
+            return
+        for a in self._apps:
+            if a.get('name') == name:
+                a['path'] = path
+                break
+        else:
+            self._apps.append({'name': name, 'path': path})
+        self.apps_changed.emit(self._apps)
+        self._on_key_clicked(APP_PREFIX + name)
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
@@ -1583,17 +1635,23 @@ class VoiceSettingsDialog(QDialog):
     def _new_macro(self):
         from views.macro_editor_dialog import MacroEditorDialog
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix')
+        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix', apps=self._apps)
         dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
+        dlg.apps_changed.connect(self._on_nested_apps_changed)
         dlg.exec()
 
     def _edit_macro(self, idx):
         from views.macro_editor_dialog import MacroEditorDialog
         data = copy.deepcopy(self._macros[idx])
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix')
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix', apps=self._apps)
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
+        dlg.apps_changed.connect(self._on_nested_apps_changed)
         dlg.exec()
+
+    def _on_nested_apps_changed(self, apps_list):
+        self._apps = [dict(a) for a in apps_list]
+        self.apps_changed.emit(self._apps)
 
     def _delete_macro(self, idx):
         from views.profile_manager_dialog import _StyledConfirmDialog

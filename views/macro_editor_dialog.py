@@ -15,7 +15,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
 
 from core.i18n import t, get_font
-from core.constants import GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX
+from core.constants import GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX
 from views.button_editor_dialog import (
     _get_key_categories, _get_mouse_keys, _FlowWidget, _make_font, _detect_icon_font,
     populate_gp_palette,
@@ -279,6 +279,7 @@ class MacroEditorDialog(QDialog):
     """宏编辑弹窗 — 左右双栏: 左侧步骤编辑 + 右侧键位面板"""
 
     macro_saved = pyqtSignal(dict)  # 发出保存后的完整宏数据
+    apps_changed = pyqtSignal(list)  # 应用池变更 (宏里挑了应用 → 冒泡给父编辑器)
 
     LEFT_W = 480
     RIGHT_W = 440
@@ -287,7 +288,7 @@ class MacroEditorDialog(QDialog):
     WIN_H = 800
 
     def __init__(self, macro_data: dict = None, existing_names: list[str] = None,
-                 parent=None, mode: str = 'kb'):
+                 parent=None, mode: str = 'kb', apps=None):
         super().__init__(parent)
         # macro_data: {"name": "...", "steps": [...]} or None for new
         # mode: 'kb'(键盘) | 'gp'(手柄) | 'mix'(统一混合, 键盘+鼠标+手柄全套); 决定候选面板
@@ -297,6 +298,8 @@ class MacroEditorDialog(QDialog):
         self._existing_names = set(existing_names or [])
         self._original_name = self._macro.get('name', '')
         self._mode = mode if mode in ('kb', 'gp', 'mix') else 'kb'
+        # 应用池 (apps) — [{name, path}]; 宏步骤可挑应用 app:<name>
+        self._apps = [dict(a) for a in apps] if apps else []
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -530,7 +533,7 @@ class MacroEditorDialog(QDialog):
         show_kb = self._mode in ('kb', 'mix')   # 键盘 / 鼠标
         show_gp = self._mode in ('gp', 'mix')   # 手柄按钮
 
-        # 顺序固定: 键盘 → 手柄 → 鼠标
+        # 顺序固定: 键盘 → 手柄 → 鼠标 → 应用
         specs = []
         if show_kb:
             specs.append((t("macro.tab_keys"), self._build_kb_tab))
@@ -538,6 +541,7 @@ class MacroEditorDialog(QDialog):
             specs.append((t("macro.tab_gp"), self._build_gp_tab))
         if show_kb:
             specs.append((t("macro.tab_mouse"), self._build_mouse_tab))
+        specs.append((t("app.tab"), self._build_app_tab))
 
         wrap = QWidget()
         wrap.setStyleSheet("background: transparent;")
@@ -656,6 +660,27 @@ class MacroEditorDialog(QDialog):
         populate_gp_palette(layout, fn, self._on_gp_key_clicked, self)
         scroll.setWidget(content)
         return scroll
+
+    def _build_app_tab(self, fn):
+        from views.app_palette import AppPaletteWidget
+        w = AppPaletteWidget(fn)
+        w.app_clicked.connect(self._on_app_clicked)
+        return w
+
+    def _on_app_clicked(self, app: dict):
+        """应用面板点击 → 合并进应用池(冒泡父编辑器) + 插入 app:<名称> 到聚焦步骤"""
+        name = app.get('name', '')
+        path = app.get('path', '')
+        if not name:
+            return
+        for a in self._apps:
+            if a.get('name') == name:
+                a['path'] = path
+                break
+        else:
+            self._apps.append({'name': name, 'path': path})
+        self.apps_changed.emit(self._apps)
+        self._on_key_clicked(APP_PREFIX + name)
 
     def _on_key_clicked(self, key_name):
         """键盘/鼠标面板点击 → 填入当前聚焦的 TagInput (无前缀, 鼠标已带 mouse:)"""

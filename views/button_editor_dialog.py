@@ -23,7 +23,7 @@ from core.constants import (
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL, C_DELAY, ACTION_COLORS,
-    BTN_TYPE_GP_BUTTON, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
+    BTN_TYPE_GP_BUTTON, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX,
 )
 from models.button_model import ButtonData
 
@@ -342,6 +342,7 @@ class ButtonEditorDialog(QDialog):
     macros_changed = pyqtSignal(list)     # (旧) 键盘宏列表变更, 保留兼容
     gp_macros_changed = pyqtSignal(list)  # (旧) 手柄宏列表变更, 保留兼容
     xmacros_changed = pyqtSignal(list)    # 统一混合宏池变更
+    apps_changed = pyqtSignal(list)       # 应用池变更
 
     LEFT_W = 340
     RIGHT_W = 560
@@ -352,7 +353,7 @@ class ButtonEditorDialog(QDialog):
     MAX_MACROS = 20
     C_MACRO = "#8B5CF6"  # 宏 tag 紫色
 
-    def __init__(self, item, parent=None, macros=None, gp_macros=None, xmacros=None):
+    def __init__(self, item, parent=None, macros=None, gp_macros=None, xmacros=None, apps=None):
         super().__init__(parent)
         self._item = item
         self.data = item.data
@@ -363,6 +364,8 @@ class ButtonEditorDialog(QDialog):
                        and getattr(self.data, 'btn_type', '') == BTN_TYPE_GP_BUTTON)
         # 统一混合宏池 (xmacros) — UI 渲染/CRUD 引用; 兼容旧 macros/gp_macros (已在加载时迁入)
         self._macros = list(xmacros) if xmacros else []
+        # 应用池 (apps) — [{name, path}]
+        self._apps = [dict(a) for a in apps] if apps else []
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -883,6 +886,27 @@ class ButtonEditorDialog(QDialog):
         storage_key = GP_LABEL_TO_KEY.get(label, label)
         self._on_key_clicked(GP_KEY_PREFIX + storage_key)
 
+    def _build_app_tab(self, fn):
+        from views.app_palette import AppPaletteWidget
+        w = AppPaletteWidget(fn)
+        w.app_clicked.connect(self._on_app_clicked)
+        return w
+
+    def _on_app_clicked(self, app: dict):
+        """应用面板点击 → 合并进应用池 + 插入 app:<名称> 到聚焦输入"""
+        name = app.get('name', '')
+        path = app.get('path', '')
+        if not name:
+            return
+        for a in self._apps:
+            if a.get('name') == name:
+                a['path'] = path
+                break
+        else:
+            self._apps.append({'name': name, 'path': path})
+        self.apps_changed.emit(self._apps)
+        self._on_key_clicked(APP_PREFIX + name)
+
     def _on_focus_changed(self, widget):
         self._focus_widget = widget
 
@@ -1041,8 +1065,10 @@ class ButtonEditorDialog(QDialog):
         self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
         self._tab_gp_btn = QPushButton(t("macro.tab_gp"))
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
+        self._tab_app_btn = QPushButton(t("app.tab"))
         for i, btn in enumerate((self._tab_keys_btn, self._tab_gp_btn,
-                                 self._tab_mouse_btn, self._tab_macros_btn)):
+                                 self._tab_mouse_btn, self._tab_macros_btn,
+                                 self._tab_app_btn)):
             btn.setFixedHeight(34)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFont(_make_font(fn, 14, bold=True))
@@ -1060,6 +1086,7 @@ class ButtonEditorDialog(QDialog):
         self._tab_stack.addWidget(self._build_gp_palette(fn))     # 1 手柄
         self._tab_stack.addWidget(self._build_mouse_palette(fn))  # 2 鼠标
         self._tab_stack.addWidget(self._build_macro_tab(fn))      # 3 宏
+        self._tab_stack.addWidget(self._build_app_tab(fn))        # 4 应用
         self._macro_tab_idx = 3
 
         panel_lay.addWidget(self._tab_stack, 1)
@@ -1080,7 +1107,8 @@ class ButtonEditorDialog(QDialog):
             border-radius: 0; padding: 0 14px 4px 14px;
         }} QPushButton:hover {{ color: #E0E0E0; }}"""
         for ix, btn in enumerate((self._tab_keys_btn, self._tab_gp_btn,
-                                  self._tab_mouse_btn, self._tab_macros_btn)):
+                                  self._tab_mouse_btn, self._tab_macros_btn,
+                                  self._tab_app_btn)):
             btn.setStyleSheet(sel_style if idx == ix else off_style)
 
     def _build_gp_palette(self, fn):
@@ -1349,17 +1377,23 @@ class ButtonEditorDialog(QDialog):
     def _new_macro(self):
         from views.macro_editor_dialog import MacroEditorDialog
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix')
+        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix', apps=self._apps)
         dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
+        dlg.apps_changed.connect(self._on_nested_apps_changed)
         dlg.exec()
 
     def _edit_macro(self, idx):
         from views.macro_editor_dialog import MacroEditorDialog
         data = copy.deepcopy(self._macros[idx])
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix')
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix', apps=self._apps)
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
+        dlg.apps_changed.connect(self._on_nested_apps_changed)
         dlg.exec()
+
+    def _on_nested_apps_changed(self, apps_list):
+        self._apps = [dict(a) for a in apps_list]
+        self.apps_changed.emit(self._apps)
 
     def _copy_macro(self, idx):
         """复制宏 — deep copy + 名称加 _copy 后缀，直接追加"""

@@ -1066,17 +1066,20 @@ class GpWheelEditorDialog(QDialog):
     def _on_open_mouse_cfg(self):
         """打开 GpWheelMouseDialog — 配置 wheel active 时其他鼠标按键映射"""
         from views.gp_wheel_mouse_dialog import GpWheelMouseDialog
-        # 拿当前统一混合宏池 xmacros (从 scene 当前 profile)
+        # 拿当前统一混合宏池 xmacros + 应用池 apps (从 scene 当前 profile)
         xmacros = []
+        apps = []
         try:
             sc = self._item.scene()
             if sc is not None and hasattr(sc, 'get_config'):
                 cfg = sc.get_config() or {}
                 xmacros = list(cfg.get('xmacros', []) or [])
+                apps = list(cfg.get('apps', []) or [])
         except Exception:
             pass
-        dlg = GpWheelMouseDialog(self._item, parent=self, xmacros=xmacros)
+        dlg = GpWheelMouseDialog(self._item, parent=self, xmacros=xmacros, apps=apps)
         dlg.xmacros_changed.connect(self._on_xmacros_changed)
+        dlg.apps_changed.connect(self._on_apps_changed)
         dlg.exec()      # 模态; 弹窗 _on_save 内部已写回 self._item.data
 
     def _on_xmacros_changed(self, xmacros_list):
@@ -1085,6 +1088,17 @@ class GpWheelEditorDialog(QDialog):
             sc = self._item.scene()
             if sc is not None and hasattr(sc, 'get_config') and sc.get_config() is not None:
                 sc.get_config()['xmacros'] = xmacros_list
+                if hasattr(sc, 'save_config'):
+                    sc.save_config()
+        except Exception:
+            pass
+
+    def _on_apps_changed(self, apps_list):
+        """嵌套鼠标键弹窗里挑了应用 → 写回 scene config 并保存"""
+        try:
+            sc = self._item.scene()
+            if sc is not None and hasattr(sc, 'get_config') and sc.get_config() is not None:
+                sc.get_config()['apps'] = apps_list
                 if hasattr(sc, 'save_config'):
                     sc.save_config()
         except Exception:

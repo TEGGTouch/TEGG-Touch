@@ -5,7 +5,12 @@
     "error_title": "严重错误",
     "error_msg": "程序发生未捕获异常:\n{error}\n请查看 teggtouch.log",
     "dep_missing_title": "依赖缺失",
-    "dep_missing_msg": "错误: 找不到 keyboard 库\n请运行: pip install keyboard"
+    "dep_missing_msg": "错误: 找不到 keyboard 库\n请运行: pip install keyboard",
+    "tab": "应用",
+    "search_placeholder": "搜索应用…",
+    "refresh": "刷新",
+    "loading": "正在扫描本地应用…",
+    "empty": "未找到应用"
   },
   "toolbar": {
     "add_button": "按键",

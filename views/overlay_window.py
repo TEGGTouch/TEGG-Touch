@@ -907,9 +907,11 @@ class OverlayWindow(QGraphicsView):
             from views.gp_stick_editor_dialog import GpStickEditorDialog
             cfg = self._scene.get_config()
             xmacros = cfg.get('xmacros', [])
-            dialog = GpStickEditorDialog(item, self, xmacros=xmacros)
+            apps = cfg.get('apps', [])
+            dialog = GpStickEditorDialog(item, self, xmacros=xmacros, apps=apps)
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             dialog.xmacros_changed.connect(self._on_xmacros_changed)
+            dialog.apps_changed.connect(self._on_apps_changed)
             dialog.saved.connect(lambda it: self._on_button_saved(it))
             dialog.deleted.connect(lambda it: self._on_button_deleted(it))
             dialog.copied.connect(lambda it: self._on_button_copied(it))
@@ -928,9 +930,11 @@ class OverlayWindow(QGraphicsView):
             return
         cfg = self._scene.get_config()
         xmacros = cfg.get('xmacros', [])
-        dialog = ButtonEditorDialog(item, self, xmacros=xmacros)
+        apps = cfg.get('apps', [])
+        dialog = ButtonEditorDialog(item, self, xmacros=xmacros, apps=apps)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.xmacros_changed.connect(self._on_xmacros_changed)
+        dialog.apps_changed.connect(self._on_apps_changed)
         dialog.saved.connect(lambda data: self._on_button_saved(item))
         dialog.deleted.connect(lambda it: self._on_button_deleted(it))
         dialog.copied.connect(lambda it: self._on_button_copied(it))
@@ -980,6 +984,13 @@ class OverlayWindow(QGraphicsView):
             self._scene.get_config()['xmacros'] = xmacros_list
             self._scene.save_config()
             logger.info("XMacros updated: %d macros", len(xmacros_list))
+
+    def _on_apps_changed(self, apps_list):
+        """应用池变更 → 写入 config 并保存"""
+        if self._scene.get_config() is not None:
+            self._scene.get_config()['apps'] = apps_list
+            self._scene.save_config()
+            logger.info("Apps updated: %d apps", len(apps_list))
 
     def _on_dialog_destroyed(self, attr_name):
         """弹窗销毁时清理引用的统一槽方法"""
@@ -1078,10 +1089,12 @@ class OverlayWindow(QGraphicsView):
         voice_auto_start = config.get('voice_auto_start', True)
         voice_chunk_size = config.get('voice_chunk_size', None)
         xmacros = config.get('xmacros', [])
-        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, xmacros=xmacros, voice_auto_start=voice_auto_start, voice_chunk_size=voice_chunk_size)
+        apps = config.get('apps', [])
+        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, xmacros=xmacros, voice_auto_start=voice_auto_start, voice_chunk_size=voice_chunk_size, apps=apps)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_voice'))
         dialog.xmacros_changed.connect(self._on_xmacros_changed)
+        dialog.apps_changed.connect(self._on_apps_changed)
         dialog.settings_saved.connect(self._on_voice_settings_saved)
         self._dlg_voice = dialog
         dialog.show()

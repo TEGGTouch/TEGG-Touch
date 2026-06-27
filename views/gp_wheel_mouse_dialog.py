@@ -19,7 +19,7 @@ from PyQt6.QtGui import QFont
 
 from core.i18n import t, get_font
 from core.constants import (
-    APP_DIR, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
+    APP_DIR, APP_PREFIX, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
     ACTION_COLORS,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
     C_CAT_LABEL,
@@ -74,6 +74,7 @@ class GpWheelMouseDialog(QDialog):
 
     saved = pyqtSignal(object)   # 保存时发出 (wheel item), 主编辑器可监听刷新
     xmacros_changed = pyqtSignal(list)   # 统一混合宏池变更
+    apps_changed = pyqtSignal(list)      # 应用池变更
 
     LEFT_W = 440
     RIGHT_W = 440
@@ -81,7 +82,7 @@ class GpWheelMouseDialog(QDialog):
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20    # 940
     WIN_H = 720
 
-    def __init__(self, item, parent=None, xmacros=None):
+    def __init__(self, item, parent=None, xmacros=None, apps=None):
         super().__init__(parent)
         self._item = item
         self.data = item.data
@@ -89,6 +90,8 @@ class GpWheelMouseDialog(QDialog):
         self._tag_inputs: dict[str, TagInput] = {}
         # 统一混合宏池 (xmacros) — 兼容旧 gp_macros (已在 config 加载时迁入)
         self._macros = list(xmacros) if xmacros else []
+        # 应用池 (apps) — [{name, path}]
+        self._apps = [dict(a) for a in apps] if apps else []
         self._occupied = _compute_occupied(self.data)
 
         self.setWindowFlags(
@@ -268,8 +271,10 @@ class GpWheelMouseDialog(QDialog):
         self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
         self._tab_gp_btn = QPushButton(t("macro.tab_gp"))
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
+        self._tab_app_btn = QPushButton(t("app.tab"))
         self._tab_btns = (self._tab_keys_btn, self._tab_gp_btn,
-                          self._tab_mouse_btn, self._tab_macros_btn)
+                          self._tab_mouse_btn, self._tab_macros_btn,
+                          self._tab_app_btn)
         for i, b in enumerate(self._tab_btns):
             b.setFixedHeight(34)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -285,6 +290,7 @@ class GpWheelMouseDialog(QDialog):
         self._tab_stack.addWidget(self._build_gp_keys_tab(fn))   # 1 手柄
         self._tab_stack.addWidget(self._build_mouse_tab(fn))     # 2 鼠标
         self._tab_stack.addWidget(self._build_macros_tab(fn))    # 3 宏
+        self._tab_stack.addWidget(self._build_app_tab(fn))       # 4 应用
         wlay.addWidget(self._tab_stack, 1)
         self._switch_tab(0)
         return wrap
@@ -358,6 +364,26 @@ class GpWheelMouseDialog(QDialog):
         populate_gp_palette(lay, fn, self._on_gp_key_clicked, self)
         scroll.setWidget(body)
         return scroll
+
+    def _build_app_tab(self, fn):
+        from views.app_palette import AppPaletteWidget
+        w = AppPaletteWidget(fn)
+        w.app_clicked.connect(self._on_app_clicked)
+        return w
+
+    def _on_app_clicked(self, app: dict):
+        name = app.get('name', '')
+        path = app.get('path', '')
+        if not name:
+            return
+        for a in self._apps:
+            if a.get('name') == name:
+                a['path'] = path
+                break
+        else:
+            self._apps.append({'name': name, 'path': path})
+        self.apps_changed.emit(self._apps)
+        self._insert_to_focused(APP_PREFIX + name)
 
     def _build_macros_tab(self, fn):
         page = QWidget()
@@ -455,8 +481,9 @@ class GpWheelMouseDialog(QDialog):
     def _new_macro(self):
         from views.macro_editor_dialog import MacroEditorDialog
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix')
+        dlg = MacroEditorDialog(existing_names=names, parent=self, mode='mix', apps=self._apps)
         dlg.macro_saved.connect(lambda data: self._on_macro_editor_saved(data, -1))
+        dlg.apps_changed.connect(self._on_nested_apps_changed)
         dlg.exec()
 
     def _edit_macro(self, idx):
@@ -464,9 +491,14 @@ class GpWheelMouseDialog(QDialog):
         from views.macro_editor_dialog import MacroEditorDialog
         data = copy.deepcopy(self._macros[idx])
         names = [m.get('name', '') for m in self._macros]
-        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix')
+        dlg = MacroEditorDialog(macro_data=data, existing_names=names, parent=self, mode='mix', apps=self._apps)
         dlg.macro_saved.connect(lambda d: self._on_macro_editor_saved(d, idx))
+        dlg.apps_changed.connect(self._on_nested_apps_changed)
         dlg.exec()
+
+    def _on_nested_apps_changed(self, apps_list):
+        self._apps = [dict(a) for a in apps_list]
+        self.apps_changed.emit(self._apps)
 
     def _delete_macro(self, idx):
         from views.profile_manager_dialog import _StyledConfirmDialog

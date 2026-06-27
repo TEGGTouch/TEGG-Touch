@@ -155,6 +155,7 @@ GP_KEY_TO_LABEL = dict(GP_BUTTONS)         # 存储 key → 显示 label (按钮
 GP_LABEL_TO_KEY = {l: k for k, l in GP_BUTTONS}  # label → 存储 key (编辑器点击时反查)
 
 GP_KEY_PREFIX = "gp:"   # 按键映射字段值的前缀, 区分于 mouse: / macro:
+APP_PREFIX = "app:"     # 启动本地应用的前缀: app:<应用名> (解析自 apps 池)
 
 # 手柄按钮配色 (蓝紫调, 区分键盘按钮)
 COLOR_GP_BTN_BG = "#1A1E2E"

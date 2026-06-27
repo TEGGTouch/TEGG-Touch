@@ -315,6 +315,8 @@ def load_config_from_file(filepath: str) -> dict:
         'macros': [],
         'gp_macros': [],
         'xmacros': [],
+        # 可启动应用池 (per-profile): [{name, path}]; 加载/导入/复制时丢弃 path 失效项
+        'apps': [],
         # 模拟模式 (per-profile): 'keyboard' | 'gamepad'; None 表示该 profile 未设置, 调用方回退
         'sim_mode': None,
         # 外观 (per-profile, None 表示该 profile 未设置, 调用方回退全局 hotkeys 做一次性迁移)
@@ -425,6 +427,9 @@ def load_config_from_file(filepath: str) -> dict:
         raw_xmacros = data.get('xmacros', [])
         if isinstance(raw_xmacros, list):
             result['xmacros'] = raw_xmacros
+        # 应用池: 加载即校验, 丢弃本机 path 失效的条目 (导入/复制 同理)
+        from core.app_scanner import validate_apps
+        result['apps'] = validate_apps(data.get('apps', []))
         # 模拟模式 (per-profile)
         raw_sim = data.get('sim_mode')
         if raw_sim in ('keyboard', 'gamepad'):
@@ -496,6 +501,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          macros=None,
                          gp_macros=None,
                          xmacros=None,
+                         apps=None,
                          sim_mode=None,
                          wheel_style=None,
                          cursor_styles=None,
@@ -607,6 +613,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['gp_macros'] = gp_macros
     if xmacros is not None:
         data['xmacros'] = xmacros
+    if apps is not None:
+        data['apps'] = apps
 
     # 模拟模式 (per-profile)
     if sim_mode in ('keyboard', 'gamepad'):
