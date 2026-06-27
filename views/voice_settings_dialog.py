@@ -75,9 +75,10 @@ class _LangBtn(QPushButton):
 class _CheckToggle(QWidget):
     """带勾号的自定义 checkbox — 点击切换选中状态。"""
 
-    def __init__(self, text, fn, checked=True, parent=None, label_px=14):
+    def __init__(self, text, fn, checked=True, parent=None, label_px=14, accent=None):
         super().__init__(parent)
         self._checked = checked
+        self._accent = accent or C_CYBER
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet("background: transparent;")
 
@@ -118,7 +119,7 @@ class _CheckToggle(QWidget):
             icon = "\uE73E" if _ICON_FONT else "\u2713"
             self._box.setText(icon)
             self._box.setStyleSheet(
-                f"background: {C_CYBER}; color: #FFF;"
+                f"background: {self._accent}; color: #FFF;"
                 " border-radius: 4px;"
             )
         else:
@@ -658,19 +659,20 @@ class VoiceSettingsDialog(QDialog):
 
         # 指令列表
         self._cmd_list = QListWidget()
+        # 列表本身无底色/无边框; 每个条目=灰底小圆角矩形, 条目间距 5px
         self._cmd_list.setStyleSheet(f"""
             QListWidget {{
-                background: {C_INPUT_BG};
-                border: 1px solid #3A3A3A; border-radius: 6px;
+                background: transparent; border: none;
                 color: #E0E0E0; outline: none;
             }}
             QListWidget::item {{
-                padding: 8px 10px; border-bottom: 1px solid #2A2A2A;
+                background: {C_GRAY}; border-radius: 6px;
+                padding: 8px 10px; margin-bottom: 5px;
             }}
             QListWidget::item:selected {{
-                background: {C_CYBER}; color: #FFF;
+                background: {C_GREEN}; color: #1A1A1A;
             }}
-            QListWidget::item:hover {{ background: #353535; }}
+            QListWidget::item:hover {{ background: {C_GRAY_H}; }}
             QScrollBar:vertical {{
                 background: transparent; width: 8px; border: none;
             }}
@@ -691,10 +693,10 @@ class VoiceSettingsDialog(QDialog):
         add_btn.setFont(_make_font(fn, 14))
         add_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_GRAY}; color: #E0E0E0;
+                background: {C_GREEN}; color: #1A1A1A;
                 border: none; border-radius: 6px;
             }}
-            QPushButton:hover {{ background: {C_GRAY_H}; }}
+            QPushButton:hover {{ background: {C_GREEN_H}; }}
         """)
         add_btn.clicked.connect(self._on_add_command)
         v.addWidget(add_btn)
@@ -726,7 +728,8 @@ class VoiceSettingsDialog(QDialog):
         mic_row.addStretch()
         # 运行时启用语音 — 右对齐到麦克风状态行, 字号与左侧一致 (省一行)
         self._auto_start_cb = _CheckToggle(
-            t("voice_dialog.auto_start"), fn, checked=self._auto_start, label_px=11)
+            t("voice_dialog.auto_start"), fn, checked=self._auto_start,
+            label_px=11, accent=C_GREEN)
         mic_row.addWidget(self._auto_start_cb)
         col.addLayout(mic_row)
 
@@ -757,19 +760,31 @@ class VoiceSettingsDialog(QDialog):
         test_row = QHBoxLayout()
         test_row.setSpacing(6)
 
-        # 设置 (识别延迟) — 齿轮 + 「设置」文本, 略宽以放下文本
-        self._chunk_btn = QPushButton(f"⚙ {t('voice_dialog.settings_btn')}")
+        # 设置 (识别延迟) — Segoe Fluent 齿轮 icon + 「设置」文本 (内嵌两 label 混排字体)
+        # 用 _LangBtn (按内部 layout 算 sizeHint), 否则普通 QPushButton 不撑开宽度
+        self._chunk_btn = _LangBtn()
         self._chunk_btn.setFixedHeight(32)
         self._chunk_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._chunk_btn.setToolTip(t("voice_dialog.chunk_tooltip"))
-        self._chunk_btn.setFont(_make_font(fn, 13))
         self._chunk_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px; padding: 0 14px;
+                background: {C_GRAY}; border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
+        _cb_lay = QHBoxLayout(self._chunk_btn)
+        _cb_lay.setContentsMargins(14, 0, 14, 0)
+        _cb_lay.setSpacing(6)
+        _cb_gear = QLabel("" if _ICON_FONT else "⚙")
+        _cb_gear.setFont(_make_font(_ICON_FONT, 15) if _ICON_FONT else _make_font(fn, 15))
+        _cb_gear.setStyleSheet("color: #E0E0E0; background: transparent;")
+        _cb_gear.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        _cb_lay.addWidget(_cb_gear)
+        _cb_txt = QLabel(t("voice_dialog.settings_btn"))
+        _cb_txt.setFont(_make_font(fn, 13))
+        _cb_txt.setStyleSheet("color: #E0E0E0; background: transparent;")
+        _cb_txt.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        _cb_lay.addWidget(_cb_txt)
         self._chunk_btn.clicked.connect(self._on_open_chunk_dialog)
         test_row.addWidget(self._chunk_btn)
 
@@ -934,10 +949,10 @@ class VoiceSettingsDialog(QDialog):
         save_btn.setFont(_make_font(fn, 16, bold=True))
         save_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_CYBER}; color: #FFF;
+                background: {C_GREEN}; color: #1A1A1A;
                 border: none; border-radius: 6px;
             }}
-            QPushButton:hover {{ background: {C_CYBER_H}; }}
+            QPushButton:hover {{ background: {C_GREEN_H}; }}
         """)
         save_btn.clicked.connect(self._on_save)
         del_save_row.addWidget(save_btn, 1)
@@ -1348,7 +1363,7 @@ class VoiceSettingsDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = f"QPushButton {{ background: transparent; color: #FFF; border: none; border-bottom: 2px solid {C_CYBER_H}; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #FFF; }}"
+        sel = f"QPushButton {{ background: transparent; color: #FFF; border: none; border-bottom: 2px solid {C_GREEN}; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #FFF; }}"
         off = f"QPushButton {{ background: transparent; color: #AAA; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #E0E0E0; }}"
         for ix, b in enumerate(self._tab_btns):
             b.setStyleSheet(sel if idx == ix else off)
@@ -1673,10 +1688,10 @@ class VoiceSettingsDialog(QDialog):
             if k == self._current_action:
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        background: {C_CYBER}; color: #FFF;
+                        background: {C_GREEN}; color: #1A1A1A;
                         border: none; border-radius: 6px; padding: 0 12px;
                     }}
-                    QPushButton:hover {{ background: {C_CYBER_H}; }}
+                    QPushButton:hover {{ background: {C_GREEN_H}; }}
                 """)
             else:
                 btn.setStyleSheet(f"""
