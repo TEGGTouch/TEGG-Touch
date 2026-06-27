@@ -549,12 +549,16 @@ class VoiceSettingsDialog(QDialog):
     WIN_H = 960
     COL3_W = WIN_W - PADDING * 2 - COL1_W - COL2_W - GUTTER * 2 - 2  # = 538
 
-    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, xmacros=None, voice_auto_start=True, voice_chunk_size=None, apps=None):
+    def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, xmacros=None, voice_auto_start=True, voice_chunk_size=None, apps=None, recenter_targets=None):
         super().__init__(parent)
         # 统一混合宏池 (xmacros) — 兼容旧 macros (已在 config 加载时迁入)
         self._macros = list(xmacros) if xmacros else []
         # 应用池 (apps) — [{name, path}]
         self._apps = [dict(a) for a in apps] if apps else []
+        # 回中目标 (当前布局) + 行为模式状态
+        self._recenter_targets = [dict(x) for x in (recenter_targets or [])]
+        self._current_mode = 'key'              # 'key' | 'recenter'
+        self._current_recenter_target = 'screen'
         # 深拷贝防止编辑过程影响外部数据 (失败时还能 cancel)
         self._commands = [dict(c) for c in (voice_commands or [])]
         self._language = voice_language or get_lang()
@@ -905,22 +909,27 @@ class VoiceSettingsDialog(QDialog):
         self._phrase_edit.textChanged.connect(self._on_phrase_changed)
         form.addWidget(self._phrase_edit)
 
-        # 触发按键 (TagInput)
+        # 行为卡片 (上下两张, 选中绿框+「选中」tag, 操作包在卡内)
+        self._cards = {}
+
+        # —— 卡A「触发按键」body: 按键 + 动作 ——
+        self._key_config_box = QWidget()
+        self._key_config_box.setStyleSheet("background: transparent;")
+        kform = QVBoxLayout(self._key_config_box)
+        kform.setContentsMargins(0, 0, 0, 0)
+        kform.setSpacing(10)
         keys_lbl = QLabel(t("voice_dialog.keys"))
-        keys_lbl.setFont(_make_font(fn, 14))
+        keys_lbl.setFont(_make_font(fn, 13))
         keys_lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
-        form.addWidget(keys_lbl)
+        kform.addWidget(keys_lbl)
         self._keys_input = TagInput(initial_value="", accent_color=C_AMBER)
         self._keys_input.setMinimumHeight(36)
         self._keys_input.focusChanged.connect(self._on_focus_changed)
-        # TagInput 没有 textChanged 信号; 编辑(add/remove tag)后用一个 timer 同步
-        form.addWidget(self._keys_input)
-
-        # 动作
+        kform.addWidget(self._keys_input)
         act_lbl = QLabel(t("voice_dialog.action"))
-        act_lbl.setFont(_make_font(fn, 14))
+        act_lbl.setFont(_make_font(fn, 13))
         act_lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
-        form.addWidget(act_lbl)
+        kform.addWidget(act_lbl)
         act_row = QHBoxLayout()
         act_row.setSpacing(6)
         self._action_btns = {}
@@ -929,15 +938,29 @@ class VoiceSettingsDialog(QDialog):
                           ('press', t("voice_dialog.action_press")),
                           ('release', t("voice_dialog.action_release"))):
             btn = QPushButton(label)
-            btn.setFixedHeight(36)
+            btn.setFixedHeight(34)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFont(_make_font(fn, 13))
             btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.clicked.connect(lambda _, kk=k: self._on_action_clicked(kk))
             act_row.addWidget(btn)
             self._action_btns[k] = btn
-        form.addLayout(act_row)
+        kform.addLayout(act_row)
         self._update_action_btn_styles()
+        form.addWidget(self._build_behavior_card(
+            fn, 'key', t('voice_dialog.mode_key'), self._key_config_box))
+
+        # —— 卡B「触发回中」: 回中目标在右栏选择, 卡内仅放提示 ——
+        from views.recenter_palette import RecenterPaletteWidget
+        self._recenter_palette = RecenterPaletteWidget(
+            self._recenter_targets, current_key='screen', fn=fn)
+        self._recenter_palette.target_selected.connect(self._on_recenter_target_selected)
+        rc_hint = QLabel(t('voice_dialog.recenter_hint'))
+        rc_hint.setFont(_make_font(fn, 12))
+        rc_hint.setStyleSheet("color: #888; background: transparent;")
+        rc_hint.setWordWrap(True)
+        form.addWidget(self._build_behavior_card(
+            fn, 'recenter', t('voice_dialog.mode_recenter'), rc_hint))
 
         form.addStretch()
 
@@ -1366,7 +1389,13 @@ class VoiceSettingsDialog(QDialog):
         self._tab_stack.addWidget(self._build_app_tab(fn))          # 4 应用
         panel_lay.addWidget(self._tab_stack, 1)
         self._switch_tab(0)
-        return panel
+
+        # 外层: 候选Tab(触发按键模式) ⇄ 回中目标(回中模式) 两页切换
+        self._col3_stack = QStackedWidget()
+        self._col3_stack.setStyleSheet("background: transparent;")
+        self._col3_stack.addWidget(panel)                   # 0 候选 Tab
+        self._col3_stack.addWidget(self._recenter_palette)  # 1 回中目标
+        return self._col3_stack
 
     def _build_gp_palette(self, fn):
         scroll = QScrollArea()
@@ -1712,23 +1741,38 @@ class VoiceSettingsDialog(QDialog):
         self._update_editor_visibility()
 
     def _load_command_to_editor(self, cmd: dict):
-        """把 cmd 内容载入编辑器 widgets。"""
+        """把 cmd 内容载入编辑器 widgets (含行为模式)。"""
         self._phrase_edit.blockSignals(True)
         self._phrase_edit.setText(cmd.get('phrase', ''))
         self._phrase_edit.blockSignals(False)
-        # TagInput 没有 setValue 方法, 重置 tags 列表后重建
-        self._keys_input.tags = [p.strip() for p in cmd.get('keys', '').split('+') if p.strip()]
+        raw_keys = str(cmd.get('keys', '') or '')
+        # 模式: 显式 mode 字段优先; 否则按 keys 是否 recenter: 前缀推断 (兼容旧数据)
+        self._current_mode = cmd.get('mode') or (
+            'recenter' if raw_keys.startswith('recenter:') else 'key')
+        self._current_recenter_target = cmd.get('recenter_target') or (
+            raw_keys[len('recenter:'):] if raw_keys.startswith('recenter:') else 'screen')
+        # key 模式按键标签 (recenter 模式不把 recenter: 当标签显示)
+        kshow = '' if self._current_mode == 'recenter' else raw_keys
+        self._keys_input.tags = [p.strip() for p in kshow.split('+') if p.strip()]
         self._keys_input._build_tags()
         self._current_action = cmd.get('action', 'click')
         self._update_action_btn_styles()
+        self._refresh_cards()
 
     def _pull_editor_to_command(self):
-        """把编辑器当前值回写到 _commands[_current_idx] (主要为 TagInput 同步)。"""
+        """把编辑器当前值回写到 _commands[_current_idx] (含行为模式)。"""
         if not (0 <= self._current_idx < len(self._commands)):
             return
-        self._commands[self._current_idx]['phrase'] = self._phrase_edit.text().strip()
-        self._commands[self._current_idx]['keys'] = self._keys_input.get_value()
-        self._commands[self._current_idx]['action'] = self._current_action
+        cmd = self._commands[self._current_idx]
+        cmd['phrase'] = self._phrase_edit.text().strip()
+        cmd['mode'] = self._current_mode
+        if self._current_mode == 'recenter':
+            cmd['recenter_target'] = self._current_recenter_target
+            cmd['keys'] = 'recenter:' + self._current_recenter_target
+            cmd['action'] = 'click'
+        else:
+            cmd['keys'] = self._keys_input.get_value()
+            cmd['action'] = self._current_action
 
     def _on_phrase_changed(self, text):
         if 0 <= self._current_idx < len(self._commands):
@@ -1759,6 +1803,74 @@ class VoiceSettingsDialog(QDialog):
                     }}
                     QPushButton:hover {{ background: #505050; }}
                 """)
+
+    # ── 行为卡片 (触发按键 / 触发回中) ──
+
+    def _build_behavior_card(self, fn, mode, title, body):
+        """一张行为卡: 头部(标题 + 选中tag/点击提示) + body(操作); 整卡可点选中。"""
+        frame = QFrame()
+        frame.setObjectName(f"behcard_{mode}")
+        gl = QVBoxLayout(frame)
+        gl.setContentsMargins(14, 10, 14, 14)
+        gl.setSpacing(10)
+
+        header = QWidget()
+        header.setStyleSheet("background: transparent;")
+        header.setCursor(Qt.CursorShape.PointingHandCursor)
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(8)
+        tlbl = QLabel(title)
+        tlbl.setFont(_make_font(fn, 15, bold=True))
+        tlbl.setStyleSheet("color: #FFF; background: transparent;")
+        hl.addWidget(tlbl)
+        tag = QLabel(t('voice_dialog.mode_selected'))
+        tag.setFont(_make_font(fn, 11, bold=True))
+        tag.setStyleSheet("color: #000; background: #10B981; border-radius: 9px; padding: 1px 10px;")
+        hl.addWidget(tag)
+        hl.addStretch()
+        hint = QLabel(t('voice_dialog.card_click_hint'))
+        hint.setFont(_make_font(fn, 11))
+        hint.setStyleSheet("color: #777; background: transparent;")
+        hl.addWidget(hint)
+        header.mousePressEvent = lambda e, m=mode: self._on_card_selected(m)
+        gl.addWidget(header)
+        gl.addWidget(body)
+        frame.mousePressEvent = lambda e, m=mode: self._on_card_selected(m)
+
+        self._cards[mode] = {'frame': frame, 'tag': tag, 'hint': hint, 'body': body}
+        return frame
+
+    def _on_card_selected(self, mode):
+        self._current_mode = mode
+        if 0 <= self._current_idx < len(self._commands):
+            self._commands[self._current_idx]['mode'] = mode
+        self._refresh_cards()
+
+    def _refresh_cards(self):
+        for mode, c in self._cards.items():
+            active = (mode == self._current_mode)
+            c['tag'].setVisible(active)
+            c['hint'].setVisible(not active)
+            c['body'].setVisible(active)
+            border = '#10B981' if active else '#3A3A3A'
+            bg = '#202A24' if active else '#1E1E1E'
+            c['frame'].setStyleSheet(
+                f"QFrame#behcard_{mode} {{ background: {bg}; "
+                f"border: 2px solid {border}; border-radius: 10px; }}")
+        # 右栏跟随模式: 触发按键→候选Tab; 回中→回中目标列表
+        if hasattr(self, '_col3_stack'):
+            if self._current_mode == 'recenter':
+                self._recenter_palette.set_targets(
+                    self._recenter_targets, current_key=self._current_recenter_target)
+                self._col3_stack.setCurrentIndex(1)
+            else:
+                self._col3_stack.setCurrentIndex(0)
+
+    def _on_recenter_target_selected(self, key):
+        self._current_recenter_target = key
+        if 0 <= self._current_idx < len(self._commands):
+            self._commands[self._current_idx]['recenter_target'] = key
 
     def _on_add_command(self):
         new_cmd = {'phrase': '', 'keys': '', 'action': 'click'}

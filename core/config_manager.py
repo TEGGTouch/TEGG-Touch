@@ -51,6 +51,35 @@ def _migrate_to_scene_scale(data: dict) -> bool:
     return True
 
 
+def _migrate_stick_names(data: dict) -> bool:
+    """给未命名的摇杆补默认名 未命名NN (历史 profile 兼容)。
+    多个空名摇杆会撞车导致回中按名引用无法区分, 故加载时一次性补唯一名。"""
+    import re
+    from core.constants import BTN_TYPE_GP_STICK
+    buttons = data.get('buttons')
+    if not isinstance(buttons, list):
+        return False
+    sticks = [b for b in buttons if isinstance(b, dict)
+              and b.get('type') == BTN_TYPE_GP_STICK]
+    if not sticks:
+        return False
+    nums = []
+    for b in sticks:
+        m = re.match(r'^未命名(\d+)', (b.get('name') or ''))
+        if m:
+            nums.append(int(m.group(1)))
+    nxt = (max(nums) + 1) if nums else 1
+    changed = False
+    for b in sticks:
+        if not (b.get('name') or '').strip():
+            b['name'] = f"未命名{nxt:02d}"
+            nxt += 1
+            changed = True
+    if changed:
+        logger.info("摇杆补默认名 未命名NN (历史兼容)")
+    return changed
+
+
 def _migrate_to_center_coords(data: dict) -> bool:
     """将旧版左上角原点坐标迁移为中心原点坐标。
     
@@ -334,8 +363,10 @@ def load_config_from_file(filepath: str) -> dict:
         
         # 自动迁移: grid_size 旧缩放语义 → scene_scale + 固定网格 100
         migrated_scale = _migrate_to_scene_scale(data)
+        # 自动迁移: 给历史未命名摇杆补默认名 未命名NN
+        migrated_names = _migrate_stick_names(data)
         # 自动迁移旧坐标系（左上角原点 → 中心原点）
-        if _migrate_to_center_coords(data) or migrated_scale:
+        if _migrate_to_center_coords(data) or migrated_scale or migrated_names:
             # 迁移后立即回写文件，避免重复迁移
             try:
                 with open(filepath, 'w', encoding='utf-8') as fw:

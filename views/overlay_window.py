@@ -894,10 +894,12 @@ class OverlayWindow(QGraphicsView):
                 lambda _=None, _it=item: setattr(_it, '_editor_dialog', None))
 
         if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_CENTER_BAND:
-            dialog = CenterBandDialog(item, self)
+            targets = self._scene.list_recenter_targets()
+            dialog = CenterBandDialog(item, self, recenter_targets=targets)
             dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
             dialog.deleted.connect(lambda it: self._on_button_deleted(it))
             dialog.copied.connect(lambda it: self._on_button_copied(it))
+            dialog.saved.connect(lambda it: self._on_button_saved(it))
             _register(dialog)
             dialog.show()
             return
@@ -1090,7 +1092,8 @@ class OverlayWindow(QGraphicsView):
         voice_chunk_size = config.get('voice_chunk_size', None)
         xmacros = config.get('xmacros', [])
         apps = config.get('apps', [])
-        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, xmacros=xmacros, voice_auto_start=voice_auto_start, voice_chunk_size=voice_chunk_size, apps=apps)
+        recenter_targets = self._scene.list_recenter_targets()
+        dialog = VoiceSettingsDialog(voice_commands, voice_language, voice_mic_device, self, xmacros=xmacros, voice_auto_start=voice_auto_start, voice_chunk_size=voice_chunk_size, apps=apps, recenter_targets=recenter_targets)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_voice'))
         dialog.xmacros_changed.connect(self._on_xmacros_changed)

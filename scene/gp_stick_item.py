@@ -33,6 +33,18 @@ _STICK_WARN_COLOR = "#E11D48"
 _STICK_WARN_THRESHOLD = 0.85
 
 
+def stick_display_name(data) -> str:
+    """摇杆显示名: 默认名(未命名NN)追加模式后缀 L/R/WASD(动态); 用户改名则原样。"""
+    mode = getattr(data, 'mode', 'analog')
+    suffix = 'WASD' if mode == 'wasd' else (getattr(data, 'stick_id', 'L') or 'L')
+    name = (getattr(data, 'name', '') or '').strip()
+    if not name:
+        return f"未命名 {suffix}"
+    if name.startswith('未命名'):
+        return f"{name} {suffix}"
+    return name
+
+
 def _gp_display(key: str) -> str:
     """gp:LB → 左肩 LB; gpmacro:Foo → Foo; 其它 → 原样"""
     if not key:

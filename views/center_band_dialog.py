@@ -46,14 +46,16 @@ class CenterBandDialog(QDialog):
 
     deleted = pyqtSignal(object)
     copied = pyqtSignal(object)
+    saved = pyqtSignal(object)
 
     WIN_W = 420
-    WIN_H = 340
+    WIN_H = 560
     PADDING = 20
 
-    def __init__(self, item, parent=None):
+    def __init__(self, item, parent=None, recenter_targets=None):
         super().__init__(parent)
         self._item = item
+        self._recenter_targets = list(recenter_targets or [{'key': 'screen', 'label': t('recenter.screen')}])
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -134,7 +136,31 @@ class CenterBandDialog(QDialog):
         sub.setWordWrap(True)
         root.addWidget(sub)
 
-        root.addStretch()
+        root.addSpacing(10)
+
+        # ── 回中目标选择 ──
+        from views.recenter_palette import RecenterPaletteWidget
+        cur = getattr(self._item.data, 'recenter_target', 'screen') or 'screen'
+        self._picker = RecenterPaletteWidget(self._recenter_targets, current_key=cur, fn=fn)
+        self._picker.target_selected.connect(self._on_target_selected)
+        root.addWidget(self._picker, 1)
+
+        root.addSpacing(8)
+
+        # ── 保存按钮 ──
+        from core.constants import C_CYBER, C_CYBER_H
+        save_btn = QPushButton(t("gp_stick_editor.save"))
+        save_btn.setFixedHeight(40)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setFont(_make_font(fn, 18, bold=True))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton:hover {{ background: {C_CYBER_H}; }}
+        """)
+        save_btn.clicked.connect(self._on_save)
+        root.addWidget(save_btn)
+
+        root.addSpacing(8)
 
         # ── 复制按钮 ──
         copy_btn = QPushButton(t("editor.copy"))
@@ -169,6 +195,14 @@ class CenterBandDialog(QDialog):
         root.addWidget(del_btn)
 
     # ── 回调 ──
+
+    def _on_target_selected(self, key):
+        self._item.data.recenter_target = key
+
+    def _on_save(self):
+        self._item.data.recenter_target = self._picker.current_key()
+        self.saved.emit(self._item)
+        self.accept()
 
     def _on_copy(self):
         self.copied.emit(self._item)

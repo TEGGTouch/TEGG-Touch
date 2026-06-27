@@ -19,6 +19,8 @@ class ButtonData:
     h: float = 100.0
     name: str = "按钮"
     btn_type: str = "normal"       # normal | center_band
+    # 回中带专用: 回中目标 (screen=屏幕中心 | center_ring | wheel | stick:<名称>)
+    recenter_target: str = "screen"
 
     # 按键映射
     hover: str = ""

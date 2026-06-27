@@ -481,7 +481,12 @@
     "chunk_slower": "Stabler · slower",
     "chunk_reset": "Reset to default",
     "chunk_cancel": "Cancel",
-    "settings_btn": "Settings"
+    "settings_btn": "Settings",
+    "mode_key": "Key trigger",
+    "mode_recenter": "Re-center",
+    "mode_selected": "Selected",
+    "card_click_hint": "Click to use",
+    "recenter_hint": "Pick a target on the right"
   },
   "macro": {
     "tab_keys": "Keyboard",
@@ -543,5 +548,12 @@
     "downloading_unknown": "Downloading… {done} MB",
     "applying": "Restarting to apply update…",
     "failed": "Update failed: {error}"
+  },
+  "recenter": {
+    "tab": "Re-center target",
+    "screen": "Screen center",
+    "center_ring": "Center ring",
+    "wheel": "Steering wheel",
+    "empty": "No targets"
   }
 }

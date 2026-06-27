@@ -275,6 +275,22 @@ class OverlayScene(QGraphicsScene):
         """公开访问当前配置引用（替代直接访问 _config）"""
         return self._config
 
+    def list_recenter_targets(self) -> list:
+        """当前布局里可回中的目标 [{key,label}]: 屏幕中心 + (中心环) + (方向盘) + 各摇杆。"""
+        from scene.gp_stick_item import GpStickItem, stick_display_name
+        from scene.gp_wheel_item import GpWheelItem
+        targets = [{'key': 'screen', 'label': t('recenter.screen')}]
+        if (self._wheel_visible and self._wheel_center_ring_visible
+                and (self.ring_item is not None or self.inner_ring_item is not None)):
+            targets.append({'key': 'center_ring', 'label': t('recenter.center_ring')})
+        if any(isinstance(it, GpWheelItem) for it in self.button_items):
+            targets.append({'key': 'wheel', 'label': t('recenter.wheel')})
+        for it in self.button_items:
+            if isinstance(it, GpStickItem):
+                targets.append({'key': 'stick:' + (it.data.name or ''),
+                                'label': stick_display_name(it.data)})
+        return targets
+
     # ── 背景绘制 ──
 
     def drawBackground(self, painter: QPainter, rect: QRectF):
@@ -757,7 +773,16 @@ class OverlayScene(QGraphicsScene):
                             if isinstance(it, GpStickItem)}
             stick_id = STICK_ID_RIGHT if STICK_ID_LEFT in existing_ids else STICK_ID_LEFT
 
-        data = GamepadStickData(w=size, h=size, stick_id=stick_id)
+        # 自动命名 未命名NN (序号取现有未命名摇杆最大值+1, 保证唯一便于回中引用)
+        import re
+        nums = []
+        for it in self.button_items:
+            if isinstance(it, GpStickItem):
+                m = re.match(r'^未命名(\d+)', (it.data.name or ''))
+                if m:
+                    nums.append(int(m.group(1)))
+        nxt = (max(nums) + 1) if nums else 1
+        data = GamepadStickData(w=size, h=size, stick_id=stick_id, name=f"未命名{nxt:02d}")
         pos = self._find_empty_slot(data.w, data.h)
         if pos:
             data.x, data.y = pos

@@ -481,7 +481,12 @@
     "chunk_slower": "更稳 · 略慢",
     "chunk_reset": "重置默认",
     "chunk_cancel": "取消",
-    "settings_btn": "设置"
+    "settings_btn": "设置",
+    "mode_key": "触发按键",
+    "mode_recenter": "回中",
+    "mode_selected": "选中",
+    "card_click_hint": "点击启用",
+    "recenter_hint": "在右侧选择回中目标"
   },
   "macro": {
     "tab_keys": "键盘",
@@ -543,5 +548,12 @@
     "downloading_unknown": "正在下载… {done} MB",
     "applying": "正在重启完成升级…",
     "failed": "升级失败: {error}"
+  },
+  "recenter": {
+    "tab": "回中目标",
+    "screen": "屏幕中心",
+    "center_ring": "中心环",
+    "wheel": "方向盘",
+    "empty": "无可回中目标"
   }
 }

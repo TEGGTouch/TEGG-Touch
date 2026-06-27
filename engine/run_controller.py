@@ -354,14 +354,15 @@ class RunController(QObject):
             self.cursor_on_ui.emit(True)
             return  # 摇杆不响应键鼠点击
 
-        # ── 回中带每帧检测 (匹配原版: 每帧 in_rect → SetCursorPos + continue) ──
+        # ── 回中带每帧检测 (in_rect → SetCursorPos 到配置的回中目标中心) ──
         if (active_item is not None
                 and getattr(active_item.data, 'btn_type', '') == BTN_TYPE_CENTER_BAND):
-            _ps = QApplication.primaryScreen()
-            screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
-            cx = screen.x() + screen.width() // 2
-            cy = screen.y() + screen.height() // 2
-            user32.SetCursorPos(cx, cy)
+            target = getattr(active_item.data, 'recenter_target', 'screen') or 'screen'
+            pos = self._resolve_recenter_pos(target)
+            if pos is None:   # 目标失效 → 回退屏幕中心
+                pos = self._resolve_recenter_pos('screen')
+            if pos is not None:
+                user32.SetCursorPos(pos[0], pos[1])
             if hasattr(active_item, 'set_visual_state'):
                 active_item.set_visual_state('hover')
             self.cursor_on_ui.emit(True)
@@ -692,9 +693,12 @@ class RunController(QObject):
         mouse_wheels = []    # mouse:wheelup, mouse:wheeldown
         gp_labels = []       # gp:A, gp:LB, gp:LT 等
         app_targets = []     # app:<应用名> 启动本地应用
+        recenter_targets = []  # recenter:<目标> 光标回中
         for p in parts:
             if p.startswith(APP_PREFIX):
                 app_targets.append(p[len(APP_PREFIX):])
+            elif p.startswith('recenter:'):
+                recenter_targets.append(p[len('recenter:'):])
             elif p.startswith('xmacro:'):
                 x_macro_names.append(p[7:])
             elif p.startswith('gpmacro:'):
@@ -785,6 +789,61 @@ class RunController(QObject):
         if app_targets:
             for name in app_targets:
                 self._launch_app(name)
+
+        # 回中: 光标移到目标中心 (与动作无关; 移到同点是幂等的)
+        if recenter_targets:
+            for tgt in recenter_targets:
+                self._do_recenter(tgt)
+
+    def _resolve_recenter_pos(self, key: str):
+        """回中目标 → 屏幕坐标 (x, y); 解析不到返回 None。
+        key: 'screen' | 'center_ring' | 'wheel' | 'stick:<名称>'"""
+        scene = self._scene
+
+        def _to_screen(scene_pt):
+            try:
+                view_pt = self._window.mapFromScene(scene_pt)
+                sp = self._window.mapToGlobal(view_pt)
+                return int(sp.x()), int(sp.y())
+            except Exception:
+                return None
+
+        if not key or key == 'screen':
+            _ps = QApplication.primaryScreen()
+            screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
+            return (screen.x() + screen.width() // 2,
+                    screen.y() + screen.height() // 2)
+        if key == 'center_ring':
+            item = getattr(scene, 'ring_item', None) or getattr(scene, 'inner_ring_item', None)
+            if item is not None and _is_alive(item):
+                return _to_screen(item.sceneBoundingRect().center())
+            return None
+        if key == 'wheel':
+            from scene.gp_wheel_item import GpWheelItem
+            for it in scene.button_items:
+                if isinstance(it, GpWheelItem) and _is_alive(it):
+                    return _to_screen(it.sceneBoundingRect().center())
+            return None
+        if key.startswith('stick:'):
+            name = key[len('stick:'):]
+            from scene.gp_stick_item import GpStickItem
+            for it in scene.button_items:
+                if (isinstance(it, GpStickItem) and _is_alive(it)
+                        and (it.data.name or '') == name):
+                    return _to_screen(it.circle_center_scene())
+            return None
+        return None
+
+    def _do_recenter(self, key: str):
+        """把光标移到回中目标中心 (目标不存在则静默)。"""
+        pos = self._resolve_recenter_pos(key)
+        if pos is None:
+            logger.warning("回中目标无法解析/不存在: '%s'", key)
+            return
+        try:
+            user32.SetCursorPos(pos[0], pos[1])
+        except Exception as e:
+            logger.warning("回中 SetCursorPos 失败 '%s': %s", key, e)
 
     def _find_app(self, name: str):
         """解析 app:<name> → 启动路径 (先 profile apps 池, 再回退全局扫描缓存)。"""
