@@ -478,9 +478,9 @@
     "chunk_cancel": "取消"
   },
   "macro": {
-    "tab_keys": "常规按键",
-    "tab_mouse": "鼠标操作",
-    "tab_gp": "手柄按钮",
+    "tab_keys": "键盘",
+    "tab_mouse": "鼠标",
+    "tab_gp": "手柄",
     "tab_macros": "自定义宏",
     "macro_list_label": "宏列表",
     "manage": "管理宏",

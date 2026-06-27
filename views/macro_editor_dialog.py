@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLineEdit, QLabel, QSlider, QPushButton, QWidget,
     QScrollArea, QFrame, QApplication, QComboBox,
-    QGraphicsOpacityEffect,
+    QGraphicsOpacityEffect, QStackedWidget,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
@@ -18,6 +18,7 @@ from core.i18n import t, get_font
 from core.constants import GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX
 from views.button_editor_dialog import (
     _get_key_categories, _get_mouse_keys, _FlowWidget, _make_font, _detect_icon_font,
+    populate_gp_palette,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
     C_INPUT_BG, C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL, C_DELAY,
     TagInput,
@@ -524,96 +525,135 @@ class MacroEditorDialog(QDialog):
         self._update_limit_label()
 
     def _build_key_palette(self, fn):
-        """复用 KEY_CATEGORIES 构建键位面板，顶部增加鼠标操作分类"""
+        """候选面板 — 与单配置编辑器一致的 Tab: 键盘 / 手柄 / 鼠标 (宏不能嵌套宏, 无宏页)。
+        mode 决定显示哪些页: mix=三页全有, kb=键盘+鼠标, gp=仅手柄。"""
+        show_kb = self._mode in ('kb', 'mix')   # 键盘 / 鼠标
+        show_gp = self._mode in ('gp', 'mix')   # 手柄按钮
+
+        # 顺序固定: 键盘 → 手柄 → 鼠标
+        specs = []
+        if show_kb:
+            specs.append((t("macro.tab_keys"), self._build_kb_tab))
+        if show_gp:
+            specs.append((t("macro.tab_gp"), self._build_gp_tab))
+        if show_kb:
+            specs.append((t("macro.tab_mouse"), self._build_mouse_tab))
+
+        wrap = QWidget()
+        wrap.setStyleSheet("background: transparent;")
+        wlay = QVBoxLayout(wrap)
+        wlay.setContentsMargins(0, 0, 0, 0)
+        wlay.setSpacing(8)
+
+        tab_row = QHBoxLayout()
+        tab_row.setSpacing(8)
+        self._mtab_btns = []
+        self._mtab_stack = QStackedWidget()
+        self._mtab_stack.setStyleSheet("background: transparent;")
+        for i, (label, builder) in enumerate(specs):
+            b = QPushButton(label)
+            b.setFixedHeight(34)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFont(_make_font(fn, 14, bold=True))
+            b.clicked.connect(lambda _, ix=i: self._switch_macro_tab(ix))
+            tab_row.addWidget(b)
+            self._mtab_btns.append(b)
+            self._mtab_stack.addWidget(builder(fn))
+        tab_row.addStretch()
+        wlay.addLayout(tab_row)
+        wlay.addWidget(self._mtab_stack, 1)
+
+        if self._mtab_btns:
+            self._switch_macro_tab(0)
+        return wrap
+
+    def _switch_macro_tab(self, idx):
+        self._mtab_stack.setCurrentIndex(idx)
+        sel = f"""QPushButton {{
+            background: transparent; color: #FFF; border: none;
+            border-bottom: 2px solid {C_CYBER_H};
+            border-radius: 0; padding: 0 14px 4px 14px;
+        }}"""
+        off = f"""QPushButton {{
+            background: transparent; color: #AAA; border: none;
+            border-bottom: 2px solid transparent;
+            border-radius: 0; padding: 0 14px 4px 14px;
+        }} QPushButton:hover {{ color: #E0E0E0; }}"""
+        for ix, b in enumerate(self._mtab_btns):
+            b.setStyleSheet(sel if idx == ix else off)
+
+    def _macro_scroll(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
-            QScrollBar:vertical {
-                background: transparent; width: 8px; border: none;
-            }
-            QScrollBar::handle:vertical {
-                background: #404040; border-radius: 4px; min-height: 30px;
-            }
+            QScrollBar:vertical { background: transparent; width: 8px; border: none; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
+        return scroll
 
+    def _build_kb_tab(self, fn):
+        """键盘 Tab — KEY_CATEGORIES 分类网格"""
+        scroll = self._macro_scroll()
         content = QWidget()
         content.setStyleSheet("background: transparent;")
         layout = QVBoxLayout(content)
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(0)
-
-        from core.i18n import t as _t
-
-        show_kb = self._mode in ('kb', 'mix')   # 键盘 + 鼠标
-        show_gp = self._mode in ('gp', 'mix')   # 手柄按钮
-
-        if show_kb:
-            # ── 鼠标 + 键盘分类 ──
-            mouse_keys = _get_mouse_keys()
-            mouse_display_names = [label for label, _ in mouse_keys]
-            mouse_tag_values = [tag for _, tag in mouse_keys]
-            self._mouse_name_to_tag = dict(zip(mouse_display_names, mouse_tag_values))
-
-            cat_lbl_mouse = QLabel(f"── {_t('key_cat.mouse_buttons')} ──")
-            cat_lbl_mouse.setFont(_make_font(fn, 13, bold=True))
-            cat_lbl_mouse.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
-            layout.addWidget(cat_lbl_mouse)
-            layout.addSpacing(6)
-
-            mouse_container = QWidget()
-            mouse_container.setStyleSheet("background: transparent;")
-            mouse_flow = _FlowWidget(
-                mouse_display_names,
-                lambda name: self._on_mouse_key_clicked(name),
-                fn, mouse_container
-            )
-            mc_lay = QVBoxLayout(mouse_container)
-            mc_lay.setContentsMargins(0, 0, 0, 0)
-            mc_lay.setSpacing(0)
-            mc_lay.addWidget(mouse_flow)
-            layout.addWidget(mouse_container)
-
-            for i, (cat_name, keys) in enumerate(_get_key_categories()):
+        for i, (cat_name, keys) in enumerate(_get_key_categories()):
+            if i > 0:
                 layout.addSpacing(16)
-                cat_lbl = QLabel(f"── {cat_name} ──")
-                cat_lbl.setFont(_make_font(fn, 13, bold=True))
-                cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
-                layout.addWidget(cat_lbl)
-                layout.addSpacing(6)
-
-                container = QWidget()
-                container.setStyleSheet("background: transparent;")
-                flow = _FlowWidget(keys, self._on_key_clicked, fn, container)
-                c_lay = QVBoxLayout(container)
-                c_lay.setContentsMargins(0, 0, 0, 0)
-                c_lay.setSpacing(0)
-                c_lay.addWidget(flow)
-                layout.addWidget(container)
-
-        if show_gp:
-            # ── 手柄按钮 (label → storage key + gp: 前缀) ──
-            if show_kb:
-                layout.addSpacing(16)
-            cat_lbl_gp = QLabel(f"── {_t('key_cat.gp_buttons')} ──")
-            cat_lbl_gp.setFont(_make_font(fn, 13, bold=True))
-            cat_lbl_gp.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
-            layout.addWidget(cat_lbl_gp)
+            cat_lbl = QLabel(f"── {cat_name} ──")
+            cat_lbl.setFont(_make_font(fn, 13, bold=True))
+            cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+            layout.addWidget(cat_lbl)
             layout.addSpacing(6)
-            gp_labels = [label for _, label in GP_BUTTONS]
-            gp_container = QWidget()
-            gp_container.setStyleSheet("background: transparent;")
-            gp_flow = _FlowWidget(gp_labels, self._on_gp_key_clicked, fn, gp_container)
-            gc_lay = QVBoxLayout(gp_container)
-            gc_lay.setContentsMargins(0, 0, 0, 0)
-            gc_lay.setSpacing(0)
-            gc_lay.addWidget(gp_flow)
-            layout.addWidget(gp_container)
-
+            container = QWidget()
+            container.setStyleSheet("background: transparent;")
+            flow = _FlowWidget(keys, self._on_key_clicked, fn, container)
+            c_lay = QVBoxLayout(container)
+            c_lay.setContentsMargins(0, 0, 0, 0)
+            c_lay.setSpacing(0)
+            c_lay.addWidget(flow)
+            layout.addWidget(container)
         layout.addStretch()
+        scroll.setWidget(content)
+        return scroll
+
+    def _build_mouse_tab(self, fn):
+        """鼠标 Tab — 鼠标按钮 (display → mouse: tag)"""
+        from core.i18n import t as _t
+        mouse_keys = _get_mouse_keys()
+        mouse_display_names = [label for label, _ in mouse_keys]
+        self._mouse_name_to_tag = {label: tag for label, tag in mouse_keys}
+
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 0, 10, 10)
+        layout.setSpacing(0)
+        cat_lbl = QLabel(f"── {_t('key_cat.mouse_buttons')} ──")
+        cat_lbl.setFont(_make_font(fn, 13, bold=True))
+        cat_lbl.setStyleSheet(f"color: {C_CAT_LABEL}; background: transparent;")
+        layout.addWidget(cat_lbl)
+        layout.addSpacing(6)
+        flow = _FlowWidget(mouse_display_names, self._on_mouse_key_clicked, fn)
+        layout.addWidget(flow)
+        layout.addStretch()
+        return page
+
+    def _build_gp_tab(self, fn):
+        """手柄 Tab — 复用 populate_gp_palette (驱动门控 + 安装热重载)"""
+        scroll = self._macro_scroll()
+        content = QWidget()
+        content.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(10, 0, 10, 10)
+        layout.setSpacing(0)
+        populate_gp_palette(layout, fn, self._on_gp_key_clicked, self)
         scroll.setWidget(content)
         return scroll
 

@@ -268,8 +268,8 @@ class GpWheelMouseDialog(QDialog):
         self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
         self._tab_gp_btn = QPushButton(t("macro.tab_gp"))
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
-        self._tab_btns = (self._tab_keys_btn, self._tab_mouse_btn,
-                          self._tab_gp_btn, self._tab_macros_btn)
+        self._tab_btns = (self._tab_keys_btn, self._tab_gp_btn,
+                          self._tab_mouse_btn, self._tab_macros_btn)
         for i, b in enumerate(self._tab_btns):
             b.setFixedHeight(34)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -281,9 +281,9 @@ class GpWheelMouseDialog(QDialog):
 
         self._tab_stack = QStackedWidget()
         self._tab_stack.setStyleSheet("background: transparent;")
-        self._tab_stack.addWidget(self._build_keys_tab(fn))      # 0 常规按键
-        self._tab_stack.addWidget(self._build_mouse_tab(fn))     # 1 鼠标
-        self._tab_stack.addWidget(self._build_gp_keys_tab(fn))   # 2 手柄按钮
+        self._tab_stack.addWidget(self._build_keys_tab(fn))      # 0 键盘
+        self._tab_stack.addWidget(self._build_gp_keys_tab(fn))   # 1 手柄
+        self._tab_stack.addWidget(self._build_mouse_tab(fn))     # 2 鼠标
         self._tab_stack.addWidget(self._build_macros_tab(fn))    # 3 宏
         wlay.addWidget(self._tab_stack, 1)
         self._switch_tab(0)

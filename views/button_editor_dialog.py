@@ -1041,8 +1041,8 @@ class ButtonEditorDialog(QDialog):
         self._tab_mouse_btn = QPushButton(t("macro.tab_mouse"))
         self._tab_gp_btn = QPushButton(t("macro.tab_gp"))
         self._tab_macros_btn = QPushButton(t("macro.tab_macros"))
-        for i, btn in enumerate((self._tab_keys_btn, self._tab_mouse_btn,
-                                 self._tab_gp_btn, self._tab_macros_btn)):
+        for i, btn in enumerate((self._tab_keys_btn, self._tab_gp_btn,
+                                 self._tab_mouse_btn, self._tab_macros_btn)):
             btn.setFixedHeight(34)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFont(_make_font(fn, 14, bold=True))
@@ -1056,9 +1056,9 @@ class ButtonEditorDialog(QDialog):
         # Stacked widget — 固定 4 页
         self._tab_stack = QStackedWidget()
         self._tab_stack.setStyleSheet("background: transparent;")
-        self._tab_stack.addWidget(self._build_key_palette(fn))    # 0 常规按键
-        self._tab_stack.addWidget(self._build_mouse_palette(fn))  # 1 鼠标
-        self._tab_stack.addWidget(self._build_gp_palette(fn))     # 2 手柄按钮
+        self._tab_stack.addWidget(self._build_key_palette(fn))    # 0 键盘
+        self._tab_stack.addWidget(self._build_gp_palette(fn))     # 1 手柄
+        self._tab_stack.addWidget(self._build_mouse_palette(fn))  # 2 鼠标
         self._tab_stack.addWidget(self._build_macro_tab(fn))      # 3 宏
         self._macro_tab_idx = 3
 
@@ -1079,8 +1079,8 @@ class ButtonEditorDialog(QDialog):
             border: none; border-bottom: 2px solid transparent;
             border-radius: 0; padding: 0 14px 4px 14px;
         }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        for ix, btn in enumerate((self._tab_keys_btn, self._tab_mouse_btn,
-                                  self._tab_gp_btn, self._tab_macros_btn)):
+        for ix, btn in enumerate((self._tab_keys_btn, self._tab_gp_btn,
+                                  self._tab_mouse_btn, self._tab_macros_btn)):
             btn.setStyleSheet(sel_style if idx == ix else off_style)
 
     def _build_gp_palette(self, fn):
