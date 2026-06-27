@@ -410,7 +410,14 @@
     "macros_manage_hint": "Create / edit / delete macros in the GP Button editor → Macros tab",
     "copy": "Copy",
     "delete": "Delete",
-    "save": "Save"
+    "save": "Save",
+    "wasd_mode": "WASD",
+    "section_wasd": "Direction Keys",
+    "wasd_hint": "The pad maps to direction keys in 8 sectors; diagonals hold two adjacent keys. Dead zone & release threshold still apply.",
+    "wasd_up": "Up",
+    "wasd_down": "Down",
+    "wasd_left": "Left",
+    "wasd_right": "Right"
   },
   "voice": {
     "status_loading": "Loading voice model...",

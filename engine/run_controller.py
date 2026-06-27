@@ -60,6 +60,17 @@ def _is_alive(item) -> bool:
         return True
 
 
+# WASD 模式 8 扇区 → 方向集映射 (atan2 屏幕坐标, y 向下为正; 索引 = round(angle/45°)%8)
+#   0=右 1=右下 2=下 3=左下 4=左 5=左上 6=上 7=右上
+_WASD_SECTOR_DIRS = (
+    ('right',), ('down', 'right'), ('down',), ('down', 'left'),
+    ('left',), ('up', 'left'), ('up',), ('up', 'right'),
+)
+_WASD_DIR_FIELD = {
+    'up': 'wasd_up', 'down': 'wasd_down', 'left': 'wasd_left', 'right': 'wasd_right',
+}
+
+
 def _wheel_occupied_fields(data) -> set:
     """根据 LT/RT 的 mode + marker_button 算出哪些鼠标动作字段被扳机占用。
     占用 = wheel.data.mouse_* 该字段配了也不生效。"""
@@ -122,6 +133,8 @@ class RunController(QObject):
 
         # 摇杆状态机 — 任一帧只允许一个 active 摇杆 (跨摇杆切换会让旧的释放 + SetCursorPos 跳到新圆心)
         self._active_gp_stick = None  # GpStickItem | None
+        # WASD 模式当前按住的方向集 ({'up','down','left','right'} 子集), 用于边沿 press/release
+        self._stick_wasd_held: set = set()
 
         # 方向盘单例状态 + LT/RT 持久值
         self._active_gp_wheel = None  # GpWheelItem | None
@@ -830,7 +843,10 @@ class RunController(QObject):
         except Exception as e:
             logger.warning("SetCursorPos to stick center failed: %s", e)
         self._active_gp_stick = stick
+        self._stick_wasd_held = set()
         stick.set_stick_visual('active', 0.0, 0.0)
+        if getattr(stick.data, 'mode', 'analog') == 'wasd':
+            return
         gp = GamepadEngine.get()
         if gp is not None:
             gp.set_stick(stick.data.stick_id, 0.0, 0.0)
@@ -851,10 +867,15 @@ class RunController(QObject):
                     key = getattr(stick.data, key_field, '')
                     if key:
                         self._smart_trigger(key, 'r')
+            # WASD 模式: 松开所有按住的方向键, 防卡键
+            if getattr(stick.data, 'mode', 'analog') == 'wasd':
+                self._apply_wasd_dirs(stick, set())
             stick.set_stick_visual('idle', 0.0, 0.0)
-            gp = GamepadEngine.get()
-            if gp is not None:
-                gp.set_stick(stick.data.stick_id, 0.0, 0.0)
+            if getattr(stick.data, 'mode', 'analog') != 'wasd':
+                gp = GamepadEngine.get()
+                if gp is not None:
+                    gp.set_stick(stick.data.stick_id, 0.0, 0.0)
+        self._stick_wasd_held = set()
         self._active_gp_stick = None
 
     def _poll_stick_mouse_actions(self, stick):
@@ -893,8 +914,12 @@ class RunController(QObject):
 
     def _update_stick_value(self, stick, scene_pos, sticking: bool):
         """根据 cursor 位置算 stick 值 (含死区/曲线/八向锁) + 更新视觉 + 引擎
-        八方向锁定时, 视觉小球位置 AND 引擎值都吸附到 8 个固定方向。"""
+        八方向锁定时, 视觉小球位置 AND 引擎值都吸附到 8 个固定方向。
+        WASD 模式走独立分支 (按方向键, 不输出摇杆轴)。"""
         import math
+        if getattr(stick.data, 'mode', 'analog') == 'wasd':
+            self._update_stick_wasd(stick, scene_pos, sticking)
+            return
         center = stick.circle_center_scene()
         dx = scene_pos.x() - center.x()
         dy = scene_pos.y() - center.y()
@@ -964,6 +989,65 @@ class RunController(QObject):
             gp.set_stick(stick.data.stick_id,
                          max(-1.0, min(1.0, out_x)),
                          max(-1.0, min(1.0, -out_y)))
+
+    def _update_stick_wasd(self, stick, scene_pos, sticking: bool):
+        """WASD 模式: 圆盘 8 扇区 → 方向键。死区内中性 (全松);
+        死区外按角度吸附到 8 方向之一, 斜向同时按住相邻两键; sticking 时保持边缘方向。"""
+        import math
+        center = stick.circle_center_scene()
+        dx = scene_pos.x() - center.x()
+        dy = scene_pos.y() - center.y()
+        r = stick.circle_radius_scene()
+        if r <= 0:
+            return
+        norm_x = dx / r
+        norm_y = dy / r
+        mag = math.sqrt(norm_x * norm_x + norm_y * norm_y)
+        dz = max(0.0, min(0.5, stick.data.dead_zone))
+
+        if mag < dz:
+            # 死区内: 中性, 松开所有方向, 小球回中
+            dirs: tuple = ()
+            stick.set_stick_visual('active', 0.0, 0.0)
+        else:
+            idx = round(math.atan2(norm_y, norm_x) / (math.pi / 4)) % 8
+            dirs = _WASD_SECTOR_DIRS[idx]
+            is_stick = sticking or mag >= 1.0
+            state = 'sticking' if is_stick else 'active'
+            # 小球自由跟随鼠标; sticking 时钉在边缘 (单位向量沿实际角度)
+            if is_stick:
+                vis_x = norm_x / mag if mag > 0 else 0.0
+                vis_y = norm_y / mag if mag > 0 else 0.0
+            else:
+                vis_x = norm_x
+                vis_y = norm_y
+            # 八方向锁定 (吸附): 小球吸到 8 方向; 关闭则自由移动 (键触发始终按扇区, 不受影响)
+            if stick.data.eight_way:
+                sang = idx * (math.pi / 4)
+                vm = math.sqrt(vis_x * vis_x + vis_y * vis_y)
+                vis_x = math.cos(sang) * vm
+                vis_y = math.sin(sang) * vm
+            sticking_progress = 0.0
+            if state == 'sticking':
+                ratio = stick.data.release_threshold_ratio
+                if ratio > 1.0:
+                    sticking_progress = max(0.0, min(1.0, (mag - 1.0) / (ratio - 1.0)))
+            stick.set_stick_visual(state, vis_x, vis_y, sticking_progress=sticking_progress)
+
+        self._apply_wasd_dirs(stick, set(dirs))
+
+    def _apply_wasd_dirs(self, stick, dirs: set):
+        """把目标方向集与已按住集做差: 新增的 press, 移除的 release。"""
+        held = self._stick_wasd_held
+        for d in held - dirs:
+            key = getattr(stick.data, _WASD_DIR_FIELD[d], '')
+            if key:
+                self._smart_trigger(key, 'r')
+        for d in dirs - held:
+            key = getattr(stick.data, _WASD_DIR_FIELD[d], '')
+            if key:
+                self._smart_trigger(key, 'p')
+        self._stick_wasd_held = set(dirs)
 
     # ── 方向盘 (gp_wheel) 单例状态机 ──
 

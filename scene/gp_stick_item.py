@@ -174,9 +174,10 @@ class GpStickItem(QGraphicsObject):
         _text_c = QColor(_fam['text'])
         _ball_c = QColor(_fam.get('ball', _BALL_COLOR_OVERRIDE))
 
-        # 选边框色 (sticking 时不再变黄, 改用进度条表达; 边框保持 active 蓝)
+        # 选边框色 (sticking 时不再变黄, 改用进度条表达)
+        # active/hover 时用自定义边框色提亮, 跟随用户配色而非硬编码蓝
         if self._state in ('active', 'sticking'):
-            border_color = _BORDER_ACTIVE
+            border_color = QColor(_idle_border).lighter(135)
             border_width = 3
         else:
             border_color = _idle_border
@@ -194,17 +195,20 @@ class GpStickItem(QGraphicsObject):
             dz_r = r * self.data.dead_zone
             painter.drawEllipse(QPointF(cx, cy), dz_r, dz_r)
 
-        # 中心标签 (L / R), 始终显示
-        label = "L" if self.data.stick_id == STICK_ID_LEFT else "R"
-        fn = get_font()
-        font = QFont(fn)
-        font.setPixelSize(max(14, int(r * 0.35)))
-        font.setWeight(QFont.Weight.Bold)
-        painter.setFont(font)
-        painter.setPen(_text_c)
-        # 标签放圆心稍上方 (active 时小球会盖到圆心区域, 标签留在上半)
-        text_rect = QRectF(0, cy - r * 0.55, self.data.w, r * 0.5)
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, label)
+        # 中心标识: WASD 模式画方向键簇字形; 否则 L / R 文本
+        if getattr(self.data, 'mode', 'analog') == 'wasd':
+            self._draw_wasd_glyph(painter, cx, cy, r, _text_c)
+        else:
+            label = "L" if self.data.stick_id == STICK_ID_LEFT else "R"
+            fn = get_font()
+            font = QFont(fn)
+            font.setPixelSize(max(14, int(r * 0.35)))
+            font.setWeight(QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.setPen(_text_c)
+            # 标签放圆心稍上方 (active 时小球会盖到圆心区域, 标签留在上半)
+            text_rect = QRectF(0, cy - r * 0.55, self.data.w, r * 0.5)
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, label)
 
         # 八方向锁定时的 8 个指示扇区分隔线 (仅编辑模式; 死区内不画, 起点 = 死区圈外缘)
         if self._mode == 'edit' and self.data.eight_way:
@@ -270,6 +274,30 @@ class GpStickItem(QGraphicsObject):
                 text_rect = QRectF(bx - tw / 2, by - ball_r - 28, tw, 24)
                 painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter,
                                  self._pressed_key_display)
+
+    # WASD 模式中心字形: 方向键簇 (1 上 + 3 下), 取自 方向键.svg, 用主题字色填充
+    # SVG viewBox 160×160, 内容居中于 (80,80); 4 个圆角方块 (W / A S D)
+    _WASD_CELLS = (
+        (57, 30, 45, 45),   # W (上)
+        (2, 85, 45, 45),    # A (左)
+        (57, 85, 46, 45),   # S (中)
+        (113, 85, 45, 45),  # D (右)
+    )
+    _WASD_VB_CX = 80.0
+    _WASD_VB_CY = 80.0
+
+    def _draw_wasd_glyph(self, painter, cx, cy, r, color):
+        # 内容高 100 (y 30..130) → 目标高 ≈ r×0.25, 偏小; 居中于中心正上方
+        scale = (r * 0.25) / 100.0
+        gcy = cy - r * 0.30
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(color))
+        radius = 4 * scale
+        for sx, sy, sw, sh in self._WASD_CELLS:
+            rx = cx + (sx - self._WASD_VB_CX) * scale
+            ry = gcy + (sy - self._WASD_VB_CY) * scale
+            painter.drawRoundedRect(QRectF(rx, ry, sw * scale, sh * scale),
+                                    radius, radius)
 
     # ── 状态控制 (由 RunController 调用) ──
 
@@ -356,14 +384,22 @@ class GpStickItem(QGraphicsObject):
         self._resize_handle.setPos(self.data.w - _RESIZE_INSET, self.data.h - _RESIZE_INSET)
 
     def _build_tooltip(self) -> str:
-        sid = "左摇杆" if self.data.stick_id == STICK_ID_LEFT else "右摇杆"
+        is_wasd = getattr(self.data, 'mode', 'analog') == 'wasd'
+        sid = "WASD模式" if is_wasd else ("左摇杆" if self.data.stick_id == STICK_ID_LEFT else "右摇杆")
         lines = [sid]
         if self.data.name:
             lines[0] = f"{sid}  {self.data.name}"
         lines.append(f"死区: {int(self.data.dead_zone * 100)}%")
-        lines.append(f"灵敏度: {'平方' if self.data.sensitivity_curve == 'square' else '线性'}")
-        if self.data.eight_way:
-            lines.append("八方向锁定")
+        if is_wasd:
+            for label, f in (("上", 'wasd_up'), ("左", 'wasd_left'),
+                             ("下", 'wasd_down'), ("右", 'wasd_right')):
+                v = getattr(self.data, f, '')
+                if v:
+                    lines.append(f"  {label}: {v}")
+        else:
+            lines.append(f"灵敏度: {'平方' if self.data.sensitivity_curve == 'square' else '线性'}")
+            if self.data.eight_way:
+                lines.append("八方向锁定")
         # 鼠标动作映射 (只列非空)
         action_lines = []
         for f, label in (('lclick', 'LMB'), ('rclick', 'RMB'), ('mclick', 'MMB'),

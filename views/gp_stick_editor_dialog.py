@@ -269,11 +269,14 @@ class GpStickEditorDialog(QDialog):
         ))
         sc.addSpacing(SECTION_SPACING)
 
-        # 灵敏度
-        sc.addLayout(self._build_sensitivity_row(fn))
-        sc.addSpacing(SECTION_SPACING)
+        # 灵敏度 (仅 analog) ⇄ WASD 方向键 (仅 wasd), 按摇杆ID 切换显隐
+        self._analog_box = self._build_analog_box(fn)
+        sc.addWidget(self._analog_box)
+        self._wasd_box = self._build_wasd_box(fn)
+        sc.addWidget(self._wasd_box)
+        sc.addSpacing(12)
 
-        # 八方向
+        # 八方向锁定 (吸附) — 两种模式都可用: analog 锁轴值, wasd 锁小球到 8 方向
         self._eight_chk = self._build_check(fn, t("gp_stick_editor.eight_way"))
         self._eight_chk.setChecked(bool(self.data.eight_way))
         sc.addWidget(self._eight_chk)
@@ -318,7 +321,51 @@ class GpStickEditorDialog(QDialog):
 
         # 底部按钮 (Copy / Delete | Save) - 跟 button editor 一致
         outer.addLayout(self._build_bottom_buttons(fn))
+        # 初始按当前模式显隐 analog/wasd 字段区
+        self._on_mode_changed()
         return outer
+
+    def _build_analog_box(self, fn):
+        """analog 模式专属字段: 灵敏度曲线"""
+        box = QWidget()
+        box.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addLayout(self._build_sensitivity_row(fn))
+        return box
+
+    def _build_wasd_box(self, fn):
+        """wasd 模式专属字段: 上/左/下/右 四个键位 (TagInput, 可填任意键/组合键)"""
+        box = QWidget()
+        box.setStyleSheet("background: transparent;")
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self._field_label(fn, t("gp_stick_editor.section_wasd")))
+        lay.addSpacing(4)
+        hint = QLabel(t("gp_stick_editor.wasd_hint"))
+        hint.setFont(_font(fn, 11))
+        hint.setStyleSheet(f"color: {_C_HINT}; background: transparent;")
+        hint.setWordWrap(True)
+        lay.addWidget(hint)
+        lay.addSpacing(8)
+        wasd_fields = [
+            ('wasd_up',    'gp_stick_editor.wasd_up'),
+            ('wasd_left',  'gp_stick_editor.wasd_left'),
+            ('wasd_down',  'gp_stick_editor.wasd_down'),
+            ('wasd_right', 'gp_stick_editor.wasd_right'),
+        ]
+        for i, (fname, loc_key) in enumerate(wasd_fields):
+            if i > 0:
+                lay.addSpacing(10)
+            lay.addLayout(self._build_action_field_row(fn, fname, t(loc_key)))
+        return box
+
+    def _on_mode_changed(self, *_):
+        is_wasd = self._rb_wasd.isChecked()
+        self._wasd_box.setVisible(is_wasd)
+        self._analog_box.setVisible(not is_wasd)
 
     # ── 右栏: 四类候选面板 [常规按键 / 鼠标 / 手柄按钮 / 宏] ──
 
@@ -633,12 +680,21 @@ class GpStickEditorDialog(QDialog):
         self._id_group = QButtonGroup(self)
         self._rb_left = self._build_radio(fn, t("gp_stick_editor.left_stick"))
         self._rb_right = self._build_radio(fn, t("gp_stick_editor.right_stick"))
-        self._id_group.addButton(self._rb_left)
-        self._id_group.addButton(self._rb_right)
-        (self._rb_right if self.data.stick_id == STICK_ID_RIGHT else self._rb_left).setChecked(True)
+        self._rb_wasd = self._build_radio(fn, t("gp_stick_editor.wasd_mode"))
+        for rb in (self._rb_left, self._rb_right, self._rb_wasd):
+            self._id_group.addButton(rb)
+        if getattr(self.data, 'mode', 'analog') == 'wasd':
+            self._rb_wasd.setChecked(True)
+        elif self.data.stick_id == STICK_ID_RIGHT:
+            self._rb_right.setChecked(True)
+        else:
+            self._rb_left.setChecked(True)
         row.addWidget(self._rb_left); row.addSpacing(16)
-        row.addWidget(self._rb_right); row.addStretch()
+        row.addWidget(self._rb_right); row.addSpacing(16)
+        row.addWidget(self._rb_wasd); row.addStretch()
         col.addLayout(row)
+        # 切到/离开 WASD 模式 → 切换下方字段区显隐 (boxes 在 _build_left 末尾才建好)
+        self._rb_wasd.toggled.connect(self._on_mode_changed)
         return col
 
     def _build_sensitivity_row(self, fn):
@@ -861,7 +917,11 @@ class GpStickEditorDialog(QDialog):
 
     def _apply_to_data(self):
         self.data.name = self._name_edit.text().strip()
-        self.data.stick_id = (STICK_ID_RIGHT if self._rb_right.isChecked() else STICK_ID_LEFT)
+        if self._rb_wasd.isChecked():
+            self.data.mode = 'wasd'
+        else:
+            self.data.mode = 'analog'
+            self.data.stick_id = (STICK_ID_RIGHT if self._rb_right.isChecked() else STICK_ID_LEFT)
         self.data.dead_zone = self._dead_zone_slider.value() / 100.0
         self.data.release_threshold_ratio = self._release_slider.value() / 100.0
         self.data.sensitivity_curve = ('square' if self._rb_square.isChecked() else 'linear')

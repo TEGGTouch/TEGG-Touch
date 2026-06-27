@@ -410,7 +410,14 @@
     "macros_manage_hint": "宏的新建 / 编辑 / 删除 请到「手柄键按钮编辑器」→「自定义宏」标签操作",
     "copy": "复制",
     "delete": "删除",
-    "save": "保存"
+    "save": "保存",
+    "wasd_mode": "WASD模式",
+    "section_wasd": "方向键位",
+    "wasd_hint": "圆盘按 8 扇区映射成方向键, 斜向同时按住相邻两键; 死区与释放阈值同样生效。",
+    "wasd_up": "上",
+    "wasd_down": "下",
+    "wasd_left": "左",
+    "wasd_right": "右"
   },
   "voice": {
     "status_loading": "正在加载语音模型...",

@@ -29,11 +29,18 @@ class GamepadStickData:
     h: float = 200.0
     name: str = ""
     btn_type: str = BTN_TYPE_GP_STICK
-    stick_id: str = STICK_ID_LEFT          # 'L' | 'R'
+    stick_id: str = STICK_ID_LEFT          # 'L' | 'R' (mode='analog' 时有效)
+    mode: str = "analog"                   # 'analog'=线性摇杆 | 'wasd'=圆盘模拟方向键
     dead_zone: float = 0.10                # 死区半径占圆半径比例 (0~1)
     release_threshold_ratio: float = 1.5   # 鼠标距圆心 > R×ratio 释放
-    sensitivity_curve: str = "linear"      # 'linear' | 'square'
-    eight_way: bool = False                # 八方向锁定 (老 RPG 用)
+    sensitivity_curve: str = "linear"      # 'linear' | 'square' (仅 analog)
+    eight_way: bool = False                # 八方向锁定 (老 RPG 用; 仅 analog)
+
+    # WASD 模式: 圆盘 8 扇区 → 方向键, 斜向同时触发相邻两键 (可填任意键/组合键)
+    wasd_up: str = "w"
+    wasd_down: str = "s"
+    wasd_left: str = "a"
+    wasd_right: str = "d"
 
     # 鼠标其它按键: 摇杆 active 时按下/抬起对应键, 触发该字段内容 (gp:X / gpmacro:X 等)
     # 跟 ButtonData 字段同名同语义, 但 stick 不需要 hover (鼠标始终在 stick 上)
