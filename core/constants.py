@@ -15,7 +15,7 @@ else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # === 应用信息 ===
-APP_VERSION = "0.4.4"
+APP_VERSION = "0.4.5"
 # 用户数据路径一律锚定到 APP_DIR（exe 所在目录）的绝对路径，不再依赖当前工作目录(CWD)。
 # 历史上这些是相对路径，靠 main.py 启动时一句 os.chdir 兜底；一旦从别的目录被拉起
 # (命令行 / 计划任务 / 别的程序 spawn) 且 CWD 不是 exe 目录，profiles/config/settings
