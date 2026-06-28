@@ -255,7 +255,13 @@
     "qr_hint": "Scan to add me on WeChat (TEGG)\nQuestions / Suggestions / Feedback welcome :)",
     "qr_missing": "WeChat QR\n(image missing)",
     "email": "📧 life.is.like.a.boat@gmail.com",
-    "github": "🔗 github.com/TEGGTouch/TEGG-Touch"
+    "github": "🔗 github.com/TEGGTouch/TEGG-Touch",
+    "website": "🌐 danta.ningshen.net",
+    "check_update": "Check for Updates",
+    "visit_website": "Visit Website",
+    "checking": "Checking…",
+    "up_to_date": "Up to date (v{version})",
+    "check_failed": "Check failed, please try again later"
   },
   "keyboard": {
     "title": "Keyboard"
@@ -547,7 +553,12 @@
     "downloading_progress": "Downloading… {done} / {total} MB",
     "downloading_unknown": "Downloading… {done} MB",
     "applying": "Restarting to apply update…",
-    "failed": "Update failed: {error}"
+    "failed": "Update failed: {error}",
+    "applied_title": "Updated to v{version}",
+    "applied_body": "Update complete. The app stays in its original folder (folder name unchanged).",
+    "applied_location": "Location:",
+    "open_folder": "Open Folder",
+    "got_it": "Got it"
   },
   "recenter": {
     "tab": "Re-center target",

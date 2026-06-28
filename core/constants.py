@@ -16,11 +16,15 @@ else:
 
 # === 应用信息 ===
 APP_VERSION = "0.4.4"
-CONFIG_FILE = "config.json"
-PROFILES_DIR = "profiles"
-PROFILES_INDEX = "_index.json"
+# 用户数据路径一律锚定到 APP_DIR（exe 所在目录）的绝对路径，不再依赖当前工作目录(CWD)。
+# 历史上这些是相对路径，靠 main.py 启动时一句 os.chdir 兜底；一旦从别的目录被拉起
+# (命令行 / 计划任务 / 别的程序 spawn) 且 CWD 不是 exe 目录，profiles/config/settings
+# 就会被写到那个 CWD 里，导致"配置跑到别的文件夹找不到"。绝对路径根治此问题。
+CONFIG_FILE = os.path.join(APP_DIR, "config.json")
+PROFILES_DIR = os.path.join(APP_DIR, "profiles")
+PROFILES_INDEX = "_index.json"  # 纯文件名，与 PROFILES_DIR 拼接使用
 DEFAULT_PROFILE_NAME = "Default"  # 固定英文作为文件名 key，显示名用 t("profile.default_name")
-HOTKEYS_FILE = "settings/hotkeys.json"
+HOTKEYS_FILE = os.path.join(APP_DIR, "settings", "hotkeys.json")
 
 def get_app_title():
     """返回本地化的应用标题。"""

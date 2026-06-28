@@ -255,7 +255,13 @@
     "qr_hint": "扫码加我微信好友（茶叶蛋TEGG）\n问题 / 建议 / 反馈，看到一定会解答 :)",
     "qr_missing": "微信二维码\n(图片缺失)",
     "email": "📧 life.is.like.a.boat@gmail.com",
-    "github": "🔗 github.com/TEGGTouch/TEGG-Touch"
+    "github": "🔗 github.com/TEGGTouch/TEGG-Touch",
+    "website": "🌐 danta.ningshen.net",
+    "check_update": "检查更新",
+    "visit_website": "访问官网",
+    "checking": "检查中…",
+    "up_to_date": "已是最新版本 v{version}",
+    "check_failed": "检查失败，请稍后重试"
   },
   "keyboard": {
     "title": "软键盘"
@@ -547,7 +553,12 @@
     "downloading_progress": "正在下载… {done} / {total} MB",
     "downloading_unknown": "正在下载… {done} MB",
     "applying": "正在重启完成升级…",
-    "failed": "升级失败: {error}"
+    "failed": "升级失败: {error}",
+    "applied_title": "已更新到 v{version}",
+    "applied_body": "更新完成，程序仍在原来的文件夹（文件夹名未改动）。",
+    "applied_location": "程序位置：",
+    "open_folder": "打开所在文件夹",
+    "got_it": "知道了"
   },
   "recenter": {
     "tab": "回中目标",

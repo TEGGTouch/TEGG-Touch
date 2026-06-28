@@ -27,8 +27,6 @@ from core.constants import (
 from core.config_manager import load_hotkeys, save_hotkeys
 from scene.virtual_cursor_item import render_cursor_pixmap, clear_cursor_render_cache
 
-_ABOUT_LAST_UPDATE = "2026.06.19"
-
 # ── 颜色 ──
 C_PM_BG = "#2D2D2D"
 C_GRAY = "#3A3A3A"
@@ -1883,6 +1881,40 @@ class HotkeySettingsDialog(QDialog):
         dlg = DiagExportDialog(self)
         dlg.exec()
 
+    def _on_check_update_clicked(self):
+        """手动检查更新: 跳过冷却。有新版→弹自更新弹窗; 否则状态栏给反馈。"""
+        from core.update_checker import UpdateChecker
+        from core.constants import APP_VERSION
+
+        self._check_update_btn.setEnabled(False)
+        self._update_status_lbl.setStyleSheet(
+            "color: #888; font-size: 12px; background: transparent;")
+        self._update_status_lbl.setText(t("about.checking"))
+
+        checker = UpdateChecker(self, force=True)
+        self._manual_update_checker = checker  # 保活引用, 防 QThread 被 GC
+
+        def _on_avail(version, url, body):
+            self._update_status_lbl.setText("")
+            self._check_update_btn.setEnabled(True)
+            from views.update_dialog import start_update_flow
+            start_update_flow(self, version, url, body)
+
+        def _on_none():
+            self._check_update_btn.setEnabled(True)
+            self._update_status_lbl.setText(t("about.up_to_date", version=APP_VERSION))
+
+        def _on_fail(_msg):
+            self._check_update_btn.setEnabled(True)
+            self._update_status_lbl.setStyleSheet(
+                "color: #F87171; font-size: 12px; background: transparent;")
+            self._update_status_lbl.setText(t("about.check_failed"))
+
+        checker.update_available.connect(_on_avail)
+        checker.no_update_available.connect(_on_none)
+        checker.check_failed.connect(_on_fail)
+        checker.start()
+
     # ── 关于页 ──
 
     def _build_about_page(self, fn):
@@ -1923,10 +1955,39 @@ class HotkeySettingsDialog(QDialog):
 
         v.addSpacing(2)
 
-        update = QLabel(t("about.last_update", date=_ABOUT_LAST_UPDATE))
-        update.setStyleSheet("color: #666; font-size: 12px; background: transparent;")
-        update.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        v.addWidget(update)
+        # ── 检查更新 / 访问官网 按钮 ──
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(12)
+        btn_row.addStretch()
+
+        self._check_update_btn = QPushButton(t("about.check_update"))
+        self._check_update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._check_update_btn.setStyleSheet(
+            f"QPushButton {{ background: #0C4A6E; color: #FFF; border: none; "
+            f"border-radius: 6px; padding: 8px 22px; font-size: 15px; font-family: '{fn}'; }}"
+            f"QPushButton:hover {{ background: #0284C7; }}"
+            f"QPushButton:disabled {{ background: #2A4A5E; color: #888; }}")
+        self._check_update_btn.clicked.connect(self._on_check_update_clicked)
+        btn_row.addWidget(self._check_update_btn)
+
+        website_btn = QPushButton(t("about.visit_website"))
+        website_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        website_btn.setStyleSheet(
+            f"QPushButton {{ background: #3A3A3A; color: #DDD; border: none; "
+            f"border-radius: 6px; padding: 8px 22px; font-size: 15px; font-family: '{fn}'; }}"
+            f"QPushButton:hover {{ background: #505050; }}")
+        website_btn.clicked.connect(lambda: webbrowser.open("https://danta.ningshen.net/"))
+        btn_row.addWidget(website_btn)
+
+        btn_row.addStretch()
+        v.addLayout(btn_row)
+
+        v.addSpacing(6)
+
+        self._update_status_lbl = QLabel("")
+        self._update_status_lbl.setStyleSheet("color: #888; font-size: 12px; background: transparent;")
+        self._update_status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(self._update_status_lbl)
 
         v.addSpacing(16)
 
@@ -2004,6 +2065,14 @@ class HotkeySettingsDialog(QDialog):
         github.mousePressEvent = lambda e: webbrowser.open(
             "https://github.com/TEGGTouch/TEGG-Touch/releases")
         right_col.addWidget(github)
+
+        website = QLabel(t("about.website"))
+        website.setStyleSheet(
+            f"color: #888; font-size: 16px; font-family: '{fn}'; background: transparent;")
+        website.setCursor(Qt.CursorShape.PointingHandCursor)
+        website.mousePressEvent = lambda e: webbrowser.open(
+            "https://danta.ningshen.net/")
+        right_col.addWidget(website)
 
         right_col.addStretch()
         qr_row.addLayout(right_col, 1)

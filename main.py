@@ -7,11 +7,13 @@ import os
 import json
 import logging
 
-# 确保工作目录为脚本/EXE 所在目录（无论从哪里启动）
+# exe 所在目录（无论从哪里启动）。所有用户数据路径都锚定到这里的绝对路径，
+# 不再依赖 CWD；下面的 chdir 仅作兼容兜底 (assets 等少数相对引用)。
 if getattr(sys, 'frozen', False):
-    os.chdir(os.path.dirname(sys.executable))
+    _APP_DIR = os.path.dirname(sys.executable)
 else:
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    _APP_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(_APP_DIR)
 
 # 日志系统 (按会话归档 + UTF-8 + 环境头 + 异常钩子)
 from core.log_setup import setup_logging, install_excepthook
@@ -32,7 +34,7 @@ from core.i18n import load_locale, t
 def _detect_language():
     """从 settings/hotkeys.json 读取 language 字段，默认 zh-CN。"""
     try:
-        hk_path = os.path.join(os.getcwd(), "settings", "hotkeys.json")
+        hk_path = os.path.join(_APP_DIR, "settings", "hotkeys.json")
         if os.path.exists(hk_path):
             with open(hk_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -58,40 +60,32 @@ from PyQt6.QtGui import QIcon
 from views.overlay_window import OverlayWindow
 
 
-def _check_for_updates(parent):
-    """启动后台更新检查，有新版本时弹窗提示, 用户点立即更新走自动下载 + 安装流程。"""
-    from core.update_checker import UpdateChecker
-    from views.update_dialog import UpdateDialog
-    from core.update_installer import UpdateInstaller, apply_update
-
-    checker = UpdateChecker(parent)
-
-    def _on_update(version, url, body):
-        dlg = UpdateDialog(version, url, body, parent)
+def _show_post_update_notice(parent):
+    """新版首启: 若检测到更新完成标记, 弹窗告知"已更新到 vX + 程序位置"。
+    就地更新不改用户文件夹名, 此提示解决"找不到新版装哪了"。"""
+    try:
+        from core.update_installer import consume_post_update_marker
+        install_dir = consume_post_update_marker()
+        if not install_dir:
+            return
+        from views.post_update_dialog import PostUpdateDialog
+        dlg = PostUpdateDialog(install_dir, parent)
         dlg.show()
         dlg.raise_()
         dlg.activateWindow()
-        parent._update_dialog = dlg
+        parent._post_update_dialog = dlg
+    except Exception as e:
+        logger.warning(f"显示更新完成提示失败: {e}")
 
-        def _start_install(zip_url):
-            installer = UpdateInstaller(zip_url, parent=parent)
-            installer.progress.connect(dlg.on_progress)
 
-            def _on_finished_ok(zip_path):
-                dlg.on_applying()
-                try:
-                    apply_update(zip_path)
-                except Exception as e:
-                    dlg.on_failed(f"启动升级器失败: {e}")
+def _check_for_updates(parent):
+    """启动后台更新检查，有新版本时弹窗提示, 用户点立即更新走自动下载 + 安装流程。"""
+    from core.update_checker import UpdateChecker
+    from views.update_dialog import start_update_flow
 
-            installer.finished_ok.connect(_on_finished_ok)
-            installer.failed.connect(dlg.on_failed)
-            installer.start()
-            parent._update_installer = installer
-
-        dlg.install_requested.connect(_start_install)
-
-    checker.update_available.connect(_on_update)
+    checker = UpdateChecker(parent)
+    checker.update_available.connect(
+        lambda version, url, body: start_update_flow(parent, version, url, body))
     checker.start()
     parent._update_checker = checker
 
@@ -116,7 +110,7 @@ def main():
         app.setApplicationVersion("0.2.1")
 
         # 应用级图标 (任务栏 / Alt+Tab / 标题栏)
-        _icon_path = os.path.join(os.getcwd(), "assets", "icon.ico")
+        _icon_path = os.path.join(_APP_DIR, "assets", "icon.ico")
         if os.path.exists(_icon_path):
             app.setWindowIcon(QIcon(_icon_path))
 
@@ -126,6 +120,9 @@ def main():
 
         window = OverlayWindow()
         window.show()
+
+        # 新版首启: 检测更新完成标记, 告知用户程序位置 (就地更新不改文件夹名)
+        QTimer.singleShot(900, lambda: _show_post_update_notice(window))
 
         # 启动 3 秒后检查更新（避免阻塞启动流程）
         QTimer.singleShot(3000, lambda: _check_for_updates(window))

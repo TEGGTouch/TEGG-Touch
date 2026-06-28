@@ -149,6 +149,15 @@ if ($proc.ExitCode -ge 8) {
     Log "ERROR: robocopy reported failure"
 }
 
+# 写更新完成标记 — 新版首启据此弹"已更新 + 程序位置"提示 (仅覆盖成功时写)
+if ($proc.ExitCode -lt 8) {
+    try {
+        $marker = Join-Path $InstallDir ".update_applied"
+        Set-Content -Path $marker -Value $InstallDir -Encoding UTF8
+        Log "wrote update marker: $marker"
+    } catch { Log "write marker failed: $_" }
+}
+
 SetStatus "正在启动新版本..."
 try {
     Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir

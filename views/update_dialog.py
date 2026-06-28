@@ -21,6 +21,39 @@ from views.edit_toolbar import (
 from core.constants import C_PM_BG, C_CYBER, C_CYBER_H, C_GRAY
 
 
+def start_update_flow(parent, version: str, url: str, body: str) -> "UpdateDialog":
+    """弹出新版本提示弹窗并接好「下载 → 应用升级」流程。返回该弹窗。
+
+    自动检查 (main.py) 与设置里手动「检查更新」共用此入口, 避免重复接线。
+    """
+    from core.update_installer import UpdateInstaller, apply_update
+
+    dlg = UpdateDialog(version, url, body, parent)
+    dlg.show()
+    dlg.raise_()
+    dlg.activateWindow()
+    parent._update_dialog = dlg  # 保活引用
+
+    def _start_install(zip_url):
+        installer = UpdateInstaller(zip_url, parent=parent)
+        installer.progress.connect(dlg.on_progress)
+
+        def _on_finished_ok(zip_path):
+            dlg.on_applying()
+            try:
+                apply_update(zip_path)
+            except Exception as e:
+                dlg.on_failed(f"启动升级器失败: {e}")
+
+        installer.finished_ok.connect(_on_finished_ok)
+        installer.failed.connect(dlg.on_failed)
+        installer.start()
+        parent._update_installer = installer  # 保活引用
+
+    dlg.install_requested.connect(_start_install)
+    return dlg
+
+
 class UpdateDialog(QDialog):
     """新版本提示弹窗 + 内嵌升级流程 UI."""
 

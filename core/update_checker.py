@@ -70,12 +70,22 @@ class UpdateChecker(QThread):
 
     Signals:
         update_available(version, url, body)  — 有新版本时发射
+        no_update_available()                 — 已是最新版 (供手动检查给反馈)
+        check_failed(msg)                     — 检查失败/网络错误 (供手动检查给反馈)
+
+    force=True: 跳过 24h 冷却, 用于用户在设置里手动点「检查更新」。
     """
 
     update_available = pyqtSignal(str, str, str)  # version, html_url, body
+    no_update_available = pyqtSignal()
+    check_failed = pyqtSignal(str)
+
+    def __init__(self, parent=None, force: bool = False):
+        super().__init__(parent)
+        self._force = force
 
     def run(self):
-        if not _should_check():
+        if not self._force and not _should_check():
             logger.debug("Update check skipped (cooldown)")
             return
 
@@ -111,8 +121,11 @@ class UpdateChecker(QThread):
                 self.update_available.emit(version_str, download_url, body)
             else:
                 logger.debug(f"Already up to date ({APP_VERSION})")
+                self.no_update_available.emit()
 
         except urllib.error.URLError as e:
             logger.debug(f"Update check failed (network): {e}")
+            self.check_failed.emit(str(e))
         except Exception as e:
             logger.debug(f"Update check failed: {e}")
+            self.check_failed.emit(str(e))

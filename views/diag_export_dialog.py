@@ -51,10 +51,10 @@ def _collect_diag_files() -> list[tuple[str, str]]:
     for p in list_recent_log_paths(10):
         items.append((p, f'logs/{os.path.basename(p)}'))
 
-    # settings/hotkeys.json
-    hk = os.path.join(os.getcwd(), 'settings', 'hotkeys.json')
-    if os.path.isfile(hk):
-        items.append((hk, 'settings/hotkeys.json'))
+    # settings/hotkeys.json (绝对路径, 不依赖 CWD)
+    from core.constants import HOTKEYS_FILE
+    if os.path.isfile(HOTKEYS_FILE):
+        items.append((HOTKEYS_FILE, 'settings/hotkeys.json'))
 
     # 当前激活方案
     try:

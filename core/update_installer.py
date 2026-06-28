@@ -192,6 +192,15 @@ if ($proc.ExitCode -ge 8) {
     Log "ERROR: robocopy reported failure"
 }
 
+# 写更新完成标记 — 新版首启据此弹"已更新 + 程序位置"提示 (仅覆盖成功时写)
+if ($proc.ExitCode -lt 8) {
+    try {
+        $marker = Join-Path $InstallDir ".update_applied"
+        Set-Content -Path $marker -Value $InstallDir -Encoding UTF8
+        Log "wrote update marker: $marker"
+    } catch { Log "write marker failed: $_" }
+}
+
 SetStatus "正在启动新版本..."
 try {
     Start-Process -FilePath $ExePath -WorkingDirectory $InstallDir
@@ -415,3 +424,34 @@ def apply_update(zip_path: str) -> None:
     app = QApplication.instance()
     if app is not None:
         QTimer.singleShot(2000, app.quit)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 更新完成标记 — 新版首启时读取一次, 告知用户"已更新 + 程序位置"
+# (不改用户安装目录名, 仅提示其位置, 解决"找不到新版装哪了")
+# ─────────────────────────────────────────────────────────────────────
+
+_UPDATE_MARKER_NAME = ".update_applied"
+
+
+def consume_post_update_marker() -> str | None:
+    """新版启动时调用一次: 存在更新完成标记则删除并返回安装目录, 否则 None。
+
+    标记由 updater.ps1 在 robocopy 覆盖成功后写入 InstallDir。
+    返回本程序所在目录 (APP_DIR) 供 UI 提示"程序位置"; 以标记是否存在为信号,
+    不依赖文件内容 (避免编码/空文件干扰)。
+    """
+    from core.constants import APP_DIR
+    marker = os.path.join(APP_DIR, _UPDATE_MARKER_NAME)
+    try:
+        if not os.path.isfile(marker):
+            return None
+        try:
+            os.remove(marker)
+        except OSError as e:
+            logger.debug(f"remove update marker failed: {e}")
+        logger.info(f"检测到更新完成标记, 程序位置: {APP_DIR}")
+        return APP_DIR
+    except Exception as e:
+        logger.debug(f"consume_post_update_marker error: {e}")
+        return None

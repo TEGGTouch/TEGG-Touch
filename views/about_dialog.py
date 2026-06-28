@@ -176,6 +176,14 @@ class AboutDialog(QDialog):
             "https://github.com/TEGGTouch/TEGG-Touch/releases")
         right_layout.addWidget(github_label)
 
+        # 官网
+        website_label = QLabel(t("about.website"))
+        website_label.setStyleSheet(f"color: #888; font-size: 16px; font-family: '{font_name}';")
+        website_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        website_label.mousePressEvent = lambda e: webbrowser.open(
+            "https://danta.ningshen.net/")
+        right_layout.addWidget(website_label)
+
         right_layout.addStretch()
         qr_layout.addLayout(right_layout)
         layout.addLayout(qr_layout)

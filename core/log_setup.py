@@ -25,11 +25,19 @@ _session_log_path: str | None = None
 _logs_dir: str | None = None
 
 
+def _app_dir() -> str:
+    """exe 所在目录 (frozen) / 项目根 (dev)。与 constants.APP_DIR 同口径，
+    但在此就地计算，避免底层日志模块反向依赖 constants (它会拉起 i18n)。"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def _logs_root() -> str:
-    """日志根目录: 应用工作目录下 logs/"""
+    """日志根目录: exe 所在目录下 logs/ (绝对路径, 不依赖 CWD)"""
     global _logs_dir
     if _logs_dir is None:
-        _logs_dir = os.path.join(os.getcwd(), LOGS_DIR_NAME)
+        _logs_dir = os.path.join(_app_dir(), LOGS_DIR_NAME)
         os.makedirs(_logs_dir, exist_ok=True)
     return _logs_dir
 

@@ -34,6 +34,35 @@ else:
 logger = logging.getLogger(__name__)
 
 
+def _atomic_write_json(filepath: str, data) -> None:
+    """原子写 JSON：先写同目录临时文件 + fsync，再 os.replace 覆盖目标。
+
+    取代直接 open(path, 'w')。后者会先把目标截断成 0 字节再慢慢写回，
+    一旦进程 / 系统在写一半时被中断（强杀 / 断电 / 蓝屏），就会留下
+    0 字节空文件，下次加载报 "Expecting value: line 1 column 1 (char 0)"
+    并丢失整份配置。
+    临时文件必须与目标同目录（同卷），os.replace 在 Windows 上才是原子覆盖。
+    """
+    directory = os.path.dirname(filepath) or '.'
+    os.makedirs(directory, exist_ok=True)
+    # 临时名带 pid，避免并发写互相覆盖
+    tmp = os.path.join(directory, f".{os.path.basename(filepath)}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, filepath)
+    except Exception:
+        # 失败时清掉临时文件，别留垃圾
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
 # ─── 坐标系迁移 ──────────────────────────────────────────────
 
 def _migrate_to_scene_scale(data: dict) -> bool:
@@ -255,8 +284,7 @@ def _load_index() -> dict:
 def _save_index(index: dict):
     os.makedirs(_profiles_dir(), exist_ok=True)
     try:
-        with open(_index_path(), 'w', encoding='utf-8') as f:
-            json.dump(index, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(_index_path(), index)
     except Exception as e:
         logger.error(f"索引保存失败: {e}")
 
@@ -369,8 +397,7 @@ def load_config_from_file(filepath: str) -> dict:
         if _migrate_to_center_coords(data) or migrated_scale or migrated_names:
             # 迁移后立即回写文件，避免重复迁移
             try:
-                with open(filepath, 'w', encoding='utf-8') as fw:
-                    json.dump(data, fw, ensure_ascii=False, indent=2)
+                _atomic_write_json(filepath, data)
                 logger.info(f"坐标系迁移已回写: {filepath}")
             except Exception as we:
                 logger.warning(f"坐标系迁移回写失败: {we}")
@@ -664,9 +691,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['button_colors'] = button_colors
 
     try:
-        os.makedirs(os.path.dirname(filepath) or '.', exist_ok=True)
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(filepath, data)
         logger.info(f"配置保存成功: {filepath}")
         return True
     except (PermissionError, OSError) as e:
@@ -970,9 +995,7 @@ def save_hotkeys(hotkeys: dict) -> bool:
             except Exception:
                 pass
         existing.update(hotkeys)
-        os.makedirs(os.path.dirname(HOTKEYS_FILE) or '.', exist_ok=True)
-        with open(HOTKEYS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(existing, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(HOTKEYS_FILE, existing)
         logger.info(f"快捷键配置保存成功: {HOTKEYS_FILE}")
         return True
     except Exception as e:
