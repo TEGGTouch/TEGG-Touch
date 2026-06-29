@@ -265,9 +265,10 @@ def populate_gp_palette(layout, fn, on_gp_click, dialog):
 
     ready = False
     try:
-        from core.gamepad_install import detect_status, Status
-        st, _ = detect_status()
-        ready = (st == Status.READY_OK)
+        # 轻量门控: 只查驱动+库是否在, 绝不创建真实虚拟手柄 (否则每开编辑器都插拔
+        # 一次设备, 响"插拔音"且高频时拖垮 ViGEmBus → 死机)。结果带缓存。
+        from core.gamepad_install import palette_ready
+        ready = palette_ready()
     except Exception as e:
         logger.warning("手柄驱动检测失败: %s", e)
 

@@ -299,6 +299,43 @@ def detect_status() -> tuple[Status, dict]:
     return Status.READY_OK, info
 
 
+# ─── 候选面板就绪门控 (轻量, 不创建真实设备) ──────────────────────────────
+#
+# 历史坑: 候选面板 (按钮/宏/语音/方向盘/摇杆 编辑器) 过去用 detect_status() 门控,
+# 而 detect_status() 会跑 _vgamepad_smoke_test() —— 真的 VX360Gamepad() 插一个虚拟
+# 手柄再 del 拔掉。结果每开一次编辑器 Windows 就响一声"设备插拔音", 用户连续删按键
+# = 高频插拔 ViGEmBus → 驱动卡 / UI 线程堆积 → 死机。
+#
+# 修复 (A+B):
+#   B — 门控改用 palette_ready(): 只查"注册表有驱动版本 + vgamepad 库存在", 绝不创建
+#       真实设备, 零插拔音。
+#   A — 结果缓存, 安装/重试后 invalidate_status_cache() 清; 平时开编辑器零开销。
+#
+# 真正的端到端设备校验仍保留给"切到手柄运行模式"和"安装弹窗"(它们本就要建设备)。
+# DRIVER_BROKEN (装了没重启) 这种边角态门控会放行, 但进手柄运行模式时仍会被
+# detect_status() 拦下, 且 GamepadEngine.get() 失败也会优雅返回 None, 不影响安全。
+
+_palette_ready_cache: bool | None = None
+
+
+def palette_ready() -> bool:
+    """候选面板「手柄就绪」轻量判断 — 驱动已装(注册表有版本) + vgamepad 库存在。
+
+    不创建真实虚拟手柄设备, 因此不会触发 Windows 设备插拔提示音。结果缓存,
+    安装驱动 / retry_import 后须 invalidate_status_cache() 清。
+    """
+    global _palette_ready_cache
+    if _palette_ready_cache is None:
+        _palette_ready_cache = (_installed_version() is not None) and _vgamepad_lib_available()
+    return _palette_ready_cache
+
+
+def invalidate_status_cache() -> None:
+    """清就绪缓存 — 装完驱动 / retry_import / 做过真实检测后调, 让下次 palette_ready() 重读。"""
+    global _palette_ready_cache
+    _palette_ready_cache = None
+
+
 def install_vgamepad_lib(progress_cb=None) -> tuple[bool, str]:
     """pip install vgamepad - 仅 Python 端。返回 (ok, info)。
 

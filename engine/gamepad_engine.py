@@ -60,6 +60,12 @@ def retry_import():
     """安装对话框装完驱动后调用 — 强制重试 import 并清 GamepadEngine 失败标记。"""
     _try_import_vgamepad(force_retry=True)
     GamepadEngine.reset_init_failed()
+    # 驱动状态变了 — 清候选面板就绪缓存, 让下次开编辑器重读 (失败也不影响主流程)
+    try:
+        from core.gamepad_install import invalidate_status_cache
+        invalidate_status_cache()
+    except Exception:
+        pass
 
 
 def _build_button_map(vg) -> dict:
