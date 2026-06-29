@@ -443,6 +443,8 @@ def load_config_from_file(filepath: str) -> dict:
         # 轮盘模式与缩放
         result['wheel_mode'] = data.get('wheel_mode', None)
         result['wheel_offset'] = data.get('wheel_offset', 0)
+        result['wheel_x'] = data.get('wheel_x', 0)
+        result['wheel_y'] = data.get('wheel_y', 0)
         # 内环按钮
         raw_inner = data.get('wheel_inner_ring', None)
         if raw_inner and isinstance(raw_inner, dict):
@@ -533,6 +535,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                         wheel_enlarged=False,
                         wheel_mode=None,
                         wheel_offset=0,
+                        wheel_x=0,
+                        wheel_y=0,
                         wheel_center_ring=None,
                         wheel_inner_ring=None,
                          wheel_center_ring_visible=True,
@@ -633,6 +637,10 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['wheel_mode'] = wheel_mode
     if wheel_offset:
         data['wheel_offset'] = wheel_offset
+    if wheel_x:
+        data['wheel_x'] = wheel_x
+    if wheel_y:
+        data['wheel_y'] = wheel_y
 
     # 中心圆环按钮
     if wheel_center_ring:

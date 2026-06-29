@@ -9,7 +9,9 @@ from PyQt6.QtCore import QRectF, pyqtSignal
 
 from PyQt6.QtWidgets import QGraphicsObject, QGraphicsItem
 from PyQt6.QtCore import QRectF, Qt as _Qt
-from PyQt6.QtGui import QPainter as _QPainter, QColor as _QColor, QFont as _QFont, QPen as _QPen
+from PyQt6.QtGui import (QPainter as _QPainter, QColor as _QColor,
+                         QFont as _QFont, QPen as _QPen,
+                         QPainterPath as _QPainterPath)
 
 from core.constants import (
     DEFAULT_GRID_SIZE, BTN_TYPE_WHEEL_SECTOR, BTN_TYPE_WHEEL_RING,
@@ -120,6 +122,7 @@ class _WheelResizeBtn(QGraphicsObject):
         self._scene_ref = scene_ref
         self._hover = False
         self._dragging = False
+        self._drag_start_x = 0
         self._drag_start_y = 0
         self._drag_start_offset = 0
         self.setAcceptHoverEvents(True)
@@ -164,7 +167,10 @@ class _WheelResizeBtn(QGraphicsObject):
     def mousePressEvent(self, event):
         if event.button() == _Qt.MouseButton.LeftButton:
             self._dragging = True
-            self._drag_start_y = event.scenePos().y()
+            # 锚定抓取点 — 后续按位移增量缩放, 1:1 跟手、无死区
+            p = event.scenePos()
+            self._drag_start_x = p.x()
+            self._drag_start_y = p.y()
             self._drag_start_offset = self._scene_ref._wheel_offset
             event.accept()
 
@@ -172,16 +178,11 @@ class _WheelResizeBtn(QGraphicsObject):
         if not self._dragging:
             return
         scene = self._scene_ref
-        cx = scene.sceneRect().width() / 2
-        cy = scene.sceneRect().height() / 2
-        mouse = event.scenePos()
-        # 用鼠标到中心的最大单轴距离来决定新的 effective_r
-        dx = mouse.x() - cx
-        dy = mouse.y() - cy
-        # 取 max(dx, dy) 因为按钮在右下角
-        desired_r = max(dx, dy)
-        base_r = scene._get_base_r_outer()
-        new_offset = int(max(0, min(WHEEL_MAX_OFFSET, desired_r - base_r)))
+        p = event.scenePos()
+        # 抓取点起算的位移增量 (按钮在右下角, 取较大单轴位移)
+        delta = max(p.x() - self._drag_start_x, p.y() - self._drag_start_y)
+        new_offset = int(max(0, min(WHEEL_MAX_OFFSET,
+                                    self._drag_start_offset + delta)))
         if new_offset != scene._wheel_offset:
             scene.set_wheel_offset(new_offset)
         event.accept()
@@ -189,6 +190,54 @@ class _WheelResizeBtn(QGraphicsObject):
     def mouseReleaseEvent(self, event):
         self._dragging = False
         event.accept()
+
+
+class _WheelDragDisk(QGraphicsObject):
+    """编辑模式整盘拖动盘 — 覆盖整圆(含圆心空洞)，把拖动委托给 scene。
+
+    Z 值压在所有按钮/扇面/环之下 (-1)，命中优先级最低；只有落在圆心空洞等
+    无任何按钮处时才接到事件触发整盘拖动。仅编辑模式可见 (运行模式隐藏，
+    圆心透传到底层程序)。
+    """
+
+    def __init__(self, scene_ref, parent=None):
+        super().__init__(parent)
+        self._scene_ref = scene_ref
+        self._r = 0.0
+        self.setZValue(-1)
+        self.setAcceptedMouseButtons(_Qt.MouseButton.LeftButton)
+
+    def set_radius(self, r):
+        if r != self._r:
+            self.prepareGeometryChange()
+            self._r = r
+            self.update()
+
+    def boundingRect(self):
+        return QRectF(-self._r, -self._r, self._r * 2, self._r * 2)
+
+    def shape(self):
+        path = _QPainterPath()
+        path.addEllipse(self.boundingRect())
+        return path
+
+    def paint(self, painter, option, widget=None):
+        pass  # 完全透明 — 仅作命中区域
+
+    def mousePressEvent(self, event):
+        if event.button() == _Qt.MouseButton.LeftButton and self._scene_ref:
+            self._scene_ref.begin_wheel_drag(event.scenePos())
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self._scene_ref:
+            self._scene_ref.update_wheel_drag(event.scenePos())
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if self._scene_ref:
+            self._scene_ref.end_wheel_drag()
+            event.accept()
 
 
 class _AutoCenterBar(QGraphicsObject):
@@ -259,8 +308,17 @@ class OverlayScene(QGraphicsScene):
         self._wheel_center_ring_visible = True
         self._wheel_middle_ring_visible = True
         self._wheel_offset = 0          # 轮盘缩放偏移 (px)
+        # 轮盘整体位置偏移 (相对屏幕中心, px) — 几何仍烘焙在屏幕中心,
+        # 位移统一靠 setPos(_wheel_x,_wheel_y) 施加到所有轮盘 item
+        self._wheel_x = 0
+        self._wheel_y = 0
+        # 整盘拖动状态 (编辑模式; item 转发 scenePos, scene 整组移动)
+        self._wheel_drag_anchor = None   # 按下时的 scenePos
+        self._wheel_drag_base = (0, 0)   # 按下时的 (_wheel_x,_wheel_y)
+        self._wheel_dragged = False      # 本次是否真的拖动过 (决定要不要 save)
         self._wheel_style_btn = None
         self._wheel_resize_btn = None
+        self._wheel_drag_disk = None     # 编辑模式整盘拖动盘 (覆盖圆心空洞)
 
         # 场景内自定义 Tooltip（替代 Qt 原生 setToolTip）
         from scene.tooltip_item import TooltipItem
@@ -280,8 +338,8 @@ class OverlayScene(QGraphicsScene):
         from scene.gp_stick_item import GpStickItem, stick_display_name
         from scene.gp_wheel_item import GpWheelItem
         targets = [{'key': 'screen', 'label': t('recenter.screen')}]
-        if (self._wheel_visible and self._wheel_center_ring_visible
-                and (self.ring_item is not None or self.inner_ring_item is not None)):
+        # 回中目标 = 中心轮盘几何中心 (任何环模式都成立, 只要轮盘可见且有扇面)
+        if self._wheel_visible and self.wheel_items:
             targets.append({'key': 'center_ring', 'label': t('recenter.center_ring')})
         if any(isinstance(it, GpWheelItem) for it in self.button_items):
             targets.append({'key': 'wheel', 'label': t('recenter.wheel')})
@@ -408,6 +466,8 @@ class OverlayScene(QGraphicsScene):
         self._wheel_center_ring_visible = config.get('wheel_center_ring_visible', True)
         self._wheel_middle_ring_visible = config.get('wheel_middle_ring_visible', True)
         self._wheel_offset = int(config.get('wheel_offset', 0))
+        self._wheel_x = int(config.get('wheel_x', 0))
+        self._wheel_y = int(config.get('wheel_y', 0))
         self._load_wheel(config)
         self._update_wheel_controls()
 
@@ -516,6 +576,71 @@ class OverlayScene(QGraphicsScene):
                 WHEEL_RING_INNER + ofs, WHEEL_RING_OUTER + ofs,
                 cx, cy, is_inner=False,
                 visible=self._wheel_visible and self._wheel_center_ring_visible)
+
+        # 几何烘焙在屏幕中心, 整盘位移统一在这里施加 (覆盖所有重建路径)
+        self._apply_wheel_position()
+
+    def _all_wheel_items(self):
+        """当前所有轮盘 item (扇面+外圈+中心环+中二环, 含切分模式扇区)"""
+        items = list(self.wheel_items) + list(self.outer_wheel_items)
+        if self.ring_item:
+            items.append(self.ring_item)
+        if self.inner_ring_item:
+            items.append(self.inner_ring_item)
+        items += list(self.center_ring_sector_items)
+        items += list(self.inner_ring_sector_items)
+        return items
+
+    def _apply_wheel_position(self):
+        """把 (_wheel_x,_wheel_y) 作为统一 pos 偏移施加到所有轮盘 item。"""
+        for it in self._all_wheel_items():
+            it.setPos(self._wheel_x, self._wheel_y)
+
+    def wheel_center_scene(self):
+        """中心轮盘几何中心 (scene 坐标) = 烘焙圆心 + 拖动偏移; 无轮盘返回 None。"""
+        it = None
+        if self.wheel_items:
+            it = self.wheel_items[0]
+        elif self.ring_item is not None:
+            it = self.ring_item
+        elif self.inner_ring_item is not None:
+            it = self.inner_ring_item
+        elif self.center_ring_sector_items:
+            it = self.center_ring_sector_items[0]
+        if it is None:
+            return None
+        from PyQt6.QtCore import QPointF
+        return QPointF(it._cx, it._cy) + it.pos()
+
+    # ── 整盘拖动 (编辑模式; 轮盘 item 转发 scenePos) ──
+
+    def begin_wheel_drag(self, scene_pos):
+        self._wheel_drag_anchor = scene_pos
+        self._wheel_drag_base = (self._wheel_x, self._wheel_y)
+        self._wheel_dragged = False
+
+    def update_wheel_drag(self, scene_pos):
+        if self._wheel_drag_anchor is None:
+            return
+        gs = self.grid_size or 1
+        dx = scene_pos.x() - self._wheel_drag_anchor.x()
+        dy = scene_pos.y() - self._wheel_drag_anchor.y()
+        # 网格吸附 (沿用按钮: 相对屏幕中心原点 round)
+        nx = round((self._wheel_drag_base[0] + dx) / gs) * gs
+        ny = round((self._wheel_drag_base[1] + dy) / gs) * gs
+        if nx == self._wheel_x and ny == self._wheel_y:
+            return
+        self._wheel_x, self._wheel_y = int(nx), int(ny)
+        self._wheel_dragged = True
+        self._apply_wheel_position()
+        self._update_wheel_controls()
+
+    def end_wheel_drag(self):
+        moved = self._wheel_dragged
+        self._wheel_drag_anchor = None
+        self._wheel_dragged = False
+        if moved:
+            self.save_config()
 
     def _writeback_ring_config(self, key: str, ring_item, sector_items: list):
         """根据当前 mode 把 ring 数据写回 config[key] 的对应 mode 槽位。
@@ -655,6 +780,8 @@ class OverlayScene(QGraphicsScene):
         self._config['wheel_center_ring_visible'] = self._wheel_center_ring_visible
         self._config['wheel_middle_ring_visible'] = self._wheel_middle_ring_visible
         self._config['wheel_offset'] = self._wheel_offset
+        self._config['wheel_x'] = self._wheel_x
+        self._config['wheel_y'] = self._wheel_y
         # 网格大小 (吸附粒度)
         self._config['grid_size'] = self.grid_size
         # scene_scale 由 OverlayWindow.set_scene_scale 实时写入 _config, 这里不动
@@ -850,8 +977,9 @@ class OverlayScene(QGraphicsScene):
     def _update_wheel_controls(self):
         """更新轮盘样式管理按钮的位置和可见性"""
         show = self._wheel_visible and self.mode == 'edit' and len(self.wheel_items) > 0
-        cx = self.sceneRect().width() / 2
-        cy = self.sceneRect().height() / 2
+        # 控制按钮跟随整盘移动 (+ _wheel_x/_wheel_y)
+        cx = self.sceneRect().width() / 2 + self._wheel_x
+        cy = self.sceneRect().height() / 2 + self._wheel_y
 
         if self._wheel_style_btn is None:
             self._wheel_style_btn = _WheelStyleBtn(self._on_wheel_style_clicked)
@@ -865,6 +993,15 @@ class OverlayScene(QGraphicsScene):
 
         # 按钮位置 — 基于外接正方形右下角
         eff_r = self._get_base_r_outer() + self._wheel_offset
+
+        # 整盘拖动盘 — 懒创建，覆盖整圆(含圆心)供编辑模式整盘拖动
+        if self._wheel_drag_disk is None:
+            self._wheel_drag_disk = _WheelDragDisk(self)
+            self.addItem(self._wheel_drag_disk)
+        self._wheel_drag_disk.set_radius(eff_r)
+        self._wheel_drag_disk.setPos(cx, cy)
+        self._wheel_drag_disk.setVisible(show)
+
         s = WHEEL_RESIZE_BTN_SIZE
         resize_x = cx + eff_r - s
         resize_y = cy + eff_r - s

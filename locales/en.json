@@ -563,7 +563,7 @@
   "recenter": {
     "tab": "Re-center target",
     "screen": "Screen center",
-    "center_ring": "Center ring",
+    "center_ring": "Center wheel",
     "wheel": "Steering wheel",
     "empty": "No targets"
   }

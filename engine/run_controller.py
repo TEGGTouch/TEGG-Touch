@@ -470,10 +470,15 @@ class RunController(QObject):
                 item, scene_pos, _, _ = self._get_cursor_item()
                 if item and hasattr(item, 'data'):
                     _on_btn = True
-                # 光标接近中心也重置 (50px)
+                # 光标接近中心也重置 (50px) — 中心点跟随移动后的中心轮盘
                 if scene_pos:
-                    center_x = self._scene.sceneRect().width() / 2
-                    center_y = self._scene.sceneRect().height() / 2
+                    wc = (self._scene.wheel_center_scene()
+                          if hasattr(self._scene, 'wheel_center_scene') else None)
+                    if wc is not None:
+                        center_x, center_y = wc.x(), wc.y()
+                    else:
+                        center_x = self._scene.sceneRect().width() / 2
+                        center_y = self._scene.sceneRect().height() / 2
                     if abs(scene_pos.x() - center_x) <= 50 and abs(scene_pos.y() - center_y) <= 50:
                         _on_btn = True
             except Exception:
@@ -814,10 +819,9 @@ class RunController(QObject):
             return (screen.x() + screen.width() // 2,
                     screen.y() + screen.height() // 2)
         if key == 'center_ring':
-            item = getattr(scene, 'ring_item', None) or getattr(scene, 'inner_ring_item', None)
-            if item is not None and _is_alive(item):
-                return _to_screen(item.sceneBoundingRect().center())
-            return None
+            # 回中到中心轮盘几何中心 (任何环模式都成立; 跟随整盘拖动)
+            c = scene.wheel_center_scene() if hasattr(scene, 'wheel_center_scene') else None
+            return _to_screen(c) if c is not None else None
         if key == 'wheel':
             from scene.gp_wheel_item import GpWheelItem
             for it in scene.button_items:

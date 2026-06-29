@@ -270,7 +270,21 @@ class WheelSectorItem(QGraphicsObject):
                 self.set_visual_state('active_middle')
             event.accept()
         else:
-            super().mousePressEvent(event)
+            # 编辑模式: 左键拖动 → 整盘移动 (委托 scene 整组移动)
+            if (event.button() == Qt.MouseButton.LeftButton
+                    and self.scene() is not None):
+                self.scene().begin_wheel_drag(event.scenePos())
+                event.accept()
+            else:
+                super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (self._mode == 'edit' and self.scene() is not None
+                and getattr(self.scene(), '_wheel_drag_anchor', None) is not None):
+            self.scene().update_wheel_drag(event.scenePos())
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if self._mode == 'run':
@@ -285,7 +299,9 @@ class WheelSectorItem(QGraphicsObject):
             self.set_visual_state('hover' if self._hover_sm.is_active else 'normal')
             event.accept()
         else:
-            super().mouseReleaseEvent(event)
+            if self.scene() is not None:
+                self.scene().end_wheel_drag()
+            event.accept()
 
     def mouseDoubleClickEvent(self, event):
         """双击 → 打开编辑弹窗"""
