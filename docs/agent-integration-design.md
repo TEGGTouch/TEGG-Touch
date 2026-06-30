@@ -1,7 +1,9 @@
 # TEGGTouch-PyQt6 Agent 集成调查与架构方案
 
-> 状态：调查 / 设计阶段（未进入实现）
-> 本文是 Agent 能力的总纲文档，后续所有相关讨论与拆分都基于它迭代。
+> 状态：**阶段0 地基已实现**（分支 `feature/agent-integration`）；阶段1+ 设计中。
+> 本文是 Agent 能力的总纲文档 + 开发者接入指南，后续讨论与拆分都基于它迭代。
+>
+> **想直接接 agent 的开发者**：跳到下方「接入 Agent：开发者指南」一节。
 
 ## Context
 
@@ -47,6 +49,153 @@ Agent 的"大脑"为**云端多模态模型**（不绑定具体厂商；用户�
 
 ---
 
+## 已实现（阶段0 地基）
+
+阶段0 的目标是让 agent **无需懂 UI、即可程序化操作蛋挞**，并保证基建与 agent 解耦、可并行开发。已落地：
+
+| 能力 | 实现 | 文件 |
+|---|---|---|
+| **Agent 工具层**（控制 + 配置两套 toolset） | `ControlTools` / `ConfigTools`，纯 headless、无 Qt 依赖、返回可序列化 dict | `agent/tool_layer.py` |
+| **执行服务**（宏/应用/屏幕回中） | 从 RunController 抽出的纯逻辑，运行时与 agent **共用同一份** | `core/action_service.py` |
+| **配置热生效** | 运行中重读 profile 应用到场景，不退编辑模式/不重启 | `OverlayWindow.reload_active_profile()`、`RunController.prepare_hot_reload()`、`OverlayScene.clear_all_items()` |
+| **鼠标绝对定位** | `mouse_move(x, y)`（G5 的精准定位部分） | `core/input_engine.py` |
+| **验证脚本** | 工具层全路径演示 / 热重载机制测试 | `agent/headless_demo.py`、`agent/test_hot_reload.py` |
+
+### 解耦现状（关键）
+
+依赖是**单向**的，agent 是**纯增量**——删掉 `agent/` 整个目录，蛋挞照常运行：
+
+```
+agent/  ──依赖──▶  core/ (input_engine · action_service · config_manager · constants)
+                   └─ engine/gamepad_engine (惰性)
+              ╳ 不依赖  views/ · scene/ · 任何 Qt/UI
+
+core · engine · views  ──▶  从不 import agent/   (基建不知道 agent 存在)
+```
+
+→ **基建与 agent 可独立开发**，但共享一份"契约"（见下方指南的"稳定契约"）。两者仍在同一进程（决策 #1：先进程内，接口按可抽 IPC 设计）。
+
+---
+
+## 接入 Agent：开发者指南
+
+本节给"要把一个 agent（或任何自动化）接到蛋挞上"的开发者。**只依赖下面列出的稳定面，不要碰基建内部。**
+
+### 1. 稳定契约（可放心依赖）
+
+| 接入面 | 说明 |
+|---|---|
+| `agent.tool_layer.ControlTools` | 把"标签语法"翻译成真实输入（键盘/鼠标/手柄/绝对移动/宏/应用/回中） |
+| `agent.tool_layer.ConfigTools` | 程序化读写 profile 绑定与参数 |
+| `core.action_service` | 宏/应用/屏幕回中的纯函数（工具层底下，需要时也可直接用） |
+| `OverlayWindow.reload_active_profile()` | 改完配置后让运行中的蛋挞热生效（**唯一伸进活应用的口子**） |
+| **数据 schema + 标签语法 + action 名** | profile JSON 字段、`mouse:`/`gp:`/`xmacro:`/`app:`/`recenter:` 标签、`click/press/release` |
+
+> ⚠️ **内部、随时会变，别直接依赖**：`RunController._smart_trigger` 及其私有方法、scene/UI 内部结构。
+
+### 2. action 协议（决策 #2：复用现有语法）
+
+- **action**：`click`（按下+短延迟+释放）| `press`（按住）| `release`（松开）
+- **token**（多个用 `+` 连，普通键合并为组合键一次触发）：
+  - 普通键：`w`、`ctrl`、`f4`、`ctrl+f4` …
+  - 鼠标键：`mouse:left` / `right` / `middle` / `x1` / `x2`；滚轮 `mouse:wheelup` / `mouse:wheeldown`
+  - 手柄：`gp:A` `gp:B` `gp:X` `gp:Y` `gp:LB` `gp:RB` `gp:LT` `gp:RT` `gp:Start` `gp:Back` `gp:Guide` `gp:D-Up/D-Down/D-Left/D-Right` `gp:L3` `gp:R3`
+  - 宏：`xmacro:<名>`（统一池，推荐）/ `gpmacro:<名>` / `macro:<名>`
+  - 启动应用：`app:<应用名>`（从 profile 的 apps 池解析路径）
+  - 回中：`recenter:screen` ✅ 可 headless；`recenter:wheel` / `recenter:stick:<名>` / `recenter:center_ring` ⛔ 需运行中的窗口几何，headless 返回 `deferred`
+- **返回**：`{key_str, action, ok, steps:[{part, kind, status, detail, ...}]}`，`status ∈ ok | error | skip | deferred`。
+
+### 3. 控制工具（ControlTools）
+
+所有方法 `@staticmethod`，**支持 `dry_run`**（决策 #3：先预演给用户确认，确认/auto 后再真跑）：
+
+```python
+from agent.tool_layer import ControlTools
+
+# 单个绑定值（组合键正确成立）
+ControlTools.run_keys("ctrl+f4", action="click", dry_run=True)        # 预演
+ControlTools.run_keys("ctrl+f4", action="click")                     # 真跑
+
+# 鼠标绝对定位
+ControlTools.move_mouse(960, 540)
+
+# 动作序列：每步 = {"keys",...} | {"delay_ms":N} | {"move":[x,y]}
+ControlTools.run_sequence([
+    {"keys": "ctrl+c", "action": "click", "after_ms": 50},
+    {"delay_ms": 100},
+    {"move": [200, 200]},
+    {"keys": "mouse:wheelup", "action": "click"},
+], profile=None)   # profile=None → 当前活跃方案（宏/应用从该方案查）
+```
+
+### 4. 配置工具（ConfigTools）
+
+读写 profile；纯文件 IO + 原子写，**任意线程安全**。改完要在运行中生效，见第 6 节。
+
+```python
+from agent.tool_layer import ConfigTools
+
+ConfigTools.list_profiles()                  # {"active": "...", "profiles": [...]}
+ConfigTools.summarize_profile()              # 给 agent 看的精简摘要(按钮绑定/轮盘/语音/宏/应用)
+ConfigTools.read_profile("方案名")           # 完整 dict
+ConfigTools.set_button_binding(0, "hover", "ctrl+f4")   # 改按钮0的 hover 并落盘
+ConfigTools.set_param("transparency", 0.5)              # 改顶层参数并落盘
+```
+
+`set_button_binding` 的 `field` 白名单：`hover/lclick/rclick/mclick/wheelup/wheeldown/xbutton1/xbutton2/hover_delay/hover_release_delay/hover_mode/hover_toggle/recenter_target`。
+
+### 5. 线程规则（重要，别踩）
+
+| 操作 | 可在哪个线程 |
+|---|---|
+| `ControlTools` 发输入（input_engine / gamepad） | **任意线程**（宏线程已这么做） |
+| `ConfigTools` 读写 profile（文件 IO） | **任意线程**（原子写） |
+| `reload_active_profile()` 及一切动 scene/UI 的操作 | **必须 Qt 主(GUI)线程** |
+
+→ agent 子线程**不要直接调 `reload_active_profile()`**；应 `emit` 一个 pyqtSignal，让主线程槽函数去调（QueuedConnection 自动跨线程）。
+
+### 6. 配置改完如何热生效
+
+```python
+# agent 子线程里：改配置（文件 IO，安全）
+ConfigTools.set_button_binding(0, "hover", "ctrl+f4")
+# 然后发信号回主线程
+self.config_changed.emit()           # 自定义信号
+
+# 主线程槽函数：
+def _on_config_changed(self):
+    self._overlay_window.reload_active_profile()   # 运行中立即生效，无需退编辑模式
+```
+
+### 7. 接一个云端 Agent 循环（照 `core/update_checker.py` 的 QThread 范式）
+
+```python
+class AgentThread(QThread):
+    actions_ready = pyqtSignal(list)     # 云端返回的动作列表
+    config_changed = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def run(self):
+        # 子线程：阻塞式云端调用（HTTP/WebSocket）+ 可选截屏(需告知用户)
+        result = self._call_cloud(self._prompt, screenshot=...)
+        self.actions_ready.emit(result["actions"])
+
+# 主线程接线：
+agent.actions_ready.connect(self._apply_agent_actions)   # 控制类: 可直接 ControlTools.run_sequence
+agent.config_changed.connect(lambda: self._window.reload_active_profile())  # 配置类: 主线程热生效
+```
+
+安全层（决策 #3）建议套在主线程"应用动作"前：默认先把动作 `dry_run` 给用户确认，auto 模式直接执行，并提供紧急中断（D4 定状态机）。
+
+### 8. 跑验证脚本
+
+```bash
+python -m agent.headless_demo     # 工具层全路径(安全, dry-run); --live 才真实发输入
+python -m agent.test_hot_reload   # 配置热重载机制(offscreen)
+```
+
+---
+
 ## 现状评估：为什么不需要大重构
 
 蛋挞本质就是"把意图翻译成输入"的引擎，agent 要的能力它大半已有雏形。**唯一算结构改造的核心工作是抽出统一的 Agent 工具层**，其余是补能力、加接口。
@@ -60,15 +209,16 @@ Agent 的"大脑"为**云端多模态模型**（不绑定具体厂商；用户�
 | **动作原语** | 键盘 `trigger/press_key/release_key`、鼠标 `mouse_press/release/wheel`、手柄 `press_button/release_button/set_stick/set_trigger/flush`、`_do_recenter`、`_launch_app`、`_execute_macro` | `core/input_engine.py`、`engine/gamepad_engine.py`、`engine/run_controller.py` |
 | **并发范式** | `QThread + pyqtSignal` 已被 `VoiceEngine`/宏线程反复验证；`UpdateChecker` 已在子线程跑网络 IO 并用信号回主线程 —— 云端 agent 循环可直接照搬 | `engine/voice_engine.py`、`core/update_checker.py` |
 
-### 需要补的缺口
+### 缺口与进度
 
-| # | 缺口 | 现状 | 要做什么 |
+| # | 缺口 | 状态 | 说明 |
 |---|---|---|---|
-| G1 | **Agent 工具层抽象** | 执行能力散在多个模块的私有方法里，无统一入口、无给 LLM 用的 schema | 收敛成稳定、带工具描述、可进程内/外调用的接口（核心结构改造） |
-| G2 | **配置程序化 + 热生效** | 可程序化改 JSON，但运行时**不热加载**（要退回编辑模式重进才生效）；无变更广播 | 加 `reload_profile_in_place()` + 配置变更信号 |
-| G3 | **自然语言双路路由** | Vosk 是 **grammar 约束**，只认固定短语；只有一条"短语→按键"链 | 本地快路保留；自由 NL 分流给 agent（ASR 需加一条无约束转写，或音频/文本直传云端） |
-| G4 | **Agent 运行时** | 无 | 新建 `AgentThread`（照 `UpdateChecker` 写）+ 编排 + 安全/确认/中断层 |
-| G5 | **多模态感知 + 精准定位** | **无截屏**；**无"鼠标移到绝对坐标"公开 API**（仅内部用过 `SetCursorPos`） | 补截屏（带告知/开关）+ `mouse_move(x,y)` 工具 |
+| G1 | **Agent 工具层抽象** | ✅ 已实现 | `agent/tool_layer.py` + `core/action_service.py`；执行逻辑从 RunController 解耦，运行时与 agent 共用。仅 `recenter:wheel/stick/center_ring` 仍 deferred（本质依赖运行时窗口几何） |
+| G2 | **配置程序化 + 热生效** | ✅ 已实现 | `reload_active_profile()` + `prepare_hot_reload()` + `clear_all_items()`；运行中重读 profile 即生效 |
+| G5 | **鼠标绝对定位** | ✅ 部分（定位） | `input_engine.mouse_move(x,y)`；**截屏部分未做**（属 G5 多模态感知，待阶段2） |
+| G3 | **自然语言双路路由** | ⬜ 待做 | Vosk 是 grammar 约束只认固定短语；本地快路保留，自由 NL 分流给 agent（ASR 需加无约束转写或音频/文本直传云端） |
+| G4 | **Agent 运行时** | ⬜ 待做 | 新建 `AgentThread`（照 `UpdateChecker` 写）+ 编排 + 安全/确认/中断层（见接入指南第 7 节） |
+| G5b | **多模态截屏** | ⬜ 待做 | 截屏（带告知/开关），供云端多模态 agent "看屏幕"（阶段2） |
 
 ---
 
@@ -111,7 +261,7 @@ Agent 的"大脑"为**云端多模态模型**（不绑定具体厂商；用户�
 
 每阶段都"先原型/调查 → 再落地"。
 
-- **阶段 0 — 地基（必做）**：抽 Agent 工具层（G1）+ 配置程序化/热生效接口（G2）。产出"无头操作蛋挞"能力，可被自动化测试驱动，不接 agent 也有价值。
+- **阶段 0 — 地基** ✅ **已完成**：Agent 工具层（G1）+ 配置热生效（G2）+ 鼠标绝对定位（G5 定位部分）。产出"无头操作蛋挞"能力，已有验证脚本。
 - **阶段 1 — 配置助手（目标2）**：风险最低、闭环最短（读 profile→改→存→热生效），**不碰真实输入、可回滚**。用它把云端 agent 全套（鉴权/超时/流式/错误处理/确认 UI）趟通。
 - **阶段 2 — 任务自动化（目标1）**：agent 规划一串鼠标键盘操作，必须带确认+中断；依赖截屏(G5)与绝对定位。
 - **阶段 3 — 生成蛋挞绑定**：复用阶段0配置工具 + 阶段2感知，交叉收口。
@@ -125,9 +275,9 @@ Agent 的"大脑"为**云端多模态模型**（不绑定具体厂商；用户�
 
 | 编号 | 产出物 | 要回答的问题 |
 |---|---|---|
-| **D1** | 本文档（架构总纲）持续迭代 | 工具层接口契约、action 协议细化、安全状态机 |
-| **D2** | Tool Layer headless 原型 | 不开 UI，能否程序化改 profile + 发一串输入并验证生效？暴露阶段0真实工作量 |
-| **D3** | 延迟基线测量 | 云端 RTT + ASR 延迟实测 → **直接决定阶段4可行性与"实时"的定义** |
+| **D1** | 本文档（架构总纲 + 接入指南）持续迭代 | ✅ 进行中：已含接入指南；待补安全状态机细化 |
+| **D2** | Tool Layer headless 原型 | ✅ 完成：`agent/tool_layer.py` + `headless_demo.py`，已验证程序化改 profile + 发输入 |
+| **D3** | 延迟基线测量 | ⬜ 云端 RTT + ASR 延迟实测 → **直接决定阶段4可行性与"实时"的定义** |
 | **D4** | 隐私/安全评审 | 截屏告知与开关的具体形态、误操作防护、确认/auto/中断状态机 |
 
 ---
@@ -144,13 +294,26 @@ Agent 的"大脑"为**云端多模态模型**（不绑定具体厂商；用户�
 
 ## 附：关键代码位置速查
 
+**已实现（agent 接入面）**
+
+| 功能 | 文件 |
+|---|---|
+| Agent 工具层 `ControlTools` / `ConfigTools` | `agent/tool_layer.py` |
+| 执行服务 `find_macro/run_macro/resolve_app_path/launch_app/screen_center` | `core/action_service.py` |
+| 配置热生效 `reload_active_profile` | `views/overlay_window.py` |
+| 热重载前释放 `prepare_hot_reload` / `_release_all_inputs` | `engine/run_controller.py` |
+| 清场 `clear_all_items` | `scene/overlay_scene.py` |
+| 鼠标绝对定位 `mouse_move` | `core/input_engine.py` |
+| 验证脚本 | `agent/headless_demo.py`、`agent/test_hot_reload.py` |
+
+**基建内部（参考/后续改造点，勿直接依赖）**
+
 | 功能 | 文件 | 位置 |
 |---|---|---|
-| 执行分派中枢 `_smart_trigger` | `engine/run_controller.py` | 681 |
-| 语音命令接收 `_on_voice_command`（NL 分流插入点） | `engine/run_controller.py` | 1765 |
-| 键盘原语 `trigger` | `core/input_engine.py` | 216 |
-| 鼠标原语 `mouse_press/release/wheel` | `core/input_engine.py` | 329-353 |
+| 执行分派中枢 `_smart_trigger` | `engine/run_controller.py` | ~681 |
+| 语音命令接收 `_on_voice_command`（NL 分流插入点，G3） | `engine/run_controller.py` | ~1765 |
+| 键盘/鼠标原语 `trigger` / `mouse_*` | `core/input_engine.py` | — |
 | 手柄原语 | `engine/gamepad_engine.py` | 93-170 |
 | 配置 API `load_profile/save_profile` | `core/config_manager.py` | 730-744 |
-| 子线程网络范式 `UpdateChecker` | `core/update_checker.py` | 68-132 |
+| 子线程网络范式 `UpdateChecker`（AgentThread 照此写，G4） | `core/update_checker.py` | 68-132 |
 | Vosk grammar 约束（G3 改造点） | `engine/voice_engine.py` | 225-229 |
