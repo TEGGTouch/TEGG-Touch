@@ -226,18 +226,29 @@ def trigger(keys: str, action: str):
     if not key_list:
         return
     try:
-        for k in key_list:
-            sc, ext = _resolve_scan(k)
-            if sc == 0:
-                continue
-            if action == 'p':
+        if action == 'c':
+            # 组合键 click: 必须「全部按下 → 延迟 → 逆序全部释放」, 否则像
+            # ctrl+f4 会被逐键拆成 ctrl 单击 + f4 单击, 修饰键提前松开, 组合键不成立。
+            scans = []
+            for k in key_list:
+                sc, ext = _resolve_scan(k)
+                if sc == 0:
+                    continue
+                scans.append((sc, ext))
+            for sc, ext in scans:
                 press_key(sc, ext)
-            elif action == 'r':
+            time.sleep(random.uniform(0.03, 0.06))
+            for sc, ext in reversed(scans):
                 release_key(sc, ext)
-            elif action == 'c':
-                press_key(sc, ext)
-                time.sleep(random.uniform(0.03, 0.06))
-                release_key(sc, ext)
+        else:
+            for k in key_list:
+                sc, ext = _resolve_scan(k)
+                if sc == 0:
+                    continue
+                if action == 'p':
+                    press_key(sc, ext)
+                elif action == 'r':
+                    release_key(sc, ext)
     except Exception as e:
         logger.error(f"触发按键失败: keys={keys}, action={action}, error={e}")
 
