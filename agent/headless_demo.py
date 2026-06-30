@@ -92,27 +92,53 @@ def demo_control(live: bool):
 
     dry = not live
 
-    # 单组合键 (核心: 证明 ctrl+f4 这类组合在 headless 下能正确解析/合并)
-    _dump("run_keys('ctrl+f4', click)", ControlTools.run_keys("ctrl+f4", "click", dry_run=dry))
+    # 准备一个带宏的临时方案, 供 macro: 演示 (跑完即删)
+    if TMP_PROFILE in cfg.list_profiles():
+        cfg.delete_profile(TMP_PROFILE)
+    cfg.create_profile(TMP_PROFILE, from_template=False)
+    ConfigTools.set_param("xmacros", [{
+        "name": "演示连招", "repeat": 1,
+        "steps": [{"type": "key", "key": "a", "action": "click"},
+                  {"type": "delay", "ms": 50},
+                  {"type": "key", "key": "b", "action": "click"}],
+    }], name=TMP_PROFILE)
 
-    # 混合标签: 普通键 + 鼠标 + 手柄 + deferred(宏)
-    _dump("run_keys('shift+mouse:left', click)",
-          ControlTools.run_keys("shift+mouse:left", "click", dry_run=dry))
-    _dump("run_keys('gp:A', click)", ControlTools.run_keys("gp:A", "click", dry_run=dry))
-    _dump("run_keys('xmacro:连招', click) — 应 deferred",
-          ControlTools.run_keys("xmacro:连招", "click", dry_run=dry))
+    try:
+        # 单组合键 (核心: 证明 ctrl+f4 这类组合在 headless 下能正确解析/合并)
+        _dump("run_keys('ctrl+f4', click)", ControlTools.run_keys("ctrl+f4", "click", dry_run=dry))
 
-    # 鼠标绝对定位 (G5)
-    _dump("move_mouse(960, 540)", ControlTools.move_mouse(960, 540, dry_run=dry))
+        # 混合标签: 普通键 + 鼠标 / 手柄
+        _dump("run_keys('shift+mouse:left', click)",
+              ControlTools.run_keys("shift+mouse:left", "click", dry_run=dry))
+        _dump("run_keys('gp:A', click)", ControlTools.run_keys("gp:A", "click", dry_run=dry))
 
-    # 动作序列
-    seq = [
-        {"keys": "ctrl+c", "action": "click", "after_ms": 50},
-        {"delay_ms": 100},
-        {"move": [200, 200]},
-        {"keys": "mouse:wheelup", "action": "click"},
-    ]
-    _dump("run_sequence([...])", ControlTools.run_sequence(seq, dry_run=dry))
+        # 宏: G1 后已可执行 (不再 deferred)
+        _dump("run_keys('xmacro:演示连招') — G1 后可执行",
+              ControlTools.run_keys("xmacro:演示连招", "click", dry_run=dry, profile=TMP_PROFILE))
+
+        # 启动应用: 不存在 → 优雅报错
+        _dump("run_keys('app:不存在的应用') — 优雅报错",
+              ControlTools.run_keys("app:不存在的应用", "click", dry_run=dry, profile=TMP_PROFILE))
+
+        # 回中: screen 可 headless; wheel 需运行时窗口几何 → deferred
+        _dump("run_keys('recenter:screen') — 可执行",
+              ControlTools.run_keys("recenter:screen", "click", dry_run=dry))
+        _dump("run_keys('recenter:wheel') — 应 deferred",
+              ControlTools.run_keys("recenter:wheel", "click", dry_run=dry))
+
+        # 鼠标绝对定位 (G5)
+        _dump("move_mouse(960, 540)", ControlTools.move_mouse(960, 540, dry_run=dry))
+
+        # 动作序列
+        seq = [
+            {"keys": "ctrl+c", "action": "click", "after_ms": 50},
+            {"delay_ms": 100},
+            {"move": [200, 200]},
+            {"keys": "mouse:wheelup", "action": "click"},
+        ]
+        _dump("run_sequence([...])", ControlTools.run_sequence(seq, dry_run=dry))
+    finally:
+        cfg.delete_profile(TMP_PROFILE)
 
 
 def main():

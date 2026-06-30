@@ -24,6 +24,7 @@ from core.input_engine import (
     mouse_press, mouse_release, mouse_wheel,
 )
 from core.config_manager import load_hotkeys
+from core import action_service
 from core.constants import (
     UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC,
     GP_KEY_PREFIX, APP_PREFIX,
@@ -851,9 +852,8 @@ class RunController(QObject):
 
     def _find_app(self, name: str):
         """解析 app:<name> → 启动路径 (先 profile apps 池, 再回退全局扫描缓存)。"""
-        from core.app_scanner import find_app_path
         config = self._scene.get_config() if hasattr(self._scene, 'get_config') else {}
-        return find_app_path(name, (config or {}).get('apps', []))
+        return action_service.resolve_app_path(name, (config or {}).get('apps', []))
 
     def _launch_app(self, name: str):
         """启动本地应用 (os.startfile 解析 .lnk/.exe), 带 ~1.5s 冷却防重复。"""
@@ -865,11 +865,7 @@ class RunController(QObject):
         if now - self._app_cooldown.get(path, 0.0) < 1.5:
             return
         self._app_cooldown[path] = now
-        try:
-            os.startfile(path)
-            logger.info("启动应用: '%s' → %s", name, path)
-        except Exception as e:
-            logger.warning("启动应用失败 '%s' (%s): %s", name, path, e)
+        action_service.launch_app(path)
 
     # ── 摇杆轮询: 状态机 + 跨摇杆切换 + SetCursorPos 圆心 + gp engine ──
 
@@ -1654,78 +1650,34 @@ class RunController(QObject):
     def _find_macro(self, name: str, pool: str = 'kb'):
         """从当前 config 中查找宏。pool='x' 查 xmacros (统一池), 'gp' 查 gp_macros, 其余查 macros"""
         config = self._scene.get_config() if hasattr(self._scene, 'get_config') else {}
-        field = {'x': 'xmacros', 'gp': 'gp_macros'}.get(pool, 'macros')
-        for m in config.get(field, []):
-            if m.get('name') == name:
-                return m
-        return None
+        return action_service.find_macro(config, name, pool)
+
+    def _macro_trigger(self, keys: str, act: str):
+        """宏步骤的执行后端 — click 走 p+r (组合键按住语义), 与历史行为一致。"""
+        if act == 'click':
+            self._smart_trigger(keys, 'p')
+            self._smart_trigger(keys, 'r')
+        elif act == 'press':
+            self._smart_trigger(keys, 'p')
+        elif act == 'release':
+            self._smart_trigger(keys, 'r')
 
     def _execute_macro(self, macro_data: dict):
-        """在后台线程中顺序执行宏步骤 (避免 delay 阻塞主循环)
+        """在后台线程中顺序执行宏步骤 (避免 delay 阻塞主循环)。
 
-        支持两种步骤格式:
-          - type='key':  {"type":"key", "key":"a+b", "action":"click"}
-          - type='delay': {"type":"delay", "ms":100}
-          - 旧格式(兼容): {"keys":"a+b", "action":"click", "delay":50}
+        步骤格式与执行逻辑见 core.action_service.run_macro; 这里只负责
+        起线程 + 注入执行后端(_macro_trigger) 与中断条件(self._active)。
         """
-        steps = macro_data.get('steps', [])
-        repeat = max(1, macro_data.get('repeat', 1))
-        name = macro_data.get('name', '?')
-        if not steps:
+        if not macro_data.get('steps'):
             return
+        name = macro_data.get('name', '?')
 
         def _run():
-            for r in range(repeat):
-                for step in steps:
-                    if not self._active:
-                        return
-                    step_type = step.get('type', 'key')
+            n = action_service.run_macro(
+                macro_data, self._macro_trigger, is_active=lambda: self._active)
+            logger.info("Macro '%s' executed (%d steps)", name, n)
 
-                    if step_type == 'delay':
-                        # 延迟步骤: {"type":"delay", "ms":100}
-                        ms = step.get('ms', 50)
-                        if ms > 0:
-                            _time.sleep(ms / 1000.0)
-
-                    elif step_type == 'key':
-                        # 按键步骤: {"type":"key", "key":"a+b", "action":"click"}
-                        # 兼容旧格式 "keys" 字段
-                        # 使用 _smart_trigger 以支持 mouse: 和 macro: 前缀
-                        keys = step.get('key', '') or step.get('keys', '')
-                        act = step.get('action', 'click')
-                        if keys:
-                            if act == 'click':
-                                self._smart_trigger(keys, 'p')
-                                self._smart_trigger(keys, 'r')
-                            elif act == 'press':
-                                self._smart_trigger(keys, 'p')
-                            elif act == 'release':
-                                self._smart_trigger(keys, 'r')
-                        # 旧格式可能有内嵌 delay
-                        delay = step.get('delay', 0)
-                        if delay > 0:
-                            _time.sleep(delay / 1000.0)
-
-                    else:
-                        # 未知类型，尝试旧格式兼容
-                        keys = step.get('keys', '') or step.get('key', '')
-                        act = step.get('action', 'click')
-                        delay = step.get('delay', 50)
-                        if keys:
-                            if act == 'click':
-                                self._smart_trigger(keys, 'p')
-                                self._smart_trigger(keys, 'r')
-                            elif act == 'press':
-                                self._smart_trigger(keys, 'p')
-                            elif act == 'release':
-                                self._smart_trigger(keys, 'r')
-                        if delay > 0:
-                            _time.sleep(delay / 1000.0)
-
-            logger.info("Macro '%s' executed (repeat=%d, steps=%d)", name, repeat, len(steps))
-
-        t = threading.Thread(target=_run, daemon=True)
-        t.start()
+        threading.Thread(target=_run, daemon=True).start()
 
     # ── 语音引擎集成 ──
 

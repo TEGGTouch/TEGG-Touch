@@ -27,6 +27,7 @@ import logging
 import time
 
 from core import input_engine
+from core import action_service
 from core.constants import APP_PREFIX, GP_KEY_PREFIX, GP_LABEL_TO_KEY
 from core import config_manager as cfg
 
@@ -35,8 +36,8 @@ logger = logging.getLogger(__name__)
 # action(agent 用语) → input_engine 动作码
 _ACTION_CODE = {"click": "c", "press": "p", "release": "r"}
 
-# 需要运行时上下文、headless 暂不执行的标签前缀
-_DEFERRED_PREFIXES = ("macro:", "xmacro:", "gpmacro:", "recenter:", APP_PREFIX)
+# 宏标签前缀 → action_service 宏池
+_MACRO_PREFIX_POOL = {"xmacro:": "x", "gpmacro:": "gp", "macro:": "kb"}
 
 # 合法的手柄标签 (存储 key)
 _GP_LABELS = set(GP_LABEL_TO_KEY.values())
@@ -54,12 +55,13 @@ class ControlTools:
     """把意图(标签语法)翻译成真实输入。所有方法返回可序列化 dict, 便于日后 IPC。"""
 
     @staticmethod
-    def run_keys(key_str: str, action: str = "click", dry_run: bool = False) -> dict:
+    def run_keys(key_str: str, action: str = "click", dry_run: bool = False,
+                 profile: str | None = None) -> dict:
         """执行一个绑定值 (可含 '+' 组合 / 多标签)。
 
         复刻 run_controller._smart_trigger 的分类逻辑, 但完全 headless:
         '+' 拆分后, 普通键合并成组合键一次触发(保证 ctrl+f4 这类成立),
-        mouse:/gp: 各自执行, deferred 类标记返回。
+        mouse:/gp:/macro:/app:/recenter: 各自执行 (宏/应用从 profile 配置查)。
 
         返回 {key_str, action, steps:[{part, kind, status, detail}...]}。
         """
@@ -72,11 +74,14 @@ class ControlTools:
         steps: list[dict] = []
 
         for p in parts:
-            low = p.lower()
-            if any(p.startswith(pref) for pref in _DEFERRED_PREFIXES):
-                pref = next(x for x in _DEFERRED_PREFIXES if p.startswith(x))
-                steps.append({"part": p, "kind": "deferred", "status": "deferred",
-                              "detail": f"'{pref}' 需运行时上下文(RunController/scene), headless 暂不执行"})
+            macro_pref = next((x for x in _MACRO_PREFIX_POOL if p.startswith(x)), None)
+            if macro_pref:
+                steps.append(ControlTools._do_macro(
+                    p[len(macro_pref):], _MACRO_PREFIX_POOL[macro_pref], action, dry_run, profile))
+            elif p.startswith("recenter:"):
+                steps.append(ControlTools._do_recenter(p[len("recenter:"):], dry_run))
+            elif p.startswith(APP_PREFIX):
+                steps.append(ControlTools._do_app(p[len(APP_PREFIX):], dry_run, profile))
             elif p.startswith("mouse:"):
                 steps.append(ControlTools._do_mouse(p[6:], action, dry_run))
             elif p.startswith(GP_KEY_PREFIX):
@@ -170,6 +175,56 @@ class ControlTools:
         return {"part": token, "kind": "gamepad", "status": "ok",
                 "detail": f"gamepad {label} {action}"}
 
+    # ── 宏 (复用 core.action_service, 与运行时同一份实现) ──
+    @staticmethod
+    def _do_macro(name: str, pool: str, action: str, dry_run: bool,
+                  profile: str | None) -> dict:
+        token = {"x": "xmacro:", "gp": "gpmacro:", "kb": "macro:"}[pool] + name
+        if action == "release":  # 宏只在 press/click 触发, 与 _smart_trigger 一致
+            return {"part": token, "kind": "macro", "status": "skip", "detail": "release 忽略"}
+        config = cfg.load_profile(profile or cfg.get_active_profile_name())
+        macro = action_service.find_macro(config, name, pool)
+        if macro is None:
+            return {"part": token, "kind": "macro", "status": "error",
+                    "detail": f"宏未找到: {name} (pool={pool})"}
+        n_steps = len(macro.get("steps", []))
+        if dry_run:
+            return {"part": token, "kind": "macro", "status": "ok",
+                    "detail": f"[dry-run] 宏 '{name}' ({n_steps} 步 ×{macro.get('repeat', 1)})"}
+        trig = lambda keys, act: ControlTools.run_keys(keys, act, dry_run=False, profile=profile)
+        done = action_service.run_macro(macro, trig)
+        return {"part": token, "kind": "macro", "status": "ok",
+                "detail": f"宏 '{name}' 执行 {done} 步"}
+
+    # ── 启动应用 ──
+    @staticmethod
+    def _do_app(name: str, dry_run: bool, profile: str | None) -> dict:
+        token = f"{APP_PREFIX}{name}"
+        config = cfg.load_profile(profile or cfg.get_active_profile_name())
+        path = action_service.resolve_app_path(name, config.get("apps", []))
+        if not path:
+            return {"part": token, "kind": "app", "status": "error",
+                    "detail": f"应用未找到/路径失效: {name}"}
+        if dry_run:
+            return {"part": token, "kind": "app", "status": "ok",
+                    "detail": f"[dry-run] launch {path}"}
+        ok = action_service.launch_app(path)
+        return {"part": token, "kind": "app", "status": "ok" if ok else "error",
+                "detail": f"launch {path}"}
+
+    # ── 回中 (仅 screen 可 headless; wheel/stick/center_ring 需运行时窗口几何) ──
+    @staticmethod
+    def _do_recenter(target: str, dry_run: bool) -> dict:
+        token = f"recenter:{target}"
+        if target in ("", "screen"):
+            cx, cy = action_service.screen_center()
+            if not dry_run:
+                input_engine.mouse_move(cx, cy)
+            return {"part": token, "kind": "recenter", "status": "ok",
+                    "detail": f"{'[dry-run] ' if dry_run else ''}回中到主屏中心 ({cx}, {cy})"}
+        return {"part": token, "kind": "recenter", "status": "deferred",
+                "detail": f"'{target}' 需运行中的窗口/控件几何, headless 无法解析"}
+
     # ── 鼠标绝对定位 (G5) ──
     @staticmethod
     def move_mouse(x: int, y: int, dry_run: bool = False) -> dict:
@@ -180,7 +235,8 @@ class ControlTools:
 
     # ── 动作序列 ──
     @staticmethod
-    def run_sequence(steps: list[dict], dry_run: bool = False) -> dict:
+    def run_sequence(steps: list[dict], dry_run: bool = False,
+                     profile: str | None = None) -> dict:
         """执行一串动作。每步是下列之一:
             {"keys": "ctrl+c", "action": "click", "after_ms": 100}
             {"delay_ms": 200}
@@ -200,7 +256,8 @@ class ControlTools:
                 results.append({"i": i, **ControlTools.move_mouse(x, y, dry_run)})
                 continue
             if "keys" in step:
-                r = ControlTools.run_keys(step["keys"], step.get("action", "click"), dry_run)
+                r = ControlTools.run_keys(step["keys"], step.get("action", "click"),
+                                          dry_run, profile)
                 results.append({"i": i, **r})
                 after = int(step.get("after_ms", 0))
                 if after and not dry_run:
