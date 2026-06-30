@@ -333,6 +333,47 @@ class OverlayScene(QGraphicsScene):
         """公开访问当前配置引用（替代直接访问 _config）"""
         return self._config
 
+    def clear_all_items(self):
+        """清空场景中所有按钮 / 轮盘 / 圆环 item — 方案切换与配置热重载共用。
+
+        移除前先 reset 各 item 的 hover 状态机, 防止其定时器回调到已删 item。
+        """
+        def _reset_sm(it):
+            if hasattr(it, '_hover_sm'):
+                try:
+                    it._hover_sm.reset()
+                except Exception:
+                    pass
+
+        for item in list(self.button_items):
+            _reset_sm(item)
+            self.removeItem(item)
+        self.button_items.clear()
+        for item in list(self.wheel_items):
+            _reset_sm(item)
+            self.removeItem(item)
+        self.wheel_items.clear()
+        for item in list(self.outer_wheel_items):
+            _reset_sm(item)
+            self.removeItem(item)
+        self.outer_wheel_items.clear()
+        if self.ring_item:
+            _reset_sm(self.ring_item)
+            self.removeItem(self.ring_item)
+            self.ring_item = None
+        if self.inner_ring_item:
+            _reset_sm(self.inner_ring_item)
+            self.removeItem(self.inner_ring_item)
+            self.inner_ring_item = None
+        for it in list(self.center_ring_sector_items):
+            _reset_sm(it)
+            self.removeItem(it)
+        self.center_ring_sector_items.clear()
+        for it in list(self.inner_ring_sector_items):
+            _reset_sm(it)
+            self.removeItem(it)
+        self.inner_ring_sector_items.clear()
+
     def list_recenter_targets(self) -> list:
         """当前布局里可回中的目标 [{key,label}]: 屏幕中心 + (中心环) + (方向盘) + 各摇杆。"""
         from scene.gp_stick_item import GpStickItem, stick_display_name

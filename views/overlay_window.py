@@ -1017,29 +1017,8 @@ class OverlayWindow(QGraphicsView):
         self._scene.save_config()
         # Bug 1 fix: 更新索引文件中的活跃方案名（必须在保存旧方案之后、加载新方案之前）
         set_active_profile(name)
-        # 清空场景中的按钮
-        for item in list(self._scene.button_items):
-            self._scene.removeItem(item)
-        self._scene.button_items.clear()
-        # 清空轮盘
-        for item in list(self._scene.wheel_items):
-            self._scene.removeItem(item)
-        self._scene.wheel_items.clear()
-        for item in list(self._scene.outer_wheel_items):
-            self._scene.removeItem(item)
-        self._scene.outer_wheel_items.clear()
-        if self._scene.ring_item:
-            self._scene.removeItem(self._scene.ring_item)
-            self._scene.ring_item = None
-        if self._scene.inner_ring_item:
-            self._scene.removeItem(self._scene.inner_ring_item)
-            self._scene.inner_ring_item = None
-        for it in list(self._scene.center_ring_sector_items):
-            self._scene.removeItem(it)
-        self._scene.center_ring_sector_items.clear()
-        for it in list(self._scene.inner_ring_sector_items):
-            self._scene.removeItem(it)
-        self._scene.inner_ring_sector_items.clear()
+        # 清空场景中的按钮 / 轮盘
+        self._scene.clear_all_items()
         # 加载新方案
         config = load_profile(name)
         self._profile_name = name
@@ -1077,6 +1056,58 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.set_sim_mode(self._sim_mode)
         self._resolve_appearance_from_profile(_hk)
         self._apply_appearance_to_items()
+
+    def reload_active_profile(self):
+        """从磁盘重新加载当前 profile 并应用到场景 — 配置热生效 (G2)。
+
+        供 agent 配置助手 / 外部编辑器改完 profile 后调用; 编辑与运行模式均可。
+        运行模式下先让 RunController 释放按住状态与 item 引用, 再清场重建;
+        RunController 仍在轮询, 下一帧自动接管新 item。
+
+        注意: 不先 save_config() —— 目的是采纳磁盘上的新配置, 而非用内存里的
+        旧配置覆盖它。
+        """
+        running = (self._current_mode == 'run')
+        if running:
+            self._run_controller.prepare_hot_reload()
+
+        self._scene.clear_all_items()
+        config = load_profile(self._profile_name)
+
+        saved_grid = config.get('grid_size', DEFAULT_GRID_SIZE)
+        self._scene.grid_size = int(saved_grid if isinstance(saved_grid, (int, float))
+                                    else DEFAULT_GRID_SIZE)
+        self._scene.load_from_config(config)
+        saved_scale = config.get('scene_scale', DEFAULT_SCENE_SCALE)
+        self.set_scene_scale(float(saved_scale if isinstance(saved_scale, (int, float))
+                                   else DEFAULT_SCENE_SCALE))
+        self._wire_button_signals()
+
+        # 透明度
+        saved_opacity = config.get('transparency', DEFAULT_TRANSPARENCY)
+        if isinstance(saved_opacity, (int, float)):
+            saved_opacity = max(0.1, min(0.9, float(saved_opacity)))
+        else:
+            saved_opacity = DEFAULT_TRANSPARENCY
+        self._apply_item_opacity(saved_opacity)
+        self._edit_toolbar.set_opacity(saved_opacity)
+
+        # 模拟模式 + 外观 (wheel_style + cursor_styles)
+        from core.config_manager import load_hotkeys
+        _hk = load_hotkeys() or {}
+        self._sim_mode = self._resolve_sim_mode_from_profile(_hk)
+        self._edit_toolbar.set_sim_mode(self._sim_mode)
+        self._resolve_appearance_from_profile(_hk)
+        self._apply_appearance_to_items()
+
+        # 恢复模式与运行态 UI
+        self._scene.set_mode('run' if running else 'edit')
+        if running and self._buttons_hidden:
+            # 重建后 item 默认可见, 按之前的隐藏状态再隐一次
+            for item in self._scene.button_items:
+                item.setVisible(False)
+
+        logger.info("Profile '%s' 热重载完成 (running=%s)", self._profile_name, running)
 
     def _open_voice_settings(self):
         """打开语音指令设置弹窗"""

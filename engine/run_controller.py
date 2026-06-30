@@ -236,13 +236,12 @@ class RunController(QObject):
         # 启动语音引擎
         self._start_voice(voice_config)
 
-    def stop(self):
-        """退出运行模式"""
-        self._active = False
-        self._timer.stop()
-        self._ac_start_time = None
-        self._stop_voice()
-        self._active_key_count = 0
+    def _release_all_inputs(self):
+        """释放一切对当前 scene item 的引用 + 按住的键/鼠标/手柄, 并重置 hover 状态机。
+
+        供 stop() 与 prepare_hot_reload() 共用。调用时 scene item 引用须仍有效
+        (热重载场景下要在清场之前调)。
+        """
         # 释放当前 hover
         if self._poll_hover_item is not None:
             item = self._poll_hover_item
@@ -260,7 +259,6 @@ class RunController(QObject):
         self._holding_lclick = None
         self._holding_rclick = None
         self._holding_mclick = None
-        self.auto_center_progress.emit(-1, 0, 0)
         # 重置所有按钮的 hover 状态机
         for item in self._scene.button_items:
             if hasattr(item, '_hover_sm'):
@@ -277,6 +275,28 @@ class RunController(QObject):
         gp = GamepadEngine.get()
         if gp is not None:
             gp.release_all()
+
+    def prepare_hot_reload(self):
+        """配置热重载前调用: 释放所有按住状态与对当前 item 的引用, 但保持运行
+        (timer/voice/_active 不动)。调用方随后可安全清场+重建 scene, RunController
+        下一帧会自动轮询到新 item。"""
+        if not self._active:
+            return
+        self._release_all_inputs()
+        self._prev_lmb = False
+        self._prev_rmb = False
+        self._prev_mmb = False
+        logger.info("RunController 已为热重载释放输入状态")
+
+    def stop(self):
+        """退出运行模式"""
+        self._active = False
+        self._timer.stop()
+        self._ac_start_time = None
+        self._stop_voice()
+        self._active_key_count = 0
+        self._release_all_inputs()
+        self.auto_center_progress.emit(-1, 0, 0)
 
     # ── 获取光标下的 item ──
 
