@@ -289,6 +289,11 @@ _mouse_event = ctypes.windll.user32.mouse_event
 _mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_size_t]
 _mouse_event.restype = None
 
+# 绝对定位光标 — agent 工具层精准点击用 (run_controller 回中也用同一 API)
+_SetCursorPos = ctypes.windll.user32.SetCursorPos
+_SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+_SetCursorPos.restype = wintypes.BOOL
+
 _CallNextHookEx = ctypes.windll.user32.CallNextHookEx
 _CallNextHookEx.argtypes = [wintypes.HHOOK, ctypes.c_int, ctypes.c_size_t, ctypes.POINTER(_MSLLHOOKSTRUCT)]
 _CallNextHookEx.restype = ctypes.c_ssize_t
@@ -350,6 +355,11 @@ def mouse_wheel(direction: str):
     """模拟鼠标滚轮。direction: 'up' 或 'down'"""
     delta = WHEEL_DELTA if direction.lower() == 'up' else -WHEEL_DELTA
     _mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta & 0xFFFFFFFF, 0)  # dwExtraInfo=0 (无)
+
+
+def mouse_move(x: int, y: int):
+    """移动鼠标光标到屏幕绝对坐标 (x, y)。供 agent 工具层精准定位用。"""
+    _SetCursorPos(int(x), int(y))
 
 
 def _mouse_hook_proc(nCode, wParam, lParam):
