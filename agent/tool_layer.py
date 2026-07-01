@@ -23,6 +23,7 @@ TEGGTouch 蛋挞 — Agent 工具层 (headless 原型 / 调查项 D2)
 
 from __future__ import annotations
 
+import copy
 import inspect
 import json
 import logging
@@ -31,7 +32,9 @@ import time
 from core import input_engine
 from core import action_service
 from core import button_theme
-from core.constants import APP_PREFIX, GP_KEY_PREFIX, GP_LABEL_TO_KEY
+from core.constants import (APP_PREFIX, GP_KEY_PREFIX, GP_LABEL_TO_KEY,
+                            DEFAULT_WHEEL_STYLE, DEFAULT_CURSOR_STYLES,
+                            DEFAULT_BALL_STYLES, DEFAULT_CURSOR_SHAPE)
 from core import config_manager as cfg
 
 logger = logging.getLogger(__name__)
@@ -430,6 +433,38 @@ _WHEEL_SECTOR_COUNT = 8                                 # 轮盘扇区固定 8 �
 _ADDABLE_BTN_TYPES = {"normal", "gp_button", "center_band"}
 _BTN_TYPE_DEFAULT_NAME = {"normal": "按钮", "gp_button": "手柄键", "center_band": "回中带"}
 
+# 移动方向 → (dx, dy) 单位向量; 坐标系 y<0 为上 (与屏幕一致)
+_MOVE_DIRS = {
+    "up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0),
+    "上": (0, -1), "下": (0, 1), "左": (-1, 0), "右": (1, 0),
+}
+
+
+# "重置为默认"的默认源 —— 与 UI 各重置按钮用的是**同一份权威常量**, 不另算默认:
+#   _on_wheel_reset→DEFAULT_WHEEL_STYLE, _on_bc_reset→DEFAULT_BUTTON_COLORS,
+#   _on_arrow_reset→DEFAULT_CURSOR_STYLES, _on_ball_reset→DEFAULT_BALL_STYLES。
+# 其余普通参数的默认取自 default_profile 模板。
+_RESET_DEFAULTS = {
+    "wheel_style": lambda: dict(DEFAULT_WHEEL_STYLE),
+    "button_colors": lambda: dict(button_theme.DEFAULT_BUTTON_COLORS),
+    "cursor_styles": lambda: {k: dict(v) for k, v in DEFAULT_CURSOR_STYLES.items()},
+    "ball_styles": lambda: {k: dict(v) for k, v in DEFAULT_BALL_STYLES.items()},
+    "cursor_shape": lambda: DEFAULT_CURSOR_SHAPE,
+}
+
+
+def _default_for_top(top: str):
+    """取顶层键的出厂默认: 优先专用常量源, 否则查默认 profile 模板。返回 (found, value)。"""
+    if top in _RESET_DEFAULTS:
+        return True, _RESET_DEFAULTS[top]()
+    try:
+        tmpl = cfg._load_default_template()
+    except Exception:
+        tmpl = {}
+    if isinstance(tmpl, dict) and top in tmpl:
+        return True, copy.deepcopy(tmpl[top])
+    return False, None
+
 
 def _norm_macro_step(step: dict) -> dict:
     """规范化一个宏步骤: {type:'delay', ms} 或 {type:'key', key, action}。"""
@@ -597,6 +632,44 @@ class ConfigTools:
         cfg.save_profile(name, c)
         return {"ok": True, "profile": name, "key": key,
                 "before": before, "after": value}
+
+    @staticmethod
+    def reset_param(key: str, name: str | None = None) -> dict:
+        """把某参数重置为出厂默认 (等价于面板里的"重置"按钮, 用同一份默认常量)。
+        支持点路径: key='wheel_style.color' 重置方向盘颜色回默认蓝; key='button_colors'
+        重置全部配色组; key='transparency' 回默认。用户说"重置/恢复默认"时用它。
+        """
+        top = key.split(".", 1)[0]
+        found, default_top = _default_for_top(top)
+        if not found:
+            return {"ok": False, "error": f"该参数无已知默认值, 无法重置: {top}"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+
+        if "." in key:
+            parts = key.split(".")
+            d = default_top                       # 在默认值里定位 leaf
+            for p in parts[1:]:
+                if not isinstance(d, dict) or p not in d:
+                    return {"ok": False, "error": f"默认值里没有此项: {key}"}
+                d = d[p]
+            container = c                          # 在 profile 里定位并写入
+            for p in parts[:-1]:
+                nxt = container.get(p)
+                if not isinstance(nxt, dict):
+                    nxt = {}
+                    container[p] = nxt
+                container = nxt
+            leaf = parts[-1]
+            before, after = container.get(leaf), d
+            container[leaf] = d
+        else:
+            before, after = c.get(top), default_top   # 整项替换回默认 (不合并)
+            c[top] = default_top
+
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "key": key,
+                "before": before, "after": after, "reset_to_default": True}
 
     # ════════════════════════════════════════════════════════════
     # list 型配置的元素级编辑 (语音命令 / 轮盘扇区 / 宏 / 应用 / 按钮)
@@ -776,3 +849,56 @@ class ConfigTools:
         cfg.save_profile(name, c)
         return {"ok": True, "profile": name,
                 "removed": {"type": removed.get("type"), "name": removed.get("name")}}
+
+    # ── 元素位置 / 尺寸 (所有元素含方向盘 gp_wheel 都按各自 buttons.x/y 渲染) ──
+    @staticmethod
+    def move_button(index: int, direction: str, cells: float = 1,
+                    name: str | None = None) -> dict:
+        """按网格相对移动某元素 (方向 上/下/左/右, cells 格数)。坐标系 y<0 上, 一格=grid_size。
+        注意: 这移动的是 buttons 里的元素 (含方向盘 gp_wheel); 中心轮盘整组偏移是另一回事
+        (wheel_x/wheel_y, 用 set_param)。"""
+        d = _MOVE_DIRS.get(str(direction).strip().lower())
+        if d is None:
+            return {"ok": False, "error": "direction 须为 上/下/左/右 (up/down/left/right)"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        buttons = c.get("buttons", [])
+        if not (0 <= index < len(buttons)):
+            return {"ok": False, "error": f"index 越界: {index} (共 {len(buttons)} 个)"}
+        try:
+            step = float(cells) * (c.get("grid_size") or 100)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": f"cells 非法: {cells}"}
+        b = buttons[index]
+        bx, by = float(b.get("x") or 0), float(b.get("y") or 0)
+        nx, ny = bx + d[0] * step, by + d[1] * step
+        b["x"], b["y"] = nx, ny
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "index": index, "direction": direction,
+                "cells": cells, "before": {"x": bx, "y": by}, "after": {"x": nx, "y": ny}}
+
+    @staticmethod
+    def set_button_geometry(index: int, x: float | None = None, y: float | None = None,
+                            w: float | None = None, h: float | None = None,
+                            name: str | None = None) -> dict:
+        """绝对设置某元素的位置/尺寸 (x/y 屏幕中心原点坐标, 任意子集)。含方向盘 gp_wheel。"""
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        buttons = c.get("buttons", [])
+        if not (0 <= index < len(buttons)):
+            return {"ok": False, "error": f"index 越界: {index} (共 {len(buttons)} 个)"}
+        b = buttons[index]
+        before = {k: b.get(k) for k in ("x", "y", "w", "h")}
+        changed = {}
+        try:
+            for k, v in (("x", x), ("y", y), ("w", w), ("h", h)):
+                if v is not None:
+                    b[k] = float(v)
+                    changed[k] = b[k]
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "x/y/w/h 须为数字"}
+        if not changed:
+            return {"ok": False, "error": "至少提供 x/y/w/h 之一"}
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "index": index,
+                "before": before, "after": changed}

@@ -89,6 +89,21 @@ def build_config_tools() -> list:
                 "required": ["key", "value"],
             },
         },
+        {
+            "name": "reset_param",
+            "description": "把某参数重置为出厂默认 (等价于设置面板里的「重置」按钮, 用同一份默认)。"
+                           "支持点路径: key='wheel_style.color' 重置方向盘颜色回默认; "
+                           "key='button_colors' 重置全部按钮配色; key='transparency' 等亦可。"
+                           "用户说'重置X'/'恢复默认X'时用它, **不要自己猜默认值或用 set_param 填当前值**。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "要重置的参数, 支持点路径"},
+                    "name": {"type": "string"},
+                },
+                "required": ["key"],
+            },
+        },
         # ── 语音命令 ──
         {
             "name": "add_voice_command",
@@ -216,6 +231,39 @@ def build_config_tools() -> list:
                              "properties": {"index": {"type": "integer"}, "name": {"type": "string"}},
                              "required": ["index"]},
         },
+        # ── 元素位置/尺寸 ──
+        {
+            "name": "move_button",
+            "description": "把某元素按网格相对移动 (方向 上/下/左/右, cells 格数, 一格=grid_size)。"
+                           "适用所有元素含方向盘 gp_wheel (它们都按各自 buttons.x/y 渲染)。"
+                           "用户说'往上移一格''左移两格'时用它, 不用自己算坐标。"
+                           "注意: 这不是中心轮盘整组偏移 (那是 wheel_x/wheel_y, 用 set_param)。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "direction": {"type": "string", "enum": ["up", "down", "left", "right"]},
+                    "cells": {"type": "number", "description": "格数, 默认 1"},
+                    "name": {"type": "string"},
+                },
+                "required": ["index", "direction"],
+            },
+        },
+        {
+            "name": "set_button_geometry",
+            "description": "绝对设置某元素的位置/尺寸 (x/y 屏幕中心原点坐标: x<0左 x>0右 y<0上 y>0下; "
+                           "w/h 尺寸; 任意子集)。含方向盘。要精确落位或改大小时用它。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "x": {"type": "number"}, "y": {"type": "number"},
+                    "w": {"type": "number"}, "h": {"type": "number"},
+                    "name": {"type": "string"},
+                },
+                "required": ["index"],
+            },
+        },
     ]
 
 
@@ -227,6 +275,7 @@ _DISPATCH = {
     "set_button_binding": lambda a: ConfigTools.set_button_binding(
         int(a["button_index"]), a["field"], a["value"], a.get("name")),
     "set_param": lambda a: ConfigTools.set_param(a["key"], a["value"], a.get("name")),
+    "reset_param": lambda a: ConfigTools.reset_param(a["key"], a.get("name")),
     # 语音命令
     "add_voice_command": lambda a: ConfigTools.add_voice_command(
         a["phrase"], a["keys"], a.get("action", "click"), a.get("name")),
@@ -249,14 +298,19 @@ _DISPATCH = {
         a.get("btn_type", "normal"), a.get("btn_name"),
         a.get("x", 0), a.get("y", 0), a.get("w"), a.get("h"), a.get("name")),
     "remove_button": lambda a: ConfigTools.remove_button(int(a["index"]), a.get("name")),
+    "move_button": lambda a: ConfigTools.move_button(
+        int(a["index"]), a["direction"], a.get("cells", 1), a.get("name")),
+    "set_button_geometry": lambda a: ConfigTools.set_button_geometry(
+        int(a["index"]), a.get("x"), a.get("y"), a.get("w"), a.get("h"), a.get("name")),
 }
 
 # 会改动配置 → 需要热生效的工具 (新加的 list 编辑工具必须在此登记, 否则改完不热重载)
 WRITE_TOOLS = {
-    "set_button_binding", "set_param",
+    "set_button_binding", "set_param", "reset_param",
     "add_voice_command", "remove_voice_command", "set_voice_command",
     "set_wheel_sector", "add_app", "remove_app",
     "add_macro", "remove_macro", "add_button", "remove_button",
+    "move_button", "set_button_geometry",
 }
 
 
@@ -279,14 +333,36 @@ def dispatch(tool_name: str, tool_input: dict) -> dict:
 # 系统提示
 # ════════════════════════════════════════════════════════════════
 
-def system_prompt() -> str:
-    """拼系统提示: 当前 profile 摘要 + 标签语法 + 行为约束。"""
+def _profile_index() -> str:
+    """紧凑索引: 每元素一行 (index/类型/名字/方位/颜色) + 一行概览。
+    详情 (完整字段/宏步骤/扇区绑定/语音内容) 让模型按需调 summarize_profile。
+    这样 system 提示保持很小且静态 (可缓存), 不随 profile 膨胀。"""
     try:
-        summary = ConfigTools.summarize_profile()
+        s = ConfigTools.summarize_profile()
     except Exception as e:
-        summary = {"error": f"读取摘要失败: {e}"}
+        return f"(读取方案失败: {e})"
+    scr = s.get("screen", {}) or {}
+    gs = (s.get("params", {}) or {}).get("grid_size") or 100
+    lines = [f'方案「{s.get("profile", "")}」 屏幕 {scr.get("w")}x{scr.get("h")} '
+             f'(坐标=像素, 原点=屏幕中心; 一格 grid_size={gs}px)',
+             f'元素 (共 {s.get("button_count", 0)} 个, index 可直接用于改/删):']
+    for e in s.get("buttons", []):
+        col = (e.get("color") or {}).get("name", "")
+        lines.append(f'  [{e["index"]}] {e.get("type_label", "")} '
+                     f'{e.get("name") or "(无名)"} · {e.get("region", "")} · {col}')
+    wheel = s.get("wheel", {}) or {}
+    lines.append(
+        f'语音命令 {len(s.get("voice_commands", []))} 条 | '
+        f'轮盘 {wheel.get("sector_count", 0)} 扇区(颜色 {wheel.get("color")}) | '
+        f'宏 x{len(s.get("xmacros", []))}/kb{len(s.get("macros", []))}/gp{len(s.get("gp_macros", []))} | '
+        f'应用 {len(s.get("apps", []))} 个')
+    return "\n".join(lines)
 
+
+def system_prompt() -> str:
+    """拼系统提示: 静态规则 + 标签语法 + 紧凑 profile 索引 (细节走工具按需拉取)。"""
     gp_labels = ", ".join(f"gp:{k}" for k in GP_LABEL_TO_KEY.values())
+    index = _profile_index()
 
     return f"""你是「蛋挞 TEGGTouch」的配置助手。蛋挞是 Windows 无障碍辅助工具, 把鼠标/触屏操作映射成键盘/鼠标/手柄输入, 帮助手部不便的用户玩需要键鼠/手柄的游戏。
 
@@ -294,7 +370,13 @@ def system_prompt() -> str:
 
 你能改 profile 里的几乎所有东西:
 - 按钮: 改绑定/名字 (set_button_binding)、新增 (add_button, 仅普通键/手柄键/回中带)、删除 (remove_button)
+- 移动/改尺寸元素: move_button (按格相对移动, 上/下/左/右)、set_button_geometry (绝对 x/y/w/h)。
+  **所有元素都用这个** —— 包括方向盘 gp_wheel (它是 buttons 里的元素, 有自己的 x/y)。
+  ⚠️ 别混淆: "方向盘"=gp_wheel 元素(move_button 按 index 移); "中心轮盘"整组(8扇区+中心环)
+  的偏移才是 wheel_x/wheel_y(set_param)。用户说移动"方向盘"时用 move_button, 不是改 wheel_y。
 - 顶层参数与配色 (set_param, 支持点路径如 wheel_style.color)
+- **重置/恢复默认**: reset_param (等价面板「重置」按钮, 用出厂默认常量)。用户说"重置方向盘颜色"
+  就 reset_param key='wheel_style.color', 别用 set_param 填当前值 (那不是重置)。
 - 语音命令: 增 (add_voice_command) / 删 (remove_voice_command) / 改 (set_voice_command)
 - 轮盘扇区绑定: set_wheel_sector (固定8个 0~7, 只改不增删)
 - 宏: 增 (add_macro) / 删 (remove_macro); 应用: 增 (add_app) / 删 (remove_app)
@@ -318,23 +400,20 @@ def system_prompt() -> str:
 改按钮名字就用 set_button_binding field='name'。摘要里每个按钮带 type 字段 (normal/gamepad 等), "第N个手柄键"指按顺序数第N个 type 为手柄类的按钮。
 
 按空间/颜色/类型定位元素 (用户常这么说话):
-- 摘要里每个元素带 region(方位: 左上/正上/右上/正左/居中/正右/左下/正下/右下)、
-  color(颜色, 如"玫红"/"绿"/"灰")、type_label(类型, 如"摇杆"/"回中带"/"手柄键")、
-  pos(坐标)。用户说"左上那个""右下的摇杆""左边第一个绿色回中带"时, 据此匹配到 index。
+- 下方速览每个元素带 index/类型/名字/方位/颜色; 用户说"左上那个""右下的摇杆"
+  "左边第一个绿色回中带"时据此匹配 index。方位九宫格: 左上/正上/右上/正左/居中/正右/左下/正下/右下。
 - 坐标系: 原点=屏幕中心, x<0 左 / x>0 右, y<0 上 / y>0 下 (y 越大越靠下)。
-- "第几个/从左数第一个": 按 pos 排序判断 (左→右按 x 升序, 上→下按 y 升序)。
-- 描述能匹配多个元素时, 先列出候选 (index+方位+颜色+名字) 让用户确认, 不要乱猜。
-- 摘要已含 profile 绝大部分数据 (每个元素的全部非空字段在 fields 里); 若还需更原始的
-  完整配置, 用 read_profile。
-- 颜色: 手柄键/摇杆看 button_colors.gamepad, 回中带看 button_colors.center_band,
-  普通键看 button_colors.keyboard, **方向盘单独看 wheel.color (来自 wheel_style.color)**。
-  改方向盘颜色 → set_param key='wheel_style.color' value='#RRGGBB';
+- "第几个/从左数第一个": 需要精确坐标时调 summarize_profile 看 pos, 按 x/y 排序。
+- 描述能匹配多个元素时, 先列候选让用户确认, 不要乱猜。
+- 改方向盘颜色 → set_param key='wheel_style.color' value='#RRGGBB';
   改手柄键/摇杆颜色 → set_param key='button_colors.gamepad' value='#RRGGBB'。
 
-当前活跃方案摘要:
-{_json(summary)}
+下面是当前方案的**速览索引** (只有 index/类型/名字/方位/颜色)。要看某元素的完整
+字段与绑定、宏的步骤、扇区绑定、语音命令内容, 就调 summarize_profile; 要最原始的
+完整配置 dict, 调 read_profile。不要凭速览猜细节字段。
+{index}
 
-注意: 只有摘要里存在的按钮 index 才能改。不确定就先 summarize_profile。用中文回复用户。"""
+注意: 只改速览里存在的 index; 拿不准细节先 summarize_profile。用中文回复用户。"""
 
 
 def _json(obj) -> str:
