@@ -439,6 +439,9 @@ _MOVE_DIRS = {
     "上": (0, -1), "下": (0, 1), "左": (-1, 0), "右": (1, 0),
 }
 
+# 元素的结构字段: 有专用工具(几何)或不可改, set_element_field 不碰
+_ELEMENT_STRUCTURAL = {"x", "y", "w", "h", "type"}
+
 
 # "重置为默认"的默认源 —— 与 UI 各重置按钮用的是**同一份权威常量**, 不另算默认:
 #   _on_wheel_reset→DEFAULT_WHEEL_STYLE, _on_bc_reset→DEFAULT_BUTTON_COLORS,
@@ -814,14 +817,40 @@ class ConfigTools:
                    x: float = 0, y: float = 0,
                    w: float | None = None, h: float | None = None,
                    name: str | None = None) -> dict:
-        """新增一个按钮 (仅 normal/gp_button/center_band; 摇杆/方向盘请用 UI)。
-        x/y 为屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下); 省略 w/h 用 grid_size。
+        """新增一个元素 (normal/gp_button/center_band/gp_stick/gp_wheel)。
+        方向盘 gp_wheel 是单例: 已存在则直接返回它 (视为"已启用")。
+        x/y 为屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下); 省略 w/h 用类型默认。
         """
-        if btn_type not in _ADDABLE_BTN_TYPES:
-            return {"ok": False, "error": f"只能新增 {sorted(_ADDABLE_BTN_TYPES)}; "
-                    f"{btn_type} 请在编辑界面添加"}
         name = ConfigTools._resolve_name(name)
         c = cfg.load_profile(name)
+        buttons = c.setdefault("buttons", [])
+
+        # 摇杆 / 方向盘: 用各自数据模型的默认值构造 (与 UI add_gp_stick/add_gp_wheel 一致)
+        if btn_type in ("gp_stick", "gp_wheel"):
+            from models.gamepad_model import GamepadStickData, GamepadWheelData
+            if btn_type == "gp_wheel":
+                exist = next((i for i, b in enumerate(buttons)
+                              if b.get("type") == "gp_wheel"), None)
+                if exist is not None:                 # 单例: 已有即"已启用"
+                    return {"ok": True, "profile": name, "index": exist,
+                            "already_exists": True, "note": "方向盘已存在 (单例), 无需重复添加"}
+                data = GamepadWheelData(x=float(x), y=float(y))
+            else:
+                data = GamepadStickData(x=float(x), y=float(y))
+            btn = data.to_dict()
+            if w:
+                btn["w"] = float(w)
+            if h:
+                btn["h"] = float(h)
+            if btn_name:
+                btn["name"] = btn_name
+            buttons.append(btn)
+            cfg.save_profile(name, c)
+            return {"ok": True, "profile": name, "index": len(buttons) - 1,
+                    "added": {"type": btn_type, "name": btn.get("name", "")}}
+
+        if btn_type not in _ADDABLE_BTN_TYPES:
+            return {"ok": False, "error": f"未知类型: {btn_type}"}
         gs = c.get("grid_size") or 100
         btn = {
             "type": btn_type,
@@ -832,7 +861,6 @@ class ConfigTools:
         if btn_type == "center_band":            # 回中带默认零延迟 (与 UI 新建一致)
             btn["hover_delay"] = 0
             btn["hover_release_delay"] = 0
-        buttons = c.setdefault("buttons", [])
         buttons.append(btn)
         cfg.save_profile(name, c)
         return {"ok": True, "profile": name, "index": len(buttons) - 1, "added": btn}
@@ -902,3 +930,25 @@ class ConfigTools:
         cfg.save_profile(name, c)
         return {"ok": True, "profile": name, "index": index,
                 "before": before, "after": changed}
+
+    @staticmethod
+    def set_element_field(index: int, field: str, value, name: str | None = None) -> dict:
+        """改某元素的任意字段 (含类型专有/高级字段: 摇杆 dead_zone/eight_way/mode/wasd_*、
+        方向盘 control_mode/lt_*、按钮 hover_repeat_interval 等)。值按旧值类型自动纠正。
+        结构字段 x/y/w/h 请用 set_button_geometry/move_button; type 不可改。
+        常规绑定 (hover/lclick/name…) 用 set_button_binding 更稳。"""
+        if field in _ELEMENT_STRUCTURAL:
+            return {"ok": False, "error": f"{field} 是结构字段: x/y/w/h 用 set_button_geometry/"
+                    "move_button, type 不可改"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        buttons = c.get("buttons", [])
+        if not (0 <= index < len(buttons)):
+            return {"ok": False, "error": f"index 越界: {index} (共 {len(buttons)} 个)"}
+        b = buttons[index]
+        before = b.get(field)
+        value = _coerce_to_type(value, before)  # 按旧值类型纠正 (bool/int/float/dict)
+        b[field] = value
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "index": index,
+                "field": field, "before": before, "after": value}

@@ -54,7 +54,7 @@ class AgentThread(QThread):
         # 多轮对话历史 (Anthropic messages 格式); 跨 ask() 保留, 形成连续会话
         self._history: list = []
         self._pending_text: str = ""
-        clog.log_session_start()   # 打一条会话分隔, 回看时区分本次运行
+        self._session_logged = False   # 首条消息才打会话分隔 (避免空会话刷屏)
 
     def reset_history(self):
         """清空会话历史 (新开一段对话)。"""
@@ -68,6 +68,9 @@ class AgentThread(QThread):
         self._pending_text = (user_text or "").strip()
         if not self._pending_text:
             return
+        if not self._session_logged:      # 真正开聊才打会话分隔
+            clog.log_session_start()
+            self._session_logged = True
         self.start()
 
     def run(self):

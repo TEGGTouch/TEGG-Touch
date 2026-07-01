@@ -209,13 +209,16 @@ def build_config_tools() -> list:
         # ── 按钮增删 ──
         {
             "name": "add_button",
-            "description": "新增一个按钮 (仅 normal/gp_button/center_band; 摇杆 gp_stick 与方向盘 "
-                           "gp_wheel 数据复杂/单例, 请让用户在编辑界面加)。x/y 为屏幕中心原点坐标 "
-                           "(x<0左 x>0右 y<0上 y>0下), 省略则放中心 (0,0), 用户可再拖。",
+            "description": "新增一个元素 (normal 普通键 / gp_button 手柄键 / center_band 回中带 / "
+                           "gp_stick 摇杆 / gp_wheel 方向盘)。方向盘是单例, 已存在则直接返回它 "
+                           "(等于'已启用')。用户说'启用/添加方向盘(摇杆)'就用它, 不要让用户手动加。"
+                           "x/y 屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下), 省略放中心 (0,0)。",
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "btn_type": {"type": "string", "enum": ["normal", "gp_button", "center_band"]},
+                    "btn_type": {"type": "string",
+                                 "enum": ["normal", "gp_button", "center_band",
+                                          "gp_stick", "gp_wheel"]},
                     "btn_name": {"type": "string"},
                     "x": {"type": "number"}, "y": {"type": "number"},
                     "w": {"type": "number"}, "h": {"type": "number"},
@@ -264,6 +267,24 @@ def build_config_tools() -> list:
                 "required": ["index"],
             },
         },
+        {
+            "name": "set_element_field",
+            "description": "改某元素的任意字段, 用于类型专有/高级字段: 摇杆 dead_zone(死区)/"
+                           "eight_way(八向吸附)/mode/wasd_up..、方向盘 control_mode/lt_*/rt_*、"
+                           "按钮 hover_repeat_interval(长按连发间隔) 等。值按旧值类型自动纠正。"
+                           "常规绑定 (hover/lclick/name) 优先 set_button_binding; 位置/尺寸用几何工具。"
+                           "改前可先 summarize_profile 看该元素 fields 里现有字段名与当前值作参考。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "index": {"type": "integer"},
+                    "field": {"type": "string", "description": "字段名 (见 summarize 的 fields)"},
+                    "value": {"description": "新值"},
+                    "name": {"type": "string"},
+                },
+                "required": ["index", "field", "value"],
+            },
+        },
     ]
 
 
@@ -302,6 +323,8 @@ _DISPATCH = {
         int(a["index"]), a["direction"], a.get("cells", 1), a.get("name")),
     "set_button_geometry": lambda a: ConfigTools.set_button_geometry(
         int(a["index"]), a.get("x"), a.get("y"), a.get("w"), a.get("h"), a.get("name")),
+    "set_element_field": lambda a: ConfigTools.set_element_field(
+        int(a["index"]), a["field"], a["value"], a.get("name")),
 }
 
 # 会改动配置 → 需要热生效的工具 (新加的 list 编辑工具必须在此登记, 否则改完不热重载)
@@ -310,7 +333,7 @@ WRITE_TOOLS = {
     "add_voice_command", "remove_voice_command", "set_voice_command",
     "set_wheel_sector", "add_app", "remove_app",
     "add_macro", "remove_macro", "add_button", "remove_button",
-    "move_button", "set_button_geometry",
+    "move_button", "set_button_geometry", "set_element_field",
 }
 
 
@@ -369,7 +392,10 @@ def system_prompt() -> str:
 你的职责: 用工具帮用户读取和修改蛋挞的按键配置 (profile)。你**只能改配置**, 不能直接操作鼠标键盘 (那是后续阶段的能力)。
 
 你能改 profile 里的几乎所有东西:
-- 按钮: 改绑定/名字 (set_button_binding)、新增 (add_button, 仅普通键/手柄键/回中带)、删除 (remove_button)
+- 元素: 改绑定/名字 (set_button_binding)、新增任意类型 (add_button, 含普通键/手柄键/回中带/摇杆/方向盘;
+  方向盘单例, 已有即"已启用")、删除 (remove_button)
+- 类型专有/高级字段: set_element_field (摇杆 dead_zone/eight_way/mode/wasd_*、方向盘 control_mode、
+  按钮 hover_repeat_interval 长按连发 等 —— 凡 summarize 的 fields 里有的字段都能改)
 - 移动/改尺寸元素: move_button (按格相对移动, 上/下/左/右)、set_button_geometry (绝对 x/y/w/h)。
   **所有元素都用这个** —— 包括方向盘 gp_wheel (它是 buttons 里的元素, 有自己的 x/y)。
   ⚠️ 别混淆: "方向盘"=gp_wheel 元素(move_button 按 index 移); "中心轮盘"整组(8扇区+中心环)
@@ -380,12 +406,16 @@ def system_prompt() -> str:
 - 语音命令: 增 (add_voice_command) / 删 (remove_voice_command) / 改 (set_voice_command)
 - 轮盘扇区绑定: set_wheel_sector (固定8个 0~7, 只改不增删)
 - 宏: 增 (add_macro) / 删 (remove_macro); 应用: 增 (add_app) / 删 (remove_app)
-摇杆(gp_stick)与方向盘(gp_wheel)的新增/删除较特殊, 新增请引导用户在编辑界面操作 (但它们的字段和方向盘颜色你能改)。
+**行为准则 (重要)**:
+- **能做就直接做, 别反复确认。** 改配置是安全、可撤销、即时热生效的; 用户意图清楚时直接执行 + 一句话回报, 不要写长篇、不要追问"你确定吗"。
+- 用户重复同一要求 = 你上一轮太啰嗦或没动手, 立刻执行, 别再解释为什么难。
+- 回复**简短**(通常 1~3 句)。只在**真的有歧义**且无法合理默认时才问, 且只问一个最短的问题。
+- "启用/添加 方向盘(gp_wheel)/摇杆(gp_stick)" → 直接 add_button, 不要说"要在编辑界面手动加"(你能加, 方向盘还是单例)。
 
 工作流程:
-1. 改任何东西前, 先用 summarize_profile 了解当前有哪些按钮和绑定。
-2. 用 set_button_binding / set_param 落实修改 (会立即保存并热生效)。
-3. 改完用**人话**简短告诉用户你改了什么 (字段、旧值→新值)。
+1. 需要现状时先 summarize_profile; 简单改动可直接动手。
+2. 用工具落实修改 (立即保存并热生效)。
+3. 用**人话**一句话回报改了什么 (字段/旧值→新值)。
 
 绑定值的「标签语法」(value 字段用):
 - 普通键: w / ctrl / f4 / ctrl+f4 (多键用 + 连成组合键)
