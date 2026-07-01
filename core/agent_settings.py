@@ -52,6 +52,12 @@ DEFAULT_AGENT_SETTINGS = {
     "asr_backend": "whisper",
     "max_tokens": 1024,
     "temperature": 1.0,
+    # AI 助手对话框的用户拖动位置/尺寸 (None=首次居中); 全局, 与 profile 无关
+    "dialog_x": None,
+    "dialog_y": None,
+    "dialog_w": None,
+    "dialog_h": None,
+    "dialog_open": False,    # 上次退出时面板是否处于打开状态 → 启动时恢复
 }
 
 
@@ -116,3 +122,22 @@ def save_agent_settings(settings: dict) -> bool:
 def is_configured() -> bool:
     """是否已配置可用密钥 (环境变量或文件)。"""
     return bool(load_agent_settings().get("api_key"))
+
+
+def load_ui_geometry() -> dict:
+    """AI 助手对话框上次的位置/尺寸 (值可能为 None = 未保存过)。"""
+    s = load_agent_settings()
+    return {k: s.get(k) for k in ("dialog_x", "dialog_y", "dialog_w", "dialog_h")}
+
+
+def save_ui_geometry(x: int, y: int, w: int, h: int) -> bool:
+    """保存 AI 助手对话框几何 (合并写, 不动密钥等其它字段)。"""
+    return save_agent_settings({
+        "dialog_x": int(x), "dialog_y": int(y),
+        "dialog_w": int(w), "dialog_h": int(h),
+    })
+
+
+def save_ui_open(is_open: bool) -> bool:
+    """记住面板开/关状态 (启动时据此恢复)。"""
+    return save_agent_settings({"dialog_open": bool(is_open)})

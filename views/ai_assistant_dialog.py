@@ -1,40 +1,92 @@
 """
 TEGG Touch (PyQt6) - ai_assistant_dialog.py
-AI 配置助手聊天窗口 (阶段1)。
+AI 蛋挞 配置助手 — 文本对话面板 (阶段1)。
 
-用自然语言让 MiniMax-M3 帮忙读取/修改蛋挞按键配置。窗口持有对外部
-AgentThread 的引用 (由 OverlayWindow 创建并持久化, 以保留多轮会话历史)。
-本窗口只负责: 收发文本、显示工具执行记录与错误、忙碌态禁用输入。
+用自然语言让 MiniMax-M3 帮忙读取/修改蛋挞按键配置。窗口持有对外部 AgentThread
+的引用 (由 OverlayWindow 创建并持久化, 保留多轮会话历史)。
 
-配置改动经 AgentThread.config_changed → OverlayWindow.reload_active_profile() 热生效,
-本窗口不直接动 scene/UI (线程规则见 docs/agent-integration-design.md 第5节)。
+面板特性:
+- **常驻**: OverlayWindow 创建一次并 hide/show; 运行/编辑模式都在, 切模式不消失,
+  直到用户点「收起」。
+- **可拖动 (标题栏) + 可缩放 (右下角手柄)**: 均钳制在屏幕内 + 持久化。
+- **位置/尺寸持久化**: 存 settings/agent.json。
+- 对话用 QTextEdit 富文本; 蛋挞回复走轻量 Markdown → HTML。
+
+配置改动经 AgentThread.config_changed → OverlayWindow.reload_active_profile() 热生效。
 """
 
 import html
+import os
+import re
 
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QFrame, QTextEdit, QLineEdit, QApplication,
+    QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QWidget,
+    QLabel, QFrame, QTextEdit, QLineEdit, QApplication, QGraphicsDropShadowEffect,
 )
-from PyQt6.QtCore import Qt, QRect
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QRect, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPen, QColor, QPainter, QTextCursor
 
 from core.i18n import get_font
+from core.constants import APP_DIR
 from core import agent_settings
+from core.shadow_helper import SHADOW_MARGIN, SHADOW_BLUR, SHADOW_OFFSET_Y, SHADOW_COLOR
 from agent import conversation_log as clog
 
-# ── 颜色 (复用项目深色风格) ──
+# 图标字体 (软键盘同款: Segoe MDL2/Fluent, 无则退回 ▲)
+_ICON_FONT = None
+
+
+def _detect_icon_font():
+    global _ICON_FONT
+    if _ICON_FONT is not None:
+        return
+    families = QFontDatabase.families()
+    if "Segoe Fluent Icons" in families:
+        _ICON_FONT = "Segoe Fluent Icons"
+    elif "Segoe MDL2 Assets" in families:
+        _ICON_FONT = "Segoe MDL2 Assets"
+    else:
+        _ICON_FONT = ""
+
+
+# ── 颜色 ──
 C_BG = "#1E1E1E"
-C_USER = "#0EA5E9"      # 用户气泡: 青蓝
-C_ASSIST = "#E0E0E0"    # 助手文本
-C_TOOL = "#10B981"      # 工具执行: 绿
+C_USER = "#38BDF8"      # 你: 蓝 (标签 + 正文都蓝)
+C_ASSIST = "#E8E8E8"    # 蛋挞正文
+C_BOT = "#F59E0B"       # 蛋挞名 / 参数修改行: 琥珀
 C_ERR = "#EF4444"       # 错误: 红
-C_DIM = "#777"
-C_SEND = "#0284C7"
-C_SEND_H = "#0EA5E9"
-C_CLOSE = "#3A3A3A"
-C_CLOSE_H = "#EF4444"
+C_DIM = "#8A8A8A"
+C_CODE_FG = "#22C55E"   # 行内代码: 绿字 (无底色, 复用之前参数绿)
+C_SEND = "#D97706"      # 发送按钮: 与启动按钮同款深橙
+C_SEND_H = "#F59E0B"
+C_CLOSE = "#3A3A3A"     # 收起按钮: 灰 (仿软键盘)
+C_CLOSE_H = "#4A4A4A"
 C_INPUT_BG = "#2A2A2A"
+
+
+def _md_to_html(text: str) -> str:
+    """把模型常用的轻量 Markdown 转成富文本 HTML。
+
+    覆盖: **粗体**、`行内代码`、# 标题(降级为粗体)、- / * 项目符号、换行。
+    斜体(单 *)不处理, 避免与粗体/符号冲突。
+    """
+    out = html.escape(text)
+    out = re.sub(r'`([^`]+)`',
+                 rf'<code style="color:{C_CODE_FG};font-family:Consolas,monospace;">\1</code>',
+                 out)
+    out = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', out)
+    lines = []
+    for ln in out.split('\n'):
+        m = re.match(r'^\s*#{1,6}\s+(.*)$', ln)
+        if m:
+            lines.append(f'<b>{m.group(1)}</b>')
+            continue
+        m = re.match(r'^\s*[-*]\s+(.*)$', ln)
+        if m:
+            lines.append(f'• {m.group(1)}')
+            continue
+        lines.append(ln)
+    return '<br>'.join(lines)
 
 
 def _make_font(name, px, bold=False):
@@ -47,20 +99,98 @@ def _make_font(name, px, bold=False):
     return f
 
 
-class AIAssistantDialog(QDialog):
-    """AI 配置助手对话框。需传入外部 AgentThread。"""
+class _DragBar(QWidget):
+    """可拖动标题栏: 拖它移动整窗 (frameless 靠这个, 比依赖事件冒泡可靠)。"""
 
-    WIN_W = 560
-    WIN_H = 640
+    def __init__(self, win, parent=None):
+        super().__init__(parent)
+        self._win = win
+        self._press = None
+        self.setCursor(Qt.CursorShape.SizeAllCursor)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._press = e.globalPosition().toPoint() - self._win.frameGeometry().topLeft()
+            e.accept()
+
+    def mouseMoveEvent(self, e):
+        if self._press is not None and (e.buttons() & Qt.MouseButton.LeftButton):
+            self._win._move_clamped(e.globalPosition().toPoint() - self._press)
+            e.accept()
+
+    def mouseReleaseEvent(self, e):
+        if self._press is not None:
+            self._press = None
+            self._win._persist_geometry()
+            e.accept()
+
+
+class _ResizeGrip(QWidget):
+    """右下角缩放手柄 — 自绘 + 自己处理拖拽 resize (QSizeGrip 在半透明 frameless 下不稳)。"""
+
+    SIZE = 20
+
+    def __init__(self, win, parent=None):
+        super().__init__(parent)
+        self._win = win
+        self._press = None
+        self._start = None
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor("#666"))
+        pen.setWidth(2)
+        p.setPen(pen)
+        s = self.SIZE
+        for off in (0, 6, 12):
+            p.drawLine(s - 3, s - 3 - off, s - 3 - off, s - 3)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            self._press = e.globalPosition().toPoint()
+            self._start = (self._win.width(), self._win.height())
+            e.accept()
+
+    def mouseMoveEvent(self, e):
+        if self._press is not None and (e.buttons() & Qt.MouseButton.LeftButton):
+            d = e.globalPosition().toPoint() - self._press
+            scr = self._win._screen_rect()
+            w = max(self._win.MIN_W, min(self._start[0] + d.x(), scr.width()))
+            h = max(self._win.MIN_H, min(self._start[1] + d.y(), scr.height()))
+            self._win.resize(w, h)
+            e.accept()
+
+    def mouseReleaseEvent(self, e):
+        if self._press is not None:
+            self._press = None
+            self._win._persist_geometry()
+            e.accept()
+
+
+class AIAssistantDialog(QDialog):
+    """AI 蛋挞 配置助手 (常驻、可拖动缩放、文本对话)。需传入外部 AgentThread。"""
+
+    DEFAULT_W = 580
+    DEFAULT_H = 680
+    MIN_W = 380
+    MIN_H = 440
     PAD = 18
+
+    collapsed = pyqtSignal()   # 用户点「收起」时发出 (供工具栏同步按钮态)
 
     def __init__(self, agent_thread, parent=None, on_before_send=None):
         super().__init__(parent)
         self._thread = agent_thread
-        # 发指令前的主线程回调 (用于把编辑模式下未保存的改动落盘, 让 agent 读到最新)
         self._on_before_send = on_before_send
         self._drag_pos = None
         self._busy = False
+        self._ready = False
+        # 退出全局阴影安装器 (它会 setFixedSize + 逐次加边距, 与"可缩放/记忆尺寸"冲突);
+        # 本对话框自己在 _init_ui 里装一次阴影 + 固定预留边距。
+        self._shadow_installed = True
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -68,20 +198,22 @@ class AIAssistantDialog(QDialog):
             | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(self.WIN_W, self.WIN_H)
+        self.setMinimumSize(self.MIN_W, self.MIN_H)
+
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(400)
+        self._save_timer.timeout.connect(self._persist_geometry)
 
         self._init_ui()
-        self._center_on_screen()
+        self._restore_geometry()
         self._wire_thread()
 
-        # 先回渲历史记录 (关窗重开 / 重启后仍可见), 再放开场白 / 无密钥引导
         had_history = self._load_history()
-
         if not agent_settings.is_configured():
             self._append_error(
                 "尚未配置 API 密钥。请在 settings/agent.json 里填写 \"api_key\", "
                 "或设置环境变量 MINIMAX_API_KEY (国内站 platform.minimaxi.com 申请)。")
-            # 禁用输入直到配置 (非忙碌态, 状态显示"未配置")
             self._input.setEnabled(False)
             self._send_btn.setEnabled(False)
             self._input.setPlaceholderText("配置密钥后重开本窗口…")
@@ -89,84 +221,115 @@ class AIAssistantDialog(QDialog):
         elif had_history:
             self._append_system("── 以上为历史记录，可继续对话 ──")
         else:
-            self._append_system("你好! 我可以帮你改蛋挞的按键配置。例如: "
+            self._append_system("你好！我是蛋挞助手，可以帮你改按键配置。例如："
                                 "“把第一个按钮的 hover 改成 ctrl+f4”、“把透明度调到 0.5”。")
+        self._ready = True
 
     # ── UI ──
     def _init_ui(self):
+        _detect_icon_font()
         fn = get_font()
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(SHADOW_MARGIN, SHADOW_MARGIN, SHADOW_MARGIN, SHADOW_MARGIN)
 
         container = QFrame()
-        container.setObjectName("ai_container")   # *_container → 全局阴影自动识别
+        container.setObjectName("ai_container")
         container.setStyleSheet(f"""
             QFrame#ai_container {{
-                background: {C_BG};
-                border-radius: 6px;
-                border: 1px solid #444;
+                background: {C_BG}; border-radius: 6px; border: 1px solid #444;
             }}
         """)
         outer.addWidget(container)
+        self._container = container
+
+        # 自装阴影 (一次性; 不改窗口尺寸 → 不与缩放/记忆尺寸冲突)
+        eff = QGraphicsDropShadowEffect(container)
+        eff.setBlurRadius(SHADOW_BLUR)
+        eff.setOffset(0.0, float(SHADOW_OFFSET_Y))
+        eff.setColor(SHADOW_COLOR)
+        container.setGraphicsEffect(eff)
 
         root = QVBoxLayout(container)
         root.setContentsMargins(self.PAD, self.PAD, self.PAD, self.PAD)
         root.setSpacing(12)
 
-        # ── 标题栏 ──
-        title_row = QHBoxLayout()
+        # ── 标题栏 (可拖动: logo + 标题 + 状态 + 收起) ──
+        title_bar = _DragBar(self)
+        title_row = QHBoxLayout(title_bar)
+        title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(8)
-        title_lbl = QLabel("AI 配置助手")
-        title_lbl.setFont(_make_font(fn, 17, bold=True))
+
+        logo = QLabel()
+        logo.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        _logo_path = os.path.join(APP_DIR, "assets", "icon.ico")
+        if os.path.exists(_logo_path):
+            pm = QPixmap(_logo_path)
+            if not pm.isNull():
+                logo.setPixmap(pm.scaled(26, 26, Qt.AspectRatioMode.KeepAspectRatio,
+                                         Qt.TransformationMode.SmoothTransformation))
+        title_row.addWidget(logo)
+
+        title_lbl = QLabel("AI 蛋挞")
+        title_lbl.setFont(_make_font(fn, 19, bold=True))
         title_lbl.setStyleSheet("color: white; background: transparent;")
+        title_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         title_row.addWidget(title_lbl)
         title_row.addStretch()
 
-        self._status_lbl = QLabel("就绪")
-        self._status_lbl.setFont(_make_font(fn, 12))
-        self._status_lbl.setStyleSheet(f"color: {C_DIM}; background: transparent;")
-        title_row.addWidget(self._status_lbl)
-        title_row.addSpacing(6)
-
-        close_btn = QPushButton("✕")
-        close_btn.setFixedSize(34, 34)
-        close_btn.setAutoDefault(False)   # 否则它是 dialog 默认按钮, 回车会误触发→关窗
-        close_btn.setDefault(False)
-        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setFont(_make_font(fn, 15, bold=True))
-        close_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 6px; }}
+        collapse_btn = QPushButton()
+        collapse_btn.setFixedSize(34, 34)
+        collapse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        collapse_btn.setAutoDefault(False)
+        collapse_btn.setDefault(False)
+        collapse_btn.setToolTip("收起面板 (随时可从工具栏 AI 按钮再打开)")
+        if _ICON_FONT:
+            collapse_btn.setText("")   # ChevronUp
+            collapse_btn.setFont(_make_font(_ICON_FONT, 16))
+        else:
+            collapse_btn.setText("▲")   # ▲ fallback
+            collapse_btn.setFont(_make_font(fn, 15, bold=True))
+        collapse_btn.setStyleSheet(f"""
+            QPushButton {{ background: {C_CLOSE}; color: #DDD; border: none; border-radius: 6px; }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
-        close_btn.clicked.connect(self.close)
-        title_row.addWidget(close_btn)
-        root.addLayout(title_row)
+        collapse_btn.clicked.connect(self._on_collapse)
+        title_row.addWidget(collapse_btn)
+        root.addWidget(title_bar)
 
         # ── 对话记录 ──
         self._log = QTextEdit()
         self._log.setReadOnly(True)
-        self._log.setFont(_make_font(fn, 13))
+        self._log.setFont(_make_font(fn, 16))
         self._log.setStyleSheet(f"""
             QTextEdit {{
                 background: #161616; color: {C_ASSIST};
-                border: 1px solid #333; border-radius: 8px; padding: 8px;
+                border: 1px solid #333; border-radius: 8px; padding: 10px;
             }}
-            QScrollBar:vertical {{ background: transparent; width: 6px; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 3px; min-height: 20px; }}
+            QScrollBar:vertical {{ background: transparent; width: 8px; border: none; margin: 0; }}
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px; min-height: 30px; }}
+            QScrollBar::handle:vertical:hover {{ background: #555; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """)
         root.addWidget(self._log, 1)
 
-        # ── 输入行 ──
+        # ── 状态行 (输入框上方独占一行: 就绪 / 思考中…) ──
+        self._status_lbl = QLabel("就绪")
+        self._status_lbl.setFont(_make_font(fn, 13))
+        self._status_lbl.setStyleSheet(f"color: {C_DIM}; background: transparent;")
+        root.addWidget(self._status_lbl)
+
+        # ── 输入行 (加大) ──
         input_row = QHBoxLayout()
         input_row.setSpacing(8)
         self._input = QLineEdit()
-        self._input.setFont(_make_font(fn, 13))
+        self._input.setFont(_make_font(fn, 16))
+        self._input.setMinimumHeight(48)
         self._input.setPlaceholderText("说点什么… (回车发送)")
         self._input.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: #EEE;
-                border: 1px solid #444; border-radius: 6px; padding: 8px 10px;
+                border: 1px solid #444; border-radius: 8px; padding: 8px 12px;
             }}
             QLineEdit:focus {{ border: 1px solid {C_SEND}; }}
         """)
@@ -174,13 +337,13 @@ class AIAssistantDialog(QDialog):
         input_row.addWidget(self._input, 1)
 
         self._send_btn = QPushButton("发送")
-        self._send_btn.setFixedSize(76, 38)
-        self._send_btn.setAutoDefault(False)   # 回车统一走 QLineEdit.returnPressed, 避免双发/关窗
+        self._send_btn.setFixedSize(100, 48)
+        self._send_btn.setAutoDefault(False)
         self._send_btn.setDefault(False)
         self._send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._send_btn.setFont(_make_font(fn, 13, bold=True))
+        self._send_btn.setFont(_make_font(fn, 16, bold=True))
         self._send_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_SEND}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {C_SEND}; color: #FFF; border: none; border-radius: 8px; }}
             QPushButton:hover {{ background: {C_SEND_H}; }}
             QPushButton:disabled {{ background: #333; color: #666; }}
         """)
@@ -188,24 +351,31 @@ class AIAssistantDialog(QDialog):
         input_row.addWidget(self._send_btn)
         root.addLayout(input_row)
 
-    # ── 线程接线 ──
+        # ── 右下角缩放手柄 ──
+        self._grip = _ResizeGrip(self, container)
+
+    # ── 线程接线 (常驻期间保持连接) ──
     def _wire_thread(self):
         self._thread.reply_ready.connect(self._on_reply)
         self._thread.tool_ran.connect(self._on_tool_ran)
         self._thread.error.connect(self._on_error)
         self._thread.busy.connect(self._set_busy)
 
-    def _unwire_thread(self):
-        for sig, slot in (
-            (self._thread.reply_ready, self._on_reply),
-            (self._thread.tool_ran, self._on_tool_ran),
-            (self._thread.error, self._on_error),
-            (self._thread.busy, self._set_busy),
-        ):
-            try:
-                sig.disconnect(slot)
-            except (TypeError, RuntimeError):
-                pass
+    # ── 对外: 打开/收起 ──
+    def show_panel(self):
+        self._clamp_into_screen()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        agent_settings.save_ui_open(True)   # 记住"已打开", 下次启动恢复
+        if self._input.isEnabled():
+            self._input.setFocus()
+
+    def _on_collapse(self):
+        self._persist_geometry()
+        agent_settings.save_ui_open(False)  # 记住"已收起"
+        self.hide()
+        self.collapsed.emit()
 
     # ── 收发 ──
     def _on_send(self):
@@ -216,7 +386,6 @@ class AIAssistantDialog(QDialog):
             return
         self._input.clear()
         self._append_user(text)
-        # 先把当前 (可能拖动过但未保存的) 编辑状态落盘, 再让 agent 读取最新 profile
         if callable(self._on_before_send):
             try:
                 self._on_before_send()
@@ -233,10 +402,11 @@ class AIAssistantDialog(QDialog):
         if not result.get("ok", True) and result.get("error"):
             self._append_tool(f"✗ {name}: {result['error']}", error=True)
             return
-        # set_button_binding / set_param 带 before/after, 显示得人性化
         if "before" in result and "after" in result:
             field = result.get("field") or result.get("key", "")
             idx = result.get("button_index")
+            if idx is None:
+                idx = result.get("index")
             tgt = f"按钮{idx} {field}" if idx is not None else f"参数 {field}"
             self._append_tool(f"✓ 已改 {tgt}: {result.get('before')!r} → {result.get('after')!r}")
         else:
@@ -247,44 +417,67 @@ class AIAssistantDialog(QDialog):
 
     def _set_busy(self, busy: bool):
         self._busy = busy
-        self._send_btn.setEnabled(not busy)
+        self._send_btn.setEnabled(not busy)   # 思考中禁用发送 → 一次一条来回
         self._input.setEnabled(not busy)
-        self._status_lbl.setText("思考中…" if busy else "就绪")
-        if not busy:
+        if busy:
+            self._status_lbl.setText("● 蛋挞思考中…")
+            self._status_lbl.setStyleSheet(f"color: {C_BOT}; background: transparent;")
+        else:
+            self._status_lbl.setText("就绪")
+            self._status_lbl.setStyleSheet(f"color: {C_DIM}; background: transparent;")
+        if not busy and self.isVisible():
             self._input.setFocus()
 
-    # ── 追加气泡 (HTML) ──
-    def _append(self, html_str: str):
+    # ── 追加消息 (HTML) ──
+    # 段落上间距: 消息(你/蛋挞) 间距要明显大于蛋挞长回复内部的换行行距
+    GAP_MSG = 18      # 一轮消息之间 (你 / 蛋挞)
+    GAP_TOOL = 12     # 参数修改 / 工具执行行 (也要与上文拉开)
+    GAP_NOTE = 12     # 系统提示 / 错误 / 分隔线
+
+    def _append(self, html_str: str, center: bool = False, top_margin: int = GAP_MSG):
         self._log.append(html_str)
+        # 显式设定本段对齐 + 上间距 (对齐: 防居中分隔线让后续继承居中; 间距: 拉开消息)
+        cur = self._log.textCursor()
+        cur.movePosition(QTextCursor.MoveOperation.End)
+        fmt = cur.blockFormat()
+        fmt.setAlignment(Qt.AlignmentFlag.AlignHCenter if center
+                         else Qt.AlignmentFlag.AlignLeft)
+        fmt.setTopMargin(float(top_margin))
+        cur.setBlockFormat(fmt)
         sb = self._log.verticalScrollBar()
         sb.setValue(sb.maximum())
 
     def _append_user(self, text: str):
-        self._append(f'<div style="margin:4px 0;"><b style="color:{C_USER};">你: </b>'
-                     f'<span style="color:#DDD;">{html.escape(text)}</span></div>')
+        self._append(f'<b style="color:{C_USER};">你: </b>'
+                     f'<span style="color:{C_USER};">{html.escape(text)}</span>',
+                     top_margin=self.GAP_MSG)
 
     def _append_assistant(self, text: str):
-        body = html.escape(text).replace("\n", "<br>")
-        self._append(f'<div style="margin:4px 0;"><b style="color:#9CA3AF;">助手: </b>'
-                     f'<span style="color:{C_ASSIST};">{body}</span></div>')
+        self._append(f'<b style="color:{C_BOT};">蛋挞: </b>'
+                     f'<span style="color:{C_ASSIST};">{_md_to_html(text)}</span>',
+                     top_margin=self.GAP_MSG)
 
     def _append_tool(self, text: str, error: bool = False):
-        color = C_ERR if error else C_TOOL
-        self._append(f'<div style="margin:2px 0 2px 12px;color:{color};font-size:12px;">'
-                     f'{html.escape(text)}</div>')
+        color = C_ERR if error else C_BOT   # 参数修改行用蛋挞同款琥珀
+        self._append(f'<span style="color:{color};font-size:14px;">'
+                     f'{html.escape(text)}</span>',
+                     top_margin=self.GAP_TOOL)
 
     def _append_system(self, text: str):
-        self._append(f'<div style="margin:4px 0;color:{C_DIM};font-style:italic;">'
-                     f'{html.escape(text)}</div>')
+        self._append(f'<span style="color:{C_DIM};font-style:italic;">'
+                     f'{html.escape(text)}</span>', top_margin=self.GAP_NOTE)
+
+    def _append_error(self, text: str):
+        self._append(f'<span style="color:{C_ERR};">⚠ {html.escape(text)}</span>',
+                     top_margin=self.GAP_NOTE)
 
     def _append_session_sep(self, ts: str = ""):
         label = f"── 会话 {ts} ──" if ts else "── 新会话 ──"
-        self._append(f'<div style="margin:10px 0;text-align:center;color:{C_DIM};'
-                     f'font-size:11px;">{html.escape(label)}</div>')
+        self._append(f'<span style="color:{C_DIM};font-size:13px;">{html.escape(label)}</span>',
+                     center=True, top_margin=self.GAP_NOTE)
 
     # ── 历史回看 ──
     def _load_history(self) -> bool:
-        """把持久化的对话回渲到窗口。返回是否有历史 (决定是否显示开场白)。"""
         events = clog.load_recent()
         rendered = False
         for ev in events:
@@ -298,40 +491,73 @@ class AIAssistantDialog(QDialog):
                 self._append_assistant(ev.get("text", ""))
                 rendered = True
             elif t == "tool":
-                # 复用实时渲染逻辑 (只读 name/result, 与 tool_ran 一致)
                 self._on_tool_ran({"name": ev.get("name", ""), "result": ev.get("result", {})})
                 rendered = True
             elif t == "error":
                 self._append_error(ev.get("text", ""))
                 rendered = True
-            # meta (token/模型) 仅供 debug, 不回渲
         return rendered
 
-    def _append_error(self, text: str):
-        self._append(f'<div style="margin:4px 0;color:{C_ERR};">⚠ {html.escape(text)}</div>')
+    # ── 几何: 恢复 / 钳制 / 持久化 ──
+    def _screen_rect(self) -> QRect:
+        scr = QApplication.primaryScreen()
+        return scr.availableGeometry() if scr else QRect(0, 0, 1920, 1080)
 
-    # ── 定位 + 拖拽 ──
-    def _center_on_screen(self):
-        _ps = QApplication.primaryScreen()
-        screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
-        self.move((screen.width() - self.width()) // 2,
-                  (screen.height() - self.height()) // 2)
+    def _restore_geometry(self):
+        g = agent_settings.load_ui_geometry()
+        scr = self._screen_rect()
+        w = int(g.get("dialog_w") or self.DEFAULT_W)
+        h = int(g.get("dialog_h") or self.DEFAULT_H)
+        w = max(self.MIN_W, min(w, scr.width()))
+        h = max(self.MIN_H, min(h, scr.height()))
+        self.resize(w, h)
+        if g.get("dialog_x") is not None and g.get("dialog_y") is not None:
+            x, y = self._clamp_pos(int(g["dialog_x"]), int(g["dialog_y"]))
+        else:
+            x = scr.left() + (scr.width() - w) // 2
+            y = scr.top() + (scr.height() - h) // 2
+        self.move(x, y)
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-        super().mousePressEvent(event)
+    def _clamp_pos(self, x: int, y: int) -> tuple:
+        scr = self._screen_rect()
+        w, h = self.width(), self.height()
+        x = max(scr.left(), min(x, scr.right() - w + 1))
+        y = max(scr.top(), min(y, scr.bottom() - h + 1))
+        return x, y
 
-    def mouseMoveEvent(self, event):
-        if self._drag_pos and event.buttons() & Qt.MouseButton.LeftButton:
-            self.move(event.globalPosition().toPoint() - self._drag_pos)
-        super().mouseMoveEvent(event)
+    def _clamp_into_screen(self):
+        x, y = self._clamp_pos(self.x(), self.y())
+        if (x, y) != (self.x(), self.y()):
+            self.move(x, y)
 
-    def mouseReleaseEvent(self, event):
-        self._drag_pos = None
-        super().mouseReleaseEvent(event)
+    def _move_clamped(self, point):
+        x, y = self._clamp_pos(point.x(), point.y())
+        self.move(x, y)
+
+    def _persist_geometry(self):
+        if not self._ready:
+            return
+        agent_settings.save_ui_geometry(self.x(), self.y(), self.width(), self.height())
+
+    # ── 事件 ──
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if getattr(self, "_grip", None) is not None and getattr(self, "_container", None) is not None:
+            self._grip.move(self._container.width() - self._grip.width() - 3,
+                            self._container.height() - self._grip.height() - 3)
+            self._grip.raise_()
+        if self._ready:
+            self._save_timer.start()
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        if self._ready:
+            self._save_timer.start()
+
+    def hideEvent(self, event):
+        self._persist_geometry()
+        super().hideEvent(event)
 
     def closeEvent(self, event):
-        # 断开本窗口与外部线程的连接 (线程由 OverlayWindow 持有, 不在此停)
-        self._unwire_thread()
+        self._persist_geometry()
         super().closeEvent(event)

@@ -320,11 +320,11 @@ class EditToolbar(QWidget):
         r1.addWidget(voice_btn)
 
         # AI 配置助手
-        ai_btn = _IconTextBtn("", "\U0001F916", "AI", C_GRAY, C_GRAY_H)
-        ai_btn.setToolTip("AI 配置助手 — 用自然语言改键位")
-        self._install_tip(ai_btn)
-        ai_btn.clicked.connect(self.ai_clicked.emit)
-        r1.addWidget(ai_btn)
+        self._ai_btn = _IconTextBtn("", "\U0001F916", "AI", C_GRAY, C_GRAY_H)
+        self._ai_btn.setToolTip("AI 配置助手 — 用自然语言改键位")
+        self._install_tip(self._ai_btn)
+        self._ai_btn.clicked.connect(self.ai_clicked.emit)
+        r1.addWidget(self._ai_btn)
 
         # 分隔线
         r1.addWidget(_VSep())
@@ -601,6 +601,13 @@ class EditToolbar(QWidget):
         """外部同步 (启动 / 编辑器内删除等场景): 直接设状态, 不 emit 信号"""
         self._wheel_gp_on = bool(visible)
         self._apply_gp_wheel_visual()
+
+    def set_ai_state(self, active: bool):
+        """AI 面板显示时按钮变深橙 (与启动按钮一致), 收起时回灰。"""
+        if active:
+            self._ai_btn.set_colors(C_AMBER_D, C_AMBER)   # 深橙, 同启动按钮
+        else:
+            self._ai_btn.set_colors(C_GRAY, C_GRAY_H)
 
     def _on_opacity(self, value):
         self._val_lbl.setText(f"{value}%")

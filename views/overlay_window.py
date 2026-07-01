@@ -303,9 +303,11 @@ class OverlayWindow(QGraphicsView):
 
     def to_run(self):
         """切换到运行模式"""
-        # 关闭所有编辑模式弹窗
+        # 关闭所有编辑模式弹窗 (AI 助手常驻, 跨模式保留, 不关)
         from PyQt6.QtWidgets import QDialog
         for dlg in self.findChildren(QDialog):
+            if dlg is self._dlg_ai:
+                continue
             dlg.close()
         self._smart_pt_timer.stop()
         self._current_mode = 'run'
@@ -392,6 +394,8 @@ class OverlayWindow(QGraphicsView):
         self._run_collapsed = False
         self._run_toolbar.update_collapse_state(False)
         self._edit_toolbar.show()
+        # AI 面板常驻: 切回编辑时同步按钮琥珀态
+        self._edit_toolbar.set_ai_state(bool(self._dlg_ai and self._dlg_ai.isVisible()))
         self._smart_pt_timer.start()
 
         # 编辑模式也显示自绘光标 (并藏掉真实箭头, 让自绘光标盖在最上层)
@@ -1154,27 +1158,40 @@ class OverlayWindow(QGraphicsView):
             logger.info("Voice settings saved: %d commands", len(result.get('voice_commands', [])))
 
     def _open_ai_assistant(self):
-        """打开 AI 配置助手聊天窗口 (阶段1)。
+        """切换 AI 配置助手面板 (常驻; 作为"启用"按钮 toggle)。
 
-        线程 self._agent_thread 由本窗口持有 (跨开关保留会话历史); 其 config_changed
-        信号驱动热生效。弹窗只在打开期间接 reply/tool/error/busy, 关窗时自行断开。
+        面板由本窗口持有并常驻 (创建一次, hide/show); 运行/编辑模式都在, 切模式不关,
+        直到用户点「收起」。线程 self._agent_thread 也常驻 (保留会话历史)。
         """
-        if self._dlg_ai and self._dlg_ai.isVisible():
-            self._dlg_ai.raise_()
-            self._dlg_ai.activateWindow()
-            return
-        # 惰性创建线程 + 一次性接热生效信号
-        if self._agent_thread is None:
-            from agent.agent_thread import AgentThread
-            self._agent_thread = AgentThread(self)
-            self._agent_thread.config_changed.connect(self._on_agent_config_changed)
-        from views.ai_assistant_dialog import AIAssistantDialog
-        dialog = AIAssistantDialog(self._agent_thread, self,
-                                   on_before_send=self._flush_for_agent)
-        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_ai'))
-        self._dlg_ai = dialog
-        dialog.show()
+        if self._dlg_ai is None:
+            if self._agent_thread is None:
+                from agent.agent_thread import AgentThread
+                self._agent_thread = AgentThread(self)
+                self._agent_thread.config_changed.connect(self._on_agent_config_changed)
+            from views.ai_assistant_dialog import AIAssistantDialog
+            self._dlg_ai = AIAssistantDialog(self._agent_thread, self,
+                                             on_before_send=self._flush_for_agent)
+            self._dlg_ai.collapsed.connect(self._on_ai_collapsed)
+
+        if self._dlg_ai.isVisible():          # 再点一次 = 收起 (走收起路径, 会记状态)
+            self._dlg_ai._on_collapse()
+        else:
+            self._dlg_ai.show_panel()
+            self._edit_toolbar.set_ai_state(True)
+
+    def _on_ai_collapsed(self):
+        """面板内「收起」按钮 → 同步工具栏 AI 按钮回灰。"""
+        self._edit_toolbar.set_ai_state(False)
+
+    def _restore_ai_panel(self):
+        """启动时: 若上次退出时面板是打开的, 自动恢复打开。"""
+        try:
+            from core import agent_settings
+            if agent_settings.load_agent_settings().get("dialog_open"):
+                if self._dlg_ai is None or not self._dlg_ai.isVisible():
+                    self._open_ai_assistant()
+        except Exception as e:
+            logger.warning("恢复 AI 面板失败: %s", e)
 
     def _flush_for_agent(self):
         """AI 助手发指令前, 把编辑模式下可能未保存的改动 (如拖动按钮) 落盘,
@@ -1339,6 +1356,10 @@ class OverlayWindow(QGraphicsView):
         self._restore_toolbars_for_mode()
         if self._current_mode == 'edit':
             self._smart_pt_timer.start()
+        # 首次显示后, 恢复上次的 AI 面板开关状态 (只做一次)
+        if not getattr(self, '_ai_restored', False):
+            self._ai_restored = True
+            QTimer.singleShot(400, self._restore_ai_panel)
 
     def _poll_smart_passthrough(self):
         """每帧检查光标位置，切换 WS_EX_TRANSPARENT — 对齐原版 update_loop"""
