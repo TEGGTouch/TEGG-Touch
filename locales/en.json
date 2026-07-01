@@ -193,6 +193,8 @@
     "hover": "Hover",
     "hover_delay": "Hover Trigger Delay",
     "hover_release_delay": "Hover Release Delay",
+    "hover_repeat_interval": "Repeat Interval",
+    "hover_repeat_hint": "0 = fire once while held; with an interval set, the key is re-sent every N ms while held (emulates keyboard auto-repeat). Max 1 s.",
     "hover_mode_trigger": "Hover Trigger",
     "hover_mode_toggle": "Hover Toggle",
     "hover_trigger_desc": "Press on hover, release on leave (hold type)",

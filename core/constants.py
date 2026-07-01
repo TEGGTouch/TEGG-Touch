@@ -451,5 +451,7 @@ BUTTON_OPTIONAL_DEFAULTS = {
     'xbutton2': '',  # 鼠标侧键2（前进键）
     'hover_delay': 200,  # 悬停触发延迟(ms)，0=立即触发，默认200ms防误触
     'hover_release_delay': 0,  # 悬停释放延迟(ms)，0=立即释放，默认0ms
+    'hover_repeat_interval': 0,  # 触发间隔(ms)，0=只发一次down，>0=按住期间按间隔重复发down
+    'hover_toggle_repeat_interval': 0,  # 同上，用于悬停开关模式
     'recenter_target': 'screen',  # 回中带回中目标
 }

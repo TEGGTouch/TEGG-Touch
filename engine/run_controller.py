@@ -660,6 +660,18 @@ class RunController(QObject):
         if key:
             self._smart_trigger(key, 'r')
 
+    def on_hover_repeat(self, data):
+        """hover 按住期间按触发间隔补发一次 down (方案A: 模拟长按自动重复)
+
+        键已在 on_hover_activated 时按下并计入 _active_key_count, 这里只是重复发
+        down 让"看重复 keydown 流"的目标程序识别为长按, 不改计数、不发 up。
+        """
+        key = (data.hover_toggle
+               if getattr(data, 'hover_mode', 'trigger') == 'toggle'
+               else data.hover)
+        if key:
+            self._smart_trigger(key, 'p')
+
     def on_action_triggered(self, data, key_str, action):
         """按钮点击/滚轮 → 触发按键"""
         if action == 'p':

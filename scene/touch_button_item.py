@@ -129,6 +129,7 @@ class TouchButtonItem(QGraphicsObject):
     doubleClicked = pyqtSignal(object)           # 双击 → 打开编辑器
     hoverActivated = pyqtSignal(object)          # hover 激活 → 触发按键
     hoverDeactivated = pyqtSignal(object)        # hover 释放 → 释放按键
+    hoverRepeat = pyqtSignal(object)             # hover 按住期间按触发间隔补发 down
     actionTriggered = pyqtSignal(object, str, str)  # (data, key_str, 'p'|'r'|'c')
     data_changed = pyqtSignal()                  # 数据变更
 
@@ -168,10 +169,14 @@ class TouchButtonItem(QGraphicsObject):
         _hd = data.hover_toggle_delay if _is_toggle else data.hover_delay
         _rd = (getattr(data, 'hover_toggle_release_delay', 0) if _is_toggle
                else data.hover_release_delay)
+        _ri = (getattr(data, 'hover_toggle_repeat_interval', 0) if _is_toggle
+               else getattr(data, 'hover_repeat_interval', 0))
         self._hover_sm = HoverStateMachine(
-            _hd, _rd, mode=getattr(data, 'hover_mode', 'trigger'))
+            _hd, _rd, mode=getattr(data, 'hover_mode', 'trigger'),
+            repeat_interval_ms=_ri)
         self._hover_sm.activated.connect(self._on_hover_activated)
         self._hover_sm.deactivated.connect(self._on_hover_deactivated)
+        self._hover_sm.repeat.connect(self._on_hover_repeat)
         self._hover_sm.charge_progress.connect(self._on_charge_progress)
         self._hover_sm.release_progress.connect(self._on_release_progress)
 
@@ -501,6 +506,9 @@ class TouchButtonItem(QGraphicsObject):
         self.hoverDeactivated.emit(self.data)
         self._charge_progress = 0.0  # 释放完成，清除进度条
         self.set_visual_state('normal')
+
+    def _on_hover_repeat(self):
+        self.hoverRepeat.emit(self.data)
 
     def _on_charge_progress(self, progress):
         """充能进度回调 — 进度条从 0→1"""

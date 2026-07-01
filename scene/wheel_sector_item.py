@@ -42,6 +42,7 @@ class WheelSectorItem(QGraphicsObject):
     doubleClicked = pyqtSignal(object)
     hoverActivated = pyqtSignal(object)
     hoverDeactivated = pyqtSignal(object)
+    hoverRepeat = pyqtSignal(object)
     actionTriggered = pyqtSignal(object, str, str)
 
     def __init__(self, data: WheelSectorData, cx, cy,
@@ -87,10 +88,14 @@ class WheelSectorItem(QGraphicsObject):
         _hd = data.hover_toggle_delay if _is_toggle else data.hover_delay
         _rd = (getattr(data, 'hover_toggle_release_delay', 0) if _is_toggle
                else data.hover_release_delay)
+        _ri = (getattr(data, 'hover_toggle_repeat_interval', 0) if _is_toggle
+               else getattr(data, 'hover_repeat_interval', 0))
         self._hover_sm = HoverStateMachine(
-            _hd, _rd, mode=getattr(data, 'hover_mode', 'trigger'))
+            _hd, _rd, mode=getattr(data, 'hover_mode', 'trigger'),
+            repeat_interval_ms=_ri)
         self._hover_sm.activated.connect(self._on_hover_activated)
         self._hover_sm.deactivated.connect(self._on_hover_deactivated)
+        self._hover_sm.repeat.connect(self._on_hover_repeat)
         self._hover_sm.charge_progress.connect(self._on_charge_progress)
         self._hover_sm.release_progress.connect(self._on_release_progress)
 
@@ -363,6 +368,9 @@ class WheelSectorItem(QGraphicsObject):
         self.hoverDeactivated.emit(self.data)
         self._charge_progress = 0.0  # 释放完成，清除进度条
         self.set_visual_state('normal')
+
+    def _on_hover_repeat(self):
+        self.hoverRepeat.emit(self.data)
 
     def _on_charge_progress(self, progress):
         """充能进度回调 — 径向从内向外扩展 (0→1)"""
