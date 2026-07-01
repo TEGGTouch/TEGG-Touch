@@ -24,11 +24,13 @@ TEGGTouch 蛋挞 — Agent 工具层 (headless 原型 / 调查项 D2)
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import time
 
 from core import input_engine
 from core import action_service
+from core import button_theme
 from core.constants import APP_PREFIX, GP_KEY_PREFIX, GP_LABEL_TO_KEY
 from core import config_manager as cfg
 
@@ -57,6 +59,12 @@ def _coerce_to_type(value, ref):
     if ref is None or type(value) is type(ref):
         return value
     try:
+        if isinstance(ref, (dict, list)):
+            # 模型常把字典/列表值当 JSON 字符串传 (如 wheel_style='{\"color\":\"#FF8C00\"}')
+            if isinstance(value, str):
+                parsed = json.loads(value)
+                return parsed if isinstance(parsed, type(ref)) else value
+            return value
         if isinstance(ref, bool):
             if isinstance(value, str):
                 s = value.strip().lower()
@@ -324,6 +332,119 @@ _BUTTON_BINDING_FIELDS = {
 # name 不是"绑定"但用户常要改, 复用 set_button_binding 通道 (省一个工具)。
 _BUTTON_WRITABLE_FIELDS = _BUTTON_BINDING_FIELDS | {"name"}
 
+# 元素类型 → 人类可读标签 (用户常按类型描述: "摇杆" "回中带")
+_TYPE_LABELS = {
+    "normal": "普通键", "center_band": "回中带", "gp_button": "手柄键",
+    "gp_stick": "摇杆", "gp_wheel": "手柄方向盘",
+    "wheel_sector": "轮盘扇区", "wheel_center_ring": "轮盘中心环",
+    "wheel_inner_ring": "轮盘内环",
+}
+
+# 颜色不存在按钮数据里 (每个按钮 color/bg_color 常为 null), 而是按类型走 button_theme
+# 这个"单一色源": keyboard 组=普通键/中心轮盘, gamepad 组=手柄键+摇杆, center_band 组=回中带,
+# 方向盘(gp_wheel)单列, 取 wheel_style.color。这里直接复用 button_theme, 不再自造映射,
+# 否则会像先前那样把蓝色方向盘误判成 gamepad 色。
+
+
+def _element_color_hex(btype: str | None, button_colors: dict | None,
+                       wheel_style: dict | None) -> str:
+    """按元素类型解析其"代表色"(=用户眼里的描边/边框色), 与渲染完全一致。"""
+    if btype == "gp_wheel":
+        base = (wheel_style or {}).get("color") or button_theme.DEFAULT_WHEEL_BASE
+        return button_theme.derive_shades(base)["border"]
+    if btype and btype.startswith("gp"):      # gp_button / gp_stick
+        group = "gamepad"
+    elif btype == "center_band":
+        group = "center_band"
+    else:                                     # normal / 其它
+        group = "keyboard"
+    return button_theme.derive_family(group, (button_colors or {}).get(group))["border"]
+
+
+def _color_name_from_hex(h) -> str | None:
+    """#RRGGBB → 中文粗略色名 (走 HSL, 兼容用户自定义 button_colors)。"""
+    if not isinstance(h, str):
+        return None
+    s = h.lstrip("#")
+    if len(s) != 6:
+        return None
+    try:
+        r, g, b = (int(s[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    except ValueError:
+        return None
+    mx, mn = max(r, g, b), min(r, g, b)
+    d = mx - mn
+    lightness = (mx + mn) / 2
+    if lightness < 0.12:
+        return "黑"
+    if d < 0.08:
+        return "白" if lightness > 0.9 else "灰"
+    if mx == r:
+        hue = ((g - b) / d) % 6
+    elif mx == g:
+        hue = (b - r) / d + 2
+    else:
+        hue = (r - g) / d + 4
+    hue *= 60
+    for lim, name in ((12, "红"), (40, "橙"), (70, "黄"), (160, "绿"),
+                      (195, "青"), (255, "蓝"), (300, "紫"), (345, "玫红")):
+        if hue < lim:
+            return name
+    return "红"
+
+
+def _screen_wh(geometry, default=(1920, 1080)) -> tuple[int, int]:
+    """从 'WxH+X+Y' 解析屏幕宽高 (方位判断的参考系)。"""
+    try:
+        wh = str(geometry).split("+")[0].split("x")
+        return int(wh[0]), int(wh[1])
+    except (ValueError, AttributeError, IndexError):
+        return default
+
+
+def _region_label(cx: float, cy: float, sw: int, sh: int) -> str:
+    """元素中心坐标 → 九宫格方位标签。坐标系原点=屏幕中心, y 越大越靠下。
+
+    校准基准 (用户实测): 玫红手柄键中心约 (-1700,-750) 在屏幕左上 → 本函数返回"左上"。
+    阈值用屏幕三分之一; 超出屏幕边缘的坐标仍归到最靠近的边 (不裁剪)。
+    """
+    hx = cx / (sw / 2) if sw else 0
+    hy = cy / (sh / 2) if sh else 0
+    col = "左" if hx < -1 / 3 else ("右" if hx > 1 / 3 else "中")
+    row = "上" if hy < -1 / 3 else ("下" if hy > 1 / 3 else "中")
+    table = {
+        ("左", "上"): "左上", ("中", "上"): "正上", ("右", "上"): "右上",
+        ("左", "中"): "正左", ("中", "中"): "居中", ("右", "中"): "正右",
+        ("左", "下"): "左下", ("中", "下"): "正下", ("右", "下"): "右下",
+    }
+    return table[(col, row)]
+
+
+# ── list 型配置的元素级编辑约束 ──
+_VOICE_FIELDS = {"phrase", "keys", "action"}           # 语音命令可改字段
+_ACTIONS = {"click", "press", "release"}               # action 合法取值
+_MACRO_POOLS = {"xmacros", "macros", "gp_macros"}      # 三个宏池 (推荐 xmacros 统一池)
+_WHEEL_SECTOR_COUNT = 8                                 # 轮盘扇区固定 8 个 (只改不增删)
+# 可由 agent 新增的按钮类型 (共用 ButtonData schema); gp_stick/gp_wheel 数据模型特殊/单例,
+# 新增交给 UI, 这里只允许删除。
+_ADDABLE_BTN_TYPES = {"normal", "gp_button", "center_band"}
+_BTN_TYPE_DEFAULT_NAME = {"normal": "按钮", "gp_button": "手柄键", "center_band": "回中带"}
+
+
+def _norm_macro_step(step: dict) -> dict:
+    """规范化一个宏步骤: {type:'delay', ms} 或 {type:'key', key, action}。"""
+    if not isinstance(step, dict):
+        raise ValueError(f"步骤须为对象: {step!r}")
+    if step.get("type") == "delay":
+        return {"type": "delay", "ms": int(step.get("ms", 100))}
+    key = step.get("key") or step.get("keys") or ""
+    if not key:
+        raise ValueError(f"指令步骤缺 key: {step!r}")
+    action = step.get("action", "click")
+    if action not in _ACTIONS:
+        raise ValueError(f"非法 action: {action}")
+    return {"type": step.get("type", "key"), "key": key, "action": action}
+
 
 class ConfigTools:
     """程序化读写蛋挞配置。全部走 config_manager 公开 API, 原子写有保证。"""
@@ -344,28 +465,72 @@ class ConfigTools:
 
     @staticmethod
     def summarize_profile(name: str | None = None) -> dict:
-        """给 agent 看的精简摘要: 按钮绑定一览 + 轮盘/语音/参数概况。"""
+        """给 agent 看的全量摘要: 每个元素的 类型/名字/方位/颜色/坐标/所有非空字段,
+        加全部顶层参数、语音、轮盘、宏、应用。目标是让配置助手感知 profile 里的全部数据
+        (需要更原始的完整 dict 时用 read_profile)。
+        """
         name = ConfigTools._resolve_name(name)
         c = cfg.load_profile(name)
-        buttons = []
+        sw, sh = _screen_wh(c.get("geometry"))
+        bcolors = c.get("button_colors") or {}
+        wstyle = c.get("wheel_style") or {}
+
+        promoted = {"x", "y", "w", "h", "type", "name"}
+        elements = []
         for i, b in enumerate(c.get("buttons", [])):
-            bind = {k: b.get(k) for k in ("hover", "lclick", "rclick", "mclick",
-                                          "wheelup", "wheeldown", "xbutton1", "xbutton2")
-                    if b.get(k)}
-            buttons.append({"index": i, "name": b.get("name", ""),
-                            "type": b.get("type", "normal"), "bindings": bind})
+            x, y = b.get("x") or 0, b.get("y") or 0
+            w, h = b.get("w") or 0, b.get("h") or 0
+            btype = b.get("type", "normal")
+            hexc = _element_color_hex(btype, bcolors, wstyle)
+            # 其余所有非空字段全暴露 (绑定 + 各类型专有参数), 不再挑挑拣拣
+            fields = {k: v for k, v in b.items()
+                      if k not in promoted and v not in (None, "")}
+            elements.append({
+                "index": i,
+                "type": btype,
+                "type_label": _TYPE_LABELS.get(btype, btype),
+                "name": b.get("name", ""),
+                "region": _region_label(x + w / 2, y + h / 2, sw, sh),
+                "color": {"name": _color_name_from_hex(hexc), "hex": hexc},
+                "pos": {"x": x, "y": y, "w": w, "h": h},
+                "fields": fields,
+            })
+
+        # 全部顶层标量参数 (transparency / voice_* / wheel_* / sim_mode ...); geometry
+        # 已拆进 screen, 列表/字典类另行结构化, 故这里只收标量。
+        params = {k: v for k, v in c.items()
+                  if not isinstance(v, (list, dict)) and k != "geometry"}
         voice = [{"phrase": v.get("phrase"), "keys": v.get("keys"),
                   "action": v.get("action")} for v in c.get("voice_commands", [])]
         return {
             "profile": name,
-            "button_count": len(buttons),
-            "buttons": buttons,
-            "wheel_visible": c.get("wheel_visible"),
-            "wheel_mode": c.get("wheel_mode"),
+            "screen": {"w": sw, "h": sh,
+                       "note": "坐标系原点=屏幕中心; x<0 左 / x>0 右; y<0 上 / y>0 下 (y 越大越靠下)"},
+            "button_count": len(elements),
+            "buttons": elements,
+            "params": params,
+            "button_colors": bcolors,
             "voice_enabled": c.get("voice_enabled"),
             "voice_commands": voice,
-            "xmacros": [m.get("name") for m in c.get("xmacros", [])],
-            "apps": [a.get("name") for a in c.get("apps", [])],
+            "wheel": {
+                "visible": c.get("wheel_visible"), "mode": c.get("wheel_mode"),
+                "enlarged": c.get("wheel_enlarged"),
+                "sector_count": len(c.get("wheel_sectors") or []),
+                "sectors": [
+                    {"index": i, "name": s.get("name", ""), "angle": s.get("angle"),
+                     "bindings": {k: v for k, v in s.items()
+                                  if k not in ("name", "angle") and v not in (None, "", 0, "trigger")}}
+                    for i, s in enumerate(c.get("wheel_sectors") or [])
+                ],
+                "center_ring": c.get("wheel_center_ring"),
+                "color": wstyle.get("color"),   # 方向盘颜色 (独立于 button_colors)
+            },
+            # 宏: 展开 name + steps (三个池; xmacros 为统一池)
+            "xmacros": c.get("xmacros", []),
+            "macros": c.get("macros", []),
+            "gp_macros": c.get("gp_macros", []),
+            "apps": [{"name": a.get("name"), "path": a.get("path")}
+                     for a in c.get("apps", [])],
         }
 
     @staticmethod
@@ -389,15 +554,225 @@ class ConfigTools:
 
     @staticmethod
     def set_param(key: str, value, name: str | None = None) -> dict:
-        """改写 profile 顶层参数 (如 transparency / voice_enabled) 并保存。"""
-        if key not in _PARAM_FIELDS:
-            return {"ok": False, "error": f"不允许的参数: {key}",
+        """改写 profile 顶层参数并保存。
+
+        - 标量参数: key='transparency', value=0.5
+        - 嵌套标量 (dict 里的一项, 推荐用点路径): key='wheel_style.color', value='#FF8C00'
+          → 只改该项, 保留 dict 其它键。
+        - 整个 dict 参数: key='wheel_style', value={...} 会与旧 dict **合并** (不覆盖其它键)。
+        值的类型按旧值自动纠正 (数字/布尔/字典 JSON 字符串都会被还原成正确类型)。
+        """
+        top = key.split(".", 1)[0]
+        if top not in _PARAM_FIELDS:
+            return {"ok": False, "error": f"不允许的参数: {top}",
                     "allowed": sorted(_PARAM_FIELDS)}
         name = ConfigTools._resolve_name(name)
         c = cfg.load_profile(name)
+
+        # ── 点路径: 改 dict 里的一个嵌套项 (如 wheel_style.color) ──
+        if "." in key:
+            parts = key.split(".")
+            container = c
+            for p in parts[:-1]:
+                nxt = container.get(p)
+                if not isinstance(nxt, dict):
+                    nxt = {}
+                    container[p] = nxt
+                container = nxt
+            leaf = parts[-1]
+            before = container.get(leaf)
+            value = _coerce_to_type(value, before)
+            container[leaf] = value
+            cfg.save_profile(name, c)
+            return {"ok": True, "profile": name, "key": key,
+                    "before": before, "after": value}
+
+        # ── 顶层参数 ──
         before = c.get(key)
-        value = _coerce_to_type(value, before)  # 模型常把数字/布尔传成字符串, 按旧值类型纠正
+        value = _coerce_to_type(value, before)  # 数字/布尔/JSON字符串 → 正确类型
+        # dict 参数 (wheel_style / button_colors ...) 合并而非整体覆盖, 避免丢兄弟键
+        if isinstance(before, dict) and isinstance(value, dict):
+            value = {**before, **value}
         c[key] = value
         cfg.save_profile(name, c)
         return {"ok": True, "profile": name, "key": key,
                 "before": before, "after": value}
+
+    # ════════════════════════════════════════════════════════════
+    # list 型配置的元素级编辑 (语音命令 / 轮盘扇区 / 宏 / 应用 / 按钮)
+    # ════════════════════════════════════════════════════════════
+
+    # ── 语音命令 ──
+    @staticmethod
+    def add_voice_command(phrase: str, keys: str, action: str = "click",
+                          name: str | None = None) -> dict:
+        """新增一条语音命令 (短语→按键)。"""
+        if action not in _ACTIONS:
+            return {"ok": False, "error": f"action 须为 {sorted(_ACTIONS)}"}
+        if not (phrase or "").strip():
+            return {"ok": False, "error": "phrase 不能为空"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        cmds = c.setdefault("voice_commands", [])
+        item = {"phrase": phrase, "keys": keys or "", "action": action}
+        cmds.append(item)
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "index": len(cmds) - 1, "added": item}
+
+    @staticmethod
+    def remove_voice_command(index: int, name: str | None = None) -> dict:
+        """按 index 删除一条语音命令。"""
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        cmds = c.get("voice_commands", [])
+        if not (0 <= index < len(cmds)):
+            return {"ok": False, "error": f"index 越界: {index} (共 {len(cmds)} 条)"}
+        removed = cmds.pop(index)
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "removed": removed}
+
+    @staticmethod
+    def set_voice_command(index: int, field: str, value, name: str | None = None) -> dict:
+        """改某条语音命令的一个字段 (phrase/keys/action)。"""
+        if field not in _VOICE_FIELDS:
+            return {"ok": False, "error": f"不允许的字段: {field}",
+                    "allowed": sorted(_VOICE_FIELDS)}
+        if field == "action" and value not in _ACTIONS:
+            return {"ok": False, "error": f"action 须为 {sorted(_ACTIONS)}"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        cmds = c.get("voice_commands", [])
+        if not (0 <= index < len(cmds)):
+            return {"ok": False, "error": f"index 越界: {index} (共 {len(cmds)} 条)"}
+        before = cmds[index].get(field)
+        cmds[index][field] = value
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "index": index,
+                "field": field, "before": before, "after": value}
+
+    # ── 轮盘扇区 (固定 8 个, 只改绑定) ──
+    @staticmethod
+    def set_wheel_sector(index: int, field: str, value, name: str | None = None) -> dict:
+        """改某个轮盘扇区的一个绑定/名字字段 (扇区数量固定, 不可增删)。"""
+        if field not in _BUTTON_WRITABLE_FIELDS:
+            return {"ok": False, "error": f"不允许的字段: {field}",
+                    "allowed": sorted(_BUTTON_WRITABLE_FIELDS)}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        secs = c.get("wheel_sectors", [])
+        if not (0 <= index < len(secs)):
+            return {"ok": False, "error": f"扇区 index 越界: {index} (共 {len(secs)} 个)"}
+        before = secs[index].get(field)
+        value = _coerce_to_type(value, before)
+        secs[index][field] = value
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "index": index,
+                "field": field, "before": before, "after": value}
+
+    # ── 应用 ──
+    @staticmethod
+    def add_app(app_name: str, path: str, name: str | None = None) -> dict:
+        """新增一个可启动应用 (name + .lnk/可执行路径)。"""
+        if not (app_name or "").strip() or not (path or "").strip():
+            return {"ok": False, "error": "app_name 与 path 都不能为空"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        apps = c.setdefault("apps", [])
+        item = {"name": app_name, "path": path}
+        apps.append(item)
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "index": len(apps) - 1, "added": item}
+
+    @staticmethod
+    def remove_app(index: int, name: str | None = None) -> dict:
+        """按 index 删除一个应用。"""
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        apps = c.get("apps", [])
+        if not (0 <= index < len(apps)):
+            return {"ok": False, "error": f"index 越界: {index} (共 {len(apps)} 个)"}
+        removed = apps.pop(index)
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "removed": removed}
+
+    # ── 宏 ──
+    @staticmethod
+    def add_macro(macro_name: str, steps: list, pool: str = "xmacros",
+                  name: str | None = None) -> dict:
+        """新建一个宏 (name + steps)。steps 每步: {type:'delay',ms} 或 {type:'key',key,action}。"""
+        if pool not in _MACRO_POOLS:
+            return {"ok": False, "error": f"pool 须为 {sorted(_MACRO_POOLS)}"}
+        if not (macro_name or "").strip():
+            return {"ok": False, "error": "宏名不能为空"}
+        try:
+            norm = [_norm_macro_step(s) for s in (steps or [])]
+        except (ValueError, TypeError) as e:
+            return {"ok": False, "error": f"步骤非法: {e}"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        pool_list = c.setdefault(pool, [])
+        if any(m.get("name") == macro_name for m in pool_list):
+            return {"ok": False, "error": f"宏名已存在: {macro_name}"}
+        item = {"name": macro_name, "steps": norm}
+        pool_list.append(item)
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "pool": pool, "added": item}
+
+    @staticmethod
+    def remove_macro(macro_name: str, pool: str = "xmacros",
+                     name: str | None = None) -> dict:
+        """按名字删除一个宏。"""
+        if pool not in _MACRO_POOLS:
+            return {"ok": False, "error": f"pool 须为 {sorted(_MACRO_POOLS)}"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        pool_list = c.get(pool, [])
+        idx = next((i for i, m in enumerate(pool_list)
+                    if m.get("name") == macro_name), None)
+        if idx is None:
+            return {"ok": False, "error": f"未找到宏: {macro_name}"}
+        removed = pool_list.pop(idx)
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "pool": pool, "removed": removed}
+
+    # ── 按钮增删 ──
+    @staticmethod
+    def add_button(btn_type: str = "normal", btn_name: str | None = None,
+                   x: float = 0, y: float = 0,
+                   w: float | None = None, h: float | None = None,
+                   name: str | None = None) -> dict:
+        """新增一个按钮 (仅 normal/gp_button/center_band; 摇杆/方向盘请用 UI)。
+        x/y 为屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下); 省略 w/h 用 grid_size。
+        """
+        if btn_type not in _ADDABLE_BTN_TYPES:
+            return {"ok": False, "error": f"只能新增 {sorted(_ADDABLE_BTN_TYPES)}; "
+                    f"{btn_type} 请在编辑界面添加"}
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        gs = c.get("grid_size") or 100
+        btn = {
+            "type": btn_type,
+            "name": btn_name or _BTN_TYPE_DEFAULT_NAME[btn_type],
+            "x": float(x), "y": float(y),
+            "w": float(w) if w else gs, "h": float(h) if h else gs,
+        }
+        if btn_type == "center_band":            # 回中带默认零延迟 (与 UI 新建一致)
+            btn["hover_delay"] = 0
+            btn["hover_release_delay"] = 0
+        buttons = c.setdefault("buttons", [])
+        buttons.append(btn)
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name, "index": len(buttons) - 1, "added": btn}
+
+    @staticmethod
+    def remove_button(index: int, name: str | None = None) -> dict:
+        """按 index 删除一个按钮 (任意类型, index 同 summarize_profile)。"""
+        name = ConfigTools._resolve_name(name)
+        c = cfg.load_profile(name)
+        buttons = c.get("buttons", [])
+        if not (0 <= index < len(buttons)):
+            return {"ok": False, "error": f"index 越界: {index} (共 {len(buttons)} 个)"}
+        removed = buttons.pop(index)
+        cfg.save_profile(name, c)
+        return {"ok": True, "profile": name,
+                "removed": {"type": removed.get("type"), "name": removed.get("name")}}

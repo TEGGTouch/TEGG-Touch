@@ -56,7 +56,7 @@ def main():
 
         # ── 3. set_button_binding 往返 (需有按钮) ──
         if summary["button_count"] > 0:
-            before = summary["buttons"][0]["bindings"].get("hover", "")
+            before = summary["buttons"][0]["fields"].get("hover", "")
             r = agent_tools.dispatch("set_button_binding",
                                      {"button_index": 0, "field": "hover", "value": "ctrl+f4"})
             assert r.get("ok") and r.get("after") == "ctrl+f4", r
