@@ -22,6 +22,7 @@ import logging
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from agent import agent_tools
+from agent import conversation_log as clog
 from agent.ai_client import MiniMaxClient, AIClientError
 from core import agent_settings
 
@@ -53,6 +54,7 @@ class AgentThread(QThread):
         # 多轮对话历史 (Anthropic messages 格式); 跨 ask() 保留, 形成连续会话
         self._history: list = []
         self._pending_text: str = ""
+        clog.log_session_start()   # 打一条会话分隔, 回看时区分本次运行
 
     def reset_history(self):
         """清空会话历史 (新开一段对话)。"""
@@ -73,9 +75,11 @@ class AgentThread(QThread):
         try:
             self._run_conversation()
         except AIClientError as e:
+            clog.log_error(str(e))
             self.error.emit(str(e))
         except Exception as e:
             logger.exception("AgentThread 未预期异常")
+            clog.log_error(f"出错了: {e}")
             self.error.emit(f"出错了: {e}")
         finally:
             self.busy.emit(False)
@@ -91,10 +95,12 @@ class AgentThread(QThread):
 
         # 追加本轮用户消息
         self._history.append({"role": "user", "content": self._pending_text})
+        clog.log_user(self._pending_text)
 
         config_dirty = False
         for _ in range(MAX_TOOL_ROUNDS):
             result = client.chat(self._history, tools=tools, system=system)
+            clog.log_meta(cfg["model"], result.get("stop_reason"), result.get("usage"))
             # 回填 assistant 轮 (含 tool_use blocks), 供下一轮上下文连贯
             self._history.append({"role": "assistant", "content": result["content_blocks"]})
 
@@ -103,6 +109,7 @@ class AgentThread(QThread):
                 text = result["text"] or "(完成)"
                 if config_dirty:
                     self.config_changed.emit()
+                clog.log_assistant(text)
                 self.reply_ready.emit(text)
                 return
 
@@ -110,6 +117,7 @@ class AgentThread(QThread):
             tool_results = []
             for tu in result["tool_uses"]:
                 out = agent_tools.dispatch(tu["name"], tu["input"])
+                clog.log_tool(tu["name"], tu["input"], out)
                 self.tool_ran.emit({"name": tu["name"], "input": tu["input"], "result": out})
                 if tu["name"] in agent_tools.WRITE_TOOLS and out.get("ok"):
                     config_dirty = True
@@ -123,4 +131,6 @@ class AgentThread(QThread):
         # 轮次用尽
         if config_dirty:
             self.config_changed.emit()
-        self.error.emit(f"工具调用超过 {MAX_TOOL_ROUNDS} 轮上限, 已停止。")
+        msg = f"工具调用超过 {MAX_TOOL_ROUNDS} 轮上限, 已停止。"
+        clog.log_error(msg)
+        self.error.emit(msg)

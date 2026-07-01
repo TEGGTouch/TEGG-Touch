@@ -27,6 +27,9 @@ desktop.ini
 *.manifest
 *.log
 
+# AI 配置助手对话记录 (本地日志, 含用户对话内容, 不入库)
+logs/
+
 # 本地下载镜像配置 (含 OSS bucket / endpoint 等私有信息)
 core/_update_mirror.py
 pack_release_oss.bat

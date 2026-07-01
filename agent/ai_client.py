@@ -111,11 +111,16 @@ class MiniMaxClient:
                     "name": getattr(b, "name", ""),
                     "input": self._coerce_tool_input(getattr(b, "input", {})),
                 })
+        usage = getattr(resp, "usage", None)
         return {
             "stop_reason": getattr(resp, "stop_reason", None),
             "content_blocks": blocks,
             "tool_uses": tool_uses,
             "text": "\n".join(t for t in texts if t).strip(),
+            "usage": {
+                "input_tokens": getattr(usage, "input_tokens", None),
+                "output_tokens": getattr(usage, "output_tokens", None),
+            } if usage is not None else None,
         }
 
     @staticmethod

@@ -1167,11 +1167,20 @@ class OverlayWindow(QGraphicsView):
             self._agent_thread = AgentThread(self)
             self._agent_thread.config_changed.connect(self._on_agent_config_changed)
         from views.ai_assistant_dialog import AIAssistantDialog
-        dialog = AIAssistantDialog(self._agent_thread, self)
+        dialog = AIAssistantDialog(self._agent_thread, self,
+                                   on_before_send=self._flush_for_agent)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_ai'))
         self._dlg_ai = dialog
         dialog.show()
+
+    def _flush_for_agent(self):
+        """AI 助手发指令前, 把编辑模式下可能未保存的改动 (如拖动按钮) 落盘,
+        让 agent 读到最新 profile。主线程调用 (dialog._on_send 里, 同步先于 agent 读取)。"""
+        try:
+            self._scene.save_config()
+        except Exception as e:
+            logger.warning("AI 指令前落盘失败: %s", e)
 
     def _on_agent_config_changed(self):
         """AI 助手改了配置 → 主线程热生效 (子线程经信号到此, 安全动 scene/UI)。"""

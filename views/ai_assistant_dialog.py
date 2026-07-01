@@ -21,6 +21,7 @@ from PyQt6.QtGui import QFont
 
 from core.i18n import get_font
 from core import agent_settings
+from agent import conversation_log as clog
 
 # ── 颜色 (复用项目深色风格) ──
 C_BG = "#1E1E1E"
@@ -53,9 +54,11 @@ class AIAssistantDialog(QDialog):
     WIN_H = 640
     PAD = 18
 
-    def __init__(self, agent_thread, parent=None):
+    def __init__(self, agent_thread, parent=None, on_before_send=None):
         super().__init__(parent)
         self._thread = agent_thread
+        # 发指令前的主线程回调 (用于把编辑模式下未保存的改动落盘, 让 agent 读到最新)
+        self._on_before_send = on_before_send
         self._drag_pos = None
         self._busy = False
 
@@ -71,7 +74,9 @@ class AIAssistantDialog(QDialog):
         self._center_on_screen()
         self._wire_thread()
 
-        # 开场白 / 无密钥引导
+        # 先回渲历史记录 (关窗重开 / 重启后仍可见), 再放开场白 / 无密钥引导
+        had_history = self._load_history()
+
         if not agent_settings.is_configured():
             self._append_error(
                 "尚未配置 API 密钥。请在 settings/agent.json 里填写 \"api_key\", "
@@ -81,6 +86,8 @@ class AIAssistantDialog(QDialog):
             self._send_btn.setEnabled(False)
             self._input.setPlaceholderText("配置密钥后重开本窗口…")
             self._status_lbl.setText("未配置")
+        elif had_history:
+            self._append_system("── 以上为历史记录，可继续对话 ──")
         else:
             self._append_system("你好! 我可以帮你改蛋挞的按键配置。例如: "
                                 "“把第一个按钮的 hover 改成 ctrl+f4”、“把透明度调到 0.5”。")
@@ -123,6 +130,8 @@ class AIAssistantDialog(QDialog):
 
         close_btn = QPushButton("✕")
         close_btn.setFixedSize(34, 34)
+        close_btn.setAutoDefault(False)   # 否则它是 dialog 默认按钮, 回车会误触发→关窗
+        close_btn.setDefault(False)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setFont(_make_font(fn, 15, bold=True))
         close_btn.setStyleSheet(f"""
@@ -166,6 +175,8 @@ class AIAssistantDialog(QDialog):
 
         self._send_btn = QPushButton("发送")
         self._send_btn.setFixedSize(76, 38)
+        self._send_btn.setAutoDefault(False)   # 回车统一走 QLineEdit.returnPressed, 避免双发/关窗
+        self._send_btn.setDefault(False)
         self._send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._send_btn.setFont(_make_font(fn, 13, bold=True))
         self._send_btn.setStyleSheet(f"""
@@ -205,6 +216,12 @@ class AIAssistantDialog(QDialog):
             return
         self._input.clear()
         self._append_user(text)
+        # 先把当前 (可能拖动过但未保存的) 编辑状态落盘, 再让 agent 读取最新 profile
+        if callable(self._on_before_send):
+            try:
+                self._on_before_send()
+            except Exception:
+                pass
         self._thread.ask(text)
 
     def _on_reply(self, text: str):
@@ -259,6 +276,36 @@ class AIAssistantDialog(QDialog):
     def _append_system(self, text: str):
         self._append(f'<div style="margin:4px 0;color:{C_DIM};font-style:italic;">'
                      f'{html.escape(text)}</div>')
+
+    def _append_session_sep(self, ts: str = ""):
+        label = f"── 会话 {ts} ──" if ts else "── 新会话 ──"
+        self._append(f'<div style="margin:10px 0;text-align:center;color:{C_DIM};'
+                     f'font-size:11px;">{html.escape(label)}</div>')
+
+    # ── 历史回看 ──
+    def _load_history(self) -> bool:
+        """把持久化的对话回渲到窗口。返回是否有历史 (决定是否显示开场白)。"""
+        events = clog.load_recent()
+        rendered = False
+        for ev in events:
+            t = ev.get("type")
+            if t == "session":
+                self._append_session_sep(ev.get("ts", ""))
+            elif t == "user":
+                self._append_user(ev.get("text", ""))
+                rendered = True
+            elif t == "assistant":
+                self._append_assistant(ev.get("text", ""))
+                rendered = True
+            elif t == "tool":
+                # 复用实时渲染逻辑 (只读 name/result, 与 tool_ran 一致)
+                self._on_tool_ran({"name": ev.get("name", ""), "result": ev.get("result", {})})
+                rendered = True
+            elif t == "error":
+                self._append_error(ev.get("text", ""))
+                rendered = True
+            # meta (token/模型) 仅供 debug, 不回渲
+        return rendered
 
     def _append_error(self, text: str):
         self._append(f'<div style="margin:4px 0;color:{C_ERR};">⚠ {html.escape(text)}</div>')
