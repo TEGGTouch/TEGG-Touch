@@ -3,3 +3,7 @@ keyboard>=0.13.5
 vosk>=0.3.45
 sounddevice>=0.4.6
 vgamepad>=0.1.0
+# AI Agent (云端多模态助手, MiniMax-M3 经 Anthropic 兼容接口) — 可选, 缺失时仅 AI 助手不可用
+anthropic>=0.40
+# 阶段2 截屏感知: mss>=9.0 + Pillow>=10.0 (待实现)
+# 功能② 语音转写: faster-whisper>=1.0 (可插拔 ASR, 待实现)

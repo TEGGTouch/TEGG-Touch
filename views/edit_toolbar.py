@@ -176,6 +176,7 @@ class EditToolbar(QWidget):
     add_button_clicked = pyqtSignal()
     add_center_band_clicked = pyqtSignal()
     voice_clicked = pyqtSignal()
+    ai_clicked = pyqtSignal()
     keyboard_clicked = pyqtSignal()
     run_clicked = pyqtSignal()
     wheel_clicked = pyqtSignal()
@@ -317,6 +318,13 @@ class EditToolbar(QWidget):
         self._install_tip(voice_btn)
         voice_btn.clicked.connect(self.voice_clicked.emit)
         r1.addWidget(voice_btn)
+
+        # AI 配置助手
+        ai_btn = _IconTextBtn("", "\U0001F916", "AI", C_GRAY, C_GRAY_H)
+        ai_btn.setToolTip("AI 配置助手 — 用自然语言改键位")
+        self._install_tip(ai_btn)
+        ai_btn.clicked.connect(self.ai_clicked.emit)
+        r1.addWidget(ai_btn)
 
         # 分隔线
         r1.addWidget(_VSep())

@@ -60,6 +60,8 @@ class OverlayWindow(QGraphicsView):
         self._dlg_profile = None
         self._dlg_voice = None
         self._dlg_hotkey = None
+        self._dlg_ai = None
+        self._agent_thread = None   # AI 配置助手线程 (惰性创建, 跨窗口开关保留会话)
 
         # ── 窗口属性 ──
         self.setWindowTitle(f"{t('app.title')} v{APP_VERSION}")
@@ -120,6 +122,7 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.add_button_clicked.connect(self._on_add_button)
         self._edit_toolbar.add_center_band_clicked.connect(self._on_add_center_band)
         self._edit_toolbar.voice_clicked.connect(self._open_voice_settings)
+        self._edit_toolbar.ai_clicked.connect(self._open_ai_assistant)
         self._edit_toolbar.keyboard_clicked.connect(self._toggle_soft_keyboard)
         self._edit_toolbar.run_clicked.connect(self.to_run)
         self._edit_toolbar.wheel_clicked.connect(self._on_toggle_wheel)
@@ -1148,6 +1151,35 @@ class OverlayWindow(QGraphicsView):
             self._scene.save_config()
             logger.info("Voice settings saved: %d commands", len(result.get('voice_commands', [])))
 
+    def _open_ai_assistant(self):
+        """打开 AI 配置助手聊天窗口 (阶段1)。
+
+        线程 self._agent_thread 由本窗口持有 (跨开关保留会话历史); 其 config_changed
+        信号驱动热生效。弹窗只在打开期间接 reply/tool/error/busy, 关窗时自行断开。
+        """
+        if self._dlg_ai and self._dlg_ai.isVisible():
+            self._dlg_ai.raise_()
+            self._dlg_ai.activateWindow()
+            return
+        # 惰性创建线程 + 一次性接热生效信号
+        if self._agent_thread is None:
+            from agent.agent_thread import AgentThread
+            self._agent_thread = AgentThread(self)
+            self._agent_thread.config_changed.connect(self._on_agent_config_changed)
+        from views.ai_assistant_dialog import AIAssistantDialog
+        dialog = AIAssistantDialog(self._agent_thread, self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_ai'))
+        self._dlg_ai = dialog
+        dialog.show()
+
+    def _on_agent_config_changed(self):
+        """AI 助手改了配置 → 主线程热生效 (子线程经信号到此, 安全动 scene/UI)。"""
+        try:
+            self.reload_active_profile()
+        except Exception as e:
+            logger.warning("AI 配置热生效失败: %s", e)
+
     def _open_hotkey_settings(self):
         """打开快捷键设置弹窗"""
         if self._dlg_hotkey and self._dlg_hotkey.isVisible():
@@ -1230,7 +1262,7 @@ class OverlayWindow(QGraphicsView):
         for w in (self._edit_toolbar, self._run_toolbar, self._virtual_keyboard):
             if w and w.isVisible():
                 w.hide()
-        for attr in ('_dlg_profile', '_dlg_voice', '_dlg_hotkey'):
+        for attr in ('_dlg_profile', '_dlg_voice', '_dlg_hotkey', '_dlg_ai'):
             dlg = getattr(self, attr, None)
             if dlg and dlg.isVisible():
                 dlg.hide()
@@ -1340,6 +1372,10 @@ class OverlayWindow(QGraphicsView):
         self._dlg_profile = None
         self._dlg_voice = None
         self._dlg_hotkey = None
+        self._dlg_ai = None
+        # AI 助手线程: 等其跑完再退, 避免 QThread 在运行中被销毁
+        if self._agent_thread is not None and self._agent_thread.isRunning():
+            self._agent_thread.wait(3000)
         self._edit_toolbar.close()
         self._run_toolbar.close()
         self._virtual_keyboard.close()
