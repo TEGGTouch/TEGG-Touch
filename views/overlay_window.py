@@ -287,6 +287,8 @@ class OverlayWindow(QGraphicsView):
             return
         item.hoverActivated.connect(self._run_controller.on_hover_activated)
         item.hoverDeactivated.connect(self._run_controller.on_hover_deactivated)
+        if hasattr(item, 'hoverRepeat'):
+            item.hoverRepeat.connect(self._run_controller.on_hover_repeat)
         item.actionTriggered.connect(self._run_controller.on_action_triggered)
 
     def _on_wheel_rebuilt(self):

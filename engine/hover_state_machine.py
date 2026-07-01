@@ -30,17 +30,19 @@ class HoverStateMachine(QObject):
     # 信号
     activated = pyqtSignal()           # hover 充能完成，应触发按键
     deactivated = pyqtSignal()         # hover 释放完成，应释放按键
+    repeat = pyqtSignal()              # ACTIVE 期间按触发间隔补发一次 down (方案A: 模拟长按自动重复)
     charge_progress = pyqtSignal(float)   # 充能进度 0~1
     release_progress = pyqtSignal(float)  # 释放进度 1~0
 
     _TICK_INTERVAL = 16  # ~60fps
 
     def __init__(self, hover_delay_ms: int = 200, release_delay_ms: int = 0,
-                 mode: str = 'trigger'):
+                 mode: str = 'trigger', repeat_interval_ms: int = 0):
         super().__init__()
         self._state = HoverState.IDLE
         self._hover_delay = hover_delay_ms
         self._release_delay = release_delay_ms
+        self._repeat_interval = repeat_interval_ms  # 0 = 不重复; >0 = ACTIVE 期间每隔该毫秒发 repeat
         self._mode = mode   # 'trigger' (按住型) | 'toggle' (开关型)
         # toggle 模式: 必须真正离开过按钮再回来才允许 toggle off
         # (防边缘抖动: 轮询光标坐标时边缘可能瞬间判定为离开+回来)
@@ -57,6 +59,10 @@ class HoverStateMachine(QObject):
         self._release_timer.setInterval(self._TICK_INTERVAL)
         self._release_elapsed = 0
         self._release_timer.timeout.connect(self._on_release_tick)
+
+        # 重复定时器 (触发间隔): ACTIVE 期间按 _repeat_interval 周期性发 repeat
+        self._repeat_timer = QTimer(self)
+        self._repeat_timer.timeout.connect(self.repeat.emit)
 
     @property
     def state(self) -> HoverState:
@@ -79,6 +85,7 @@ class HoverStateMachine(QObject):
                     return
                 # 真正再次进入 → 走关闭流程 (按 release_delay 决定立即/延迟松开)
                 self._toggle_has_left = False
+                self._stop_repeat()
                 if self._release_delay <= 0:
                     self._state = HoverState.IDLE
                     self.deactivated.emit()
@@ -95,6 +102,7 @@ class HoverStateMachine(QObject):
             if self._hover_delay <= 0:
                 self._state = HoverState.ACTIVE
                 self.activated.emit()
+                self._start_repeat()
             else:
                 self._state = HoverState.CHARGING
                 self._charge_elapsed = 0
@@ -107,6 +115,7 @@ class HoverStateMachine(QObject):
             self._release_timer.stop()
             self._state = HoverState.ACTIVE
             self.release_progress.emit(0.0)  # 清除进度条，避免与 hover 填充双层叠加
+            self._start_repeat()  # 恢复 ACTIVE → 重启触发间隔
             return
 
         if self._state != HoverState.IDLE:
@@ -116,6 +125,7 @@ class HoverStateMachine(QObject):
             # 无充能延迟，直接激活
             self._state = HoverState.ACTIVE
             self.activated.emit()
+            self._start_repeat()
         else:
             # 开始充能
             self._state = HoverState.CHARGING
@@ -148,6 +158,7 @@ class HoverStateMachine(QObject):
         if self._state != HoverState.ACTIVE:
             return
 
+        self._stop_repeat()
         if self._release_delay <= 0:
             # 无释放延迟，直接释放
             self._state = HoverState.IDLE
@@ -163,6 +174,7 @@ class HoverStateMachine(QObject):
         was_active = self._state in (HoverState.ACTIVE, HoverState.RELEASING)
         self._charge_timer.stop()
         self._release_timer.stop()
+        self._repeat_timer.stop()
         self._state = HoverState.IDLE
         self._charge_elapsed = 0
         self._release_elapsed = 0
@@ -175,13 +187,30 @@ class HoverStateMachine(QObject):
         self._hover_delay = hover_delay_ms
         self._release_delay = release_delay_ms
 
-    def update_config(self, mode: str, hover_delay_ms: int, release_delay_ms: int):
-        """切换模式 + 更新延迟。切换模式时强制 reset 到 IDLE 避免漏松按键。"""
+    def update_config(self, mode: str, hover_delay_ms: int, release_delay_ms: int,
+                      repeat_interval_ms: int = 0):
+        """切换模式 + 更新延迟/触发间隔。切换模式时强制 reset 到 IDLE 避免漏松按键。"""
         if mode != self._mode:
             self.reset()
             self._mode = mode
         self._hover_delay = hover_delay_ms
         self._release_delay = release_delay_ms
+        self._repeat_interval = repeat_interval_ms
+        # 若正处于 ACTIVE, 按新间隔即时重启 (0 则停掉)
+        if self._state == HoverState.ACTIVE:
+            self._stop_repeat()
+            self._start_repeat()
+
+    # ── 触发间隔 (方案A: ACTIVE 期间周期性补发 down) ──
+
+    def _start_repeat(self):
+        """进入/恢复 ACTIVE 时调用: 若配置了触发间隔则启动重复定时器"""
+        if self._repeat_interval > 0:
+            self._repeat_timer.start(self._repeat_interval)
+
+    def _stop_repeat(self):
+        """离开 ACTIVE 时调用: 停止重复定时器"""
+        self._repeat_timer.stop()
 
     # ── 内部定时器回调 ──
 
@@ -194,6 +223,7 @@ class HoverStateMachine(QObject):
             self._charge_timer.stop()
             self._state = HoverState.ACTIVE
             self.activated.emit()
+            self._start_repeat()
             self.charge_progress.emit(0.0)  # 清除充能条
 
     def _on_release_tick(self):
@@ -203,5 +233,6 @@ class HoverStateMachine(QObject):
 
         if progress <= 0.0:
             self._release_timer.stop()
+            self._stop_repeat()
             self._state = HoverState.IDLE
             self.deactivated.emit()

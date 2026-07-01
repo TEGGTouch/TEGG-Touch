@@ -35,6 +35,9 @@ class ButtonData:
     # 延迟配置 (悬停触发模式)
     hover_delay: int = 200         # ms, 0 = 立即触发
     hover_release_delay: int = 0   # ms, 0 = 立即释放
+    # 触发间隔(ms): 0=激活时只发一次 down; >0=按住期间每隔该毫秒补发一次 down
+    # (方案A: 模拟键盘长按自动重复, 键始终按住, 松开时才 up)
+    hover_repeat_interval: int = 0
 
     # 悬停模式: 'trigger' (按住型, 离开即松) | 'toggle' (开关型, 再次 hover 才松)
     hover_mode: str = "trigger"
@@ -42,6 +45,7 @@ class ButtonData:
     hover_toggle: str = ""
     hover_toggle_delay: int = 200          # 开启时触发延迟
     hover_toggle_release_delay: int = 0    # 关闭时触发延迟 (第二次 hover 到松开)
+    hover_toggle_repeat_interval: int = 0  # 触发间隔(ms), 同上, 用于开关模式
 
     def to_dict(self) -> dict:
         """序列化为 JSON dict（与旧格式完全兼容）"""

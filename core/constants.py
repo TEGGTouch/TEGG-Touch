@@ -15,7 +15,7 @@ else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # === 应用信息 ===
-APP_VERSION = "0.4.6"
+APP_VERSION = "0.4.7"
 # 用户数据路径一律锚定到 APP_DIR（exe 所在目录）的绝对路径，不再依赖当前工作目录(CWD)。
 # 历史上这些是相对路径，靠 main.py 启动时一句 os.chdir 兜底；一旦从别的目录被拉起
 # (命令行 / 计划任务 / 别的程序 spawn) 且 CWD 不是 exe 目录，profiles/config/settings
@@ -451,5 +451,7 @@ BUTTON_OPTIONAL_DEFAULTS = {
     'xbutton2': '',  # 鼠标侧键2（前进键）
     'hover_delay': 200,  # 悬停触发延迟(ms)，0=立即触发，默认200ms防误触
     'hover_release_delay': 0,  # 悬停释放延迟(ms)，0=立即释放，默认0ms
+    'hover_repeat_interval': 0,  # 触发间隔(ms)，0=只发一次down，>0=按住期间按间隔重复发down
+    'hover_toggle_repeat_interval': 0,  # 同上，用于悬停开关模式
     'recenter_target': 'screen',  # 回中带回中目标
 }

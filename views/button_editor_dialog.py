@@ -617,6 +617,11 @@ class ButtonEditorDialog(QDialog):
         tv.addLayout(self._build_delay_slider(
             fn, t("editor.hover_release_delay"),
             self.data.hover_release_delay, 'release_delay'))
+        tv.addSpacing(14)
+        tv.addLayout(self._build_delay_slider(
+            fn, t("editor.hover_repeat_interval"),
+            getattr(self.data, 'hover_repeat_interval', 0), 'hover_repeat_interval',
+            step=100, max_val=1000, hint=t("editor.hover_repeat_hint")))
         self._hover_stack.addWidget(trigger_page)
 
         # 页 1: 开关模式 = hover_toggle + 开启延迟 + 关闭延迟
@@ -637,6 +642,12 @@ class ButtonEditorDialog(QDialog):
             fn, t("editor.hover_toggle_release_delay"),
             getattr(self.data, 'hover_toggle_release_delay', 0),
             'hover_toggle_release_delay'))
+        gv.addSpacing(14)
+        gv.addLayout(self._build_delay_slider(
+            fn, t("editor.hover_repeat_interval"),
+            getattr(self.data, 'hover_toggle_repeat_interval', 0),
+            'hover_toggle_repeat_interval',
+            step=100, max_val=1000, hint=t("editor.hover_repeat_hint")))
         self._hover_stack.addWidget(toggle_page)
 
         block.addWidget(self._hover_stack)
@@ -711,8 +722,9 @@ class ButtonEditorDialog(QDialog):
 
         return row
 
-    def _build_delay_slider(self, fn, label_text, value, key):
-        """构建延迟滑块: 色点 + 标签 + Entry + ms + Slider"""
+    def _build_delay_slider(self, fn, label_text, value, key,
+                            step=10, max_val=1000, hint=None):
+        """构建延迟滑块: 色点 + 标签 + Entry + ms + Slider (+ 可选 hint 说明)"""
         col = QVBoxLayout()
         col.setSpacing(4)
 
@@ -754,9 +766,10 @@ class ButtonEditorDialog(QDialog):
 
         # Row 2: slider
         slider = QSlider(Qt.Orientation.Horizontal)
-        slider.setRange(0, 1000)
-        slider.setValue(value)
-        slider.setSingleStep(10)
+        slider.setRange(0, max_val)
+        slider.setValue(min(max_val, value))
+        slider.setSingleStep(step)
+        slider.setPageStep(step)
         slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
                 background: #404040; height: 8px; border-radius: 4px;
@@ -776,15 +789,15 @@ class ButtonEditorDialog(QDialog):
             }}
         """)
 
-        # 双向同步
+        # 双向同步 (按 step 对齐, 按 max_val 截断)
         def _slider_to_entry(v):
-            v = round(v / 10) * 10
+            v = round(v / step) * step
             entry.setText(str(v))
 
         def _entry_to_slider():
             try:
                 v = max(0, int(entry.text()))
-                slider.setValue(min(1000, v))
+                slider.setValue(min(max_val, v))
             except ValueError:
                 pass
 
@@ -793,6 +806,14 @@ class ButtonEditorDialog(QDialog):
 
         col.addWidget(slider)
 
+        # 可选说明文字
+        if hint:
+            hint_lbl = QLabel(hint)
+            hint_lbl.setFont(_make_font(fn, 12))
+            hint_lbl.setStyleSheet("color: #888; background: transparent;")
+            hint_lbl.setWordWrap(True)
+            col.addWidget(hint_lbl)
+
         # 存储引用
         if key == 'hover_delay':
             self._hover_delay_slider = slider
@@ -800,12 +821,18 @@ class ButtonEditorDialog(QDialog):
         elif key == 'release_delay':
             self._release_delay_slider = slider
             self._release_delay_entry = entry
+        elif key == 'hover_repeat_interval':
+            self._hover_repeat_slider = slider
+            self._hover_repeat_entry = entry
         elif key == 'hover_toggle_delay':
             self._hover_toggle_delay_slider = slider
             self._hover_toggle_delay_entry = entry
         elif key == 'hover_toggle_release_delay':
             self._hover_toggle_release_delay_slider = slider
             self._hover_toggle_release_delay_entry = entry
+        elif key == 'hover_toggle_repeat_interval':
+            self._hover_toggle_repeat_slider = slider
+            self._hover_toggle_repeat_entry = entry
 
         return col
 
@@ -1025,16 +1052,31 @@ class ButtonEditorDialog(QDialog):
             self.data.hover_toggle_release_delay = (
                 self._hover_toggle_release_delay_slider.value())
 
-        # 更新状态机 (按当前 mode 选 delay)
+        # 触发间隔 — 0=只发一次 down; 上限 1000ms (跟滑块一致)
+        try:
+            self.data.hover_repeat_interval = min(
+                1000, max(0, int(self._hover_repeat_entry.text())))
+        except ValueError:
+            self.data.hover_repeat_interval = self._hover_repeat_slider.value()
+        try:
+            self.data.hover_toggle_repeat_interval = min(
+                1000, max(0, int(self._hover_toggle_repeat_entry.text())))
+        except ValueError:
+            self.data.hover_toggle_repeat_interval = (
+                self._hover_toggle_repeat_slider.value())
+
+        # 更新状态机 (按当前 mode 选 delay + 触发间隔)
         if hasattr(self._item, '_hover_sm'):
             if self.data.hover_mode == 'toggle':
                 _active_delay = self.data.hover_toggle_delay
                 _release_delay = self.data.hover_toggle_release_delay
+                _repeat = self.data.hover_toggle_repeat_interval
             else:
                 _active_delay = self.data.hover_delay
                 _release_delay = self.data.hover_release_delay
+                _repeat = self.data.hover_repeat_interval
             self._item._hover_sm.update_config(
-                self.data.hover_mode, _active_delay, _release_delay)
+                self.data.hover_mode, _active_delay, _release_delay, _repeat)
 
         self._item.update()
         self.saved.emit(self.data)

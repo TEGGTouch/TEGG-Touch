@@ -193,6 +193,8 @@
     "hover": "悬停时",
     "hover_delay": "悬停-触发延迟",
     "hover_release_delay": "悬停-释放延迟",
+    "hover_repeat_interval": "触发间隔",
+    "hover_repeat_hint": "0 = 按住只触发一次；设为间隔后，按住期间每隔这么多毫秒重复触发一次（模拟键盘长按连发）。最大 1 秒。",
     "hover_mode_trigger": "悬停触发",
     "hover_mode_toggle": "悬停开关",
     "hover_trigger_desc": "鼠标进入即按下按键，离开即松开（按住型）",
