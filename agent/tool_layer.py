@@ -23,6 +23,7 @@ TEGGTouch 蛋挞 — Agent 工具层 (headless 原型 / 调查项 D2)
 
 from __future__ import annotations
 
+import inspect
 import logging
 import time
 
@@ -32,6 +33,46 @@ from core.constants import APP_PREFIX, GP_KEY_PREFIX, GP_LABEL_TO_KEY
 from core import config_manager as cfg
 
 logger = logging.getLogger(__name__)
+
+# save_config_to_file 接受的顶层参数白名单 (从签名推导, 去掉 filepath / buttons:
+# buttons 改用 set_button_binding)。set_param 写未知 key 会被 save_config_to_file
+# 当成非法 kwarg 而崩, 故在此先拦截并给 agent 清晰提示。
+_PARAM_FIELDS = frozenset(
+    name for name, p in inspect.signature(cfg.save_config_to_file).parameters.items()
+    if p.kind == inspect.Parameter.KEYWORD_ONLY and name != "buttons"
+)
+
+# 模型经 tool_use 常把数字/布尔当字符串传 (value schema 无类型约束), 会污染
+# profile 里的标量参数 (如 transparency 变成 '0.42' 字符串, setWindowOpacity 崩)。
+_TRUE_STRS = {"true", "1", "yes", "on", "是", "开"}
+_FALSE_STRS = {"false", "0", "no", "off", "否", "关"}
+
+
+def _coerce_to_type(value, ref):
+    """把 value 转成参考值 ref 的类型 (bool/int/float)。转不动就原样返回。
+
+    ref 为已存在的旧值; None (未设置过) 时无从推断类型, 保持原样。
+    bool 要在 int 前判 (bool 是 int 子类)。
+    """
+    if ref is None or type(value) is type(ref):
+        return value
+    try:
+        if isinstance(ref, bool):
+            if isinstance(value, str):
+                s = value.strip().lower()
+                if s in _TRUE_STRS:
+                    return True
+                if s in _FALSE_STRS:
+                    return False
+                return value  # 无法判定, 保留原值给上层/模型看到
+            return bool(value)
+        if isinstance(ref, int):
+            return int(value)
+        if isinstance(ref, float):
+            return float(value)
+    except (TypeError, ValueError):
+        return value
+    return value
 
 # action(agent 用语) → input_engine 动作码
 _ACTION_CODE = {"click": "c", "press": "p", "release": "r"}
@@ -279,6 +320,10 @@ _BUTTON_BINDING_FIELDS = {
     "hover_mode", "hover_toggle", "recenter_target",
 }
 
+# 按钮上允许 agent 改写的全部字段 = 绑定字段 + 元信息 (如按钮显示名)。
+# name 不是"绑定"但用户常要改, 复用 set_button_binding 通道 (省一个工具)。
+_BUTTON_WRITABLE_FIELDS = _BUTTON_BINDING_FIELDS | {"name"}
+
 
 class ConfigTools:
     """程序化读写蛋挞配置。全部走 config_manager 公开 API, 原子写有保证。"""
@@ -326,16 +371,17 @@ class ConfigTools:
     @staticmethod
     def set_button_binding(button_index: int, field: str, value: str,
                            name: str | None = None) -> dict:
-        """改写某个按钮的一个绑定字段并保存。返回 before/after。"""
-        if field not in _BUTTON_BINDING_FIELDS:
+        """改写某个按钮的一个字段 (绑定 / 名字) 并保存。返回 before/after。"""
+        if field not in _BUTTON_WRITABLE_FIELDS:
             return {"ok": False, "error": f"不允许的字段: {field}",
-                    "allowed": sorted(_BUTTON_BINDING_FIELDS)}
+                    "allowed": sorted(_BUTTON_WRITABLE_FIELDS)}
         name = ConfigTools._resolve_name(name)
         c = cfg.load_profile(name)
         buttons = c.get("buttons", [])
         if not (0 <= button_index < len(buttons)):
             return {"ok": False, "error": f"button_index 越界: {button_index} (共 {len(buttons)} 个)"}
         before = buttons[button_index].get(field)
+        value = _coerce_to_type(value, before)  # hover_delay(int)/hover_toggle(bool) 防字符串污染
         buttons[button_index][field] = value
         cfg.save_profile(name, c)
         return {"ok": True, "profile": name, "button_index": button_index,
@@ -344,9 +390,13 @@ class ConfigTools:
     @staticmethod
     def set_param(key: str, value, name: str | None = None) -> dict:
         """改写 profile 顶层参数 (如 transparency / voice_enabled) 并保存。"""
+        if key not in _PARAM_FIELDS:
+            return {"ok": False, "error": f"不允许的参数: {key}",
+                    "allowed": sorted(_PARAM_FIELDS)}
         name = ConfigTools._resolve_name(name)
         c = cfg.load_profile(name)
         before = c.get(key)
+        value = _coerce_to_type(value, before)  # 模型常把数字/布尔传成字符串, 按旧值类型纠正
         c[key] = value
         cfg.save_profile(name, c)
         return {"ok": True, "profile": name, "key": key,
