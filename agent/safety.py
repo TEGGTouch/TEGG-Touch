@@ -68,6 +68,27 @@ def resolve_pending(ok: bool) -> bool:
     return False
 
 
+# ── 危险动作判定 (强制 🔴 确认, 无视 auto_execute) ──
+# 命中 = 可能不可逆/高代价, 即便用户开了 auto 也要停下来问。
+# 宁可多问一次, 也别让 agent 自动点了"删除/支付/发送"。
+_DANGER_WORDS = (
+    # 中文
+    "关闭", "删除", "移除", "卸载", "清空", "清除", "格式化",
+    "购买", "支付", "付款", "下单", "结算", "充值",
+    "发送", "发布", "提交", "转账", "汇款", "退款",
+    # 英文
+    "close", "delete", "remove", "uninstall", "format", "erase",
+    "buy", "pay", "purchase", "checkout", "order",
+    "send", "submit", "post", "publish", "transfer",
+)
+
+
+def is_dangerous(text: str) -> bool:
+    """文本(动作描述/目标名/按键值)命中危险不可逆关键词 → True, 强制确认。"""
+    t = (text or "").lower()
+    return any(w.lower() in t for w in _DANGER_WORDS)
+
+
 # ── 语音确认词 (grammar 常驻 + 路由用; 仅"语音已开"时生效) ──
 CONFIRM_YES_KEY = "__confirm_yes__"
 CONFIRM_NO_KEY = "__confirm_no__"

@@ -285,6 +285,52 @@ class ControlTools:
         return {"kind": "mouse_move", "status": "ok", "x": int(x), "y": int(y),
                 "detail": f"{'[dry-run] ' if dry_run else ''}mouse_move({x}, {y})"}
 
+    # ── computer use L3: 绝对像素点击/滚动 (0-1000 → 像素的换算在上层做) ──
+    @staticmethod
+    def click_xy(x: int, y: int, button: str = "left", double: bool = False,
+                 dry_run: bool = False) -> dict:
+        """移动到绝对像素 (x,y) 并点击。button: left/right/middle; double=双击。"""
+        x, y = int(x), int(y)
+        if button not in _MOUSE_BUTTONS:
+            return {"kind": "click_xy", "status": "error",
+                    "detail": f"未知鼠标按钮: {button}", "ok": False}
+        detail = f"click_xy({x},{y},{button}{',double' if double else ''})"
+        if dry_run:
+            return {"kind": "click_xy", "status": "ok", "ok": True, "x": x, "y": y,
+                    "button": button, "double": double, "detail": f"[dry-run] {detail}"}
+        input_engine.mouse_move(x, y)
+        time.sleep(0.04)
+        for i in range(2 if double else 1):
+            input_engine.mouse_press(button)
+            time.sleep(0.03)
+            input_engine.mouse_release(button)
+            if double and i == 0:
+                time.sleep(0.06)
+        return {"kind": "click_xy", "status": "ok", "ok": True, "x": x, "y": y,
+                "button": button, "double": double, "detail": detail}
+
+    @staticmethod
+    def scroll_xy(x: int, y: int, direction: str = "down", amount: int = 3,
+                  dry_run: bool = False) -> dict:
+        """移到绝对像素 (x,y) 处滚动 amount 格。direction: up/down。"""
+        x, y = int(x), int(y)
+        direction = (direction or "down").lower()
+        if direction not in ("up", "down"):
+            return {"kind": "scroll_xy", "status": "error",
+                    "detail": f"方向应为 up/down: {direction}", "ok": False}
+        amount = max(1, min(20, int(amount)))
+        detail = f"scroll_xy({x},{y},{direction},x{amount})"
+        if dry_run:
+            return {"kind": "scroll_xy", "status": "ok", "ok": True, "x": x, "y": y,
+                    "direction": direction, "amount": amount, "detail": f"[dry-run] {detail}"}
+        input_engine.mouse_move(x, y)
+        time.sleep(0.04)
+        for _ in range(amount):
+            input_engine.mouse_wheel(direction)
+            time.sleep(0.02)
+        return {"kind": "scroll_xy", "status": "ok", "ok": True, "x": x, "y": y,
+                "direction": direction, "amount": amount, "detail": detail}
+
     # ── 动作序列 ──
     @staticmethod
     def run_sequence(steps: list[dict], dry_run: bool = False,

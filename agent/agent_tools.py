@@ -335,6 +335,69 @@ def build_config_tools() -> list:
     ]
 
 
+# ════════════════════════════════════════════════════════════════
+# 控制 toolset (L3 坐标操作电脑) — computer use
+# 坐标一律归一化 0-1000 (x 左0右1000 / y 上0下1000), 由 M3 视觉 grounding 给出,
+# 上层(AgentThread)按最近一次截图的真实尺寸换算成像素再执行。
+# 这些是 EXEC_TOOLS: 走安全闸(预演→分档确认→执行), 不走通用 dispatch。
+# ════════════════════════════════════════════════════════════════
+
+def build_control_tools() -> list:
+    """返回操作电脑的控制工具 (Anthropic tools 格式)。坐标 0-1000。"""
+    _xy = {
+        "x": {"type": "integer", "description": "目标中心横坐标, 归一化 0-1000 (左0右1000)"},
+        "y": {"type": "integer", "description": "目标中心纵坐标, 归一化 0-1000 (上0下1000)"},
+        "target": {"type": "string",
+                   "description": "你要操作的对象(如'开始游戏按钮'), 给用户看的确认文案用; 务必填"},
+    }
+    return [
+        {
+            "name": "computer_click",
+            "description": "在屏幕某处点击鼠标。坐标是归一化 0-1000, 由你看截图判断。"
+                           "**必须先 capture_screen 看当前画面**再给坐标。点前可能要用户确认。",
+            "input_schema": {
+                "type": "object",
+                "properties": {**_xy,
+                    "button": {"type": "string", "enum": ["left", "right", "middle"],
+                               "description": "left=左键(默认) right=右键 middle=中键"}},
+                "required": ["x", "y", "target"],
+            },
+        },
+        {
+            "name": "computer_double_click",
+            "description": "在屏幕某处双击左键(如打开桌面图标)。坐标 0-1000。先 capture_screen 再给坐标。",
+            "input_schema": {"type": "object", "properties": {**_xy}, "required": ["x", "y", "target"]},
+        },
+        {
+            "name": "computer_move",
+            "description": "只把鼠标移到某处(不点击), 用于悬停查看。坐标 0-1000。",
+            "input_schema": {"type": "object", "properties": {**_xy}, "required": ["x", "y", "target"]},
+        },
+        {
+            "name": "computer_scroll",
+            "description": "在屏幕某处滚动鼠标滚轮(翻页/找列表里的东西)。坐标 0-1000。",
+            "input_schema": {
+                "type": "object",
+                "properties": {**_xy,
+                    "direction": {"type": "string", "enum": ["up", "down"], "description": "up上 down下"},
+                    "amount": {"type": "integer", "description": "滚几格(1-20, 默认3)"}},
+                "required": ["x", "y", "target", "direction"],
+            },
+        },
+        {
+            "name": "wait",
+            "description": "等待一会儿再继续(用于开程序/加载游戏这类有延迟的场景), 然后你应再 capture_screen 看状态。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "ms": {"type": "integer", "description": "等待毫秒数 (100-10000)"},
+                    "reason": {"type": "string", "description": "等什么(如'等 Steam 启动')"}},
+                "required": ["ms"],
+            },
+        },
+    ]
+
+
 def _capture_screen(_a: dict) -> dict:
     """截屏 (受 screenshot_enabled 开关约束; 结果含 base64 图, 由 AgentThread 转成图像回填)。"""
     from core import agent_settings
@@ -387,12 +450,22 @@ _DISPATCH = {
     # 执行 (真跑; 由 AgentThread 走安全闸, 不该走到这里)
     "run_action": lambda a: {"ok": False, "error": "run_action 须经安全闸 (内部错误)"},
     "run_sequence": lambda a: {"ok": False, "error": "run_sequence 须经安全闸 (内部错误)"},
+    # 操作电脑 (由 AgentThread 换算+主线程执行, 不该走到这里)
+    "computer_click": lambda a: {"ok": False, "error": "computer_click 须经安全闸 (内部错误)"},
+    "computer_double_click": lambda a: {"ok": False, "error": "computer_double_click 须经安全闸 (内部错误)"},
+    "computer_move": lambda a: {"ok": False, "error": "computer_move 须经安全闸 (内部错误)"},
+    "computer_scroll": lambda a: {"ok": False, "error": "computer_scroll 须经安全闸 (内部错误)"},
 }
 
 # 结果需转成图像回填 (由 AgentThread 特殊处理, 不走 JSON 文本 tool_result)
 IMAGE_TOOLS = {"capture_screen"}
 # 会真实发出输入的执行类工具 (AgentThread 拦截 → 预演 → 确认/auto → 执行)
 EXEC_TOOLS = {"run_action", "run_sequence"}
+# 操作电脑 (L3 坐标) 工具: 坐标 0-1000, 由 AgentThread 换算像素 + 主线程执行, 走安全闸分档确认。
+# 不走通用 dispatch。computer_move 无点击(🟢), 其余点击/滚动按分档确认。
+COMPUTER_TOOLS = {"computer_click", "computer_double_click", "computer_move", "computer_scroll"}
+# wait: 子线程 sleep, 无输入、无确认 (AgentThread 直接处理)
+WAIT_TOOL = "wait"
 
 # 会改动配置 → 需要热生效的工具 (新加的 list 编辑工具必须在此登记, 否则改完不热重载)
 WRITE_TOOLS = {
