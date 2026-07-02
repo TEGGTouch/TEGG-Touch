@@ -1725,6 +1725,15 @@ class RunController(QObject):
         chunk_size = voice_config.get('voice_chunk_size', None)
         if not commands:
             return
+        # grammar 里常驻"确认/取消"词 (仅在 agent 待确认时才起作用; 平时被忽略),
+        # 避免临时切 grammar 重载 Vosk 模型。已有同名短语的不重复加。
+        try:
+            from agent import safety
+            have = {c.get('phrase') for c in commands}
+            commands = list(commands) + [c for c in safety.confirm_voice_commands()
+                                         if c['phrase'] not in have]
+        except Exception:
+            pass
 
         try:
             from engine.voice_engine import VoiceEngine
@@ -1750,6 +1759,21 @@ class RunController(QObject):
         """语音指令识别回调 → 触发按键 (支持宏)"""
         if not self._active or not keys:
             return
+        # agent 待确认时: 语音接管为"只认确认/取消", 其它指令一律忽略; 处理完自动恢复
+        from agent import safety
+        is_yes = keys == safety.CONFIRM_YES_KEY
+        is_no = keys == safety.CONFIRM_NO_KEY
+        if safety.confirm_pending():
+            if is_yes:
+                safety.resolve_pending(True)
+                logger.info("语音确认: 确认 ('%s')", phrase)
+            elif is_no:
+                safety.resolve_pending(False)
+                logger.info("语音确认: 取消 ('%s')", phrase)
+            # 其它指令在确认期间忽略
+            return
+        if is_yes or is_no:
+            return   # 无待确认时, 确认/取消词不做任何事
         if action == 'click':
             # 统一 click 语义: 键盘=按下+短延迟+释放, 手柄=press+flush+延迟release,
             # 鼠标键=按下+延迟释放。直接 p 紧跟 r 会因无间隔被游戏/驱动丢弃。

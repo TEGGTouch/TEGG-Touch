@@ -31,6 +31,7 @@ from core.constants import APP_DIR
 from core import agent_settings
 from core.shadow_helper import SHADOW_MARGIN, SHADOW_BLUR, SHADOW_OFFSET_Y, SHADOW_COLOR
 from agent import conversation_log as clog
+from agent import safety
 
 # 图标字体 (软键盘同款: Segoe MDL2/Fluent, 无则退回 ▲)
 _ICON_FONT = None
@@ -278,6 +279,7 @@ class AIAssistantDialog(QDialog):
 
         collapse_btn = QPushButton()
         collapse_btn.setFixedSize(34, 34)
+        collapse_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         collapse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         collapse_btn.setAutoDefault(False)
         collapse_btn.setDefault(False)
@@ -313,11 +315,24 @@ class AIAssistantDialog(QDialog):
         """)
         root.addWidget(self._log, 1)
 
-        # ── 状态行 (输入框上方独占一行: 就绪 / 思考中…) ──
+        # (执行确认改为独立弹窗 views/confirm_popup.py, 由 OverlayWindow 收口, 不再内嵌于此)
+
+        # ── 状态行 (输入框上方独占一行: 就绪 / 思考中… + 急停) ──
+        status_row = QHBoxLayout()
+        status_row.setSpacing(8)
         self._status_lbl = QLabel("就绪")
         self._status_lbl.setFont(_make_font(fn, 13))
         self._status_lbl.setStyleSheet(f"color: {C_DIM}; background: transparent;")
-        root.addWidget(self._status_lbl)
+        status_row.addWidget(self._status_lbl)
+        status_row.addStretch()
+        from views.edit_toolbar import _IconTextBtn   # 复用体系图标+文字按钮 (icon-font)
+        self._stop_btn = _IconTextBtn("", "⏹", "急停", "#3A2A2A", "#EF4444",
+                                      fg="#EF4444", height=36)
+        self._stop_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)   # 防回车/空格误触发急停
+        self._stop_btn.setToolTip("立即中断 agent 的所有执行 (全局热键: Ctrl+Alt+空格)")
+        self._stop_btn.clicked.connect(self._on_stop)
+        status_row.addWidget(self._stop_btn)
+        root.addLayout(status_row)
 
         # ── 输入行 (加大) ──
         input_row = QHBoxLayout()
@@ -340,6 +355,7 @@ class AIAssistantDialog(QDialog):
         self._send_btn.setFixedSize(100, 48)
         self._send_btn.setAutoDefault(False)
         self._send_btn.setDefault(False)
+        self._send_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)   # 焦点常驻输入框, 按钮只鼠标点
         self._send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._send_btn.setFont(_make_font(fn, 16, bold=True))
         self._send_btn.setStyleSheet(f"""
@@ -360,6 +376,19 @@ class AIAssistantDialog(QDialog):
         self._thread.tool_ran.connect(self._on_tool_ran)
         self._thread.error.connect(self._on_error)
         self._thread.busy.connect(self._set_busy)
+
+    # ── 急停 (确认弹窗由 OverlayWindow 独立管理) ──
+    def _on_stop(self):
+        """急停: 置位中断 + 解除等待中的确认(若有) + 松开已按住的输入。"""
+        safety.request_abort()
+        try:
+            from core.input_engine import release_all_keys
+            release_all_keys()
+        except Exception:
+            pass
+        if safety.confirm_pending():           # 有待确认 → 走收口(关弹窗 + resolve False)
+            safety.resolve_pending(False)
+        self._append_error("已急停,已中断执行并松开按键。")
 
     # ── 对外: 打开/收起 ──
     def show_panel(self):
@@ -401,6 +430,20 @@ class AIAssistantDialog(QDialog):
         result = info.get("result", {}) or {}
         if not result.get("ok", True) and result.get("error"):
             self._append_tool(f"✗ {name}: {result['error']}", error=True)
+            return
+        if result.get("screenshot"):   # 截屏: 明确告知用户 (决策#5 知情透明)
+            self._append_tool(f"📸 蛋挞看了下屏幕 ({result.get('w')}×{result.get('h')}，不含蛋挞界面)")
+            return
+        if name in ("run_action", "run_sequence"):   # 执行类
+            if result.get("cancelled"):
+                self._append_tool(f"✋ 已取消执行: {result.get('value','')}")
+            elif result.get("executed") and result.get("ok"):
+                self._append_tool(f"▶ 已执行: {result.get('value','')}")
+                if result.get("note"):     # 焦点警告 (如没有目标窗口)
+                    self._append_tool(result["note"], error=True)
+            else:
+                self._append_tool(f"✗ 执行失败: {result.get('error') or result.get('value','')}",
+                                  error=True)
             return
         if "before" in result and "after" in result:
             field = result.get("field") or result.get("key", "")

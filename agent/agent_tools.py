@@ -212,6 +212,7 @@ def build_config_tools() -> list:
             "description": "新增一个元素 (normal 普通键 / gp_button 手柄键 / center_band 回中带 / "
                            "gp_stick 摇杆 / gp_wheel 方向盘)。方向盘是单例, 已存在则直接返回它 "
                            "(等于'已启用')。用户说'启用/添加方向盘(摇杆)'就用它, 不要让用户手动加。"
+                           "加摇杆时: 用户要'右摇杆'就传 stick_id='R', '左摇杆'传 'L'。"
                            "x/y 屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下), 省略放中心 (0,0)。",
             "input_schema": {
                 "type": "object",
@@ -220,6 +221,8 @@ def build_config_tools() -> list:
                                  "enum": ["normal", "gp_button", "center_band",
                                           "gp_stick", "gp_wheel"]},
                     "btn_name": {"type": "string"},
+                    "stick_id": {"type": "string", "enum": ["L", "R"],
+                                 "description": "仅 gp_stick: L=左摇杆 R=右摇杆"},
                     "x": {"type": "number"}, "y": {"type": "number"},
                     "w": {"type": "number"}, "h": {"type": "number"},
                     "name": {"type": "string"},
@@ -269,9 +272,10 @@ def build_config_tools() -> list:
         },
         {
             "name": "set_element_field",
-            "description": "改某元素的任意字段, 用于类型专有/高级字段: 摇杆 dead_zone(死区)/"
-                           "eight_way(八向吸附)/mode/wasd_up..、方向盘 control_mode/lt_*/rt_*、"
-                           "按钮 hover_repeat_interval(长按连发间隔) 等。值按旧值类型自动纠正。"
+            "description": "改某元素的任意字段, 用于类型专有/高级字段: 摇杆 stick_id(L=左/R=右)/"
+                           "dead_zone(死区)/eight_way(八向吸附)/mode(analog|wasd)/wasd_up..、"
+                           "方向盘 control_mode/lt_*/rt_*、按钮 hover_repeat_interval(长按连发) 等。"
+                           "**这些字段都能直接改, 不要说'改不了'** —— 值按旧值类型自动纠正。"
                            "常规绑定 (hover/lclick/name) 优先 set_button_binding; 位置/尺寸用几何工具。"
                            "改前可先 summarize_profile 看该元素 fields 里现有字段名与当前值作参考。",
             "input_schema": {
@@ -285,7 +289,59 @@ def build_config_tools() -> list:
                 "required": ["index", "field", "value"],
             },
         },
+        # ── 执行 (阶段2: 触发已配置的按键/宏/应用) ──
+        {
+            "name": "run_action",
+            "description": "**真的发出**一次输入 (帮用户执行, 非改配置)。value 用蛋挞标签语法: "
+                           "普通键 'ctrl+f4' / 鼠标 'mouse:left' / 手柄 'gp:A' / 宏 'xmacro:名' / "
+                           "启动应用 'app:名'。用户说'帮我按攻击''放个技能''打开录屏'时: 先 summarize_profile "
+                           "找到对应绑定的 value, 再用它调本工具。默认会先让用户确认才真执行 (auto 模式除外)。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "value": {"type": "string", "description": "要执行的标签, 如 'ctrl+f4' / 'gp:A' / 'xmacro:连招'"},
+                    "action": {"type": "string", "enum": ["click", "press", "release"],
+                               "description": "click=按一下(默认) / press=按住 / release=松开"},
+                    "target": {"type": "string",
+                               "description": "被操作对象的名字(如按钮名'茶叶蛋'/'手柄键01'), 用于给用户看的确认文案; 知道就填"},
+                },
+                "required": ["value"],
+            },
+        },
+        {
+            "name": "run_sequence",
+            "description": "**真的连续发出**一串输入, 只弹一次确认 (用于'连按N次''一连串操作')。"
+                           "重复N次或多步操作**必须用这个**, 不要 run_action 调 N 次(那样弹 N 次确认)。"
+                           "steps 每步二选一: {keys:'a', action:'click', after_ms:50} 或 {delay_ms:100}。",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "steps": {"type": "array", "items": {"type": "object"},
+                              "description": "步骤数组, 如按a十次: [{keys:'a',after_ms:50}]×10"},
+                    "target": {"type": "string", "description": "被操作对象名字(确认文案用)"},
+                    "summary": {"type": "string", "description": "一句话概括这串操作(如'连按A键10次'), 确认文案用"},
+                },
+                "required": ["steps"],
+            },
+        },
+        # ── 多模态感知 ──
+        {
+            "name": "capture_screen",
+            "description": "截取当前屏幕并返回图像给你看 (截图**不含**蛋挞自己的覆盖层/工具栏/本面板)。"
+                           "当用户让你看屏幕、或你需要看到画面才能判断/操作时调用。每次截屏都会在面板"
+                           "告知用户。返回的是图片, 直接看图回答即可。",
+            "input_schema": {"type": "object", "properties": {}, "required": []},
+        },
     ]
+
+
+def _capture_screen(_a: dict) -> dict:
+    """截屏 (受 screenshot_enabled 开关约束; 结果含 base64 图, 由 AgentThread 转成图像回填)。"""
+    from core import agent_settings
+    if not agent_settings.load_agent_settings().get("screenshot_enabled", True):
+        return {"ok": False, "error": "用户未开启截屏 (在 AI 设置里开启 screenshot_enabled)"}
+    from agent import screen_capture
+    return screen_capture.grab_png()
 
 
 # 工具名 → ConfigTools 调用 (kwargs 透传)
@@ -317,7 +373,8 @@ _DISPATCH = {
     # 按钮增删
     "add_button": lambda a: ConfigTools.add_button(
         a.get("btn_type", "normal"), a.get("btn_name"),
-        a.get("x", 0), a.get("y", 0), a.get("w"), a.get("h"), a.get("name")),
+        a.get("x", 0), a.get("y", 0), a.get("w"), a.get("h"),
+        a.get("stick_id"), a.get("name")),
     "remove_button": lambda a: ConfigTools.remove_button(int(a["index"]), a.get("name")),
     "move_button": lambda a: ConfigTools.move_button(
         int(a["index"]), a["direction"], a.get("cells", 1), a.get("name")),
@@ -325,7 +382,17 @@ _DISPATCH = {
         int(a["index"]), a.get("x"), a.get("y"), a.get("w"), a.get("h"), a.get("name")),
     "set_element_field": lambda a: ConfigTools.set_element_field(
         int(a["index"]), a["field"], a["value"], a.get("name")),
+    # 多模态
+    "capture_screen": lambda a: _capture_screen(a),
+    # 执行 (真跑; 由 AgentThread 走安全闸, 不该走到这里)
+    "run_action": lambda a: {"ok": False, "error": "run_action 须经安全闸 (内部错误)"},
+    "run_sequence": lambda a: {"ok": False, "error": "run_sequence 须经安全闸 (内部错误)"},
 }
+
+# 结果需转成图像回填 (由 AgentThread 特殊处理, 不走 JSON 文本 tool_result)
+IMAGE_TOOLS = {"capture_screen"}
+# 会真实发出输入的执行类工具 (AgentThread 拦截 → 预演 → 确认/auto → 执行)
+EXEC_TOOLS = {"run_action", "run_sequence"}
 
 # 会改动配置 → 需要热生效的工具 (新加的 list 编辑工具必须在此登记, 否则改完不热重载)
 WRITE_TOOLS = {
@@ -382,6 +449,19 @@ def _profile_index() -> str:
     return "\n".join(lines)
 
 
+# ── 跨"配置/执行"共用的公共认知 (将来若拆成多套工具集/提示, 两边都复用此常量, 不重写) ──
+SHARED_TERMINOLOGY = """**术语与指代 (用户怎么叫元素, 你要对上)**:
+- 类型: 普通键(normal)、手柄键(gp_button)、摇杆(gp_stick)、方向盘(gp_wheel)、回中带(center_band)。
+- **"中心轮盘" = "中心环"**: 同一个东西(8扇区那个), 是顶层 wheel_*/wheel_sectors(**不在 buttons 里**)、单例。它和"方向盘"**不是一回事**。
+- **"方向盘"** = gp_wheel 元素(在 buttons 里、单例)。
+- 用户指代摇杆的三种说法:
+  · "左摇杆/右摇杆" → 指 **stick_id=L / R** 的 analog 摇杆(是 ID 的左右, 不是名字)
+  · "WASD摇杆" → 指 **mode='wasd'** 的摇杆
+  · 直接报名字 → 按 name 匹配(手柄键/按钮/回中带/摇杆都有 name, 见速览)
+- 名字现在按类型编号(手柄键01/按钮01/回中带01 等); 用户可能说"第一个手柄键"(按顺序数)或直接名字。
+- 指代匹配到多个时, 先列候选(index+方位+颜色+名字)让用户确认, 别乱猜。"""
+
+
 def system_prompt() -> str:
     """拼系统提示: 静态规则 + 标签语法 + 紧凑 profile 索引 (细节走工具按需拉取)。"""
     gp_labels = ", ".join(f"gp:{k}" for k in GP_LABEL_TO_KEY.values())
@@ -391,11 +471,21 @@ def system_prompt() -> str:
 
 你的职责: 用工具帮用户读取和修改蛋挞的按键配置 (profile)。你**只能改配置**, 不能直接操作鼠标键盘 (那是后续阶段的能力)。
 
+看屏幕: 用户让你看屏幕、或你需要看画面才能判断时, 调 capture_screen (截图不含蛋挞自己的覆盖层, 每次都会告知用户), 然后据图回答。别凭空猜屏幕内容。
+
+执行操作 (帮用户"按键", 非改配置): 用户说"帮我按X""放个技能""打开录屏"等要你**真的发输入**时, 用 run_action。流程: 先 summarize_profile 找到对应元素绑定的 value(如某按钮 hover='ctrl+f4'), 再 run_action(value=值, target=该元素名字如'茶叶蛋')。target 会显示在给用户的确认弹窗里, 知道就带上。也可直接跑宏 'xmacro:名' / 启动应用 'app:名'。**重复 N 次 或 一连串操作**(如"连按A十次""先按A再按B")→ 用 run_sequence 把整串打包成 steps, **只弹一次确认、一次执行**, 千万别 run_action 调 N 次(会弹 N 次确认)。注意: 默认会先弹确认, 确认后才真执行; 用户随时可急停。别把"改配置"和"发输入"搞混——改键位用 set_*, 真按键用 run_action/run_sequence。
+
 你能改 profile 里的几乎所有东西:
 - 元素: 改绑定/名字 (set_button_binding)、新增任意类型 (add_button, 含普通键/手柄键/回中带/摇杆/方向盘;
   方向盘单例, 已有即"已启用")、删除 (remove_button)
 - 类型专有/高级字段: set_element_field (摇杆 dead_zone/eight_way/mode/wasd_*、方向盘 control_mode、
   按钮 hover_repeat_interval 长按连发 等 —— 凡 summarize 的 fields 里有的字段都能改)
+- 摇杆(gp_stick)领域知识 (关键!): 有两种 mode ——
+  · mode='analog': 模拟手柄摇杆, 由 stick_id=L/R 决定是**左**还是**右**摇杆;
+  · mode='wasd': 圆盘模拟 W/A/S/D 方向键, **此模式下 stick_id 完全无效**(不驱动手柄摇杆)。
+  所以用户说"改成左/右摇杆"通常指 analog 摇杆: 若目标摇杆当前是 wasd 模式, **光改 stick_id 没有任何效果**,
+  要么同时把 mode 改成 'analog'(会从"出方向键"变成"出手柄摇杆", 行为大变), 要么先问用户是否要这样切。
+  别只改 stick_id 就报成功。
 - 移动/改尺寸元素: move_button (按格相对移动, 上/下/左/右)、set_button_geometry (绝对 x/y/w/h)。
   **所有元素都用这个** —— 包括方向盘 gp_wheel (它是 buttons 里的元素, 有自己的 x/y)。
   ⚠️ 别混淆: "方向盘"=gp_wheel 元素(move_button 按 index 移); "中心轮盘"整组(8扇区+中心环)
@@ -406,9 +496,13 @@ def system_prompt() -> str:
 - 语音命令: 增 (add_voice_command) / 删 (remove_voice_command) / 改 (set_voice_command)
 - 轮盘扇区绑定: set_wheel_sector (固定8个 0~7, 只改不增删)
 - 宏: 增 (add_macro) / 删 (remove_macro); 应用: 增 (add_app) / 删 (remove_app)
+{SHARED_TERMINOLOGY}
+
 **行为准则 (重要)**:
 - **能做就直接做, 别反复确认。** 改配置是安全、可撤销、即时热生效的; 用户意图清楚时直接执行 + 一句话回报, 不要写长篇、不要追问"你确定吗"。
 - 用户重复同一要求 = 你上一轮太啰嗦或没动手, 立刻执行, 别再解释为什么难。
+- **别编造"改不了"。** profile 里元素的几乎所有字段(含摇杆 stick_id、mode、dead_zone 等)都能用
+  set_element_field 改。拿不准某字段能不能改, 先 summarize_profile 看该元素 fields 里有没有, 有就直接改, 不要凭空说不行。
 - 回复**简短**(通常 1~3 句)。只在**真的有歧义**且无法合理默认时才问, 且只问一个最短的问题。
 - "启用/添加 方向盘(gp_wheel)/摇杆(gp_stick)" → 直接 add_button, 不要说"要在编辑界面手动加"(你能加, 方向盘还是单例)。
 

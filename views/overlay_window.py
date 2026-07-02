@@ -63,6 +63,7 @@ class OverlayWindow(QGraphicsView):
         self._dlg_ai = None
         self._ai_open = False       # AI 面板逻辑开关 (最小化还原时据此重新显示)
         self._agent_thread = None   # AI 配置助手线程 (惰性创建, 跨窗口开关保留会话)
+        self._confirm_popup = None  # 执行确认独立弹窗 (惰性创建)
 
         # ── 窗口属性 ──
         self.setWindowTitle(f"{t('app.title')} v{APP_VERSION}")
@@ -204,6 +205,12 @@ class OverlayWindow(QGraphicsView):
         self._smart_pt_timer.setInterval(frame_interval_ms())
         self._smart_pt_timer.timeout.connect(self._poll_smart_passthrough)
 
+        # ── 焦点目标追踪 (给 agent 执行前切焦用; 记最后一个非蛋挞前景窗) ──
+        self._focus_track_timer = QTimer(self)
+        self._focus_track_timer.setInterval(400)
+        self._focus_track_timer.timeout.connect(self._track_focus_target)
+        self._focus_track_timer.start()
+
         # 连接场景信号
         self._scene.button_double_clicked.connect(self._open_button_editor)
         self._scene.wheel_rebuilt.connect(self._on_wheel_rebuilt)
@@ -304,10 +311,10 @@ class OverlayWindow(QGraphicsView):
 
     def to_run(self):
         """切换到运行模式"""
-        # 关闭所有编辑模式弹窗 (AI 助手常驻, 跨模式保留, 不关)
+        # 关闭所有编辑模式弹窗 (AI 助手 + 确认弹窗常驻, 跨模式保留, 不关)
         from PyQt6.QtWidgets import QDialog
         for dlg in self.findChildren(QDialog):
-            if dlg is self._dlg_ai:
+            if dlg is self._dlg_ai or dlg is self._confirm_popup:
                 continue
             dlg.close()
         self._smart_pt_timer.stop()
@@ -1169,10 +1176,14 @@ class OverlayWindow(QGraphicsView):
                 from agent.agent_thread import AgentThread
                 self._agent_thread = AgentThread(self)
                 self._agent_thread.config_changed.connect(self._on_agent_config_changed)
+                self._agent_thread.confirm_requested.connect(self._on_agent_confirm_requested)
+                self._agent_thread.execute_requested.connect(self._do_agent_trigger)
             from views.ai_assistant_dialog import AIAssistantDialog
             self._dlg_ai = AIAssistantDialog(self._agent_thread, self,
                                              on_before_send=self._flush_for_agent)
             self._dlg_ai.collapsed.connect(self._on_ai_collapsed)
+            self._dlg_ai.ensurePolished()
+            self._update_capture_context()   # 把新建的 AI 面板句柄纳入截屏排除列表
 
         if self._dlg_ai.isVisible():          # 再点一次 = 收起 (走收起路径, 会记状态)
             self._dlg_ai._on_collapse()
@@ -1210,6 +1221,52 @@ class OverlayWindow(QGraphicsView):
             self.reload_active_profile()
         except Exception as e:
             logger.warning("AI 配置热生效失败: %s", e)
+
+    # ── 执行确认 (独立弹窗; 按钮/语音统一收口 + 编辑模式确认后切运行) ──
+    def _on_agent_confirm_requested(self, desc: str):
+        from agent import safety
+        from views.confirm_popup import ConfirmPopup
+        # 弹窗前先进运行模式 → 启动语音引擎, 用户才能说"确认/取消"(语音只在运行态跑)
+        if self._current_mode == 'edit':
+            try:
+                self.to_run()
+            except Exception as e:
+                logger.warning("确认前切运行模式失败: %s", e)
+        if self._confirm_popup is None:
+            self._confirm_popup = ConfirmPopup(self)
+            self._confirm_popup.confirmed.connect(self._resolve_agent_confirm)
+        self._confirm_popup.prompt(desc)
+        # 登记待确认: 语音说"确认/取消"经 broker → 先高亮闪一下按钮再关(resolve_by_voice)
+        safety.set_pending_confirm(self._confirm_popup.resolve_by_voice)
+
+    def _resolve_agent_confirm(self, ok: bool):
+        """确认收口: 关弹窗 + (编辑模式且执行→切运行) + 通知 agent 线程。"""
+        from agent import safety
+        safety.clear_pending_confirm()
+        if self._confirm_popup is not None:
+            self._confirm_popup.hide()
+        # 切运行态放到真执行处 (_do_agent_trigger), 取消时不切
+        if self._agent_thread is not None:
+            self._agent_thread.resolve_confirm(ok)
+
+    def _do_agent_trigger(self, value: str, action: str):
+        """主线程真执行: 走 RunController._smart_trigger(权威: 进运行态 + 焦点校正 +
+        recenter 用真实几何)。子线程经 execute_requested 触发, 结果 resolve_execute 回填。"""
+        res = {"ok": True, "steps": [{"part": value, "status": "ok"}]}
+        try:
+            if self._current_mode == 'edit':
+                self.to_run()   # 执行 → 进运行态 (游戏为前景, recenter 几何有效)
+            from agent import exec_focus
+            if not exec_focus.focus_target().get("target"):
+                res["no_target"] = True
+            code = {'click': 'click', 'press': 'p', 'release': 'r'}.get(action, 'click')
+            self._run_controller._smart_trigger(value, code)
+        except Exception as e:
+            logger.warning("agent 执行失败 '%s': %s", value, e)
+            res = {"ok": False, "error": str(e)}
+        finally:
+            if self._agent_thread is not None:
+                self._agent_thread.resolve_execute(res)
 
     def _open_hotkey_settings(self):
         """打开快捷键设置弹窗"""
@@ -1326,6 +1383,59 @@ class OverlayWindow(QGraphicsView):
         if self._ai_open and self._dlg_ai is not None:
             self._dlg_ai.show_panel()
 
+    def _track_focus_target(self):
+        """记录"最后一个非蛋挞前景窗", 供 agent 执行前把焦点切回去(否则按键打进面板)。"""
+        try:
+            from agent import exec_focus
+            from PyQt6.QtWidgets import QApplication
+            own = [int(w.winId()) for w in QApplication.topLevelWidgets()]
+            exec_focus.note_target(exec_focus.get_foreground(), own)
+        except Exception:
+            pass
+
+    def _register_abort_hotkey(self):
+        """注册全局急停热键 Ctrl+Alt+空格 (随时中断 agent 执行, 面板未聚焦也生效)。"""
+        try:
+            import keyboard
+            keyboard.add_hotkey("ctrl+alt+space", self._abort_agent_exec)
+            logger.info("急停热键已注册: Ctrl+Alt+Space")
+        except Exception as e:
+            logger.warning("注册急停热键失败: %s", e)
+
+    def _abort_agent_exec(self):
+        """急停回调 (热键线程): 置中断 + 松键 + 解除等待中的确认。全部线程安全。"""
+        try:
+            from agent import safety
+            safety.request_abort()
+            from core.input_engine import release_all_keys
+            release_all_keys()
+            if safety.confirm_pending():        # 有待确认 → 走收口(关弹窗+resolve False)
+                safety.resolve_pending(False)
+            elif self._agent_thread is not None:
+                self._agent_thread.resolve_confirm(False)
+        except Exception as e:
+            logger.warning("急停执行失败: %s", e)
+
+    def _update_capture_context(self):
+        """把"蛋挞所有顶层窗句柄 + 蛋挞所在显示器区域"喂给截屏模块。
+        agent 截屏时据此**临时**排除覆盖层(截完恢复), 并只截蛋挞那块屏。"""
+        try:
+            from agent import screen_capture
+            from PyQt6.QtWidgets import QApplication
+            hwnds = []
+            for w in QApplication.topLevelWidgets():
+                try:
+                    hwnds.append(int(w.winId()))
+                except Exception:
+                    pass
+            scr = self.screen() or QApplication.primaryScreen()
+            g = scr.geometry() if scr else None
+            region = ((g.left(), g.top(), g.left() + g.width(), g.top() + g.height())
+                      if g else None)
+            screen_capture.set_capture_context(hwnds, region)
+        except Exception as e:
+            logger.warning("更新截屏上下文失败: %s", e)
+
     # ── 事件处理 ──
 
     def _force_taskbar_visible(self):
@@ -1365,10 +1475,13 @@ class OverlayWindow(QGraphicsView):
         self._restore_toolbars_for_mode()
         if self._current_mode == 'edit':
             self._smart_pt_timer.start()
-        # 首次显示后, 恢复上次的 AI 面板开关状态 (只做一次)
+        # 首次显示后, 恢复上次的 AI 面板开关状态 + 注册急停热键 (只做一次)
         if not getattr(self, '_ai_restored', False):
             self._ai_restored = True
             QTimer.singleShot(400, self._restore_ai_panel)
+            self._register_abort_hotkey()
+        # 每次显示都刷新截屏上下文 (句柄列表 + 蛋挞所在显示器)
+        self._update_capture_context()
 
     def _poll_smart_passthrough(self):
         """每帧检查光标位置，切换 WS_EX_TRANSPARENT — 对齐原版 update_loop"""

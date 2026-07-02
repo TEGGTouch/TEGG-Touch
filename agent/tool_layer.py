@@ -816,9 +816,10 @@ class ConfigTools:
     def add_button(btn_type: str = "normal", btn_name: str | None = None,
                    x: float = 0, y: float = 0,
                    w: float | None = None, h: float | None = None,
-                   name: str | None = None) -> dict:
+                   stick_id: str | None = None, name: str | None = None) -> dict:
         """新增一个元素 (normal/gp_button/center_band/gp_stick/gp_wheel)。
         方向盘 gp_wheel 是单例: 已存在则直接返回它 (视为"已启用")。
+        摇杆 gp_stick 可传 stick_id ('L'=左 / 'R'=右; 省略默认 L)。
         x/y 为屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下); 省略 w/h 用类型默认。
         """
         name = ConfigTools._resolve_name(name)
@@ -836,7 +837,9 @@ class ConfigTools:
                             "already_exists": True, "note": "方向盘已存在 (单例), 无需重复添加"}
                 data = GamepadWheelData(x=float(x), y=float(y))
             else:
-                data = GamepadStickData(x=float(x), y=float(y))
+                sid = str(stick_id).upper() if stick_id else None
+                data = (GamepadStickData(x=float(x), y=float(y), stick_id=sid)
+                        if sid in ("L", "R") else GamepadStickData(x=float(x), y=float(y)))
             btn = data.to_dict()
             if w:
                 btn["w"] = float(w)
@@ -852,9 +855,17 @@ class ConfigTools:
         if btn_type not in _ADDABLE_BTN_TYPES:
             return {"ok": False, "error": f"未知类型: {btn_type}"}
         gs = c.get("grid_size") or 100
+        # 未指定名字 → 按类型编号命名 (手柄键01/按钮01/回中带01), 便于用户指明
+        if btn_name:
+            auto_name = btn_name
+        else:
+            from core.naming import next_numbered_name
+            prefix = _BTN_TYPE_DEFAULT_NAME[btn_type]
+            existing = [b.get("name") for b in buttons if b.get("type") == btn_type]
+            auto_name = next_numbered_name(existing, prefix)
         btn = {
             "type": btn_type,
-            "name": btn_name or _BTN_TYPE_DEFAULT_NAME[btn_type],
+            "name": auto_name,
             "x": float(x), "y": float(y),
             "w": float(w) if w else gs, "h": float(h) if h else gs,
         }

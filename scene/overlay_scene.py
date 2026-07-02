@@ -833,14 +833,25 @@ class OverlayScene(QGraphicsScene):
 
     # ── 按钮 CRUD ──
 
+    def _auto_name(self, prefix, btn_type):
+        """按类型给新元素编号命名 (前缀+序号), 便于用户/agent 指明。"""
+        from core.naming import next_numbered_name
+        from core.constants import BTN_TYPE_NORMAL
+        names = [getattr(it.data, 'name', '') for it in self.button_items
+                 if getattr(it.data, 'btn_type', BTN_TYPE_NORMAL) == btn_type]
+        return next_numbered_name(names, prefix)
+
     def add_button(self, data=None, _toast=True):
         """新增按钮，自动找空位"""
         from models.button_model import ButtonData
         from scene.touch_button_item import TouchButtonItem
+        from core.constants import BTN_TYPE_NORMAL
 
         gs = self.grid_size
         if data is None:
-            data = ButtonData(name=t("button_defaults.name"), w=gs, h=gs)
+            data = ButtonData(
+                name=self._auto_name(t("button_defaults.name"), BTN_TYPE_NORMAL),
+                w=gs, h=gs)
 
         # 空位查找
         pos = self._find_empty_slot(data.w, data.h, start_x=data.x, start_y=data.y)
@@ -861,7 +872,7 @@ class OverlayScene(QGraphicsScene):
         """新增回中带按钮"""
         from models.button_model import ButtonData
         data = ButtonData(
-            name=t("button_defaults.center_band"),
+            name=self._auto_name(t("button_defaults.center_band"), BTN_TYPE_CENTER_BAND),
             btn_type=BTN_TYPE_CENTER_BAND,
             hover_delay=0,
             hover_release_delay=0,
@@ -879,7 +890,7 @@ class OverlayScene(QGraphicsScene):
         from core.constants import BTN_TYPE_GP_BUTTON
         gs = self.grid_size
         data = ButtonData(
-            name=t("button_defaults.gp_button"),
+            name=self._auto_name(t("button_defaults.gp_button"), BTN_TYPE_GP_BUTTON),
             btn_type=BTN_TYPE_GP_BUTTON,
             w=gs, h=gs,
         )

@@ -48,7 +48,7 @@ DEFAULT_AGENT_SETTINGS = {
     "model": DEFAULT_MODEL,
     "use_openai_fallback": False,
     "auto_execute": False,
-    "screenshot_enabled": False,
+    "screenshot_enabled": True,   # 允许 agent 截屏看画面 (每次都会在面板告知; 可关)
     "asr_backend": "whisper",
     "max_tokens": 1024,
     "temperature": 1.0,
