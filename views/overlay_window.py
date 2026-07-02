@@ -61,6 +61,7 @@ class OverlayWindow(QGraphicsView):
         self._dlg_voice = None
         self._dlg_hotkey = None
         self._dlg_ai = None
+        self._ai_open = False       # AI 面板逻辑开关 (最小化还原时据此重新显示)
         self._agent_thread = None   # AI 配置助手线程 (惰性创建, 跨窗口开关保留会话)
 
         # ── 窗口属性 ──
@@ -1177,10 +1178,12 @@ class OverlayWindow(QGraphicsView):
             self._dlg_ai._on_collapse()
         else:
             self._dlg_ai.show_panel()
+            self._ai_open = True
             self._edit_toolbar.set_ai_state(True)
 
     def _on_ai_collapsed(self):
         """面板内「收起」按钮 → 同步工具栏 AI 按钮回灰。"""
+        self._ai_open = False
         self._edit_toolbar.set_ai_state(False)
 
     def _restore_ai_panel(self):
@@ -1309,13 +1312,19 @@ class OverlayWindow(QGraphicsView):
         冒出编辑工具栏, 或把用户已隐藏的运行工具栏/悬浮球弹回来。"""
         if self._current_mode == 'edit':
             self._edit_toolbar.show()
-            return
-        # 运行模式: 工具栏仅在未被隐藏时显示; 悬浮球按折叠状态恢复
-        cfg = self._scene.get_config() or {}
-        if not cfg.get('run_toolbar_hidden', False):
-            self._run_toolbar.show()
-        if self._run_collapsed:
-            self._collapsed_bubble.show()
+        else:
+            # 运行模式: 工具栏仅在未被隐藏时显示; 悬浮球按折叠状态恢复
+            cfg = self._scene.get_config() or {}
+            if not cfg.get('run_toolbar_hidden', False):
+                self._run_toolbar.show()
+            if self._run_collapsed:
+                self._collapsed_bubble.show()
+        self._restore_ai_panel_visibility()   # 两种模式都要补显示 AI 面板
+
+    def _restore_ai_panel_visibility(self):
+        """最小化/隐藏桌面还原后, AI 面板(独立 Tool 窗)不会自动回来, 这里按逻辑开关补显示。"""
+        if self._ai_open and self._dlg_ai is not None:
+            self._dlg_ai.show_panel()
 
     # ── 事件处理 ──
 
