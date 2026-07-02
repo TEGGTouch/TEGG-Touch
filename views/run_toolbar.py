@@ -42,7 +42,7 @@ class RunToolbar(QWidget):
 
     stop_clicked = pyqtSignal()
     voice_toggle_clicked = pyqtSignal()
-    auto_center_clicked = pyqtSignal()
+    ai_clicked = pyqtSignal()
     toggle_buttons_clicked = pyqtSignal()
     soft_keyboard_clicked = pyqtSignal()
     pt_clicked = pyqtSignal(str)
@@ -185,15 +185,15 @@ class RunToolbar(QWidget):
         self._voice_btn.clicked.connect(self.voice_toggle_clicked.emit)
         row.addWidget(self._voice_btn)
 
-        # 回中 [F6] (绿/灰 toggle, 统一文案)
-        self._ac_btn = _IconTextBtn(
-            "\uEA3A", "\u21BA",
-            t("run.auto_center", key=_K_AC),
+        # AI [F6] (amber=对话已开启, gray=关闭)
+        self._ai_btn = _IconTextBtn(
+            "", "🤖",
+            t("hotkey.auto_center", key=_K_AC),
             C_GRAY, C_GRAY_H)
-        self._ac_btn.setToolTip(t("tooltip.auto_center"))
-        self._install_tip(self._ac_btn)
-        self._ac_btn.clicked.connect(self.auto_center_clicked.emit)
-        row.addWidget(self._ac_btn)
+        self._ai_btn.setToolTip(t("tooltip.auto_center"))
+        self._install_tip(self._ai_btn)
+        self._ai_btn.clicked.connect(self.ai_clicked.emit)
+        row.addWidget(self._ai_btn)
 
         # 隐藏/显示 [F7] (统一文案)
         self._vis_btn = _IconTextBtn(
@@ -258,14 +258,7 @@ class RunToolbar(QWidget):
             self._voice_btn.set_icon_text("\uE720", "\U0001F3A4")
 
     def update_auto_center(self, enabled):
-        self._auto_center = enabled
-        # 仅切换颜色和icon，文案统一为 "回中 [F6]"
-        if enabled:
-            self._ac_btn.set_colors(C_GREEN, C_GREEN_H)
-            self._ac_btn.set_icon_text("\uE7C9", "\u2714")
-        else:
-            self._ac_btn.set_colors(C_GRAY, C_GRAY_H)
-            self._ac_btn.set_icon_text("\uEA3A", "\u21BA")
+        self._auto_center = enabled  # backend state kept for run_controller
 
     def update_buttons_visibility(self, hidden):
         self._buttons_hidden = hidden
@@ -329,6 +322,13 @@ class RunToolbar(QWidget):
         if hasattr(self._pt_btn, '_icon_lbl') and self._pt_btn._icon_lbl:
             self._pt_btn._icon_lbl.setStyleSheet(
                 f"color: {m['fg']}; background: transparent;")
+
+    def set_ai_state(self, active: bool):
+        """同步 AI 按钮高亮状态 (amber=对话开启, gray=关闭)。"""
+        if active:
+            self._ai_btn.set_colors(C_AMBER_D, C_AMBER)
+        else:
+            self._ai_btn.set_colors(C_GRAY, C_GRAY_H)
 
     def set_profile_name(self, name):
         """显示 icon + 方案名称（过长则截断为 ...）"""

@@ -104,6 +104,7 @@ class OverlayWindow(QGraphicsView):
         self._run_controller.request_edit_mode.connect(self.to_edit)
         self._run_controller.request_toggle_buttons.connect(self._toggle_buttons_visibility)
         self._run_controller.request_toggle_auto_center.connect(self._toggle_auto_center)
+        self._run_controller.request_toggle_ai.connect(self._open_ai_assistant)
         self._run_controller.request_soft_keyboard.connect(self._toggle_soft_keyboard)
         self._run_controller.passthrough_changed.connect(
             lambda mode: self._pt_manager.set_mode(mode))
@@ -142,7 +143,7 @@ class OverlayWindow(QGraphicsView):
         # 连接运行工具栏信号
         self._run_toolbar.stop_clicked.connect(self.to_edit)
         self._run_toolbar.voice_toggle_clicked.connect(self._toggle_voice)
-        self._run_toolbar.auto_center_clicked.connect(self._toggle_auto_center)
+        self._run_toolbar.ai_clicked.connect(self._open_ai_assistant)
         self._run_toolbar.toggle_buttons_clicked.connect(self._toggle_buttons_visibility)
         self._run_toolbar.soft_keyboard_clicked.connect(self._toggle_soft_keyboard)
         self._run_toolbar.pt_clicked.connect(self._on_pt_clicked)
@@ -354,6 +355,7 @@ class OverlayWindow(QGraphicsView):
                 self._toast.show_toast(t("voice_dialog.mic_not_found"))
 
         self._run_toolbar.update_auto_center(False)
+        self._run_toolbar.set_ai_state(bool(self._dlg_ai and self._dlg_ai.isVisible()))
         self._run_toolbar.update_buttons_visibility(False)
         self._run_toolbar.update_pt_mode(PT_ON)
 
@@ -1191,11 +1193,13 @@ class OverlayWindow(QGraphicsView):
             self._dlg_ai.show_panel()
             self._ai_open = True
             self._edit_toolbar.set_ai_state(True)
+            self._run_toolbar.set_ai_state(True)
 
     def _on_ai_collapsed(self):
         """面板内「收起」按钮 → 同步工具栏 AI 按钮回灰。"""
         self._ai_open = False
         self._edit_toolbar.set_ai_state(False)
+        self._run_toolbar.set_ai_state(False)
 
     def _restore_ai_panel(self):
         """启动时: 若上次退出时面板是打开的, 自动恢复打开。"""

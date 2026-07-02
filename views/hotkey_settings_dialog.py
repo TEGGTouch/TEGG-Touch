@@ -46,7 +46,7 @@ HOTKEY_COLORS = {
     'cursor':         '#0D9488',
     'collapse':       '#9333EA',
     'voice':          '#10B981',
-    'auto_center':    '#176F2C',
+    'auto_center':    '#F59E0B',
     'toggle_buttons': '#6B7280',
     'soft_keyboard':  '#0284C7',
     'pt_on':          '#6B7280',
@@ -574,9 +574,6 @@ class HotkeySettingsDialog(QDialog):
         v.addLayout(self._build_hotkey_row(fn, 'voice', labels, descriptions))
         v.addSpacing(10)
         v.addLayout(self._build_hotkey_row(fn, 'auto_center', labels, descriptions))
-        v.addSpacing(4)
-        v.addLayout(self._build_delay_slider(
-            fn, t("hotkey.auto_center_delay"), HOTKEY_COLORS['auto_center']))
         v.addSpacing(14)
         for field in hotkey_fields[4:]:
             v.addLayout(self._build_hotkey_row(fn, field, labels, descriptions))
@@ -2319,7 +2316,6 @@ class HotkeySettingsDialog(QDialog):
         data = {}
         for field, edit in self._key_edits.items():
             data[field] = edit.get_value()
-        data['auto_center_delay'] = self._ac_delay_slider.value()
         # 语言已在切换时即时保存，这里只保留当前值
         data['language'] = self._selected_lang
         # 光标配色 (用户在 cursor 页改动的 buffer)
@@ -2351,7 +2347,6 @@ class HotkeySettingsDialog(QDialog):
                 widget = self._key_edits[field]
                 widget.tags = [p.strip() for p in str(default).split("+") if p.strip()]
                 widget._build_tags()
-        self._ac_delay_slider.setValue(DEFAULT_HOTKEYS.get('auto_center_delay', 1500))
         # 通知主窗口重置透明度和运行工具栏位置
         self.defaults_reset.emit()
 

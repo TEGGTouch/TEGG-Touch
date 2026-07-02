@@ -96,6 +96,7 @@ class RunController(QObject):
     request_toggle_voice = pyqtSignal()
     request_toggle_buttons = pyqtSignal()
     request_toggle_auto_center = pyqtSignal()
+    request_toggle_ai = pyqtSignal()
     request_soft_keyboard = pyqtSignal()
     passthrough_changed = pyqtSignal(str)   # 'pt_on' | 'pt_off' | 'pt_block'
     cursor_on_ui = pyqtSignal(bool)         # 每帧: 光标是否在 UI 元素上
@@ -556,7 +557,7 @@ class RunController(QObject):
             self.request_soft_keyboard.emit()
 
         if _debounced('auto_center', hk.get('auto_center', 'f6')):
-            self.request_toggle_auto_center.emit()
+            self.request_toggle_ai.emit()
 
         # 收起/展开 (默认 F4)
         if _debounced('collapse', hk.get('collapse', 'f4')):
