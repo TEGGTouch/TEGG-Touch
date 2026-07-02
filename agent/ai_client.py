@@ -51,13 +51,14 @@ class MiniMaxClient:
 
     # ── 对话 ────────────────────────────────────────────────────
     def chat(self, messages: list, tools: list | None = None,
-             system: str | None = None) -> dict:
+             system: str | None = None, thinking: dict | None = None) -> dict:
         """调一次 messages.create, 返回归一化结果。
 
         Args:
             messages: Anthropic 格式消息列表 (role + content)
             tools:    工具定义列表 (None = 不带工具)
             system:   系统提示
+            thinking: M3 思考开关, 如 {"type": "adaptive"} 开思考; None = 不带(默认关)
 
         Returns:
             {
@@ -80,6 +81,8 @@ class MiniMaxClient:
             kwargs["system"] = system
         if tools:
             kwargs["tools"] = tools
+        if thinking:
+            kwargs["thinking"] = thinking
 
         try:
             resp = self._client.messages.create(**kwargs)
