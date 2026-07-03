@@ -187,6 +187,7 @@ class RunController(QObject):
 
         # 语音引擎（延迟创建，仅在配置启用时）
         self._voice_engine = None
+        self._voice_suppressed = False   # True=正在对AI助手语音输入, 暂停游戏语音指令
 
     def reload_hotkeys(self):
         """重新加载快捷键配置"""
@@ -1759,6 +1760,9 @@ class RunController(QObject):
     def _on_voice_command(self, phrase: str, keys: str, action: str, latency_ms: int = 0):
         """语音指令识别回调 → 触发按键 (支持宏)"""
         if not self._active or not keys:
+            return
+        # 语音输入捕获中 (用户在对 AI 助手说话): 压制游戏语音指令, 别把话当指令触发
+        if getattr(self, "_voice_suppressed", False):
             return
         # agent 待确认时: 语音接管为"只认确认/取消", 其它指令一律忽略; 处理完自动恢复
         from agent import safety

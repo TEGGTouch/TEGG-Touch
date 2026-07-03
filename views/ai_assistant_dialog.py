@@ -422,6 +422,21 @@ class AIAssistantDialog(QDialog):
                 pass
         self._thread.ask(text)
 
+    def submit_text(self, text: str) -> bool:
+        """程序化提交一条消息 (语音输入用): 等同用户打字并回车。忙时返回 False。"""
+        text = (text or "").strip()
+        if not text or self._busy:
+            return False
+        self._input.clear()
+        self._append_user(text)
+        if callable(self._on_before_send):
+            try:
+                self._on_before_send()
+            except Exception:
+                pass
+        self._thread.ask(text)
+        return True
+
     def _on_reply(self, text: str):
         self._append_assistant(text)
 

@@ -64,6 +64,8 @@ class OverlayWindow(QGraphicsView):
         self._ai_open = False       # AI 面板逻辑开关 (最小化还原时据此重新显示)
         self._agent_thread = None   # AI 配置助手线程 (惰性创建, 跨窗口开关保留会话)
         self._confirm_popup = None  # 执行确认独立弹窗 (惰性创建)
+        self._voice_wake = None     # 常驻唤醒引擎 (唤醒词「蛋挞」→ 自由听写 → 发给 agent)
+        self._voice_input_popup = None  # 「正在听…」小窗 (惰性创建)
 
         # ── 窗口属性 ──
         self.setWindowTitle(f"{t('app.title')} v{APP_VERSION}")
@@ -1202,6 +1204,74 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.set_ai_state(False)
         self._run_toolbar.set_ai_state(False)
 
+    # ── 语音输入 (唤醒词「蛋挞」→ 自由听写 → 发给 agent) ──
+    def _start_voice_wake(self):
+        """启动常驻唤醒引擎 (编辑/运行都监听「蛋挞」)。未配置/依赖缺失则静默跳过。"""
+        try:
+            from core import agent_settings
+            s = agent_settings.load_agent_settings()
+            if not s.get("voice_wake_enabled") or not s.get("asr_api_key"):
+                return
+            if self._voice_wake is None:
+                from agent.voice_wake import VoiceWakeEngine
+                self._voice_wake = VoiceWakeEngine(self)
+                self._voice_wake.wake_detected.connect(self._on_wake_detected)
+                self._voice_wake.state_changed.connect(self._on_wake_state)
+                self._voice_wake.transcribed.connect(self._on_wake_transcribed)
+                self._voice_wake.error_occurred.connect(self._on_wake_error)
+            # 麦克风沿用当前方案的语音麦克风设置 (没有则系统默认)
+            cfg = self._scene.get_config() or {}
+            self._voice_wake.start(mic_device=cfg.get("voice_mic_device"))
+        except Exception as e:
+            logger.warning("启动语音唤醒失败: %s", e)
+
+    def _ensure_voice_popup(self):
+        if self._voice_input_popup is None:
+            from views.voice_input_popup import VoiceInputPopup
+            self._voice_input_popup = VoiceInputPopup(self)
+        return self._voice_input_popup
+
+    def _on_wake_detected(self):
+        """听到「蛋挞」: 压制运行态游戏语音指令 + 弹「正在听」小窗。"""
+        try:
+            self._run_controller._voice_suppressed = True
+        except Exception:
+            pass
+        self._ensure_voice_popup().show_listening()
+
+    def _on_wake_state(self, state: str):
+        if self._voice_input_popup is None:
+            return
+        if state == "recognizing":
+            self._voice_input_popup.show_recognizing()
+        elif state == "capturing":
+            self._voice_input_popup.show_listening()
+
+    def _on_wake_transcribed(self, text: str):
+        """转写完成: 关小窗 + 恢复游戏语音; 有内容则灌进 AI 面板自动发送。"""
+        if self._voice_input_popup is not None:
+            self._voice_input_popup.hide()
+        try:
+            self._run_controller._voice_suppressed = False
+        except Exception:
+            pass
+        text = (text or "").strip()
+        if not text:
+            return
+        if self._dlg_ai is None or not self._dlg_ai.isVisible():
+            self._open_ai_assistant()   # 没开就开
+        if self._dlg_ai is not None:
+            self._dlg_ai.submit_text(text)
+
+    def _on_wake_error(self, msg: str):
+        if self._voice_input_popup is not None:
+            self._voice_input_popup.hide()
+        try:
+            self._run_controller._voice_suppressed = False
+        except Exception:
+            pass
+        self._toast.show_toast(f"语音识别失败: {msg}")
+
     def _restore_ai_panel(self):
         """启动时: 若上次退出时面板是打开的, 自动恢复打开。"""
         try:
@@ -1570,6 +1640,7 @@ class OverlayWindow(QGraphicsView):
         if not getattr(self, '_ai_restored', False):
             self._ai_restored = True
             QTimer.singleShot(400, self._restore_ai_panel)
+            QTimer.singleShot(600, self._start_voice_wake)   # 常驻唤醒「蛋挞」
             self._register_abort_hotkey()
         # 每次显示都刷新截屏上下文 (句柄列表 + 蛋挞所在显示器)
         self._update_capture_context()
@@ -1618,6 +1689,12 @@ class OverlayWindow(QGraphicsView):
         self._dlg_voice = None
         self._dlg_hotkey = None
         self._dlg_ai = None
+        # 停止常驻唤醒引擎 (释放麦克风 + 线程)
+        if self._voice_wake is not None:
+            try:
+                self._voice_wake.stop()
+            except Exception:
+                pass
         # AI 助手线程: 等其跑完再退, 避免 QThread 在运行中被销毁
         if self._agent_thread is not None and self._agent_thread.isRunning():
             self._agent_thread.wait(3000)

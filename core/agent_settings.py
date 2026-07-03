@@ -37,6 +37,8 @@ AGENT_SETTINGS_FILE = os.path.join(APP_DIR, "settings", "agent.json")
 
 # api_key 环境变量覆盖名 (与 MiniMax 文档/SDK 习惯一致)
 ENV_API_KEY = "MINIMAX_API_KEY"
+# 自由听写 ASR 密钥环境变量 (SiliconFlow 硅基流动)
+ENV_ASR_KEY = "SILICONFLOW_API_KEY"
 
 # 国内站 Anthropic 兼容端点 (密钥不跨区; 海外站为 https://api.minimax.io/anthropic)
 DEFAULT_BASE_URL = "https://api.minimaxi.com/anthropic"
@@ -49,7 +51,13 @@ DEFAULT_AGENT_SETTINGS = {
     "use_openai_fallback": False,
     "auto_execute": False,
     "screenshot_enabled": True,   # 允许 agent 截屏看画面 (每次都会在面板告知; 可关)
-    "asr_backend": "whisper",
+    "asr_backend": "siliconflow",
+    # 自由听写 (对 AI 助手说话): SiliconFlow SenseVoice, 唤醒词「蛋挞」→ 录音 → 转文字 → 发 agent
+    "asr_api_key": "",                                   # SiliconFlow 密钥 (环境变量 SILICONFLOW_API_KEY 优先)
+    "asr_base_url": "https://api.siliconflow.cn/v1",
+    "asr_model": "FunAudioLLM/SenseVoiceSmall",
+    "voice_wake_enabled": True,                          # 是否常驻监听唤醒词 (类似 Hey Siri, 可关)
+    "wake_word": "蛋挞",
     "max_tokens": 1024,
     "temperature": 1.0,
     # AI 助手对话框的用户拖动位置/尺寸 (None=首次居中); 全局, 与 profile 无关
@@ -82,6 +90,10 @@ def load_agent_settings() -> dict:
     env_key = os.environ.get(ENV_API_KEY)
     if env_key:
         result["api_key"] = env_key.strip()
+    # 同理 ASR 密钥 (SiliconFlow)
+    env_asr = os.environ.get(ENV_ASR_KEY)
+    if env_asr:
+        result["asr_api_key"] = env_asr.strip()
 
     # temperature 夹到 MiniMax 合法区间 [0, 2]
     try:
