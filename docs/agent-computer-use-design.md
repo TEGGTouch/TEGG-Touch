@@ -1,10 +1,37 @@
 # TEGGTouch 蛋挞 — Agent 操作电脑（Computer Use）设计
 
-> 状态：**设计定稿，待开发**（分支 `feature/agent-integration`）。
-> 前置：`docs/agent-integration-design.md`（总纲）。本文聚焦"让 agent 真的操作电脑"这一块：
-> 分层执行、多步任务编排、分档确认。
->
-> 落地进度记忆见 memory `project_agent_integration`。
+> ⚠️ **状态（2026-07-03）：已实现并实测，随后【回退】——不再接入。代码作为存档保留，未来可捡回。**
+> 前置：`docs/agent-integration-design.md`（总纲）。落地进度记忆见 memory `project_agent_integration`。
+
+---
+
+## 0. 回退备忘（先读这里）
+
+**决定**：agent 收回到只做 **蛋挞配置 + 蛋挞执行（触发已配绑定）+ 看屏幕(capture_screen)**，**不再操作电脑**（不点屏幕上任意东西、不启动别的程序）。
+
+**为什么回退**：坐标视觉点击（L3）实测「大目标能点、小/相邻目标会偏」，可靠性不足以放心替残障用户操作；且多步编排容易把技术杂活（找 exe 路径等）甩回给用户，体验反而添堵。用户决定先把 agent 做扎实在蛋挞自己的地盘（配置 + 已配绑定触发）。
+
+**怎么关的（仅两处，改动小、可逆）**：
+- `agent/agent_thread.py`：`tools = build_config_tools()`（不再 `+ build_control_tools()`）；`MAX_TOOL_ROUNDS` 30→8。
+- `agent/agent_tools.py` `system_prompt()`：删掉整段「操作电脑」指引；职责改回两件事 + 边界声明「不直接操作电脑」。
+
+**存档保留、未接入的代码**（想重启该能力时捡这些）：
+- `agent/coords.py`（0-1000↔像素映射）
+- `agent/grounding_probe.py`（精度探针，可独立跑）
+- `agent/tool_layer.py`：`ControlTools.click_xy / scroll_xy`
+- `agent/agent_tools.py`：`build_control_tools()` / `COMPUTER_TOOLS` / `WAIT_TOOL` / computer_* dispatch 兜底桩
+- `agent/safety.py`：`is_dangerous()`（危险词）
+- `agent/agent_thread.py`：`_exec_computer / _do_wait / _computer_on_main / computer_requested`（信号+方法，休眠）
+- `views/overlay_window.py`：`_do_agent_computer / _exec_computer_action / _set_tegg_click_through`（休眠，`computer_requested` 已连但永不发射）
+- `agent/test_control_tools.py`（离线测试）
+
+**重新启用的步骤**（未来若要捡回）：
+1. `agent_thread._run_conversation`：`tools = build_config_tools() + build_control_tools()`。
+2. `agent_tools.system_prompt()`：把「操作电脑」段加回（本文档第 2.3/2.4、3、4 节是权威规则）。
+3. `MAX_TOOL_ROUNDS` 调回 ~30，确认 `_trim_history_images` 仍在（控上下文）。
+4. 其余休眠代码无需改动，接上即用。
+
+**下面第 1–8 节是当初的完整设计与实测教训，重启时照它做。**
 
 ---
 
@@ -43,6 +70,23 @@ agent 操作电脑时，按**可靠性从高到低**选路径，全部汇入同�
 - "帮我点开始游戏" → Steam 里没这绑定 → L3 坐标 + 确认
 
 > 防返工：控制工具签名带"意图描述 + 坐标"，以后接 L2 UIA 时 schema 不变（内部先试控件名命中，失败退坐标）。
+
+### 2.3 铁律：活是 agent 干，绝不把杂活甩回给用户
+
+服务对象是残障用户 —— **让用户去找 exe 路径、报 appid、自己点，是方向完全反了**（用户能自己做就不需要 agent）。故：
+
+- **绝不向用户索要技术细节**：文件/exe 路径、appid、窗口名、坐标等，一律 agent 自己截图看、自己找。
+- **优先"看"而非"问"**：需要辨别时先 `capture_screen` 看；看完仍有歧义，才问一个最短的**选择题**，且只问**用户偏好/决策**（如"哪一款游戏"），绝不问技术手段。
+- **一竿子做到底**：除非真被卡住或需用户拍板偏好，别停下来把活推回给用户。
+
+### 2.4 打开东西：先分目标类型，用对策略
+
+| 目标类型 | 正确策略 | 禁止 |
+|---|---|---|
+| **独立程序**（Steam/Chrome/微信） | 开始菜单搜名字（win→打名→回车，最通用免路径）；已配则 `app:名` | 让用户报路径 |
+| **某 app 内的内容**（Steam 游戏 / 一首歌 / 网页 / 某设置） | **操作那个 app 的界面**：打开 app → 截图看 → 在界面里找到（可用 app 自带搜索）→ 点它 → 点开始/播放/打开 | 用 exe/路径启动、问用户要路径/appid |
+
+> 教训（2026-07-03 实测）：模型曾试图用 exe 路径启动 Steam 里的游戏，找不到就问用户要 exe 路径 —— 典型的"甩活给用户"。根因是早期 prompt 把"app:/路径"当万能启动法，未区分"独立程序"与"app 内内容"。**app:/路径只适用于独立程序；app 内的内容必须靠看屏幕操作 UI。**
 
 ---
 

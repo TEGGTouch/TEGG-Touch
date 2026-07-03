@@ -1180,6 +1180,7 @@ class OverlayWindow(QGraphicsView):
                 self._agent_thread.config_changed.connect(self._on_agent_config_changed)
                 self._agent_thread.confirm_requested.connect(self._on_agent_confirm_requested)
                 self._agent_thread.execute_requested.connect(self._do_agent_trigger)
+                self._agent_thread.computer_requested.connect(self._do_agent_computer)
             from views.ai_assistant_dialog import AIAssistantDialog
             self._dlg_ai = AIAssistantDialog(self._agent_thread, self,
                                              on_before_send=self._flush_for_agent)
@@ -1271,6 +1272,92 @@ class OverlayWindow(QGraphicsView):
         finally:
             if self._agent_thread is not None:
                 self._agent_thread.resolve_execute(res)
+
+    def _do_agent_computer(self, payload: dict):
+        """主线程执行坐标操作 (computer use L3)。子线程经 computer_requested 触发,
+        结果 resolve_execute 回填 (复用 execute 通道)。"""
+        res = {"ok": False}
+        try:
+            res = self._exec_computer_action(payload)
+        except Exception as e:
+            logger.warning("agent 坐标执行失败 %s: %s", payload, e)
+            res = {"ok": False, "error": str(e)}
+        finally:
+            if self._agent_thread is not None:
+                self._agent_thread.resolve_execute(res)
+
+    def _exec_computer_action(self, payload: dict) -> dict:
+        """0-1000 归一坐标 → 蛋挞所在屏像素 → 临时全穿透蛋挞窗 → 点击/滚动/移动。
+        进运行态(PT_ON 全穿透)与标签路径一致; 临时穿透确保点击落到底层 app 而非蛋挞窗。"""
+        from PyQt6.QtWidgets import QApplication
+        from agent import coords
+        from agent.tool_layer import ControlTools
+
+        kind = payload.get("kind")
+        # 进运行态: 底层 app 为前景、蛋挞 PT_ON 全穿透 (与 _do_agent_trigger 一致)
+        try:
+            if self._current_mode == 'edit':
+                self.to_run()
+        except Exception as e:
+            logger.warning("坐标执行前切运行态失败: %s", e)
+
+        # 换算: 用蛋挞所在屏的真实几何 (与截屏同一块屏)
+        scr = self.screen() or QApplication.primaryScreen()
+        g = scr.geometry() if scr else None
+        if g:
+            region = (g.left(), g.top(), g.left() + g.width(), g.top() + g.height())
+            src_w, src_h = g.width(), g.height()
+        else:
+            region, src_w, src_h = None, 1920, 1080
+        px, py = coords.norm_to_pixel(payload.get("x", 0), payload.get("y", 0),
+                                      src_w, src_h, region)
+
+        # 临时让所有蛋挞顶层窗鼠标穿透 → 点击落到底层 app; 无论成败都恢复
+        saved = self._set_tegg_click_through(True)
+        try:
+            if kind == "computer_scroll":
+                res = ControlTools.scroll_xy(px, py, payload.get("direction", "down"),
+                                             payload.get("amount", 3))
+            elif kind == "computer_move":
+                res = ControlTools.move_mouse(px, py)
+            else:  # computer_click / computer_double_click
+                res = ControlTools.click_xy(px, py, payload.get("button", "left"),
+                                            double=(kind == "computer_double_click"))
+        finally:
+            self._set_tegg_click_through(False, saved)
+
+        res["px"], res["py"] = px, py
+        res.setdefault("ok", res.get("status") == "ok")
+        return res
+
+    def _set_tegg_click_through(self, on: bool, saved: dict | None = None) -> dict:
+        """临时把所有蛋挞顶层窗设/复原鼠标穿透 (WS_EX_TRANSPARENT), 使 agent 坐标点击
+        落到底层 app 而非蛋挞自己的窗口/工具栏/面板。
+        on=True: 置穿透, 返回 {hwnd: old_style} 供恢复; on=False: 用 saved 逐个还原。"""
+        import sys
+        if sys.platform != 'win32':
+            return {}
+        import ctypes
+        from PyQt6.QtWidgets import QApplication
+        GWL_EXSTYLE, WS_EX_TRANSPARENT = -20, 0x20
+        u = ctypes.windll.user32
+        if on:
+            snap = {}
+            for w in QApplication.topLevelWidgets():
+                try:
+                    h = int(w.winId())
+                    old = u.GetWindowLongW(h, GWL_EXSTYLE)
+                    snap[h] = old
+                    u.SetWindowLongW(h, GWL_EXSTYLE, old | WS_EX_TRANSPARENT)
+                except Exception:
+                    pass
+            return snap
+        for h, old in (saved or {}).items():
+            try:
+                u.SetWindowLongW(h, GWL_EXSTYLE, old)
+            except Exception:
+                pass
+        return {}
 
     def _open_hotkey_settings(self):
         """打开快捷键设置弹窗"""
