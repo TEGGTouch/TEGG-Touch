@@ -130,8 +130,7 @@ class _WakeThread(QThread):
                     hit = False
                     if rec.AcceptWaveform(data):
                         hit = self._wake in json.loads(rec.Result()).get("text", "")
-                    else:
-                        hit = self._wake in json.loads(rec.PartialResult()).get("partial", "")
+                    # 不用 PartialResult：小模型噪音误判率高，只在完整句子中确认唤醒词
                     if hit:
                         rec = vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE, grammar)
                         state = _ST_CAPTURE
@@ -150,12 +149,21 @@ class _WakeThread(QThread):
                     end = False
                     if speech and silence_ms >= _SILENCE_MS:
                         end = True
-                    elif cap_ms >= _MAX_CAPTURE_MS:
-                        end = True
+                    elif cap_ms >= _MAX_CAPTURE_MS and speech:
+                        end = True  # 超时只在有真实语音时才转写
                     elif not speech and cap_ms >= _LEAD_TIMEOUT_MS:
-                        # 唤醒后没说话 → 放弃, 回到常听
+                        # 唤醒后没说话，或超时无语音 → 放弃, 回到常听
                         state = _ST_LISTEN
                         self.transcribed.emit("")
+                        self.state_changed.emit(_ST_LISTEN)
+                        continue
+                    elif cap_ms >= _MAX_CAPTURE_MS and not speech:
+                        # 最长录音超时但始终无语音 → 丢弃，回到常听
+                        while not q.empty():
+                            try: q.get_nowait()
+                            except queue.Empty: break
+                        rec = vosk.KaldiRecognizer(model, VOICE_SAMPLE_RATE, grammar)
+                        state = _ST_LISTEN
                         self.state_changed.emit(_ST_LISTEN)
                         continue
                     if end:

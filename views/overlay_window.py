@@ -1187,6 +1187,7 @@ class OverlayWindow(QGraphicsView):
             self._dlg_ai = AIAssistantDialog(self._agent_thread, self,
                                              on_before_send=self._flush_for_agent)
             self._dlg_ai.collapsed.connect(self._on_ai_collapsed)
+            self._dlg_ai.voice_wake_toggle_requested.connect(self._on_dlg_voice_wake_toggle)
             self._dlg_ai.ensurePolished()
             self._update_capture_context()   # 把新建的 AI 面板句柄纳入截屏排除列表
 
@@ -1498,6 +1499,17 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar._position_toolbar()
         logger.info("Defaults reset: transparency=%.2f, grid=%d, scene_scale=%.2f, run_toolbar position cleared",
                      default_opacity, DEFAULT_GRID_SIZE, DEFAULT_SCENE_SCALE)
+
+    def _on_dlg_voice_wake_toggle(self, enabled: bool):
+        """AI 对话框内蛋挞唤醒词 toggle: 按开关启停引擎 (设置持久化已由对话框完成)。"""
+        if enabled:
+            self._start_voice_wake()
+        elif self._voice_wake is not None:
+            try:
+                self._voice_wake.stop()
+            except Exception:
+                pass
+            self._voice_wake = None
 
     def _on_ai_settings_saved(self):
         """AI 配置保存后: 重启语音唤醒引擎 (让新密钥 / voice_wake_enabled 即时生效)。"""

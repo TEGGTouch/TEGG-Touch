@@ -181,6 +181,7 @@ class AIAssistantDialog(QDialog):
     PAD = 18
 
     collapsed = pyqtSignal()   # 用户点「收起」时发出 (供工具栏同步按钮态)
+    voice_wake_toggle_requested = pyqtSignal(bool)   # 蛋挞唤醒词开关变化 (供 OverlayWindow 启停引擎)
 
     def __init__(self, agent_thread, parent=None, on_before_send=None):
         super().__init__(parent)
@@ -225,6 +226,9 @@ class AIAssistantDialog(QDialog):
             self._append_system("你好！我是蛋挞助手，可以帮你改按键配置。例如："
                                 "“把第一个按钮的 hover 改成 ctrl+f4”、“把透明度调到 0.5”。")
         self._ready = True
+        # 蛋挞唤醒词按钮初始配色 (反映持久化的 voice_wake_enabled)
+        self._refresh_wake_btn(
+            bool(agent_settings.load_agent_settings().get("voice_wake_enabled", True)))
 
     # ── UI ──
     def _init_ui(self):
@@ -331,6 +335,13 @@ class AIAssistantDialog(QDialog):
         self._stop_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)   # 防回车/空格误触发急停
         self._stop_btn.setToolTip("立即中断 agent 的所有执行 (全局热键: Ctrl+Alt+空格)")
         self._stop_btn.clicked.connect(self._on_stop)
+        # 蛋挞唤醒词 toggle (急停左侧; 绿=启用, 灰=关闭) — icon 沿用工具栏语音按钮话筒
+        self._wake_btn = _IconTextBtn("", "\U0001F3A4", "蛋挞",
+                                      "#2A2A2A", "#3A3A3A", height=36)
+        self._wake_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._wake_btn.setToolTip("蛋挞唤醒词 — 开启后说「蛋挞」即可语音输入给 AI")
+        self._wake_btn.clicked.connect(self._on_toggle_wake)
+        status_row.addWidget(self._wake_btn)
         status_row.addWidget(self._stop_btn)
         root.addLayout(status_row)
 
@@ -376,6 +387,23 @@ class AIAssistantDialog(QDialog):
         self._thread.tool_ran.connect(self._on_tool_ran)
         self._thread.error.connect(self._on_error)
         self._thread.busy.connect(self._set_busy)
+
+    # ── 蛋挞唤醒词开关 ──
+    def _refresh_wake_btn(self, enabled: bool):
+        """按开关状态刷新按钮配色: 绿=启用 (同工具栏语音开), 灰=关闭。"""
+        if enabled:
+            self._wake_btn.set_colors("#176F2C", "#1E8E38")
+        else:
+            self._wake_btn.set_colors("#2A2A2A", "#3A3A3A")
+
+    def _on_toggle_wake(self):
+        """翻转 voice_wake_enabled: 持久化 + 刷新配色 + 通知 OverlayWindow 启停引擎。"""
+        s = agent_settings.load_agent_settings()
+        new_val = not s.get("voice_wake_enabled", True)
+        s["voice_wake_enabled"] = new_val
+        agent_settings.save_agent_settings(s)
+        self._refresh_wake_btn(new_val)
+        self.voice_wake_toggle_requested.emit(new_val)
 
     # ── 急停 (确认弹窗由 OverlayWindow 独立管理) ──
     def _on_stop(self):

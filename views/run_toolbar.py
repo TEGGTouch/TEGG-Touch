@@ -229,6 +229,8 @@ class RunToolbar(QWidget):
         row.addWidget(_VSep())
 
         # 停止 [F12] (#6E1E1E)
+        row.addWidget(_VSep())
+
         stop_btn = _IconTextBtn(
             "\uE71A", "\u25A0",
             t("run.stop", key=_K_STOP),
