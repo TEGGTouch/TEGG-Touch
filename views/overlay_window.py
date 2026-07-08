@@ -1441,6 +1441,7 @@ class OverlayWindow(QGraphicsView):
         dialog.settings_saved.connect(self._on_settings_saved)
         dialog.defaults_reset.connect(self._on_defaults_reset)
         dialog.language_changed.connect(self._on_language_changed)
+        dialog.ai_settings_saved.connect(self._on_ai_settings_saved)
         self._dlg_hotkey = dialog
         dialog.show()
 
@@ -1497,6 +1498,17 @@ class OverlayWindow(QGraphicsView):
         self._run_toolbar._position_toolbar()
         logger.info("Defaults reset: transparency=%.2f, grid=%d, scene_scale=%.2f, run_toolbar position cleared",
                      default_opacity, DEFAULT_GRID_SIZE, DEFAULT_SCENE_SCALE)
+
+    def _on_ai_settings_saved(self):
+        """AI 配置保存后: 重启语音唤醒引擎 (让新密钥 / voice_wake_enabled 即时生效)。"""
+        if self._voice_wake is not None:
+            try:
+                self._voice_wake.stop()
+            except Exception:
+                pass
+            self._voice_wake = None
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(300, self._start_voice_wake)
 
     def _on_language_changed(self, lang):
         """语言切换后刷新 UI"""

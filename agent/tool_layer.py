@@ -913,7 +913,7 @@ class ConfigTools:
             "type": btn_type,
             "name": auto_name,
             "x": float(x), "y": float(y),
-            "w": float(w) if w else gs, "h": float(h) if h else gs,
+            "w": max(gs, float(w)) if w else gs, "h": max(gs, float(h)) if h else gs,
         }
         if btn_type == "center_band":            # 回中带默认零延迟 (与 UI 新建一致)
             btn["hover_delay"] = 0
@@ -973,12 +973,16 @@ class ConfigTools:
         if not (0 <= index < len(buttons)):
             return {"ok": False, "error": f"index 越界: {index} (共 {len(buttons)} 个)"}
         b = buttons[index]
+        gs = c.get("grid_size") or 100
         before = {k: b.get(k) for k in ("x", "y", "w", "h")}
         changed = {}
         try:
             for k, v in (("x", x), ("y", y), ("w", w), ("h", h)):
                 if v is not None:
-                    b[k] = float(v)
+                    val = float(v)
+                    if k in ("w", "h"):
+                        val = max(gs, val)
+                    b[k] = val
                     changed[k] = b[k]
         except (TypeError, ValueError):
             return {"ok": False, "error": "x/y/w/h 须为数字"}

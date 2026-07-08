@@ -42,6 +42,22 @@ def norm_to_image_xy(nx: float, ny: float, img_w: int, img_h: int) -> tuple[int,
             int(round(_frac(ny) * img_h)))
 
 
+def norm_to_center_origin(nx: float, ny: float, src_w: int, src_h: int,
+                          region: tuple | None = None) -> tuple[int, int]:
+    """0-1000 grounding 坐标 → TEGGTouch 中心原点像素 (直接用于 add_button / set_button_geometry 的 x/y)。
+
+    原点 = 蛋挞所在屏的中心; x 右正 y 下正, 单位像素。
+    """
+    abs_x, abs_y = norm_to_pixel(nx, ny, src_w, src_h, region)
+    if region:
+        cx = (region[0] + region[2]) / 2.0
+        cy = (region[1] + region[3]) / 2.0
+    else:
+        cx = src_w / 2.0
+        cy = src_h / 2.0
+    return (int(round(abs_x - cx)), int(round(abs_y - cy)))
+
+
 def pixel_to_norm(px: float, py: float, src_w: int, src_h: int,
                   region: tuple | None = None) -> tuple[int, int]:
     """屏幕绝对像素 → 0–1000 归一坐标 (反向; 校准/回填时用)。"""

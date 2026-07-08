@@ -213,7 +213,9 @@ def build_config_tools() -> list:
                            "gp_stick 摇杆 / gp_wheel 方向盘)。方向盘是单例, 已存在则直接返回它 "
                            "(等于'已启用')。用户说'启用/添加方向盘(摇杆)'就用它, 不要让用户手动加。"
                            "加摇杆时: 用户要'右摇杆'就传 stick_id='R', '左摇杆'传 'L'。"
-                           "x/y 屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下), 省略放中心 (0,0)。",
+                           "位置: 优先用 norm_x/norm_y (0-1000, capture_screen 看到的截图坐标, "
+                           "自动换算成中心原点像素); 或直接传 x/y 屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下)。"
+                           "省略位置则放屏幕中心 (0,0)。",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -223,7 +225,12 @@ def build_config_tools() -> list:
                     "btn_name": {"type": "string"},
                     "stick_id": {"type": "string", "enum": ["L", "R"],
                                  "description": "仅 gp_stick: L=左摇杆 R=右摇杆"},
-                    "x": {"type": "number"}, "y": {"type": "number"},
+                    "norm_x": {"type": "number",
+                               "description": "0-1000 归一横坐标 (截图 grounding 给出, 左0右1000); 与 x 二选一"},
+                    "norm_y": {"type": "number",
+                               "description": "0-1000 归一纵坐标 (截图 grounding 给出, 上0下1000); 与 y 二选一"},
+                    "x": {"type": "number", "description": "中心原点像素横坐标 (有 norm_x 时忽略)"},
+                    "y": {"type": "number", "description": "中心原点像素纵坐标 (有 norm_y 时忽略)"},
                     "w": {"type": "number"}, "h": {"type": "number"},
                     "name": {"type": "string"},
                 },
@@ -257,13 +264,19 @@ def build_config_tools() -> list:
         },
         {
             "name": "set_button_geometry",
-            "description": "绝对设置某元素的位置/尺寸 (x/y 屏幕中心原点坐标: x<0左 x>0右 y<0上 y>0下; "
-                           "w/h 尺寸; 任意子集)。含方向盘。要精确落位或改大小时用它。",
+            "description": "绝对设置某元素的位置/尺寸。位置: 优先用 norm_x/norm_y (0-1000 截图坐标, "
+                           "自动换算); 或直接传 x/y 屏幕中心原点坐标 (x<0左 x>0右 y<0上 y>0下)。"
+                           "w/h 尺寸可单独传。含方向盘。",
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "index": {"type": "integer"},
-                    "x": {"type": "number"}, "y": {"type": "number"},
+                    "norm_x": {"type": "number",
+                               "description": "0-1000 归一横坐标 (截图 grounding 给出); 与 x 二选一"},
+                    "norm_y": {"type": "number",
+                               "description": "0-1000 归一纵坐标 (截图 grounding 给出); 与 y 二选一"},
+                    "x": {"type": "number", "description": "中心原点像素横坐标 (有 norm_x 时忽略)"},
+                    "y": {"type": "number", "description": "中心原点像素纵坐标 (有 norm_y 时忽略)"},
                     "w": {"type": "number"}, "h": {"type": "number"},
                     "name": {"type": "string"},
                 },
@@ -299,11 +312,14 @@ def build_config_tools() -> list:
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "value": {"type": "string", "description": "要执行的标签, 如 'ctrl+f4' / 'gp:A' / 'xmacro:连招'"},
+                    "value": {"type": "string", "description": "要执行的标签, 如 'ctrl+f4' / 'gp:A' / 'xmacro:连招' / 'mouse:left'"},
                     "action": {"type": "string", "enum": ["click", "press", "release"],
                                "description": "click=按一下(默认) / press=按住 / release=松开"},
                     "target": {"type": "string",
                                "description": "被操作对象的名字(如按钮名'茶叶蛋'/'手柄键01'), 用于给用户看的确认文案; 知道就填"},
+                    "button_index": {"type": "integer",
+                                     "description": "当 value 是 mouse:left/right/middle 且需要点在某个已配按钮的屏幕位置时, "
+                                                    "传该按钮的 index; 执行前会自动把光标移到那个按钮的坐标。省略则在当前光标位置触发。"},
                 },
                 "required": ["value"],
             },
@@ -398,6 +414,28 @@ def build_control_tools() -> list:
     ]
 
 
+def _resolve_norm_xy(a: dict) -> tuple[float | None, float | None]:
+    """把 norm_x/norm_y (0-1000 截图坐标) 换算成中心原点像素 (x/y)。
+    若 a 里没有 norm_x/norm_y, 返回 (None, None), 调用方继续用原始 x/y。"""
+    nx, ny = a.get("norm_x"), a.get("norm_y")
+    if nx is None and ny is None:
+        return None, None
+    from agent import coords, screen_capture
+    region = screen_capture._ctx.get("region")
+    if region:
+        src_w, src_h = region[2] - region[0], region[3] - region[1]
+    else:
+        src_w, src_h = 1920, 1080
+    # 缺一个维度就用中心 (500); 两个都有时一次调用即可
+    px, py = coords.norm_to_center_origin(
+        nx if nx is not None else 500,
+        ny if ny is not None else 500,
+        src_w, src_h, region,
+    )
+    return (float(px) if nx is not None else None,
+            float(py) if ny is not None else None)
+
+
 def _capture_screen(_a: dict) -> dict:
     """截屏 (受 screenshot_enabled 开关约束; 结果含 base64 图, 由 AgentThread 转成图像回填)。"""
     from core import agent_settings
@@ -436,13 +474,17 @@ _DISPATCH = {
     # 按钮增删
     "add_button": lambda a: ConfigTools.add_button(
         a.get("btn_type", "normal"), a.get("btn_name"),
-        a.get("x", 0), a.get("y", 0), a.get("w"), a.get("h"),
-        a.get("stick_id"), a.get("name")),
+        *((lambda nx, ny: (nx if nx is not None else a.get("x", 0),
+                           ny if ny is not None else a.get("y", 0)))(*_resolve_norm_xy(a))),
+        a.get("w"), a.get("h"), a.get("stick_id"), a.get("name")),
     "remove_button": lambda a: ConfigTools.remove_button(int(a["index"]), a.get("name")),
     "move_button": lambda a: ConfigTools.move_button(
         int(a["index"]), a["direction"], a.get("cells", 1), a.get("name")),
     "set_button_geometry": lambda a: ConfigTools.set_button_geometry(
-        int(a["index"]), a.get("x"), a.get("y"), a.get("w"), a.get("h"), a.get("name")),
+        int(a["index"]),
+        *((lambda nx, ny: (nx if nx is not None else a.get("x"),
+                           ny if ny is not None else a.get("y")))(*_resolve_norm_xy(a))),
+        a.get("w"), a.get("h"), a.get("name")),
     "set_element_field": lambda a: ConfigTools.set_element_field(
         int(a["index"]), a["field"], a["value"], a.get("name")),
     # 多模态
@@ -545,7 +587,10 @@ def system_prompt() -> str:
 你的职责 (两件事, 按用户的话选合适的工具):
 1. **改配置**: 读取/修改蛋挞的按键绑定与参数 (profile)。
 2. **用蛋挞的能力操作**: 触发用户**已配好**的按钮/宏 (run_action / run_sequence)。
-你**不直接操作电脑** —— 不点屏幕上的任意东西、不启动别的程序; 只做蛋挞自己的配置, 和已配绑定的触发。看屏幕仅用于辅助判断, 不据此去点。
+你的边界 = 蛋挞自身的按钮与配置:
+- **配置**: 增/改/删蛋挞的按钮、绑定、参数。
+- **执行**: 触发蛋挞**已配好的**按钮绑定 (run_action / run_sequence)。
+不直接操作蛋挞盒子外的东西 —— 不启动没在 apps 池里的程序, 不做任何游离于按钮配置之外的系统动作。
 
 看屏幕: 用户让你看屏幕、或你需要看画面才能判断时, 调 capture_screen (截图不含蛋挞自己的覆盖层, 每次都会告知用户), 然后据图回答。别凭空猜屏幕内容。
 
@@ -607,7 +652,9 @@ def system_prompt() -> str:
 - 播放暂停 / 切歌 → play/pause media / next track / previous track
 - 锁屏 → win+l ; 显示桌面 → win+d ; 切窗口 → alt+tab ; 关闭当前窗口 → alt+f4
 - 启动程序 → app:名
-提醒: 蛋挞只能"发出这些标签对应的输入", **不能看屏幕去点任意位置**(那类操作已下线)。用户要点屏幕上某个具体按钮/图标而没有对应绑定时, 直说做不了, 别假装能点。
+**用户要点屏幕上某个固定位置 (如游戏里的"开始游戏"按钮)?** 标准流程:
+① capture_screen 看清目标在哪 → ② 在目标位置 add_button(btn_type='normal', norm_x=..., norm_y=..., lclick='mouse:left') 新建一个按钮盖上去, 尺寸覆盖目标 → ③ run_action(value='mouse:left', button_index=<新按钮 index>, target='目标名') 触发它。
+全程只用蛋挞的按钮能力, 不超出边界。norm_x/norm_y 直接从截图里读坐标 (0-1000), 工具会自动换算。
 
 按钮可改字段: {', '.join(_FIELD_LIST)}
 (name=按钮显示名, hover=悬停触发键, lclick/rclick/mclick=左/右/中键, wheelup/wheeldown=滚轮, xbutton1/2=鼠标侧键, hover_delay/hover_release_delay=毫秒延迟, hover_mode=trigger|toggle)

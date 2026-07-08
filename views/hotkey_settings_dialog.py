@@ -277,12 +277,96 @@ class _FlowKeys(QWidget):
         super().resizeEvent(event)
 
 
+class _ConnTestWorker:
+    """连接测试后台线程封装 (QThread)。"""
+
+    def __init__(self, service: str, key: str, parent=None):
+        from PyQt6.QtCore import QThread
+        self._service = service  # 'minimax' | 'siliconflow'
+        self._key = key
+        self._thread = QThread(parent)
+        self._thread.run = self._run
+        self._result = None
+        self._callbacks: list = []
+
+    def start(self, callback):
+        self._callbacks.append(callback)
+        if not self._thread.isRunning():
+            self._thread.finished.connect(self._on_done)
+            self._thread.start()
+
+    def _run(self):
+        try:
+            if self._service == 'minimax':
+                self._result = self._test_minimax()
+            else:
+                self._result = self._test_siliconflow()
+        except Exception as e:
+            self._result = ('error', str(e))
+
+    def _test_minimax(self):
+        from core.agent_settings import DEFAULT_BASE_URL, DEFAULT_MODEL
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=self._key, base_url=DEFAULT_BASE_URL)
+            client.messages.create(
+                model=DEFAULT_MODEL,
+                max_tokens=8,
+                messages=[{"role": "user", "content": "hi"}])
+            return ('ok', '')
+        except Exception as e:
+            msg = str(e).lower()
+            if '401' in msg or 'auth' in msg or 'invalid' in msg or 'unauthorized' in msg:
+                return ('fail', '')
+            return ('error', str(e))
+
+    def _test_siliconflow(self):
+        import io
+        import wave
+        import struct
+        import requests
+        from core.agent_settings import DEFAULT_AGENT_SETTINGS
+        # 生成 0.3s 静音 WAV
+        buf = io.BytesIO()
+        with wave.open(buf, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            frames = struct.pack('<' + 'h' * 4800, *([0] * 4800))
+            wf.writeframes(frames)
+        wav_bytes = buf.getvalue()
+        url = DEFAULT_AGENT_SETTINGS['asr_base_url'] + '/audio/transcriptions'
+        try:
+            resp = requests.post(
+                url,
+                headers={'Authorization': f'Bearer {self._key}'},
+                files={'file': ('test.wav', wav_bytes, 'audio/wav')},
+                data={'model': DEFAULT_AGENT_SETTINGS['asr_model']},
+                timeout=12)
+            if resp.status_code == 200:
+                return ('ok', '')
+            elif resp.status_code in (401, 403):
+                return ('fail', '')
+            else:
+                return ('error', f'HTTP {resp.status_code}')
+        except Exception as e:
+            return ('error', str(e))
+
+    def _on_done(self):
+        for cb in self._callbacks:
+            try:
+                cb(self._result)
+            except Exception:
+                pass
+
+
 class HotkeySettingsDialog(QDialog):
     """快捷键设置弹窗 — 双栏布局"""
 
     settings_saved = pyqtSignal()
     defaults_reset = pyqtSignal()   # 重置默认时发出，通知主窗口重置透明度和工具栏位置
     language_changed = pyqtSignal(str)
+    ai_settings_saved = pyqtSignal()
 
     SIDEBAR_W = 130
     CONTENT_W = 400                                # 中间内容区 (快捷键/语言页)
@@ -443,6 +527,10 @@ class HotkeySettingsDialog(QDialog):
         self._button_color_page = self._build_button_color_page(fn)
         self._stack.addWidget(self._button_color_page)
 
+        # 页 6: AI 配置
+        self._ai_config_page = self._build_ai_config_page(fn)
+        self._stack.addWidget(self._ai_config_page)
+
         ll.addWidget(self._stack)
 
         columns.addWidget(self._left_wrapper)
@@ -509,6 +597,7 @@ class HotkeySettingsDialog(QDialog):
             (t("hotkey.menu_hotkeys"), 0),
             (t("hotkey.menu_cursor"), 1),
             (t("hotkey.menu_button_colors"), 5),
+            (t("hotkey.menu_ai_config"), 6),
             (t("hotkey.menu_language"), 2),
             (t("hotkey.menu_log"), 3),
             (t("hotkey.menu_about"), 4),
@@ -544,9 +633,9 @@ class HotkeySettingsDialog(QDialog):
         # 仅快捷键页(0)显示右侧键位面板; 其余页隐藏 right_wrapper → 两列
         if hasattr(self, '_right_wrapper'):
             self._right_wrapper.setVisible(idx == 0)
-        # 光标(1) / 按钮配色(5) / 日志(3) / 关于(4) 页拉宽 left_wrapper 和 stack
+        # 光标(1) / 按钮配色(5) / 日志(3) / 关于(4) / AI配置(6) 页拉宽 left_wrapper 和 stack
         if hasattr(self, '_left_wrapper'):
-            if idx in (1, 3, 4, 5):
+            if idx in (1, 3, 4, 5, 6):
                 self._stack.setFixedWidth(self.WIDE_CONTENT_W)
                 self._left_wrapper.setFixedWidth(self.WIDE_LEFT_W)
             else:
@@ -1291,6 +1380,304 @@ class HotkeySettingsDialog(QDialog):
         if btn:
             self._apply_color_btn_style(btn, base)
         self._refresh_bc_preview(g)
+
+    # ── AI 配置页 ──
+
+    def _build_ai_config_page(self, fn):
+        from core.agent_settings import load_agent_settings, ENV_API_KEY, ENV_ASR_KEY
+        import os
+
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        v = QVBoxLayout(page)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+
+        tip = QLabel(t("hotkey.ai_config_tip"))
+        tip.setFont(_make_font(fn, 13))
+        tip.setStyleSheet("color: #888; background: transparent;")
+        tip.setWordWrap(True)
+        v.addWidget(tip)
+        v.addSpacing(20)
+
+        settings = load_agent_settings()
+        mm_env = bool(os.environ.get(ENV_API_KEY))
+        sf_env = bool(os.environ.get(ENV_ASR_KEY))
+
+        # 两卡片并排
+        cols = QHBoxLayout()
+        cols.setSpacing(24)
+
+        mm_card, self._ai_mm_key, self._ai_mm_status, self._ai_mm_test_btn = \
+            self._build_ai_card(fn, t("hotkey.ai_minimax_title"),
+                                settings.get("api_key", ""), mm_env, 'minimax')
+        sf_card, self._ai_sf_key, self._ai_sf_status, self._ai_sf_test_btn = \
+            self._build_ai_card(fn, t("hotkey.ai_sf_title"),
+                                settings.get("asr_api_key", ""), sf_env, 'siliconflow')
+        cols.addWidget(mm_card, 1)
+        cols.addWidget(sf_card, 1)
+        v.addLayout(cols)
+
+        # 语音唤醒开关 (在 SiliconFlow 卡片下方)
+        v.addSpacing(16)
+        wake_row = QHBoxLayout()
+        self._ai_wake_cb = QPushButton()
+        self._ai_wake_cb.setCheckable(True)
+        self._ai_wake_cb.setChecked(bool(settings.get("voice_wake_enabled", True)))
+        self._ai_wake_cb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._ai_wake_cb.setFixedHeight(34)
+        self._ai_wake_cb.setFont(_make_font(fn, 13, bold=True))
+        self._ai_wake_cb.clicked.connect(self._refresh_ai_wake_btn)
+        wake_row.addWidget(self._ai_wake_cb)
+        wake_row.addSpacing(12)
+        wake_hint = QLabel(t("hotkey.ai_voice_wake_hint"))
+        wake_hint.setFont(_make_font(fn, 12))
+        wake_hint.setStyleSheet("color: #777; background: transparent;")
+        wake_hint.setWordWrap(True)
+        wake_row.addWidget(wake_hint, 1)
+        v.addLayout(wake_row)
+        self._refresh_ai_wake_btn()
+
+        v.addStretch()
+
+        # 底部保存按钮 + 状态
+        bottom = QHBoxLayout()
+        bottom.addStretch()
+        self._ai_save_status = QLabel("")
+        self._ai_save_status.setFont(_make_font(fn, 13))
+        self._ai_save_status.setStyleSheet("color: #4ADE80; background: transparent;")
+        bottom.addWidget(self._ai_save_status)
+        bottom.addSpacing(12)
+        save_btn = QPushButton(t("hotkey.ai_save_btn"))
+        save_btn.setFixedHeight(40)
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        save_btn.setFont(_make_font(fn, 14, bold=True))
+        save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_CYBER}; color: #FFF;
+                border: none; border-radius: 6px; padding: 0 24px;
+            }}
+            QPushButton:hover {{ background: {C_CYBER_H}; }}
+        """)
+        save_btn.clicked.connect(self._on_ai_save)
+        bottom.addWidget(save_btn)
+        v.addLayout(bottom)
+
+        return page
+
+    def _build_ai_card(self, fn, title_text: str, current_key: str,
+                       from_env: bool, service: str):
+        """构建 AI 服务卡片, 返回 (card, key_edit, status_lbl, test_btn)。"""
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(20, 18, 20, 18)
+        cl.setSpacing(12)
+
+        # 标题 + 状态灯
+        title_row = QHBoxLayout()
+        title_lbl = QLabel(title_text)
+        title_lbl.setFont(_make_font(fn, 15, bold=True))
+        title_lbl.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        title_row.addWidget(title_lbl)
+        title_row.addStretch()
+        status_lbl = QLabel(
+            t("hotkey.ai_status_ok") if (current_key or from_env)
+            else t("hotkey.ai_status_empty"))
+        status_lbl.setFont(_make_font(fn, 12))
+        status_lbl.setStyleSheet(
+            f"color: {'#4ADE80' if (current_key or from_env) else '#888'}; "
+            f"background: transparent; border: none;")
+        title_row.addWidget(status_lbl)
+        cl.addLayout(title_row)
+
+        # 密钥输入框行
+        key_row = QHBoxLayout()
+        key_lbl = QLabel(t("hotkey.ai_key_label"))
+        key_lbl.setFont(_make_font(fn, 13))
+        key_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        key_row.addWidget(key_lbl)
+        key_row.addSpacing(8)
+
+        key_edit = QLineEdit()
+        key_edit.setFont(_make_font(fn, 12))
+        key_edit.setFixedHeight(34)
+        if from_env:
+            key_edit.setPlaceholderText(t("hotkey.ai_key_env_placeholder"))
+            key_edit.setEnabled(False)
+            key_edit.setStyleSheet(f"""
+                QLineEdit {{
+                    background: #2A2A2A; color: #666;
+                    border: 1px solid #3A3A3A; border-radius: 4px;
+                    padding: 0 8px; font-family: monospace;
+                }}
+            """)
+        else:
+            key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            key_edit.setPlaceholderText(t("hotkey.ai_key_placeholder"))
+            if current_key:
+                key_edit.setText(current_key)
+            key_edit.setStyleSheet(f"""
+                QLineEdit {{
+                    background: {C_INPUT_BG}; color: #DDD;
+                    border: 1px solid #555; border-radius: 4px;
+                    padding: 0 8px; font-family: monospace;
+                }}
+                QLineEdit:focus {{ border-color: {C_CYBER_H}; }}
+            """)
+            # 眼睛按钮切明文
+            key_edit.textChanged.connect(
+                lambda text, sl=status_lbl: self._ai_update_status(sl, bool(text.strip())))
+        key_row.addWidget(key_edit, 1)
+
+        if not from_env:
+            eye_btn = QPushButton("👁")
+            eye_btn.setFixedSize(34, 34)
+            eye_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            eye_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C_GRAY}; border: none; border-radius: 4px;
+                    font-size: 16px;
+                }}
+                QPushButton:hover {{ background: {C_GRAY_H}; }}
+            """)
+            eye_btn.clicked.connect(lambda _, e=key_edit: self._toggle_key_visibility(e))
+            key_row.addWidget(eye_btn)
+
+        cl.addLayout(key_row)
+
+        # 测试连接按钮
+        test_btn = QPushButton(t("hotkey.ai_test_btn"))
+        test_btn.setFixedHeight(34)
+        test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        test_btn.setFont(_make_font(fn, 13, bold=True))
+        test_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+            QPushButton:disabled {{ background: #2A2A2A; color: #666; }}
+        """)
+        test_btn.clicked.connect(
+            lambda _, svc=service, ke=key_edit, tb=test_btn, sl=status_lbl:
+            self._on_ai_test(svc, ke, tb, sl))
+        cl.addWidget(test_btn)
+
+        cl.addStretch()
+        return card, key_edit, status_lbl, test_btn
+
+    def _toggle_key_visibility(self, edit: QLineEdit):
+        if edit.echoMode() == QLineEdit.EchoMode.Password:
+            edit.setEchoMode(QLineEdit.EchoMode.Normal)
+        else:
+            edit.setEchoMode(QLineEdit.EchoMode.Password)
+
+    def _ai_update_status(self, lbl: QLabel, has_key: bool):
+        if has_key:
+            lbl.setText(t("hotkey.ai_status_ok"))
+            lbl.setStyleSheet("color: #4ADE80; background: transparent; border: none;")
+        else:
+            lbl.setText(t("hotkey.ai_status_empty"))
+            lbl.setStyleSheet("color: #888; background: transparent; border: none;")
+
+    def _refresh_ai_wake_btn(self):
+        checked = self._ai_wake_cb.isChecked()
+        if checked:
+            self._ai_wake_cb.setText("✓ " + t("hotkey.ai_voice_wake"))
+            self._ai_wake_cb.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C_CYBER}; color: #FFF;
+                    border: none; border-radius: 6px; padding: 0 14px; text-align: left;
+                }}
+                QPushButton:hover {{ background: {C_CYBER_H}; }}
+            """)
+        else:
+            self._ai_wake_cb.setText(t("hotkey.ai_voice_wake"))
+            self._ai_wake_cb.setStyleSheet(f"""
+                QPushButton {{
+                    background: #404040; color: #AAA;
+                    border: none; border-radius: 6px; padding: 0 14px; text-align: left;
+                }}
+                QPushButton:hover {{ background: #505050; }}
+            """)
+
+    def _on_ai_test(self, service: str, key_edit: QLineEdit, test_btn: QPushButton,
+                    status_lbl: QLabel):
+        key = key_edit.text().strip()
+        if not key:
+            return
+        test_btn.setEnabled(False)
+        test_btn.setText(t("hotkey.ai_test_testing"))
+
+        worker = _ConnTestWorker(service, key, parent=self)
+
+        def _done(result):
+            kind, _msg = result
+            if kind == 'ok':
+                test_btn.setText(t("hotkey.ai_test_ok"))
+                test_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: #166534; color: #4ADE80;
+                        border: none; border-radius: 6px;
+                    }}
+                    QPushButton:disabled {{ background: #166534; color: #4ADE80; }}
+                """)
+                status_lbl.setText(t("hotkey.ai_status_ok"))
+                status_lbl.setStyleSheet("color: #4ADE80; background: transparent; border: none;")
+            elif kind == 'fail':
+                test_btn.setText(t("hotkey.ai_test_fail"))
+                test_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: #7F1D1D; color: #FCA5A5;
+                        border: none; border-radius: 6px;
+                    }}
+                    QPushButton:disabled {{ background: #7F1D1D; color: #FCA5A5; }}
+                """)
+            else:
+                test_btn.setText(t("hotkey.ai_test_error"))
+                test_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background: #78350F; color: #FCD34D;
+                        border: none; border-radius: 6px;
+                    }}
+                    QPushButton:disabled {{ background: #78350F; color: #FCD34D; }}
+                """)
+
+        # 保持 worker 引用防 GC
+        if not hasattr(self, '_ai_workers'):
+            self._ai_workers = []
+        self._ai_workers.append(worker)
+        worker.start(_done)
+
+    def _on_ai_save(self):
+        from core.agent_settings import save_agent_settings, ENV_API_KEY, ENV_ASR_KEY
+        import os
+
+        data = {}
+        # MiniMax key (若非环境变量提供)
+        if not os.environ.get(ENV_API_KEY):
+            key = self._ai_mm_key.text().strip()
+            if key:
+                data['api_key'] = key
+        # SiliconFlow key
+        if not os.environ.get(ENV_ASR_KEY):
+            asr_key = self._ai_sf_key.text().strip()
+            if asr_key:
+                data['asr_api_key'] = asr_key
+        # 语音唤醒开关
+        data['voice_wake_enabled'] = self._ai_wake_cb.isChecked()
+
+        save_agent_settings(data)
+
+        self._ai_save_status.setText(
+            t("hotkey.ai_save_ok") + " — " + t("hotkey.ai_save_ok_hint"))
+
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(3000, lambda: self._ai_save_status.setText(""))
+
+        self.ai_settings_saved.emit()
 
     # ── 方向盘卡片 (并入按钮配色页第二行) ──
 

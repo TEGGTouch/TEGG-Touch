@@ -188,6 +188,12 @@ class AgentThread(QThread):
         if safety.is_aborted():
             return {"ok": False, "error": "已急停, 未执行"}
 
+        # run_action + button_index: 先把光标 warp 到该按钮的屏幕位置, 再触发
+        if name != "run_sequence":
+            btn_idx = inp.get("button_index")
+            if btn_idx is not None:
+                self._warp_to_button(int(btn_idx))
+
         # 真执行: 走主线程 RunController._smart_trigger (权威执行器: 进运行态 + 焦点校正 +
         # recenter 用真实几何)。延迟在本子线程 sleep, 每个触发 marshal 到主线程。
         import time
@@ -214,6 +220,38 @@ class AgentThread(QThread):
             note = "⚠ 没有目标窗口(先点一下游戏/目标程序), 输入可能发到别处"
         return {"ok": ok, "executed": True, "value": label,
                 "steps": results, "error": (None if ok else "部分步骤失败"), "note": note}
+
+    def _warp_to_button(self, index: int) -> None:
+        """把光标移到 index 号按钮的屏幕中心位置 (run_action + button_index 用)。
+        复用 computer_move 通道 (🟢 只移不点, 无确认); 失败静默 — 后续触发仍在当前光标位置。"""
+        try:
+            from agent import coords, screen_capture
+            from agent.tool_layer import ConfigTools
+            s = ConfigTools.summarize_profile()
+            btn = next((b for b in s.get("buttons", []) if b.get("index") == index), None)
+            if btn is None:
+                logger.warning("_warp_to_button: index=%s 不存在", index)
+                return
+            pos = btn.get("pos") or {}
+            bx, by = float(pos.get("x") or 0), float(pos.get("y") or 0)
+            bw, bh = float(pos.get("w") or 100), float(pos.get("h") or 100)
+            # center-origin + 半宽半高 → 按钮视觉中心 (center-origin 本身已是中心)
+            # 换算: 中心原点 → 绝对像素
+            region = screen_capture._ctx.get("region")
+            if region:
+                screen_cx = (region[0] + region[2]) / 2.0
+                screen_cy = (region[1] + region[3]) / 2.0
+                src_w = region[2] - region[0]
+                src_h = region[3] - region[1]
+            else:
+                src_w, src_h = 1920, 1080
+                screen_cx, screen_cy = src_w / 2.0, src_h / 2.0
+            abs_x = int(round(bx + screen_cx))
+            abs_y = int(round(by + screen_cy))
+            nx, ny = coords.pixel_to_norm(abs_x, abs_y, src_w, src_h, region)
+            self._computer_on_main({"kind": "computer_move", "x": nx, "y": ny})
+        except Exception as e:
+            logger.warning("_warp_to_button index=%s 失败: %s", index, e)
 
     # ── 操作电脑 (L3 坐标) 的安全闸: 预演校验 → 分档确认 → 主线程穿透执行 ──
     _COMPUTER_CN = {"computer_click": "点击", "computer_double_click": "双击",
@@ -372,7 +410,9 @@ class AgentThread(QThread):
                                     "media_type": out.get("media_type", "image/jpeg"),
                                     "data": out["data"]}},
                         {"type": "text",
-                         "text": f"屏幕截图 {out.get('w')}x{out.get('h')} (已排除蛋挞覆盖层)"},
+                         "text": (f"屏幕截图 {out.get('w')}x{out.get('h')} (已排除蛋挞覆盖层); "
+                                  f"原始屏幕 {out.get('src_w')}x{out.get('src_h')}。"
+                                  f"用 norm_x/norm_y (0-1000) 指定截图中的位置即可, 无需自己换算。")},
                     ]
                 else:
                     content = agent_tools._json(out)
