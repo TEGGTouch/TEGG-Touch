@@ -300,6 +300,10 @@ class OverlayWindow(QGraphicsView):
 
     def to_run(self):
         """切换到运行模式"""
+        # 幂等: 已在运行态则跳过, 避免重复 save_config/install_wheel_hook/重启语音引擎
+        # (重复进入会孤儿化语音引擎并泄漏虚拟盘符 → 语音失灵)
+        if self._current_mode == 'run':
+            return
         # 关闭所有编辑模式弹窗
         from PyQt6.QtWidgets import QDialog
         for dlg in self.findChildren(QDialog):
@@ -522,6 +526,11 @@ class OverlayWindow(QGraphicsView):
                 it.setVisible(False)
         else:
             self._scene._update_ring_visibility()
+        # 隐藏按键时连带隐藏自绘光标: 没有可瞄准的 UI, 且全穿透游戏(鼠标视角)里
+        # 光标会被游戏每帧拽回屏幕中心 → 表现为黑光标锁中心抖动。
+        # 恢复按键时按用户的光标偏好(F3, cursor_visible)还原。
+        if self._current_mode == 'run':
+            self._set_drawn_cursor(False if self._buttons_hidden else self._cursor_visible)
         self._run_toolbar.update_buttons_visibility(self._buttons_hidden)
         self._persist_view_state('buttons_hidden', self._buttons_hidden)
 
