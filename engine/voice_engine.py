@@ -27,6 +27,11 @@ from core.constants import VOICE_MODELS_DIR, VOICE_SAMPLE_RATE, VOICE_CHUNK_SIZE
 
 logger = logging.getLogger(__name__)
 
+# 同进程内已为某父目录建立的虚拟盘符映射: parent_dir -> drive (如 "D:\\自己...": "Z:")
+# 复用它 → 每次启动语音不再吃掉一个新盘符。盘符池仅 Z→Q 共 10 个,
+# 若不复用, 反复"停止→改指令→运行"十来次就会耗尽 → 模型加载失败 → 语音整体失灵。
+_dos_device_cache: dict = {}
+
 
 def _safe_model_path(path: str) -> str:
     """确保模型路径对 vosk C 库可用 — 解决中文/非 ASCII 路径问题。
@@ -61,6 +66,12 @@ def _safe_model_path(path: str) -> str:
     # 策略 3: 虚拟盘符 (subst)
     parent = os.path.dirname(path)
     basename = os.path.basename(path)
+
+    # 复用同进程内已为该目录建立的映射, 防止盘符泄漏 (语音失灵主因)
+    cached = _dos_device_cache.get(parent)
+    if cached and os.path.exists(f"{cached}\\"):
+        return f"{cached}\\{basename}"
+
     for letter in 'ZYXWVUTSRQ':
         drive = f"{letter}:"
         if os.path.exists(f"{drive}\\"):
@@ -68,6 +79,7 @@ def _safe_model_path(path: str) -> str:
         try:
             ret = ctypes.windll.kernel32.DefineDosDeviceW(0, drive, parent)
             if ret:
+                _dos_device_cache[parent] = drive
                 result = f"{drive}\\{basename}"
                 logger.info(f"Virtual drive {drive} -> {parent}")
                 # 注册清理（进程退出时移除映射）

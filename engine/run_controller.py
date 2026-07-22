@@ -1739,6 +1739,9 @@ class RunController(QObject):
 
         try:
             from engine.voice_engine import VoiceEngine
+            # 幂等: 先停掉可能仍在运行的旧引擎, 否则新引擎覆盖旧引用会留下
+            # 孤儿线程 + 麦克风流 + 虚拟盘符 (反复重启语音会累积泄漏)
+            self._stop_voice()
             self._voice_engine = VoiceEngine(self)
             self._voice_engine.command_recognized.connect(self._on_voice_command)
             self._voice_engine.error_occurred.connect(
