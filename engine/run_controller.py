@@ -27,6 +27,7 @@ from core.config_manager import load_hotkeys
 from core.constants import (
     UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC,
     GP_KEY_PREFIX, APP_PREFIX,
+    BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL,
 )
 from core.system_tuning import input_poll_interval_ms
 from engine.gamepad_engine import GamepadEngine
@@ -70,6 +71,33 @@ _WASD_SECTOR_DIRS = (
 _WASD_DIR_FIELD = {
     'up': 'wasd_up', 'down': 'wasd_down', 'left': 'wasd_left', 'right': 'wasd_right',
 }
+
+
+def _config_uses_gamepad(obj) -> bool:
+    """递归扫描 profile 配置, 判断是否存在「任何会驱动虚拟手柄的触发」。
+
+    命中任一即 True:
+      - 任意字符串里含 gp: 触发 token (按键/语音/摇杆&方向盘的鼠标动作字段/宏步骤 key)
+      - 存在方向盘 (gp_wheel) —— easy 模式走 RT、advanced 模式走左摇杆+LT/RT, 都吃手柄
+      - 存在 analog 模式摇杆 (gp_stick) —— 输出摇杆轴
+    刻意不命中:
+      - wasd 模式摇杆 (只发键盘方向键); 除非它的鼠标动作字段里配了 gp: (由字符串扫描兜住)
+
+    用途: 只有 True 时才允许创建/驱动虚拟手柄, 避免纯键盘/语音 profile 也插一个
+    虚拟 Xbox 手柄导致游戏误切到手柄映射。
+    """
+    if isinstance(obj, str):
+        return any(p.strip().startswith(GP_KEY_PREFIX) for p in obj.split('+'))
+    if isinstance(obj, dict):
+        t = obj.get('type') or obj.get('btn_type')
+        if t == BTN_TYPE_GP_WHEEL:
+            return True
+        if t == BTN_TYPE_GP_STICK and obj.get('mode', 'analog') != 'wasd':
+            return True
+        return any(_config_uses_gamepad(v) for v in obj.values())
+    if isinstance(obj, (list, tuple)):
+        return any(_config_uses_gamepad(v) for v in obj)
+    return False
 
 
 def _wheel_occupied_fields(data) -> set:
@@ -131,6 +159,11 @@ class RunController(QObject):
 
         # 防抖标志
         self._debounce = {}
+
+        # 本次运行是否启用虚拟手柄: start() 时按当前 profile 现扫 (见 _profile_uses_gamepad)。
+        # 仅当当前 profile 存在手柄触发时才为 True; 为 False 时所有 GamepadEngine.get()
+        # 一律跳过, 绝不创建虚拟手柄 (修复: 纯键盘/语音 profile 进游戏被误映射成手柄)。
+        self._gp_enabled = False
 
         # 摇杆状态机 — 任一帧只允许一个 active 摇杆 (跨摇杆切换会让旧的释放 + SetCursorPos 跳到新圆心)
         self._active_gp_stick = None  # GpStickItem | None
@@ -230,10 +263,30 @@ class RunController(QObject):
         self._easy_steer_tick = None
         self._easy_brake_state = False
         self._easy_visual_steer = 0.0
+
+        # 现扫当前 profile: 有手柄触发才启用虚拟手柄 (方案1, 每次进运行模式重扫一遍,
+        # 天然跟随 profile 切换/编辑, 无需维护刷新点)。
+        self._gp_enabled = self._profile_uses_gamepad()
+        if self._gp_enabled:
+            # 预建虚拟手柄, 让游戏进入运行模式即能识别到手柄 (而非等首次触发才插)
+            GamepadEngine.get()
+        else:
+            # 纯键盘/语音 profile: 拔掉上一个手柄 profile 可能残留的虚拟手柄,
+            # 否则切到键盘 profile 后游戏仍看到那个虚拟手柄 → 继续误映射。
+            GamepadEngine.shutdown_singleton()
+
         self._timer.start()
 
         # 启动语音引擎
         self._start_voice(voice_config)
+
+    def _profile_uses_gamepad(self) -> bool:
+        """现扫当前 profile 配置, 判断是否存在任何手柄触发。见 _config_uses_gamepad。"""
+        try:
+            config = self._scene.get_config() if hasattr(self._scene, 'get_config') else {}
+        except Exception:
+            return False
+        return _config_uses_gamepad(config or {})
 
     def stop(self):
         """退出运行模式"""
@@ -273,7 +326,7 @@ class RunController(QObject):
             self._release_gp_wheel()
         # 释放轻松操控模式残留的 A/D/S
         self._release_easy_state()
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.release_all()
 
@@ -683,7 +736,7 @@ class RunController(QObject):
 
     def _gp_delayed_release(self, label: str):
         """vgamepad 状态机延迟释放 — 给 'click' 动作用, 确保 press 帧能被驱动看到"""
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.release_button(label)
             gp.flush()
@@ -757,7 +810,7 @@ class RunController(QObject):
         # 注意: vgamepad 是状态机不是事件队列 — press 后立即 release 净变化为 0,
         # 驱动收不到 button down 事件。'click' 必须 press → flush → 延迟 → release → flush
         if gp_labels:
-            gp = GamepadEngine.get()
+            gp = GamepadEngine.get() if self._gp_enabled else None
             if gp is not None:
                 for label in gp_labels:
                     if action == 'p':
@@ -941,7 +994,7 @@ class RunController(QObject):
             self._poll_stick_mouse_actions(self._active_gp_stick)
 
         # 帧末 flush
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.flush()
 
@@ -959,7 +1012,7 @@ class RunController(QObject):
         stick.set_stick_visual('active', 0.0, 0.0)
         if getattr(stick.data, 'mode', 'analog') == 'wasd':
             return
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.set_stick(stick.data.stick_id, 0.0, 0.0)
 
@@ -984,7 +1037,7 @@ class RunController(QObject):
                 self._apply_wasd_dirs(stick, set())
             stick.set_stick_visual('idle', 0.0, 0.0)
             if getattr(stick.data, 'mode', 'analog') != 'wasd':
-                gp = GamepadEngine.get()
+                gp = GamepadEngine.get() if self._gp_enabled else None
                 if gp is not None:
                     gp.set_stick(stick.data.stick_id, 0.0, 0.0)
         self._stick_wasd_held = set()
@@ -1096,7 +1149,7 @@ class RunController(QObject):
 
         # 6) 视觉 + 引擎赋值 (引擎 Y 翻转: 屏幕 down 正 → 手柄 up 正)
         stick.set_stick_visual(state, vis_x, vis_y, sticking_progress=sticking_progress)
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.set_stick(stick.data.stick_id,
                          max(-1.0, min(1.0, out_x)),
@@ -1188,7 +1241,7 @@ class RunController(QObject):
         if (wheel is not None
                 and getattr(wheel.data, 'control_mode', 'advanced') == 'easy'):
             self._poll_gp_wheel_easy(wheel, screen_pt)
-            gp = GamepadEngine.get()
+            gp = GamepadEngine.get() if self._gp_enabled else None
             if gp is not None:
                 gp.flush()
             return
@@ -1225,7 +1278,7 @@ class RunController(QObject):
                 self._release_gp_wheel()
             self._activate_gp_wheel(wheel)
 
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.flush()
 
@@ -1315,7 +1368,7 @@ class RunController(QObject):
         self._easy_last_y = my
         # 上移 (dy<0) → RT 增加
         self._easy_rt = max(0.0, min(1.0, self._easy_rt - dy * sens))
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.set_trigger("R", self._easy_rt)
 
@@ -1378,7 +1431,7 @@ class RunController(QObject):
         self._easy_last_mx = None
         self._easy_smooth_dx = 0.0
         self._easy_visual_steer = 0.0
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.set_trigger("R", 0.0)
 
@@ -1400,7 +1453,7 @@ class RunController(QObject):
         self._wheel_rmb_was_down = False
         wheel.set_visual(0.0, self._wheel_lt, self._wheel_rt, active=True)
         self._sync_wheel_visual(wheel)
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.set_stick("L", 0.0, 0.0)
             gp.set_trigger("L", self._wheel_lt)
@@ -1434,7 +1487,7 @@ class RunController(QObject):
             except Exception:
                 pass
         self._wheel_mouse_holding.clear()
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.set_stick("L", 0.0, 0.0)
             gp.set_trigger("L", 0.0)
@@ -1461,7 +1514,7 @@ class RunController(QObject):
         if wheel.data.sensitivity_curve == 'square':
             val = math.copysign(val * val, val)
         self._wheel_steering_last = val
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.set_stick("L", val, 0.0)
 
@@ -1595,7 +1648,7 @@ class RunController(QObject):
         final_lt = max(self._wheel_lt, override_lt)
         final_rt = max(self._wheel_rt, override_rt)
 
-        gp = GamepadEngine.get()
+        gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.set_trigger("L", final_lt)
             gp.set_trigger("R", final_rt)
@@ -1632,7 +1685,7 @@ class RunController(QObject):
             setattr(self, val_attr, cur)
             handled = True
         if handled:
-            gp = GamepadEngine.get()
+            gp = GamepadEngine.get() if self._gp_enabled else None
             if gp is not None:
                 gp.set_trigger("L", self._wheel_lt)
                 gp.set_trigger("R", self._wheel_rt)
