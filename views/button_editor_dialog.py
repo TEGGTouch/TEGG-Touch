@@ -105,10 +105,13 @@ class TagInput(QWidget):
 
     focusChanged = pyqtSignal(object)
 
-    def __init__(self, initial_value="", accent_color="#F59E0B", parent=None):
+    def __init__(self, initial_value="", accent_color="#F59E0B", parent=None,
+                 tag_text_color="#FFF"):
         super().__init__(parent)
         self.tags: list[str] = []
         self._accent = accent_color
+        # 标签文字色 — 默认白字 (沿用各弹窗现状); 琥珀等浅底色可传深色提高对比
+        self._tag_text = tag_text_color
         self._focused = False
 
         self.setFixedHeight(42)
@@ -145,7 +148,7 @@ class TagInput(QWidget):
             lbl.setFont(_make_font(fn, 12, bold=True))
             lbl.setStyleSheet(f"""
                 QLabel {{
-                    background: {self._accent}; color: #FFF;
+                    background: {self._accent}; color: {self._tag_text};
                     padding: 2px 6px; border-radius: 4px;
                 }}
             """)

@@ -225,6 +225,40 @@ def _migrate_to_xmacros(result: dict) -> bool:
 
 # ─── 内部工具 ────────────────────────────────────────────────
 
+def _validate_key_remaps(raw) -> list:
+    """校验键盘映射列表, 返回干净的 [{src, dst, mode, enabled}]。
+
+    src 重复时后者覆盖前者 (钩子表本来就是 dict, 这里提前去重让 UI 看到的
+    条数和实际生效条数一致)。
+    """
+    if not isinstance(raw, list):
+        return []
+    out = []
+    seen = {}
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        src = str(item.get('src', '') or '').strip()
+        dst = str(item.get('dst', '') or '').strip()
+        if not src or not dst:
+            continue
+        mode = item.get('mode', 'hold')
+        if mode not in ('hold', 'click', 'toggle'):
+            mode = 'hold'
+        entry = {
+            'src': src,
+            'dst': dst,
+            'mode': mode,
+            'enabled': bool(item.get('enabled', True)),
+        }
+        if src in seen:
+            out[seen[src]] = entry
+        else:
+            seen[src] = len(out)
+            out.append(entry)
+    return out
+
+
 def _validate_geometry(geo: str) -> str:
     try:
         wh = geo.split('+')[0].split('x')
@@ -374,6 +408,10 @@ def load_config_from_file(filepath: str) -> dict:
         'xmacros': [],
         # 可启动应用池 (per-profile): [{name, path}]; 加载/导入/复制时丢弃 path 失效项
         'apps': [],
+        # 键盘映射 (per-profile): [{src, dst, mode, enabled}]
+        # src=物理键名; dst=动作字符串 (同 _smart_trigger 语法); mode=hold|click|toggle
+        'key_remaps': [],
+        'key_remap_enabled': True,
         # 模拟模式 (per-profile): 'keyboard' | 'gamepad'; None 表示该 profile 未设置, 调用方回退
         'sim_mode': None,
         # 外观 (per-profile, None 表示该 profile 未设置, 调用方回退全局 hotkeys 做一次性迁移)
@@ -490,6 +528,10 @@ def load_config_from_file(filepath: str) -> dict:
         # 应用池: 加载即校验, 丢弃本机 path 失效的条目 (导入/复制 同理)
         from core.app_scanner import validate_apps
         result['apps'] = validate_apps(data.get('apps', []))
+        # 键盘映射: 逐条校验, 丢弃缺 src/dst 的脏数据 (钩子拿到空 src 会静默失效)
+        result['key_remaps'] = _validate_key_remaps(data.get('key_remaps', []))
+        kre = data.get('key_remap_enabled', True)
+        result['key_remap_enabled'] = bool(kre) if isinstance(kre, bool) else True
         # 模拟模式 (per-profile)
         raw_sim = data.get('sim_mode')
         if raw_sim in ('keyboard', 'gamepad'):
@@ -564,6 +606,8 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
                          gp_macros=None,
                          xmacros=None,
                          apps=None,
+                         key_remaps=None,
+                         key_remap_enabled=None,
                          sim_mode=None,
                          wheel_style=None,
                          cursor_styles=None,
@@ -681,6 +725,12 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         data['xmacros'] = xmacros
     if apps is not None:
         data['apps'] = apps
+
+    # 键盘映射 (per-profile)
+    if key_remaps is not None:
+        data['key_remaps'] = _validate_key_remaps(key_remaps)
+    if key_remap_enabled is not None:
+        data['key_remap_enabled'] = bool(key_remap_enabled)
 
     # 模拟模式 (per-profile)
     if sim_mode in ('keyboard', 'gamepad'):

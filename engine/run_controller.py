@@ -24,6 +24,7 @@ from core.input_engine import (
     mouse_press, mouse_release, mouse_wheel,
 )
 from core.config_manager import load_hotkeys
+from core import keyboard_hook
 from core.constants import (
     UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC,
     GP_KEY_PREFIX, APP_PREFIX,
@@ -130,6 +131,7 @@ class RunController(QObject):
     voice_command_triggered = pyqtSignal(str, str, str)  # phrase, keys, action
     request_toggle_collapse = pyqtSignal()  # F10: 折叠/展开运行工具栏
     request_toggle_cursor = pyqtSignal()    # F3: 切换自绘光标显隐
+    key_remap_state_changed = pyqtSignal(bool)  # 键盘映射总开关状态
 
     def __init__(self, scene, window):
         super().__init__()
@@ -275,10 +277,46 @@ class RunController(QObject):
             # 否则切到键盘 profile 后游戏仍看到那个虚拟手柄 → 继续误映射。
             GamepadEngine.shutdown_singleton()
 
+        # 键盘映射: 现扫当前 profile 的 key_remaps, 有才装钩子
+        self._start_key_remap()
+
         self._timer.start()
 
         # 启动语音引擎
         self._start_voice(voice_config)
+
+    def _start_key_remap(self):
+        """载入当前 profile 的键盘映射并装钩子 (无映射则不装, 零开销)。"""
+        try:
+            config = self._scene.get_config() if hasattr(self._scene, 'get_config') else {}
+        except Exception:
+            config = {}
+        remaps = (config or {}).get('key_remaps') or []
+        enabled = (config or {}).get('key_remap_enabled', True)
+        # 蛋挞自己的快捷键 (F2~F12) 不允许被映射吞掉 —— 否则一旦映射了 F12,
+        # 就再也退不出运行模式, 也关不掉映射本身。
+        reserved = {str(v).strip().lower() for k, v in (self._hotkeys or {}).items()
+                    if isinstance(v, str) and v.strip()}
+        kept = []
+        for r in remaps:
+            src = str((r or {}).get('src', '')).strip().lower()
+            if src and src in reserved:
+                logger.warning("键盘映射: '%s' 与蛋挞快捷键冲突, 本次运行忽略该条", src)
+                continue
+            kept.append(r)
+        keyboard_hook.set_remaps(kept, enabled)
+        if keyboard_hook.has_remaps():
+            keyboard_hook.install_hook()
+            self.key_remap_state_changed.emit(keyboard_hook.is_enabled())
+        else:
+            keyboard_hook.uninstall_hook()
+
+    def toggle_key_remap(self):
+        """总开关 (F2 / 运行工具栏)。无映射时不做任何事。"""
+        if not keyboard_hook.has_remaps():
+            return
+        keyboard_hook.set_enabled(not keyboard_hook.is_enabled())
+        self.key_remap_state_changed.emit(keyboard_hook.is_enabled())
 
     def _profile_uses_gamepad(self) -> bool:
         """现扫当前 profile 配置, 判断是否存在任何手柄触发。见 _config_uses_gamepad。"""
@@ -294,6 +332,8 @@ class RunController(QObject):
         self._timer.stop()
         self._ac_start_time = None
         self._stop_voice()
+        # 键盘映射: 先卸钩子 (内部会释放按下中的目标), 再走下面的通用兜底释放
+        keyboard_hook.uninstall_hook()
         self._active_key_count = 0
         # 释放当前 hover
         if self._poll_hover_item is not None:
@@ -358,6 +398,10 @@ class RunController(QObject):
         self._check_hotkeys(hk)
         if not self._active:  # stop 可能在 _check_hotkeys 中被调用
             return
+
+        # 1b. 键盘映射的慢路径事件 (宏/手柄/鼠标/应用/回中; 纯键盘键已在钩子内直发)
+        for dst, act in keyboard_hook.poll_events():
+            self._smart_trigger(dst, act)
 
         # 2. 处理滚轮事件
         wheel_events = poll_wheel_events()
@@ -597,6 +641,10 @@ class RunController(QObject):
         # 光标显隐 (默认 F3)
         if _debounced('cursor', hk.get('cursor', 'f3')):
             self.request_toggle_cursor.emit()
+
+        # 键盘映射总开关 (默认 F2) — 临时要打字时一键放行
+        if _debounced('key_remap', hk.get('key_remap', 'f2')):
+            self.toggle_key_remap()
 
         # 穿透模式快捷键
         if _debounced('pt_on', hk.get('pt_on', 'f9')):

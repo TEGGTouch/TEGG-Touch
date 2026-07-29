@@ -60,6 +60,7 @@ class OverlayWindow(QGraphicsView):
         self._dlg_profile = None
         self._dlg_voice = None
         self._dlg_hotkey = None
+        self._dlg_key_remap = None
 
         # ── 窗口属性 ──
         self.setWindowTitle(f"{t('app.title')} v{APP_VERSION}")
@@ -121,6 +122,7 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.add_center_band_clicked.connect(self._on_add_center_band)
         self._edit_toolbar.voice_clicked.connect(self._open_voice_settings)
         self._edit_toolbar.keyboard_clicked.connect(self._toggle_soft_keyboard)
+        self._edit_toolbar.key_remap_clicked.connect(self._open_key_remap)
         self._edit_toolbar.run_clicked.connect(self.to_run)
         self._edit_toolbar.wheel_clicked.connect(self._on_toggle_wheel)
         self._edit_toolbar.opacity_changed.connect(self._on_opacity_changed)
@@ -1128,6 +1130,43 @@ class OverlayWindow(QGraphicsView):
             self._scene.save_config()
             logger.info("Voice settings saved: %d commands", len(result.get('voice_commands', [])))
 
+    def _open_key_remap(self):
+        """打开键盘映射弹窗 (per-profile)"""
+        if self._dlg_key_remap and self._dlg_key_remap.isVisible():
+            self._dlg_key_remap.raise_()
+            self._dlg_key_remap.activateWindow()
+            return
+        from views.key_remap_dialog import KeyRemapDialog
+        config = self._scene.get_config() or {}
+        dialog = KeyRemapDialog(
+            key_remaps=config.get('key_remaps', []),
+            enabled=config.get('key_remap_enabled', True),
+            parent=self,
+            xmacros=config.get('xmacros', []),
+            apps=config.get('apps', []),
+            recenter_targets=self._scene.list_recenter_targets(),
+        )
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(lambda: self._on_dialog_destroyed('_dlg_key_remap'))
+        dialog.xmacros_changed.connect(self._on_xmacros_changed)
+        dialog.apps_changed.connect(self._on_apps_changed)
+        dialog.settings_saved.connect(self._on_key_remap_saved)
+        self._dlg_key_remap = dialog
+        dialog.show()
+
+    def _on_key_remap_saved(self):
+        """键盘映射保存 → 写入当前 profile"""
+        dialog = self.sender()
+        if not (dialog and hasattr(dialog, 'get_result')):
+            return
+        result = dialog.get_result()
+        config = self._scene.get_config()
+        if config is not None:
+            config['key_remaps'] = result.get('key_remaps', [])
+            config['key_remap_enabled'] = result.get('key_remap_enabled', True)
+        self._scene.save_config()
+        logger.info("Key remaps saved: %d entries", len(result.get('key_remaps', [])))
+
     def _open_hotkey_settings(self):
         """打开快捷键设置弹窗"""
         if self._dlg_hotkey and self._dlg_hotkey.isVisible():
@@ -1320,6 +1359,7 @@ class OverlayWindow(QGraphicsView):
         self._dlg_profile = None
         self._dlg_voice = None
         self._dlg_hotkey = None
+        self._dlg_key_remap = None
         self._edit_toolbar.close()
         self._run_toolbar.close()
         self._virtual_keyboard.close()

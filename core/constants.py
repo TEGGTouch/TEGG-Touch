@@ -32,6 +32,7 @@ def get_app_title():
 
 # === 默认快捷键映射 ===
 DEFAULT_HOTKEYS = {
+    "key_remap":      "f2",
     "cursor":         "f3",
     "collapse":       "f4",
     "voice":          "f5",
@@ -75,6 +76,7 @@ DEFAULT_WHEEL_STYLE = {
 def get_hotkey_labels():
     """返回本地化的快捷键显示名称（运行时求值）。"""
     return {
+        "key_remap":      t("hotkey.key_remap"),
         "cursor":         t("hotkey.cursor"),
         "collapse":       t("hotkey.collapse"),
         "voice":          t("hotkey.voice"),

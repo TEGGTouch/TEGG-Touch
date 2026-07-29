@@ -31,7 +31,8 @@
     "scale": "缩放",
     "center_wheel": "中心轮盘",
     "start_icon": "▶ 启动",
-    "profile_prefix": "方案："
+    "profile_prefix": "方案：",
+    "key_remap": "键盘映射"
   },
   "gp_install": {
     "detecting_title": "正在检测手柄驱动…",
@@ -112,7 +113,8 @@
     "add_gp_button": "添加手柄键 (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 等)",
     "add_gp_stick": "添加摇杆 (圆形, 模拟左/右摇杆移动)",
     "toggle_gp_wheel": "方向盘 (4×2 复合: LT + 转向 + RT, 单例, 适合赛车游戏)",
-    "cursor": "显示/隐藏自绘光标 (默认显示, 不需要可关闭)"
+    "cursor": "显示/隐藏自绘光标 (默认显示, 不需要可关闭)",
+    "key_remap": "配置物理键盘按键的重新映射（每个方案独立）"
   },
   "hotkey": {
     "title": "设置",
@@ -183,7 +185,9 @@
     "bc_center_band": "回中带",
     "bc_base": "基色",
     "bc_reset": "重置该组",
-    "bc_wheel": "方向盘"
+    "bc_wheel": "方向盘",
+    "key_remap": "键盘映射开关",
+    "desc_key_remap": "运行中一键开关整套键盘映射；临时要打字时按一下放行原键"
   },
   "editor": {
     "title": "编辑按钮",
@@ -568,5 +572,28 @@
     "center_ring": "中心轮盘",
     "wheel": "方向盘",
     "empty": "无可回中目标"
+  },
+  "key_remap": {
+    "title": "键盘映射",
+    "tip": "运行模式下把物理键盘的按键改成别的动作：可以换键（A→D）、当手柄键用、点鼠标、跑宏、启动应用或光标回中。每个方案各存一套。",
+    "enable": "启用键盘映射",
+    "add": "＋ 新增映射",
+    "select_hint": "左侧选择或新增一条映射",
+    "src": "物理键（按下要被改掉的那个键）",
+    "src_empty": "点击后按一下键盘",
+    "capturing": "请按下键盘上的任意键…",
+    "dst": "目标动作（右侧面板点选）",
+    "dst_empty": "未设置动作",
+    "mode": "触发模式",
+    "mode_hold": "按住",
+    "mode_click": "单次",
+    "mode_toggle": "锁定",
+    "mode_hold_hint": "按下即按下目标、松开即松开——游戏里换键用这个",
+    "mode_click_hint": "按下就完整触发一次，松开不管；宏 / 启动应用 / 回中只能用这个",
+    "mode_toggle_hint": "按一次锁住不放，再按一次松开；适合自动跑步、锁血一类",
+    "row_enable": "启用这条",
+    "disabled": "已停用",
+    "delete": "删除",
+    "save": "保存"
   }
 }

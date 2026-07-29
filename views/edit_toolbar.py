@@ -177,6 +177,7 @@ class EditToolbar(QWidget):
     add_center_band_clicked = pyqtSignal()
     voice_clicked = pyqtSignal()
     keyboard_clicked = pyqtSignal()
+    key_remap_clicked = pyqtSignal()
     run_clicked = pyqtSignal()
     wheel_clicked = pyqtSignal()
     opacity_changed = pyqtSignal(float)
@@ -329,6 +330,14 @@ class EditToolbar(QWidget):
         kb_btn.clicked.connect(self.keyboard_clicked.emit)
         r1.addWidget(kb_btn)
 
+        # 键盘映射 (与软键盘同组: 都在处理「物理键盘」这件事)
+        remap_btn = _IconTextBtn("", "⇄", t("toolbar.key_remap"),
+                                 C_GRAY, C_GRAY_H)
+        remap_btn.setToolTip(t("tooltip.key_remap"))
+        self._install_tip(remap_btn)
+        remap_btn.clicked.connect(self.key_remap_clicked.emit)
+        r1.addWidget(remap_btn)
+
         # 启动按钮 (琥珀色)
         run_btn = _IconTextBtn("\uE768", "\u25b6", t("toolbar.start"),
                                C_AMBER_D, C_AMBER, fg="#FFF")
@@ -343,6 +352,9 @@ class EditToolbar(QWidget):
         # 右上角: 最小化 | 设置 | 关闭 (关于已合并到设置内)
         r1_right = QHBoxLayout()
         r1_right.setSpacing(6)
+        # 分隔线: 把窗口控制 (最小化/设置/关闭) 与左侧工具区分开。
+        # 贴在最小化前面而不是启动后面 —— 两者之间隔着弹簧, 线跟着最小化走才不会悬空。
+        r1_right.addWidget(_VSep())
         minimize_btn = self._build_sq_btn(
             "\uE921", "_", C_TOOL, C_TOOL_H, "#CCC", self.minimize_clicked)
         minimize_btn.setToolTip(t("tooltip.minimize"))

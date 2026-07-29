@@ -704,7 +704,9 @@ class VoiceSettingsDialog(QDialog):
             QListWidget::item:selected {{
                 background: {C_GREEN}; color: #1A1A1A;
             }}
-            QListWidget::item:hover {{ background: {C_GRAY_H}; }}
+            QListWidget::item:hover {{ background: {C_GRAY_H}; color: #FFF; }}
+            /* 选中行被 hover 时不能被上面那条 hover 规则改成白字 —— 绿底必须配黑字 */
+            QListWidget::item:selected:hover {{ background: {C_GREEN}; color: #1A1A1A; }}
             QScrollBar:vertical {{
                 background: transparent; width: 8px; border: none;
             }}

@@ -31,7 +31,8 @@
     "scale": "Scale",
     "center_wheel": "Wheel",
     "start_icon": "▶ Start",
-    "profile_prefix": "Profile: "
+    "profile_prefix": "Profile: ",
+    "key_remap": "Key Remap"
   },
   "gp_install": {
     "detecting_title": "Detecting gamepad driver…",
@@ -112,7 +113,8 @@
     "add_gp_button": "Add gamepad button (A/B/X/Y/LB/RB/Start/D-pad/L3/R3 etc.)",
     "add_gp_stick": "Add joystick (circular, simulates left/right stick)",
     "toggle_gp_wheel": "Steering Wheel (4×2 composite: LT + steering + RT, singleton, for racing games)",
-    "cursor": "Show or hide the drawn cursor (shown by default)"
+    "cursor": "Show or hide the drawn cursor (shown by default)",
+    "key_remap": "Remap physical keyboard keys (per profile)"
   },
   "hotkey": {
     "title": "Settings",
@@ -183,7 +185,9 @@
     "bc_center_band": "Center Band",
     "bc_base": "Base color",
     "bc_reset": "Reset group",
-    "bc_wheel": "Steering Wheel"
+    "bc_wheel": "Steering Wheel",
+    "key_remap": "Key Remap Toggle",
+    "desc_key_remap": "Turn the whole key-remap set on/off while running; press it when you need to type normally"
   },
   "editor": {
     "title": "Edit Button",
@@ -568,5 +572,28 @@
     "center_ring": "Center wheel",
     "wheel": "Steering wheel",
     "empty": "No targets"
+  },
+  "key_remap": {
+    "title": "Key Remap",
+    "tip": "In run mode, turn physical keys into other actions: swap keys (A→D), act as gamepad buttons, click the mouse, run macros, launch apps, or re-center the cursor. Stored per profile.",
+    "enable": "Enable key remap",
+    "add": "＋ Add mapping",
+    "select_hint": "Select or add a mapping on the left",
+    "src": "Physical key (the one being replaced)",
+    "src_empty": "Click, then press a key",
+    "capturing": "Press any key…",
+    "dst": "Target action (pick from the right panel)",
+    "dst_empty": "No action set",
+    "mode": "Trigger mode",
+    "mode_hold": "Hold",
+    "mode_click": "Once",
+    "mode_toggle": "Lock",
+    "mode_hold_hint": "Press to press, release to release — use this for in-game key swaps",
+    "mode_click_hint": "Fires once on press, release ignored; macros / app launch / re-center only support this",
+    "mode_toggle_hint": "Press once to hold it down, press again to release; good for auto-run type things",
+    "row_enable": "Enable this mapping",
+    "disabled": "off",
+    "delete": "Delete",
+    "save": "Save"
   }
 }

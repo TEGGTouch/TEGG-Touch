@@ -31,14 +31,24 @@ _pressed_keys_lock = threading.Lock()
 
 PUL = ctypes.POINTER(ctypes.c_ulong)
 
+# ─── 自注入标记 ────────────────────────────────────────────
+# 本模块发出的所有键盘/鼠标事件都在 dwExtraInfo 填这个魔数。
+# 键盘映射钩子 (core/keyboard_hook.py) 见到它就直接放行, 否则
+# 「A→D 同时 D→A」这类互换映射会被自己的注入再次命中 → 无限回环。
+# 改动任何 SendInput / mouse_event 调用时务必带上它。
+INJECT_MAGIC = 0x7E66  # "TEGG"
+
 
 class KeyBdInput(ctypes.Structure):
+    # dwExtraInfo 是 Win32 ULONG_PTR (指针大小的「整数」, 不是指针) —— 同
+    # passthrough_manager 对 mouse_event 的声明。旧版这里写 POINTER(c_ulong)
+    # 并传指针, 钩子侧读到的是那个 c_ulong 的「地址」而非魔数本身, 对不上。
     _fields_ = [
         ("wVk", ctypes.c_ushort),
         ("wScan", ctypes.c_ushort),
         ("dwFlags", ctypes.c_ulong),
         ("time", ctypes.c_ulong),
-        ("dwExtraInfo", PUL),
+        ("dwExtraInfo", ctypes.c_size_t),
     ]
 
 
@@ -164,9 +174,8 @@ def press_key(scan_code: int, extended: bool = False):
     flags = KEYEVENTF_SCANCODE
     if extended:
         flags |= KEYEVENTF_EXTENDEDKEY
-    extra = ctypes.c_ulong(0)
     ii_ = Input_I()
-    ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
+    ii_.ki = KeyBdInput(0, scan_code, flags, 0, INJECT_MAGIC)
     x = Input(ctypes.c_ulong(1), ii_)
     _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
     with _pressed_keys_lock:
@@ -181,9 +190,8 @@ def release_key(scan_code: int, extended: bool = False):
     flags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
     if extended:
         flags |= KEYEVENTF_EXTENDEDKEY
-    extra = ctypes.c_ulong(0)
     ii_ = Input_I()
-    ii_.ki = KeyBdInput(0, scan_code, flags, 0, ctypes.pointer(extra))
+    ii_.ki = KeyBdInput(0, scan_code, flags, 0, INJECT_MAGIC)
     x = Input(ctypes.c_ulong(1), ii_)
     _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
     with _pressed_keys_lock:
@@ -203,9 +211,8 @@ def release_all_keys():
             flags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP
             if ext:
                 flags |= KEYEVENTF_EXTENDEDKEY
-            extra = ctypes.c_ulong(0)
             ii_ = Input_I()
-            ii_.ki = KeyBdInput(0, sc, flags, 0, ctypes.pointer(extra))
+            ii_.ki = KeyBdInput(0, sc, flags, 0, INJECT_MAGIC)
             x = Input(ctypes.c_ulong(1), ii_)
             _SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
         except Exception as e:
@@ -333,7 +340,7 @@ def mouse_press(button: str):
         logger.debug(f"未知鼠标按钮: '{button}'")
         return
     down_flag, _, mouse_data = entry
-    _mouse_event(down_flag, 0, 0, mouse_data, 0)  # dwExtraInfo=0 (无)
+    _mouse_event(down_flag, 0, 0, mouse_data, INJECT_MAGIC)
 
 
 def mouse_release(button: str):
@@ -343,13 +350,13 @@ def mouse_release(button: str):
         logger.debug(f"未知鼠标按钮: '{button}'")
         return
     _, up_flag, mouse_data = entry
-    _mouse_event(up_flag, 0, 0, mouse_data, 0)  # dwExtraInfo=0 (无)
+    _mouse_event(up_flag, 0, 0, mouse_data, INJECT_MAGIC)
 
 
 def mouse_wheel(direction: str):
     """模拟鼠标滚轮。direction: 'up' 或 'down'"""
     delta = WHEEL_DELTA if direction.lower() == 'up' else -WHEEL_DELTA
-    _mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta & 0xFFFFFFFF, 0)  # dwExtraInfo=0 (无)
+    _mouse_event(MOUSEEVENTF_WHEEL, 0, 0, delta & 0xFFFFFFFF, INJECT_MAGIC)
 
 
 def _mouse_hook_proc(nCode, wParam, lParam):
