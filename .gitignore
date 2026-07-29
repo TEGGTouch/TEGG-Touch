@@ -26,6 +26,8 @@ desktop.ini
 # PyInstaller
 *.manifest
 *.log
+# 开发期跑出来的 .out 日志 (gitignore 不支持行尾注释, 注释必须独占一行)
+logs/
 
 # 本地下载镜像配置 (含 OSS bucket / endpoint 等私有信息)
 core/_update_mirror.py
