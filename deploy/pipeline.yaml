@@ -1,0 +1,35 @@
+sources:
+  teggtouch:
+    type: codeup
+    name: TEGGTouch
+    endpoint: https://codeup.aliyun.com/69bd03dc706afd34aa5fa6c3/TEGGTouch.git
+    branch: main
+    branchesFilter: '^main$'
+    triggerEvents: [push]
+    certificate:
+      type: serviceConnection
+      serviceConnection: vfa9zk5motys67xs
+stages:
+  archive:
+    name: 产品版本归档
+    jobs:
+      archive_job:
+        name: 归档源码与已发布 Windows 安装包
+        runsOn:
+          group: public/cn-beijing
+          container: build-steps-public-registry.cn-beijing.cr.aliyuncs.com/build-steps/alinux3:latest
+        steps:
+          archive_step:
+            step: Command
+            with:
+              run: bash deploy/archive.sh
+          upload_step:
+            step: ArtifactUpload
+            with:
+              uploadType: flowPublic
+              serviceConnection: wqxhtadpzk54q5fr
+              repo: flow_generic_repo
+              artifact: teggtouch_desktop
+              version: ${BUILD_NUMBER}
+              filePath: [teggtouch-desktop-archive.tar.gz]
+
