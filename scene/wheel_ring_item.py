@@ -234,17 +234,14 @@ class WheelRingItem(QGraphicsObject):
 
     # ── Hover 事件 ──
 
+    # 运行模式的 hover 状态机只由 RunController._poll_hover_and_click 驱动,
+    # 不在 Qt 事件里碰 —— 原因见 touch_button_item.hoverEnterEvent 上方注释
+    # (过期的 hoverLeaveEvent 会把轮询刚起的充能打回 IDLE, 悬浮就不触发了)。
     def hoverEnterEvent(self, event):
         if self._mode == 'edit':
             scene = self.scene()
             if scene:
                 scene.show_tooltip(build_edit_tooltip(self.data), event.scenePos())
-        elif self._mode == 'run':
-            _key = (self.data.hover_toggle
-                    if getattr(self.data, 'hover_mode', 'trigger') == 'toggle'
-                    else self.data.hover)
-            if _key:
-                self._hover_sm.enter()
         super().hoverEnterEvent(event)
 
     def hoverMoveEvent(self, event):
@@ -259,10 +256,6 @@ class WheelRingItem(QGraphicsObject):
             scene = self.scene()
             if scene:
                 scene.hide_tooltip()
-        if self._mode == 'run':
-            self._hover_sm.leave()
-            if not self._hover_sm.is_active:
-                self.set_visual_state('normal')
         super().hoverLeaveEvent(event)
 
     # ── 滚轮 ──

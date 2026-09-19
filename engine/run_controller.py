@@ -32,6 +32,7 @@ from core.constants import (
 )
 from core.system_tuning import input_poll_interval_ms
 from engine.gamepad_engine import GamepadEngine
+from engine.hover_state_machine import HoverState
 
 user32 = ctypes.windll.user32
 logger = logging.getLogger(__name__)
@@ -150,6 +151,9 @@ class RunController(QObject):
 
         # 轮询式 hover 检测状态 (解决 WS_EX_TRANSPARENT 下 Qt 事件丢失)
         self._poll_hover_item = None  # 当前 hover 的 item
+        # hover 自愈统计 (见 _rearm_stale_hover): 累计次数 + 上次写日志时间, 用于限流
+        self._hover_rearm_count = 0
+        self._hover_rearm_log_time = 0.0
         self._prev_lmb = False  # 左键上一帧状态
         self._prev_rmb = False  # 右键
         self._prev_mmb = False  # 中键
@@ -454,6 +458,15 @@ class RunController(QObject):
         # ── 回中带每帧检测 (in_rect → SetCursorPos 到配置的回中目标中心) ──
         if (active_item is not None
                 and getattr(active_item.data, 'btn_type', '') == BTN_TYPE_CENTER_BAND):
+            # 先把上一个 hover item 松掉 (跟摇杆/方向盘分支一致)。否则「从悬浮按钮
+            # 直接划进回中带」会让那个按钮的 hover 键一直按住不放。
+            prev_item = self._poll_hover_item
+            if prev_item is not None and prev_item is not active_item:
+                if hasattr(prev_item, '_hover_sm'):
+                    prev_item._hover_sm.leave()
+                if hasattr(prev_item, 'set_visual_state'):
+                    prev_item.set_visual_state('normal')
+            self._poll_hover_item = None
             target = getattr(active_item.data, 'recenter_target', 'screen') or 'screen'
             pos = self._resolve_recenter_pos(target)
             if pos is None:   # 目标失效 → 回退屏幕中心
@@ -498,6 +511,9 @@ class RunController(QObject):
                         active_item.set_visual_state('hover')
 
             self._poll_hover_item = active_item
+        elif active_item is not None and hasattr(active_item, '_hover_sm'):
+            # 光标停在同一个 item 上: 每帧校验状态机没被别的路径打回空档 (自愈)
+            self._rearm_stale_hover(active_item)
 
         # ── 通知穿透管理器当前是否在 UI 上（驱动 PT_OFF/PT_BLOCK 动态切换）──
         self.cursor_on_ui.emit(active_item is not None)
@@ -556,6 +572,36 @@ class RunController(QObject):
         self._prev_lmb = lmb
         self._prev_rmb = rmb
         self._prev_mmb = mmb
+
+    def _rearm_stale_hover(self, item):
+        """光标仍停在同一个 item 上时, 兜底补 enter() —— hover 检测由边沿触发改成电平触发。
+
+        为什么需要: hover 状态机除了本轮询, 历史上还可能被别的路径打回空档
+        (Qt 迟到的 hoverLeaveEvent、切 profile/重建轮盘时的 reset() 等)。而
+        `active_item != prev_item` 是边沿判断, 一旦状态机在「光标没动」的时候被清掉,
+        轮询就再也不会补 enter, 表现为悬浮概率不触发、必须把鼠标移出再移回才恢复。
+        这里每帧校验一次: 光标还在按钮上却既没充能也没激活 → 说明状态丢了, 立刻重来。
+
+        toggle 模式不参与: 它「已关掉但光标还压在按钮上」的 IDLE 是合法状态,
+        补 enter 会变成无限自动开关。
+        """
+        sm = item._hover_sm
+        if sm.mode != 'trigger':
+            return
+        if sm.state not in (HoverState.IDLE, HoverState.RELEASING):
+            return
+
+        sm.enter()
+        if sm.is_active and hasattr(item, 'set_visual_state'):
+            item.set_visual_state('hover')
+
+        # 限流日志: 正常情况下一局都不该出现, 出现就说明还有别的路径在偷偷清状态
+        self._hover_rearm_count += 1
+        now = _time.time()
+        if now - self._hover_rearm_log_time >= 1.0:
+            self._hover_rearm_log_time = now
+            logger.info("hover 状态机被外部清空, 已自愈重入 (累计 %d 次, 按钮=%r)",
+                        self._hover_rearm_count, getattr(item.data, 'name', '?'))
 
     # ── 自动回中 ──
 

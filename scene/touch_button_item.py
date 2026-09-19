@@ -441,28 +441,18 @@ class TouchButtonItem(QGraphicsObject):
 
     # ── Hover 事件 ──
 
+    # 注意: 运行模式下不在 Qt 的 hover 事件里驱动 hover 状态机 / 回中带。
+    # 运行模式的唯一驱动源是 RunController._poll_hover_and_click (GetCursorPos +
+    # itemAt 轮询)。两个驱动源并存会出事: 智能穿透每帧切 WS_EX_TRANSPARENT,
+    # Windows 随之补发 WM_MOUSELEAVE, 这条消息可能晚几帧才被 Qt 派发 —— 轮询
+    # 已经为新一轮 hover 调过 enter(), 随后一条过期的 hoverLeaveEvent 把状态机
+    # 打回 IDLE; 而轮询是边沿触发的 (active_item != prev_item 才 enter), 之后
+    # 再也不会补 enter → 「悬浮概率不触发, 点击正常, 鼠标移出再移回才恢复」。
     def hoverEnterEvent(self, event):
         if self._mode == 'edit':
             scene = self.scene()
             if scene:
                 scene.show_tooltip(build_edit_tooltip(self.data), event.scenePos())
-        elif self._mode == 'run':
-            # 回中带：立即回中 (匹配原版 handle_run_interaction: center_band → SetCursorPos)
-            if self.data.btn_type == BTN_TYPE_CENTER_BAND:
-                import ctypes
-                from PyQt6.QtWidgets import QApplication
-                from PyQt6.QtCore import QRect
-                _ps = QApplication.primaryScreen()
-                screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
-                cx = screen.x() + screen.width() // 2
-                cy = screen.y() + screen.height() // 2
-                ctypes.windll.user32.SetCursorPos(cx, cy)
-            else:
-                _key = (self.data.hover_toggle
-                        if getattr(self.data, 'hover_mode', 'trigger') == 'toggle'
-                        else self.data.hover)
-                if _key:
-                    self._hover_sm.enter()
         super().hoverEnterEvent(event)
 
     def hoverMoveEvent(self, event):
@@ -477,10 +467,6 @@ class TouchButtonItem(QGraphicsObject):
             scene = self.scene()
             if scene:
                 scene.hide_tooltip()
-        if self._mode == 'run':
-            self._hover_sm.leave()
-            if not self._hover_sm.is_active:
-                self.set_visual_state('normal')
         super().hoverLeaveEvent(event)
 
     # ── 滚轮事件（由 RunController 分发）──

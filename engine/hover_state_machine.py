@@ -69,6 +69,11 @@ class HoverStateMachine(QObject):
         return self._state
 
     @property
+    def mode(self) -> str:
+        """'trigger' (按住型) | 'toggle' (开关型)"""
+        return self._mode
+
+    @property
     def is_active(self) -> bool:
         return self._state == HoverState.ACTIVE
 
