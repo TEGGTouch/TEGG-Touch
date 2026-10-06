@@ -4,7 +4,7 @@ TEGG Touch 蛋挞 (PyQt6) - run_toolbar.py
 
 原版布局 (单行, 1070×60):
   DragHandle | Profile(210px,#AAA) | Sep | AutoCenter(150px) | ShowHide(160px)
-  | Keyboard(140px) | Passthrough(180px,3-state) | Sep | Stop(130px)
+  | Keyboard(140px) | Passthrough(180px,2-state) | Sep | Stop(130px)
 """
 
 from PyQt6.QtWidgets import (
@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QIcon, QPixmap
 
 from core.i18n import t, get_font
-from core.constants import PT_ON, PT_OFF, PT_BLOCK, TOOLBAR_WIDTH
+from core.constants import PT_ON, PT_OFF, TOOLBAR_WIDTH
 
 # 共用组件 & 颜色常量 (从 edit_toolbar 导入)
 from views.edit_toolbar import (
@@ -93,7 +93,6 @@ class RunToolbar(QWidget):
         _K_KB = hotkeys.get('soft_keyboard', 'F8').upper()
         _K_PTON = hotkeys.get('pt_on', 'F9').upper()
         _K_PTOFF = hotkeys.get('pt_off', 'F10').upper()
-        _K_PTBLK = hotkeys.get('pt_block', 'F11').upper()
         _K_STOP = hotkeys.get('stop', 'F12').upper()
 
         # 外层透明
@@ -215,7 +214,7 @@ class RunToolbar(QWidget):
         kb_btn.clicked.connect(self.soft_keyboard_clicked.emit)
         row.addWidget(kb_btn)
 
-        # 穿透模式 (3-state cycle)
+        # 穿透模式 (2-state cycle)
         self._pt_btn = _IconTextBtn(
             "\uE739", "\u26A1",
             t("run.pt_off", key=_K_PTOFF),
@@ -309,12 +308,6 @@ class RunToolbar(QWidget):
                 "bg": C_BLUE, "bg_h": C_BLUE_H,
                 "icon": "\uE739", "fallback": "\u26A1",
                 "text": t("run.pt_off", key=hotkeys.get('pt_off', 'F10').upper()),
-                "fg": "#FFF",
-            },
-            PT_BLOCK: {
-                "bg": C_AMBER_D, "bg_h": C_AMBER,
-                "icon": "\uE72E", "fallback": "\u26D4",
-                "text": t("run.pt_block", key=hotkeys.get('pt_block', 'F11').upper()),
                 "fg": "#FFF",
             },
         }

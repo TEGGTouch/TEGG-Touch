@@ -52,7 +52,6 @@ HOTKEY_COLORS = {
     'soft_keyboard':  '#0284C7',
     'pt_on':          '#6B7280',
     'pt_off':         '#1976D2',
-    'pt_block':       '#D97706',
     'stop':           '#C42B1C',
 }
 
@@ -411,7 +410,6 @@ class HotkeySettingsDialog(QDialog):
             'soft_keyboard': t("hotkey.desc_soft_keyboard"),
             'pt_on': t("hotkey.desc_pt_on"),
             'pt_off': t("hotkey.desc_pt_off"),
-            'pt_block': t("hotkey.desc_pt_block"),
             'stop': t("hotkey.desc_stop"),
         }
 
@@ -566,7 +564,7 @@ class HotkeySettingsDialog(QDialog):
 
         hotkey_fields = [
             'key_remap', 'cursor', 'collapse', 'voice', 'auto_center', 'toggle_buttons',
-            'soft_keyboard', 'pt_on', 'pt_off', 'pt_block', 'stop',
+            'soft_keyboard', 'pt_on', 'pt_off', 'stop',
         ]
 
         v.addLayout(self._build_hotkey_row(fn, 'key_remap', labels, descriptions))
@@ -633,14 +631,14 @@ class HotkeySettingsDialog(QDialog):
             existing = hk.get('cursor_styles') or {}
             # 箭头组默认值兜底
             self._cursor_buf = {}
-            for ct in ('cursor', 'cursor_off', 'cursor_block'):
+            for ct in ('cursor', 'cursor_off'):
                 d = dict(DEFAULT_CURSOR_STYLES[ct])
                 d.update(existing.get(ct, {}))
                 self._cursor_buf[ct] = d
             # 圆球组默认值兜底
             existing_ball = hk.get('ball_styles') or {}
             self._ball_buf = {}
-            for ct in ('cursor', 'cursor_off', 'cursor_block'):
+            for ct in ('cursor', 'cursor_off'):
                 d = dict(DEFAULT_BALL_STYLES[ct])
                 d.update(existing_ball.get(ct, {}))
                 self._ball_buf[ct] = d
@@ -666,7 +664,6 @@ class HotkeySettingsDialog(QDialog):
         items = [
             ('cursor',       t("hotkey.cursor_default")),
             ('cursor_off',   t("hotkey.cursor_off_label")),
-            ('cursor_block', t("hotkey.cursor_block_label")),
         ]
         self._cursor_widgets = {}
         self._ball_widgets = {}
@@ -889,7 +886,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_arrow_reset(self):
         self._cursor_buf = {ct: dict(DEFAULT_CURSOR_STYLES[ct])
-                            for ct in ('cursor', 'cursor_off', 'cursor_block')}
+                            for ct in ('cursor', 'cursor_off')}
         for ct, style in self._cursor_buf.items():
             # 同步色块按钮 + 滑块 + 数值标签
             for k in ('fill', 'stroke'):
@@ -1145,7 +1142,7 @@ class HotkeySettingsDialog(QDialog):
     def _on_ball_reset(self):
         from core.constants import DEFAULT_BALL_STYLES
         self._ball_buf = {ct: dict(DEFAULT_BALL_STYLES[ct])
-                          for ct in ('cursor', 'cursor_off', 'cursor_block')}
+                          for ct in ('cursor', 'cursor_off')}
         for ct, style in self._ball_buf.items():
             btn = getattr(self, '_ball_color_btns', {}).get(ct)
             if btn:

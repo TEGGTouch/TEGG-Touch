@@ -1420,7 +1420,7 @@ class _ProfileDetailPanel(QFrame):
                 lay.addWidget(_make_kv_label("Geometry", geo))
         lay.addWidget(_make_kv_label(
             "透明度", f"{int((cfg.get('transparency', 0.5)) * 100)}%"))
-        ct_map = {'pt_on': '开启', 'pt_off': '关闭', 'pt_block': '阻挡'}
+        ct_map = {'pt_on': '开启', 'pt_off': '关闭', 'pt_block': '开启（旧模式已移除）'}
         lay.addWidget(_make_kv_label(
             "穿透模式", ct_map.get(cfg.get('click_through', ''), str(cfg.get('click_through', '')))))
         lay.addWidget(_make_kv_label("网格", f"{cfg.get('grid_size') or '默认'}px"))
@@ -1453,8 +1453,7 @@ class _ProfileDetailPanel(QFrame):
                 lay.addWidget(_make_kv_label("方向盘描边", color, value_color=color))
             if isinstance(cs, dict):
                 for ct, label in (('cursor', '光标-默认'),
-                                  ('cursor_off', '光标-关闭'),
-                                  ('cursor_block', '光标-阻挡')):
+                                  ('cursor_off', '光标-关闭')):
                     sty = cs.get(ct, {}) or {}
                     fill = sty.get('fill', '?')
                     scale = sty.get('scale', 1.0)

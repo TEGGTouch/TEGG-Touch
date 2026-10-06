@@ -12,7 +12,7 @@ from PyQt6.QtGui import QPainter, QIcon
 
 from core.i18n import t, load_locale
 from core.constants import (
-    APP_VERSION, APP_DIR, PT_ON, PT_OFF, PT_BLOCK,
+    APP_VERSION, APP_DIR, PT_ON, PT_OFF,
     DEFAULT_TRANSPARENCY, DEFAULT_GRID_SIZE,
     DEFAULT_SCENE_SCALE, SCENE_SCALE_MIN, SCENE_SCALE_MAX,
 )
@@ -102,8 +102,7 @@ class OverlayWindow(QGraphicsView):
         self._run_controller.request_toggle_buttons.connect(self._toggle_buttons_visibility)
         self._run_controller.request_toggle_auto_center.connect(self._toggle_auto_center)
         self._run_controller.request_soft_keyboard.connect(self._toggle_soft_keyboard)
-        self._run_controller.passthrough_changed.connect(
-            lambda mode: self._pt_manager.set_mode(mode))
+        self._run_controller.passthrough_changed.connect(self._on_pt_clicked)
         self._run_controller.auto_center_progress.connect(
             self._scene.update_auto_center_bar)
         self._run_controller.cursor_on_ui.connect(
@@ -193,7 +192,8 @@ class OverlayWindow(QGraphicsView):
         self._wheel_style = dict(DEFAULT_WHEEL_STYLE)
         _initial_style = self._cursor_styles.get(
             'cursor', DEFAULT_CURSOR_STYLES['cursor'])
-        self._virtual_cursor = VirtualCursorItem('cursor', _initial_style)
+        self._virtual_cursor = VirtualCursorItem(
+            'cursor', _initial_style, self._run_controller.cursor_input.position)
         self._virtual_cursor.setVisible(False)
         self._scene.addItem(self._virtual_cursor)
 
@@ -408,7 +408,6 @@ class OverlayWindow(QGraphicsView):
     _PT_CURSOR_MAP = {
         PT_ON: 'cursor',
         PT_OFF: 'cursor_off',
-        PT_BLOCK: 'cursor_block',
     }
 
     def _collapse_run_toolbar(self):
@@ -1327,6 +1326,11 @@ class OverlayWindow(QGraphicsView):
 
     def mousePressEvent(self, event):
         """智能穿透: 空白区域的点击转发到底层窗口（轮询间隙兜底）"""
+        if self._current_mode == 'run' and self._run_controller.cursor_input.independent:
+            # Native events contain the game's locked OS position. The polling
+            # path dispatches this physical click at our logical position.
+            event.accept()
+            return
         scene_pos = self.mapToScene(event.pos())
         item = self._scene.itemAt(scene_pos, self.transform())
 
@@ -1337,6 +1341,18 @@ class OverlayWindow(QGraphicsView):
             event.ignore()
             return
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._current_mode == 'run' and self._run_controller.cursor_input.independent:
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if self._current_mode == 'run' and self._run_controller.cursor_input.independent:
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
 
     def closeEvent(self, event):
         """关闭时保存配置并退出进程"""

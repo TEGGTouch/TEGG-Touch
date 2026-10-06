@@ -4,7 +4,7 @@ TEGG Touch 蛋挞 (PyQt6) - run_controller.py
 
 旧版: update_loop() 单函数 400 行，轮询一切
 新版:
-  - hover/click 由轮询 GetCursorPos + itemAt 驱动（与原版一致）
+  - hover/click 由统一光标位置 + itemAt 驱动（正常游戏沿用系统坐标）
   - 解决 WS_EX_TRANSPARENT 下 Qt 事件丢失的问题
   - Controller 负责: 快捷键轮询 + hover/click轮询 + 侧键 + 自动回中 + 滚轮
 """
@@ -24,6 +24,7 @@ from core.input_engine import (
     mouse_press, mouse_release, mouse_wheel,
 )
 from core.config_manager import load_hotkeys
+from core.cursor_input import CursorInput
 from core import keyboard_hook
 from core.constants import (
     UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC,
@@ -38,14 +39,8 @@ user32 = ctypes.windll.user32
 logger = logging.getLogger(__name__)
 
 # ── ctypes 类型声明 ──
-user32.GetCursorPos.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
-user32.GetCursorPos.restype = ctypes.wintypes.BOOL
-
 user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
 user32.GetAsyncKeyState.restype = ctypes.c_short
-
-user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
-user32.SetCursorPos.restype = ctypes.wintypes.BOOL
 
 # VK 常量
 VK_LBUTTON = 0x01
@@ -126,7 +121,7 @@ class RunController(QObject):
     request_toggle_buttons = pyqtSignal()
     request_toggle_auto_center = pyqtSignal()
     request_soft_keyboard = pyqtSignal()
-    passthrough_changed = pyqtSignal(str)   # 'pt_on' | 'pt_off' | 'pt_block'
+    passthrough_changed = pyqtSignal(str)   # 'pt_on' | 'pt_off'
     cursor_on_ui = pyqtSignal(bool)         # 每帧: 光标是否在 UI 元素上
     auto_center_progress = pyqtSignal(float, float, float)  # progress, x, y
     voice_command_triggered = pyqtSignal(str, str, str)  # phrase, keys, action
@@ -138,11 +133,13 @@ class RunController(QObject):
         super().__init__()
         self._scene = scene
         self._window = window
+        self.cursor_input = CursorInput(self)
         self._active = False
 
         # 硬件按键状态缓存 (用于侧键检测)
         self._prev_xb1 = False
         self._prev_xb2 = False
+        self._holding_xbuttons = {}  # btn_name -> (item, key, smart_dispatch)
 
         # Bug 4 fix: 使用计数器替代布尔值，正确追踪多个同时激活的按键
         # 线程安全说明: 所有修改 _active_key_count 的 slot 均在主线程中
@@ -284,6 +281,9 @@ class RunController(QObject):
         # 键盘映射: 现扫当前 profile 的 key_remaps, 有才装钩子
         self._start_key_remap()
 
+        if self._window is not None:
+            self.cursor_input.start(QRect(self._window.mapToGlobal(QPoint(0, 0)),
+                                          self._window.size()))
         self._timer.start()
 
         # 启动语音引擎
@@ -334,6 +334,7 @@ class RunController(QObject):
         """退出运行模式"""
         self._active = False
         self._timer.stop()
+        self.cursor_input.stop()
         self._ac_start_time = None
         self._stop_voice()
         # 键盘映射: 先卸钩子 (内部会释放按下中的目标), 再走下面的通用兜底释放
@@ -357,6 +358,7 @@ class RunController(QObject):
         self._holding_rclick = None
         self._holding_mclick = None
         self.auto_center_progress.emit(-1, 0, 0)
+        self._release_xbuttons()
         # 重置所有按钮的 hover 状态机
         for item in self._scene.button_items:
             if hasattr(item, '_hover_sm'):
@@ -377,17 +379,58 @@ class RunController(QObject):
     # ── 获取光标下的 item ──
 
     def _get_cursor_item(self):
-        """获取光标位置和光标下的 item（使用 Win32 GetCursorPos，不依赖 Qt 事件）"""
+        """所有运行时命中检测共用系统/自动独立光标坐标。"""
         try:
-            pt = ctypes.wintypes.POINT()
-            user32.GetCursorPos(ctypes.byref(pt))
-            cursor_pos = QPoint(pt.x, pt.y)
+            cursor_pos = self.cursor_input.position()
             view_pos = self._window.mapFromGlobal(cursor_pos)
             scene_pos = self._window.mapToScene(view_pos)
             item = self._scene.itemAt(scene_pos, self._window.transform())
-            return item, scene_pos, pt.x, pt.y
+            return item, scene_pos, cursor_pos.x(), cursor_pos.y()
         except Exception:
             return None, None, 0, 0
+
+    def _reset_pointer_actions(self):
+        """Release pointer-owned actions before changing coordinate/focus source."""
+        self._release_active_stick()
+        self._release_gp_wheel()
+        if (self._easy_steer_tick is not None or self._easy_key_down
+                or self._easy_brake_state or self._easy_rt):
+            self._release_easy_state()
+        self._release_xbuttons()
+        items = []
+        if self._scene is not None:
+            for name in ('button_items', 'wheel_items', 'outer_wheel_items',
+                         'center_ring_sector_items', 'inner_ring_sector_items'):
+                items.extend(getattr(self._scene, name, []))
+            items.extend([getattr(self._scene, 'ring_item', None),
+                          getattr(self._scene, 'inner_ring_item', None)])
+        if self._poll_hover_item is not None:
+            items.append(self._poll_hover_item)
+        seen = set()
+        for item in items:
+            if item is None or id(item) in seen or not _is_alive(item):
+                continue
+            seen.add(id(item))
+            if hasattr(item, '_hover_sm'):
+                item._hover_sm.reset()
+            if hasattr(item, 'set_visual_state'):
+                item.set_visual_state('normal')
+        self._poll_hover_item = None
+        for attr in ('_holding_lclick', '_holding_rclick', '_holding_mclick'):
+            held = getattr(self, attr)
+            if held:
+                self._smart_trigger(held[1], 'r')
+            setattr(self, attr, None)
+        self._active_key_count = 0
+        self._ac_start_time = None
+        for attr, key in (('_prev_lmb', VK_LBUTTON), ('_prev_rmb', VK_RBUTTON),
+                          ('_prev_mmb', VK_MBUTTON), ('_prev_xb1', VK_XBUTTON1),
+                          ('_prev_xb2', VK_XBUTTON2)):
+            setattr(self, attr, bool(user32.GetAsyncKeyState(key) & 0x8000))
+        if self._gp_enabled:
+            gp = GamepadEngine.get()
+            if gp is not None:
+                gp.flush()
 
     # ── 主循环 ──
 
@@ -401,6 +444,12 @@ class RunController(QObject):
         # 1. 快捷键检测
         self._check_hotkeys(hk)
         if not self._active:  # stop 可能在 _check_hotkeys 中被调用
+            return
+
+        if self.cursor_input.poll():
+            self._reset_pointer_actions()
+            # A focus/mode change must not replay old wheel events or held clicks.
+            poll_wheel_events()
             return
 
         # 1b. 键盘映射的慢路径事件 (宏/手柄/鼠标/应用/回中; 纯键盘键已在钩子内直发)
@@ -432,7 +481,7 @@ class RunController(QObject):
     def _poll_hover_and_click(self):
         """轮询光标位置，驱动 hover 状态机和 click 检测
         
-        与原版 Tkinter 一致：使用 GetCursorPos + 坐标碰撞检测，
+        使用统一光标位置 + 坐标碰撞检测，
         不依赖 Qt 的 hoverEnterEvent/mousePressEvent（WS_EX_TRANSPARENT 下不触发）。
         """
         item, scene_pos, abs_x, abs_y = self._get_cursor_item()
@@ -472,7 +521,7 @@ class RunController(QObject):
             if pos is None:   # 目标失效 → 回退屏幕中心
                 pos = self._resolve_recenter_pos('screen')
             if pos is not None:
-                user32.SetCursorPos(pos[0], pos[1])
+                self.cursor_input.set_position(pos[0], pos[1])
             if hasattr(active_item, 'set_visual_state'):
                 active_item.set_visual_state('hover')
             self.cursor_on_ui.emit(True)
@@ -515,7 +564,7 @@ class RunController(QObject):
             # 光标停在同一个 item 上: 每帧校验状态机没被别的路径打回空档 (自愈)
             self._rearm_stale_hover(active_item)
 
-        # ── 通知穿透管理器当前是否在 UI 上（驱动 PT_OFF/PT_BLOCK 动态切换）──
+        # ── 通知穿透管理器当前是否在 UI 上（驱动 PT_OFF 动态切换）──
         self.cursor_on_ui.emit(active_item is not None)
 
         # ── 硬件按键状态 ──
@@ -697,8 +746,6 @@ class RunController(QObject):
             self.passthrough_changed.emit('pt_on')
         elif _debounced('pt_off', hk.get('pt_off', 'f10')):
             self.passthrough_changed.emit('pt_off')
-        elif _debounced('pt_block', hk.get('pt_block', 'f11')):
-            self.passthrough_changed.emit('pt_block')
 
     def _dispatch_wheel(self, direction, abs_x, abs_y):
         """将滚轮事件分发到场景坐标处的 Item;
@@ -723,7 +770,8 @@ class RunController(QObject):
                         getattr(s, '_pressed_action', None) == f else None)
             return
         try:
-            global_pos = QPoint(abs_x, abs_y)
+            global_pos = (self.cursor_input.position() if self.cursor_input.independent
+                          else QPoint(abs_x, abs_y))
             view_pos = self._window.mapFromGlobal(global_pos)
             scene_pos = self._window.mapToScene(view_pos)
             item = self._scene.itemAt(scene_pos, self._window.transform())
@@ -747,17 +795,19 @@ class RunController(QObject):
 
     def _dispatch_xbutton(self, btn_name, action):
         """侧键事件分发: 摇杆 active 时优先到 stick.xbutton1/2; 否则到鼠标下的 Item"""
+        if action == 'r':
+            self._release_xbutton(btn_name)
+            return
         # 摇杆 active 时, 侧键路由到 stick (走 _smart_trigger 支持 gp:/gpmacro: 前缀)
         if self._active_gp_stick is not None and _is_alive(self._active_gp_stick):
             stick = self._active_gp_stick
             key = getattr(stick.data, btn_name, '')
             if key:
+                self._holding_xbuttons[btn_name] = (stick, key, True)
                 self._smart_trigger(key, action)
             return
 
-        pt = ctypes.wintypes.POINT()
-        user32.GetCursorPos(ctypes.byref(pt))
-        cursor_pos = QPoint(pt.x, pt.y)
+        cursor_pos = self.cursor_input.position()
 
         view_pos = self._window.mapFromGlobal(cursor_pos)
         scene_pos = self._window.mapToScene(view_pos)
@@ -766,15 +816,23 @@ class RunController(QObject):
         if item and hasattr(item, 'data'):
             key_val = getattr(item.data, btn_name, '')
             if key_val:
+                self._holding_xbuttons[btn_name] = (item, key_val, False)
                 trigger(key_val, action)
-                state_name = f'active_{btn_name}'
-                if action == 'p':
-                    item.set_visual_state(state_name)
-                else:
-                    if hasattr(item, '_hover_sm') and item._hover_sm.is_active:
-                        item.set_visual_state('hover')
-                    else:
-                        item.set_visual_state('normal')
+                item.set_visual_state(f'active_{btn_name}')
+
+    def _release_xbutton(self, btn_name):
+        held = self._holding_xbuttons.pop(btn_name, None)
+        if held is None:
+            return
+        item, key, smart = held
+        (self._smart_trigger if smart else trigger)(key, 'r')
+        if item is not None and _is_alive(item) and hasattr(item, 'set_visual_state'):
+            active = hasattr(item, '_hover_sm') and item._hover_sm.is_active
+            item.set_visual_state('hover' if active else 'normal')
+
+    def _release_xbuttons(self):
+        for btn_name in tuple(self._holding_xbuttons):
+            self._release_xbutton(btn_name)
 
     def _do_auto_center(self):
         """执行自动回中 — 使用实际屏幕尺寸（与原版一致）"""
@@ -784,7 +842,7 @@ class RunController(QObject):
         screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         cx = screen.x() + screen.width() // 2
         cy = screen.y() + screen.height() // 2
-        user32.SetCursorPos(cx, cy)
+        self.cursor_input.set_position(cx, cy)
 
     # ── 接收 Item 信号的槽 ──
 
@@ -1004,7 +1062,7 @@ class RunController(QObject):
             logger.warning("回中目标无法解析/不存在: '%s'", key)
             return
         try:
-            user32.SetCursorPos(pos[0], pos[1])
+            self.cursor_input.set_position(pos[0], pos[1])
         except Exception as e:
             logger.warning("回中 SetCursorPos 失败 '%s': %s", key, e)
 
@@ -1044,9 +1102,7 @@ class RunController(QObject):
 
         # cursor → scene 坐标
         try:
-            pt = ctypes.wintypes.POINT()
-            user32.GetCursorPos(ctypes.byref(pt))
-            view_pos = self._window.mapFromGlobal(QPoint(pt.x, pt.y))
+            view_pos = self._window.mapFromGlobal(self.cursor_input.position())
             scene_pos = self._window.mapToScene(view_pos)
         except Exception:
             return
@@ -1098,7 +1154,7 @@ class RunController(QObject):
             center_scene = stick.circle_center_scene()
             view_pt = self._window.mapFromScene(center_scene)
             screen_pt = self._window.mapToGlobal(view_pt)
-            user32.SetCursorPos(int(screen_pt.x()), int(screen_pt.y()))
+            self.cursor_input.set_position(screen_pt.x(), screen_pt.y())
         except Exception as e:
             logger.warning("SetCursorPos to stick center failed: %s", e)
         self._active_gp_stick = stick
@@ -1323,9 +1379,7 @@ class RunController(QObject):
             return
 
         try:
-            pt = ctypes.wintypes.POINT()
-            user32.GetCursorPos(ctypes.byref(pt))
-            screen_pt = QPoint(pt.x, pt.y)
+            screen_pt = self.cursor_input.position()
             view_pos = self._window.mapFromGlobal(screen_pt)
             scene_pos = self._window.mapToScene(view_pos)
         except Exception:
@@ -1535,7 +1589,7 @@ class RunController(QObject):
             center = wheel.rect_center_scene()
             view_pt = self._window.mapFromScene(center)
             screen_pt = self._window.mapToGlobal(view_pt)
-            user32.SetCursorPos(int(screen_pt.x()), int(screen_pt.y()))
+            self.cursor_input.set_position(screen_pt.x(), screen_pt.y())
             self._wheel_last_screen_y = int(screen_pt.y())
         except Exception as e:
             logger.warning("SetCursorPos to wheel center failed: %s", e)

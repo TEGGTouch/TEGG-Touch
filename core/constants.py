@@ -15,7 +15,7 @@ else:
     APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # === 应用信息 ===
-APP_VERSION = "0.5.1"
+APP_VERSION = "0.5.2-preview.1"
 # 用户数据路径一律锚定到 APP_DIR（exe 所在目录）的绝对路径，不再依赖当前工作目录(CWD)。
 # 历史上这些是相对路径，靠 main.py 启动时一句 os.chdir 兜底；一旦从别的目录被拉起
 # (命令行 / 计划任务 / 别的程序 spawn) 且 CWD 不是 exe 目录，profiles/config/settings
@@ -41,7 +41,6 @@ DEFAULT_HOTKEYS = {
     "soft_keyboard":  "f8",
     "pt_on":          "f9",
     "pt_off":         "f10",
-    "pt_block":       "f11",
     "stop":           "f12",
     "auto_center_delay": 1500,
 }
@@ -53,18 +52,16 @@ CURSOR_BASE_SIZE = 30   # 1x 对应的像素 (SVG viewBox 是 32×32, 绘制时�
 DEFAULT_CURSOR_STYLES = {
     "cursor":       {"stroke": "#FFFFFF", "fill": "#000000", "scale": 1.0},
     "cursor_off":   {"stroke": "#FFFFFF", "fill": "#005291", "scale": 1.0},
-    "cursor_block": {"stroke": "#FFFFFF", "fill": "#E69318", "scale": 1.0},
 }
 
 # === 圆球光标 (半透明实心圆, 类 iPadOS 指针; 圆心对齐真实光标顶点) ===
 # 形状: 'arrow' (默认箭头) | 'ball' (圆球)
 DEFAULT_CURSOR_SHAPE = "arrow"
 BALL_BASE_SIZE = 28     # 1x 圆球直径 (px); 按 scale 放大
-# 三种穿透各一套 {color, alpha(0~1), scale}; 默认黑/蓝/黄半透明, 与箭头 fill 同色系
+# 两种穿透各一套 {color, alpha(0~1), scale}，与箭头 fill 同色系
 DEFAULT_BALL_STYLES = {
     "cursor":       {"color": "#FFFFFF", "alpha": 0.6, "scale": 1.0},
     "cursor_off":   {"color": "#005291", "alpha": 0.6, "scale": 1.0},
-    "cursor_block": {"color": "#E69318", "alpha": 0.6, "scale": 1.0},
 }
 
 # === 方向盘样式 (全局, 跟 cursor 一样存 hotkeys.json) ===
@@ -85,7 +82,6 @@ def get_hotkey_labels():
         "soft_keyboard":  t("hotkey.soft_keyboard"),
         "pt_on":          t("hotkey.pt_on"),
         "pt_off":         t("hotkey.pt_off"),
-        "pt_block":       t("hotkey.pt_block"),
         "stop":           t("hotkey.stop"),
     }
 
@@ -391,14 +387,10 @@ RUNTIME_FIELDS = frozenset({
     '_sx', '_sy',  # 缓存的屏幕坐标（逻辑坐标+偏移）
 })
 
-# === 穿透模式三态常量 ===
+# === 穿透模式常量 ===
 PT_ON = "pt_on"        # 完全穿透：点击穿透到下层游戏/桌面
 PT_OFF = "pt_off"      # 智能穿透：按钮拦截，空白穿透
-PT_BLOCK = "pt_block"  # 不穿透：所有输入都被拦截
-PT_CYCLE = [PT_ON, PT_OFF, PT_BLOCK]  # 循环顺序
-
-# 不穿透模式覆盖色（半透明黑，提示用户当前处于拦截状态）
-COLOR_BLOCK_OVERLAY = "#1A1A1A"
+PT_CYCLE = [PT_ON, PT_OFF]
 
 # === 编辑弹窗 UI 颜色 ===
 C_PM_BG = "#2D2D2D"

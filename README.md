@@ -68,7 +68,8 @@ TEGG Touch creates a transparent overlay on your screen where you can freely pla
 | 🎮 **悬浮按键映射 Overlay-to-Key** | 全屏透明覆盖层，任意位置放置按钮，支持悬停/左右键/中键/滚轮/侧键/组合键 — Full-screen transparent overlay, place buttons anywhere, supports hover/click/scroll/combos |
 | 🎡 **中心轮盘 Wheel** | 8方向虚拟摇杆 + 中心环，5种布局（small/large/double/triple/dual）— 8-direction virtual joystick + center ring, 5 layout modes |
 | 📐 **回中带 Center Band** | 鼠标触碰自动归位屏幕中心，配合轮盘模拟摇杆回中 — Auto-return to screen center on contact |
-| 🔀 **三态穿透 Passthrough** | 穿透ON / 智能穿透 / 不穿透 三种模式 — ON / Smart / OFF three passthrough modes |
+| 🔀 **穿透 Passthrough** | 完全穿透 / 按钮拦截、空白穿透 — Full passthrough / Smart passthrough |
+| 🖱️ **自动光标兼容 Adaptive Cursor** | 游戏锁定光标时自动接管，释放后恢复系统光标，无需按游戏设置 — Automatically adapts to cursor capture, no per-game setup |
 | 🎤 **语音指令 Voice** | 离线语音识别（Vosk），支持中英文，自定义语音指令触发按键或宏 — Offline voice recognition (Vosk), Chinese & English, trigger keys or macros |
 | 🔄 **宏系统 Macros** | 录制/编辑按键宏（多步骤+延迟+重复），可绑定到按钮或语音 — Record/edit key macros with delays, bind to buttons or voice |
 
@@ -128,7 +129,6 @@ python main.py    # 以管理员运行 / Run as Administrator
 | F8 | 软键盘 Soft Keyboard |
 | F9 | 穿透ON Pass-Through ON |
 | F10 | 穿透OFF Pass-Through OFF |
-| F11 | 不穿透 Block Mode |
 | F12 | 停止 Stop (Edit Mode) |
 
 > 所有快捷键可在 ⚙ 设置中自定义 / All hotkeys are customizable in Settings.

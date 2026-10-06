@@ -16,7 +16,7 @@ from .constants import (
     MIN_WINDOW_SIZE, RUNTIME_FIELDS,
     BUTTON_OPTIONAL_DEFAULTS,
     PROFILES_DIR, PROFILES_INDEX, DEFAULT_PROFILE_NAME,
-    PT_ON, PT_OFF, PT_BLOCK,
+    PT_ON, PT_OFF,
     HOTKEYS_FILE, DEFAULT_HOTKEYS,
     default_wheel_sectors,
     default_wheel_center_ring,
@@ -444,11 +444,11 @@ def load_config_from_file(filepath: str) -> dict:
         result['transparency'] = data.get('transparency', DEFAULT_TRANSPARENCY)
         result['ball_x'] = data.get('ball_x', None)
         result['ball_y'] = data.get('ball_y', None)
-        # 兼容旧版布尔值 click_through → 新三态字符串
+        # 兼容旧版布尔值；已移除的 pt_block 回退完全穿透。
         raw_ct = data.get('click_through', True)
         if isinstance(raw_ct, bool):
             result['click_through'] = PT_ON if raw_ct else PT_OFF
-        elif raw_ct in (PT_ON, PT_OFF, PT_BLOCK):
+        elif raw_ct in (PT_ON, PT_OFF):
             result['click_through'] = raw_ct
         else:
             result['click_through'] = PT_ON
@@ -653,7 +653,7 @@ def save_config_to_file(filepath: str, *, geometry, transparency, buttons,
         'buttons': clean_btns,
         'ball_x': ball_x,
         'ball_y': ball_y,
-        'click_through': click_through,
+        'click_through': PT_ON if click_through == 'pt_block' else click_through,
         'wheel_visible': wheel_visible,
         'wheel_enlarged': wheel_enlarged,
         'wheel_center_ring_visible': wheel_center_ring_visible,
@@ -1053,6 +1053,7 @@ def save_hotkeys(hotkeys: dict) -> bool:
             except Exception:
                 pass
         existing.update(hotkeys)
+        existing.pop('pt_block', None)
         _atomic_write_json(HOTKEYS_FILE, existing)
         logger.info(f"快捷键配置保存成功: {HOTKEYS_FILE}")
         return True

@@ -111,11 +111,12 @@ def clear_cursor_render_cache():
 class VirtualCursorItem(QGraphicsItem):
     """屏幕中心的十字准星 / 自定义光标。"""
 
-    def __init__(self, cursor_type='cursor', style: dict | None = None):
+    def __init__(self, cursor_type='cursor', style: dict | None = None, position_source=None):
         super().__init__()
+        self._position_source = position_source or QCursor.pos
         self.setZValue(100)  # 始终在最上层
 
-        self._cursor_type = cursor_type  # 'cursor' | 'cursor_off' | 'cursor_block'
+        self._cursor_type = cursor_type  # 'cursor' | 'cursor_off'
         self._shape = 'arrow'            # 'arrow' | 'ball'
         self._style = dict(style) if style else dict(
             DEFAULT_CURSOR_STYLES.get(cursor_type, {}))
@@ -243,7 +244,7 @@ class VirtualCursorItem(QGraphicsItem):
         if not views:
             return
         view = views[0]
-        global_pos = QCursor.pos()
+        global_pos = self._position_source()
         view_pos = view.mapFromGlobal(global_pos)
         scene_pos = view.mapToScene(view_pos)
         # 加热点偏移: 箭头(0,0) 左上对齐; 圆球(-r,-r) 圆心对齐光标顶点

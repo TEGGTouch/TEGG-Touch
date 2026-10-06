@@ -28,17 +28,18 @@ _COOLDOWN_SECONDS = 24 * 60 * 60
 
 
 def _parse_version(tag: str) -> tuple:
-    """将 'v0.2.1' 或 '0.2.1' 解析为 (0, 2, 1) 元组，解析失败返回 (0,)。"""
+    """读取版本数字，兼容 preview/build 后缀，避免测试版被误判为 (0,)。"""
     tag = tag.strip().lstrip("vV")
     try:
-        return tuple(int(x) for x in tag.split("."))
+        return tuple(int(x) for x in tag.split("-", 1)[0].split("+", 1)[0].split("."))
     except (ValueError, AttributeError):
         return (0,)
 
 
 def _is_newer(remote_tag: str, local_version: str) -> bool:
     """remote_tag > local_version ?"""
-    return _parse_version(remote_tag) > _parse_version(local_version)
+    remote, local = _parse_version(remote_tag), _parse_version(local_version)
+    return remote > local or (remote == local and '-' in local_version and '-' not in remote_tag)
 
 
 def _should_check() -> bool:
