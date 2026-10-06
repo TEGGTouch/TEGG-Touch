@@ -149,7 +149,7 @@ class TagInput(QWidget):
             lbl.setStyleSheet(f"""
                 QLabel {{
                     background: {self._accent}; color: {self._tag_text};
-                    padding: 2px 6px; border-radius: 4px;
+                    padding: 2px 6px; border-radius: 0;
                 }}
             """)
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -163,7 +163,7 @@ class TagInput(QWidget):
         border_color = QColor(self._accent) if self._focused else QColor(C_GRAY)
         p.setPen(QPen(border_color, 2))
         p.setBrush(QBrush(QColor(C_INPUT_BG)))
-        p.drawRoundedRect(1, 1, self.width() - 2, self.height() - 2, 6, 6)
+        p.drawRect(1, 1, self.width() - 2, self.height() - 2)
 
     def focusInEvent(self, event):
         self._focused = True
@@ -234,7 +234,7 @@ class _FocusLineEdit(QLineEdit):
         self.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: white;
-                border: 2px solid {bc}; border-radius: 6px;
+                border: 2px solid {bc}; border-radius: 0;
                 padding: 4px 8px; font-size: 13px;
             }}
         """)
@@ -307,7 +307,7 @@ def populate_gp_palette(layout, fn, on_gp_click, dialog):
         install_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER}; color: #FFF;
-                border: none; border-radius: 6px; padding: 0 24px;
+                border: none; border-radius: 0; padding: 0 24px;
             }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
@@ -348,11 +348,11 @@ class ButtonEditorDialog(QDialog):
     xmacros_changed = pyqtSignal(list)    # 统一混合宏池变更
     apps_changed = pyqtSignal(list)       # 应用池变更
 
-    LEFT_W = 340
+    LEFT_W = 480
     RIGHT_W = 560
     PADDING = 20
-    WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20  # 940
-    WIN_H = 960
+    WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20
+    WIN_H = 820
 
     MAX_MACROS = 20
     C_MACRO = "#8B5CF6"  # 宏 tag 紫色
@@ -380,6 +380,8 @@ class ButtonEditorDialog(QDialog):
         self.setFixedSize(self.WIN_W, self.WIN_H)
 
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1120, 820), actions=[t("editor.copy"), t("editor.delete"), t("editor.save")], columns=True, guidance=('① 点击左侧字段 → ② 在右侧添加动作（Backspace 删除）→ ③ 保存', '1 Select a field → 2 Add actions on the right (Backspace removes) → 3 Save'))
         self._center_on_screen()
         self._drag_pos = None
 
@@ -411,7 +413,7 @@ class ButtonEditorDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#be_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 0;
                 border: 1px solid #444;
             }}
         """)
@@ -441,22 +443,13 @@ class ButtonEditorDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         close_btn.clicked.connect(self.reject)
         title_row.addWidget(close_btn)
         root.addLayout(title_row)
-
-        # ── 提示文字 ──
-        tip = QLabel(t("editor.tip"))
-        tip.setFont(_make_font(fn, 14))
-        tip.setStyleSheet("color: #888; background: transparent;")
-        tip.setWordWrap(True)
-        root.addWidget(tip)
-
-        root.addSpacing(20)
 
         # ── 双栏 ──
         columns = QHBoxLayout()
@@ -474,6 +467,8 @@ class ButtonEditorDialog(QDialog):
         sc_lay.setSpacing(0)
         sc_lay.setContentsMargins(0, 0, 8, 0)   # 右侧留 8px 给滚动条
 
+        from views.ui_components import section_heading
+        sc_lay.addWidget(section_heading("01  基本信息", "01  Basic information"))
         # 名称
         sc_lay.addLayout(self._build_field_row(
             fn, 'name', t("editor.name"), self.data.name, is_tag=False, show_dot=False))
@@ -484,6 +479,7 @@ class ButtonEditorDialog(QDialog):
         sc_lay.addWidget(sep1)
         sc_lay.addSpacing(16)
 
+        sc_lay.addWidget(section_heading("02  悬停行为", "02  Hover behavior"))
         # 悬停区块 (切换器 + 说明 + 字段 Stack)
         sc_lay.addLayout(self._build_hover_block(fn))
 
@@ -493,6 +489,7 @@ class ButtonEditorDialog(QDialog):
         sc_lay.addWidget(sep2)
         sc_lay.addSpacing(20)
 
+        sc_lay.addWidget(section_heading("03  鼠标按键", "03  Mouse buttons"))
         # 鼠标键位
         mouse_fields = [
             ('lclick', t("editor.lclick")),
@@ -504,6 +501,9 @@ class ButtonEditorDialog(QDialog):
             ('wheeldown', t("editor.wheeldown")),
         ]
         for i, (field, label) in enumerate(mouse_fields):
+            if field == "wheelup":
+                sc_lay.addSpacing(16)
+                sc_lay.addWidget(section_heading("04  鼠标滚轮", "04  Mouse wheel"))
             sc_lay.addLayout(self._build_field_row(
                 fn, field, label, getattr(self.data, field, ''), is_tag=True))
             if i < len(mouse_fields) - 1:
@@ -522,7 +522,7 @@ class ButtonEditorDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 0; min-height: 30px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
@@ -536,12 +536,6 @@ class ButtonEditorDialog(QDialog):
         left_outer.setSpacing(0)
         left_outer.setContentsMargins(0, 0, 0, 0)
         left_outer.addWidget(scroll, 1)
-        left_outer.addSpacing(10)
-        bottom_sep = QFrame()
-        bottom_sep.setFixedHeight(1)
-        bottom_sep.setStyleSheet("background: #444;")
-        left_outer.addWidget(bottom_sep)
-        left_outer.addSpacing(12)
         left_outer.addLayout(self._build_bottom_buttons(fn))
 
         left_widget = QWidget()
@@ -562,6 +556,8 @@ class ButtonEditorDialog(QDialog):
         # ════ 右栏: Tab 切换 (常规按键 / 自定义宏) ════
         right = self._build_right_tabbed_panel(fn)
         columns.addWidget(right, 1)
+        from views.ui_components import target_hint
+        target_hint(self, right.layout(), self._fields)
 
         root.addLayout(columns, 1)
 
@@ -679,7 +675,7 @@ class ButtonEditorDialog(QDialog):
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {bg}; color: {fg};
-                    border: none; border-radius: 6px;
+                    border: none; border-radius: 0;
                 }}
                 QPushButton:hover {{
                     background: {C_CYBER_H if selected else C_GRAY_H};
@@ -739,20 +735,21 @@ class ButtonEditorDialog(QDialog):
         r1.addWidget(dot)
 
         lbl = QLabel(label_text)
-        lbl.setFont(_make_font(fn, 16))
+        lbl.setFont(_make_font(fn, 14))
+        lbl.setFixedWidth(150)
         lbl.setStyleSheet("color: #CCC; background: transparent;")
         r1.addWidget(lbl)
 
-        r1.addStretch()
+        r1.addSpacing(8)
 
         entry = QLineEdit(str(value))
-        entry.setFixedSize(80, 28)
+        entry.setFixedSize(64, 28)
         entry.setAlignment(Qt.AlignmentFlag.AlignCenter)
         entry.setFont(_make_font(fn, 13))
         entry.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: {C_DELAY};
-                border: 1px solid #555; border-radius: 4px;
+                border: 1px solid #555; border-radius: 0;
             }}
             QLineEdit:focus {{ border-color: {C_DELAY}; }}
         """)
@@ -761,7 +758,7 @@ class ButtonEditorDialog(QDialog):
         r1.addSpacing(10)
 
         ms_lbl = QLabel("ms")
-        ms_lbl.setFont(_make_font(fn, 16))
+        ms_lbl.setFont(_make_font(fn, 14))
         ms_lbl.setStyleSheet("color: #888; background: transparent;")
         r1.addWidget(ms_lbl)
 
@@ -775,17 +772,17 @@ class ButtonEditorDialog(QDialog):
         slider.setPageStep(step)
         slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 4px;
+                background: #404040; height: 8px; border-radius: 0;
             }}
             QSlider::sub-page:horizontal {{
-                background: {C_DELAY}; border-radius: 4px;
+                background: {C_DELAY}; border-radius: 0;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 4px;
+                background: #404040; border-radius: 0;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;
-                width: 16px; height: 16px; margin: -4px 0; border-radius: 8px;
+                width: 16px; height: 16px; margin: -4px 0; border-radius: 0;
             }}
             QSlider::handle:horizontal:hover {{
                 background: {C_DELAY};
@@ -807,7 +804,9 @@ class ButtonEditorDialog(QDialog):
         slider.valueChanged.connect(_slider_to_entry)
         entry.editingFinished.connect(_entry_to_slider)
 
-        col.addWidget(slider)
+        slider.setFixedHeight(24)
+        slider.setMinimumWidth(48)
+        r1.insertWidget(2, slider, 1)
 
         # 可选说明文字
         if hint:
@@ -854,7 +853,7 @@ class ButtonEditorDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 0; min-height: 30px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 height: 0;
@@ -955,7 +954,7 @@ class ButtonEditorDialog(QDialog):
         copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -975,7 +974,7 @@ class ButtonEditorDialog(QDialog):
             del_btn.setStyleSheet("""
                 QPushButton {
                     background: #3A3A3A; color: #666666;
-                    border: none; border-radius: 6px;
+                    border: none; border-radius: 0;
                 }
             """)
         else:
@@ -984,7 +983,7 @@ class ButtonEditorDialog(QDialog):
             del_btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {C_CLOSE}; color: #FFF;
-                    border: none; border-radius: 6px;
+                    border: none; border-radius: 0;
                 }}
                 QPushButton:hover {{ background: {C_CLOSE_H}; }}
             """)
@@ -998,7 +997,7 @@ class ButtonEditorDialog(QDialog):
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
@@ -1247,7 +1246,7 @@ class ButtonEditorDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 0; min-height: 30px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -1264,7 +1263,7 @@ class ButtonEditorDialog(QDialog):
         new_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {self.C_MACRO}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: #7C3AED; }}
         """)
@@ -1325,7 +1324,7 @@ class ButtonEditorDialog(QDialog):
             row.setObjectName("macro_row")
             row.setStyleSheet(f"""
                 QFrame#macro_row {{
-                    background: {C_GRAY}; border-radius: 6px;
+                    background: {C_GRAY}; border-radius: 0;
                 }}
                 QFrame#macro_row:hover {{
                     background: {self.C_MACRO};
@@ -1359,7 +1358,7 @@ class ButtonEditorDialog(QDialog):
                 QPushButton {{
                     color: white; background: transparent; border: none;
                 }}
-                QPushButton:hover {{ background: rgba(255,255,255,0.15); border-radius: 6px; }}
+                QPushButton:hover {{ background: rgba(255,255,255,0.15); border-radius: 0; }}
             """)
             edit_btn.clicked.connect(lambda _, idx=i: self._edit_macro(idx))
             row_lay.addWidget(edit_btn)
@@ -1378,7 +1377,7 @@ class ButtonEditorDialog(QDialog):
                 QPushButton {{
                     color: white; background: transparent; border: none;
                 }}
-                QPushButton:hover {{ background: rgba(255,255,255,0.15); border-radius: 6px; }}
+                QPushButton:hover {{ background: rgba(255,255,255,0.15); border-radius: 0; }}
             """)
             copy_btn.clicked.connect(lambda _, idx=i: self._copy_macro(idx))
             row_lay.addWidget(copy_btn)
@@ -1397,7 +1396,7 @@ class ButtonEditorDialog(QDialog):
                 QPushButton {{
                     color: white; background: transparent; border: none;
                 }}
-                QPushButton:hover {{ background: rgba(255,255,255,0.15); border-radius: 6px; }}
+                QPushButton:hover {{ background: rgba(255,255,255,0.15); border-radius: 0; }}
             """)
             del_btn.clicked.connect(lambda _, idx=i: self._delete_macro(idx))
             row_lay.addWidget(del_btn)
@@ -1518,7 +1517,7 @@ class _FlowWidget(QWidget):
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {C_TAG_BG}; color: {C_TAG_TEXT};
-                    border: none; border-radius: 6px;
+                    border: none; border-radius: 0;
                     padding: 0 {self.TAG_PAD_X}px;
                 }}
                 QPushButton:hover {{ background: {C_TAG_HOVER}; }}

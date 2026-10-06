@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>蛋挞 · UI 分支实机效果</title>
+<style>
+*{box-sizing:border-box}html{color-scheme:dark;background:#202020;color:#ddd;font:15px/1.6 "Microsoft YaHei UI",sans-serif}body{margin:0}header,main{max-width:1480px;margin:auto;padding:28px}header{border-bottom:1px solid #444}h1{margin:0 0 12px;border-left:3px solid #f59e0b;padding-left:18px;color:#fff;font-size:28px}p{color:#aaa;margin:10px 0}a{color:#fbbf24}nav{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}nav a{border:1px solid #555;background:#303030;text-decoration:none;padding:6px 14px}nav a:hover{border-color:#f59e0b}section{margin:0 0 42px;scroll-margin-top:24px}h2{color:#fff;font-size:21px;margin:0 0 16px}article{background:#292929;border:1px solid #444;margin-bottom:22px;padding:18px}h3{font-size:16px;font-weight:500;margin:0 0 12px;color:#ddd}img{display:block;max-width:100%;height:auto;margin:auto}article a{display:block}small{color:#aaa;display:block;margin-top:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.grid article{margin:0}.grid img{max-height:560px;object-fit:contain}@media(max-width:800px){header,main{padding:18px}.grid{grid-template-columns:1fr}}
+</style>
+<header>
+ <h1>蛋挞 · UI 分支实机效果</h1>
+ <p>feature/ui-inputegg · 琥珀基调 · 方角 · 三行工具栏 · 固定标题与底栏 · 按内容分栏滚动。</p>
+ <p>先看运行中的工具栏和按钮编辑器，再看各功能窗口。点击图片可打开原尺寸截图。</p>
+ <nav><a href="#running">运行画面</a><a href="#editors">编辑弹窗</a><a href="#settings">设置</a><a href="#auxiliary">子弹窗与状态窗口</a><a href="#compact">压缩工作区</a><a href="ui-redesign-plan.md">改造记录</a><a href="ui-color-inventory.md">配色清单</a></nav>
+</header>
+<main>
+ <section id="running">
+  <h2>运行中的客户端</h2>
+  <p>通过原 main.main() 启动。窗口使用 UI 分支的本地默认方案，原目录中的方案和配置保持独立。</p>
+  <article><h3>编辑工具栏 · 方案 / 透明度 / 缩放 / 窗口操作；模拟模式 / 语音控制 / 软键盘 / 启动</h3><a href="ui-running-toolbar.png"><img src="ui-running-toolbar.png" alt="运行中的三行编辑工具栏"></a></article>
+  <article><h3>当前方案的“全配置示范” · 原按钮编辑入口</h3><a href="ui-running-editor.png"><img src="ui-running-editor.png" alt="运行中的按钮编辑器，标题底栏固定，字段和候选分别滚动"></a></article>
+  <div class="grid">
+   <article><h3>键盘模式 · 1070×159</h3><a href="ui-client-EditToolbar.png"><img src="ui-client-EditToolbar.png" alt="键盘模拟模式"></a></article>
+   <article><h3>手柄模式 · 同宽，入口随模式变化</h3><a href="ui-client-EditToolbar-gamepad.png"><img src="ui-client-EditToolbar-gamepad.png" alt="手柄模拟模式"></a></article>
+  </div>
+  <article style="margin-top:18px"><h3>运行工具栏 · 保留原入口和状态配色</h3><a href="ui-client-RunToolbar.png"><img src="ui-client-RunToolbar.png" alt="运行工具栏"></a></article>
+ </section>
+ <section id="editors"><h2>编辑弹窗</h2><p>实际 Qt 组件截图。每个窗口保留原有字段、候选动作、控件预览与功能配色。</p><div class="grid" id="editor-grid"></div></section>
+ <section id="settings"><h2>设置 · 六个页面</h2><p>沿用原侧边导航与控件预览；当前页面的已有保存 / 重置操作移至固定底栏。</p><div class="grid" id="settings-grid"></div></section>
+ <section id="auxiliary"><h2>子弹窗与状态窗口</h2><p>采用同一标题 / 底栏外壳。语音识别、驱动检测、诊断打包在截图盘点中暂停；这些图片用于检查视觉。</p><div class="grid" id="auxiliary-grid"></div></section>
+ <section id="compact"><h2>压缩工作区</h2><p>在实际 Windows Qt 中模拟 1216×620 逻辑尺寸，检查高缩放 / 较小可用空间；标题、关闭和底栏保持可见。</p><div class="grid" id="compact-grid"></div></section>
+ <p>盘点环境：逻辑屏幕 2048×1152、可用 2048×1104、DPR 1.25。正式入口沿用原关闭 Qt 缩放的设置，运行截图 DPR 为 1。<a href="ui-capture-report.json">尺寸核对记录</a></p>
+</main>
+<script>
+const groups={
+ 'editor-grid':[
+  ['ButtonEditorDialog','按钮编辑 · 名称 → 悬停 → 鼠标按键 → 滚轮'],
+  ['VoiceSettingsDialog','语音 · 识别设置与指令编辑分区，测试单独入口'],
+  ['KeyRemapDialog','键盘映射 · 来源 → 目标 → 触发模式'],
+  ['MacroEditorDialog','宏 · 指令 / 延迟步骤，保留拖动排序'],
+  ['GpStickEditorDialog','手柄摇杆 · 参数与鼠标动作'],
+  ['GpWheelEditorDialog','方向盘 · 轻松操控'],
+  ['direction-advanced','方向盘 · 复杂设置与 LT / RT'],
+  ['GpWheelMouseDialog','方向盘 · 其他鼠标按键'],
+  ['WheelStyleDialog','轮盘样式 · 保留原控件预览'],
+  ['CenterBandDialog','回中带 · 目标选择'],
+  ['ProfileManagerDialog','方案管理 · 查看与应用仍是两个操作']],
+ 'settings-grid':[['settings-0','快捷键'],['settings-1','光标配色'],['settings-5','按钮配色与方向盘预览'],['settings-2','语言'],['settings-3','日志与诊断'],['settings-4','关于蛋挞']],
+ 'auxiliary-grid':[['VoiceTestDialog','语音测试 · 波形 / 结果 / 固定状态栏'],['_ChunkSizeDialog','语音识别延迟'],['_ProfileCopyDialog','方案复制'],['_StyledInputDialog','方案命名'],['_StyledConfirmDialog','方案删除确认'],['_StyledMessageDialog','消息提示'],['GamepadInstallDialog','手柄驱动状态'],['DiagExportDialog','诊断打包状态'],['UpdateDialog','更新提示'],['PostUpdateDialog','更新完成'],['AboutDialog','独立关于窗口']],
+ 'compact-grid':[['ButtonEditorDialog','按钮编辑 · 1120×620'],['VoiceSettingsDialog','语音 · 1216×620'],['KeyRemapDialog','映射 · 1216×620'],['HotkeySettingsDialog','设置 · 1216×620'],['GpWheelEditorDialog','方向盘 · 1216×620']]
+};
+for(const [id,entries] of Object.entries(groups)){
+ const grid=document.getElementById(id);
+ for(const [name,title] of entries){
+  const file=(id==='compact-grid'?'ui-compact-':'ui-client-')+name+'.png';
+  const article=document.createElement('article');
+  const heading=document.createElement('h3');heading.textContent=title;
+  const link=document.createElement('a');link.href=file;
+  const img=document.createElement('img');img.src=file;img.alt=title;img.loading='lazy';
+  link.append(img);article.append(heading,link);grid.append(article);
+ }
+}
+</script>
+</html>

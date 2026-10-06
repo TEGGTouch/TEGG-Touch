@@ -104,11 +104,11 @@ class _CheckToggle(QWidget):
             self._box.setText("✓")
             self._box.setStyleSheet(
                 f"background: {self._accent}; color: #1A1A1A; "
-                f"border-radius: 4px; font-weight: bold;")
+                f"border-radius: 0; font-weight: bold;")
         else:
             self._box.setText("")
             self._box.setStyleSheet(
-                "background: #2A2A2A; border: 2px solid #555; border-radius: 4px;")
+                "background: #2A2A2A; border: 2px solid #555; border-radius: 0;")
 
 
 class KeyRemapDialog(QDialog):
@@ -118,12 +118,12 @@ class KeyRemapDialog(QDialog):
     xmacros_changed = pyqtSignal(list)
     apps_changed = pyqtSignal(list)
 
-    COL1_W = 260
-    COL2_W = 320
+    COL1_W = 240
+    COL2_W = 390
     PADDING = 20
     GUTTER = 20
-    WIN_W = 1160
-    WIN_H = 860
+    WIN_W = 1280
+    WIN_H = 820
 
     CAPTURE_TIMEOUT_MS = 8000
 
@@ -151,6 +151,8 @@ class KeyRemapDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1280, 820), actions=[t("key_remap.add"), t("key_remap.delete"), t("key_remap.save")], columns=True, guidance=('① 选择或新增映射 → ② 捕获来源键 → ③ 设置目标与行为', '1 Select or add a mapping → 2 Capture its source → 3 Set the target and behavior'), scope=self._editor_form, scope_actions=[t("key_remap.delete"), t("key_remap.save")])
         self._rebuild_list()
         if self._remaps:
             self._list.setCurrentRow(0)
@@ -170,7 +172,7 @@ class KeyRemapDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#kr_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 0;
                 border: 1px solid #444;
             }}
         """)
@@ -201,19 +203,13 @@ class KeyRemapDialog(QDialog):
                                      bold=not _ICON_FONT))
         close_btn.setStyleSheet(f"""
             QPushButton {{ background: {C_CLOSE}; color: #FFF;
-                           border: none; border-radius: 6px; }}
+                           border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         close_btn.clicked.connect(self.reject)
         title_row.addWidget(close_btn)
         root.addLayout(title_row)
 
-        tip = QLabel(t("key_remap.tip"))
-        tip.setFont(_make_font(fn, 14))
-        tip.setStyleSheet("color: #888; background: transparent;")
-        tip.setWordWrap(True)
-        root.addWidget(tip)
-        root.addSpacing(14)
 
         # ── 三列 ──
         columns = QHBoxLayout()
@@ -258,14 +254,14 @@ class KeyRemapDialog(QDialog):
         self._list.setStyleSheet(f"""
             QListWidget {{ background: transparent; border: none;
                            color: #E0E0E0; outline: none; }}
-            QListWidget::item {{ background: {C_GRAY}; border-radius: 6px;
+            QListWidget::item {{ background: {C_GRAY}; border-radius: 0;
                                  padding: 8px 10px; margin-bottom: 6px; }}
             QListWidget::item:selected {{ background: {C_ACCENT}; color: #1A1A1A; }}
             QListWidget::item:hover {{ background: {C_GRAY_H}; color: #FFF; }}
             /* 选中行被 hover 时不能被上面那条 hover 规则改成白字 —— 琥珀底必须配黑字 */
             QListWidget::item:selected:hover {{ background: {C_ACCENT}; color: #1A1A1A; }}
             QScrollBar:vertical {{ background: transparent; width: 8px; border: none; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px;
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 0;
                                            min-height: 30px; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -279,7 +275,7 @@ class KeyRemapDialog(QDialog):
         add_btn.setFont(_make_font(fn, 14))
         add_btn.setStyleSheet(f"""
             QPushButton {{ background: {C_ACCENT}; color: #1A1A1A;
-                           border: none; border-radius: 6px; }}
+                           border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_ACCENT_H}; }}
         """)
         add_btn.clicked.connect(self._on_add)
@@ -380,7 +376,7 @@ class KeyRemapDialog(QDialog):
         del_btn.setFont(_make_font(fn, 14))
         del_btn.setStyleSheet(f"""
             QPushButton {{ background: {C_CLOSE}; color: #FFF;
-                           border: none; border-radius: 6px; }}
+                           border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         del_btn.clicked.connect(self._on_delete)
@@ -392,7 +388,7 @@ class KeyRemapDialog(QDialog):
         save_btn.setFont(_make_font(fn, 16, bold=True))
         save_btn.setStyleSheet(f"""
             QPushButton {{ background: {C_ACCENT}; color: #1A1A1A;
-                           border: none; border-radius: 6px; }}
+                           border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_ACCENT_H}; }}
         """)
         save_btn.clicked.connect(self._on_save)
@@ -407,6 +403,9 @@ class KeyRemapDialog(QDialog):
         has = 0 <= self._current_idx < len(self._remaps)
         self._editor_form.setVisible(has)
         self._editor_hint.setVisible(not has)
+        for button in getattr(self, "_ui_actions", []):
+            if button.text() in (t("key_remap.delete"), t("key_remap.save"),):
+                button.setEnabled(has)
 
     # ── 物理键捕获 ──
 
@@ -415,7 +414,7 @@ class KeyRemapDialog(QDialog):
             self._src_btn.setText(t("key_remap.capturing"))
             self._src_btn.setStyleSheet(f"""
                 QPushButton {{ background: #2A2A2A; color: {C_ACCENT};
-                               border: 2px dashed {C_ACCENT}; border-radius: 6px; }}
+                               border: 2px dashed {C_ACCENT}; border-radius: 0; }}
             """)
             return
         src = ''
@@ -425,7 +424,7 @@ class KeyRemapDialog(QDialog):
         color = "#FFF" if src else "#888"
         self._src_btn.setStyleSheet(f"""
             QPushButton {{ background: #2A2A2A; color: {color};
-                           border: 2px solid {C_GRAY_H}; border-radius: 6px; }}
+                           border: 2px solid {C_GRAY_H}; border-radius: 0; }}
             QPushButton:hover {{ border-color: {C_ACCENT}; }}
         """)
 
@@ -481,13 +480,13 @@ class KeyRemapDialog(QDialog):
             if k == self._current_mode:
                 b.setStyleSheet(f"""
                     QPushButton {{ background: {C_ACCENT}; color: #1A1A1A;
-                                   border: none; border-radius: 6px; padding: 0 10px; }}
+                                   border: none; border-radius: 0; padding: 0 10px; }}
                     QPushButton:hover {{ background: {C_ACCENT_H}; }}
                 """)
             else:
                 b.setStyleSheet("""
                     QPushButton { background: #404040; color: #AAA;
-                                  border: none; border-radius: 6px; padding: 0 10px; }
+                                  border: none; border-radius: 0; padding: 0 10px; }
                     QPushButton:hover { background: #505050; }
                 """)
         if hasattr(self, '_mode_hint'):
@@ -561,7 +560,7 @@ class KeyRemapDialog(QDialog):
         sc.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px;
+            QScrollBar::handle:vertical { background: #404040; border-radius: 0;
                                           min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
@@ -680,7 +679,7 @@ class KeyRemapDialog(QDialog):
             QListWidget::item {{ background: transparent; padding: 0px; border: none; }}
             QListWidget::item:selected {{ background: transparent; }}
             QScrollBar:vertical {{ background: transparent; width: 8px; border: none; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px;
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 0;
                                            min-height: 30px; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -694,7 +693,7 @@ class KeyRemapDialog(QDialog):
         new_btn.setFont(_make_font(fn, 15))
         new_btn.setStyleSheet(f"""
             QPushButton {{ background: {C_MACRO}; color: #FFF;
-                           border: none; border-radius: 6px; }}
+                           border: none; border-radius: 0; }}
             QPushButton:hover {{ background: #7C3AED; }}
         """)
         new_btn.clicked.connect(self._new_macro)
@@ -725,7 +724,7 @@ class KeyRemapDialog(QDialog):
             row.setFixedHeight(ROW_H)
             row.setObjectName("macro_row")
             row.setStyleSheet(f"""
-                QFrame#macro_row {{ background: {C_GRAY}; border-radius: 6px; }}
+                QFrame#macro_row {{ background: {C_GRAY}; border-radius: 0; }}
                 QFrame#macro_row:hover {{ background: {C_MACRO}; }}
             """)
             row.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -747,7 +746,7 @@ class KeyRemapDialog(QDialog):
                 b.setStyleSheet("""
                     QPushButton { color: white; background: transparent; border: none; }
                     QPushButton:hover { background: rgba(255,255,255,0.15);
-                                        border-radius: 6px; }
+                                        border-radius: 0; }
                 """)
                 b.clicked.connect(slot)
                 rl.addWidget(b)

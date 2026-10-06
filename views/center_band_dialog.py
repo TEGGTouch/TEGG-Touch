@@ -66,6 +66,8 @@ class CenterBandDialog(QDialog):
         self.setFixedSize(self.WIN_W, self.WIN_H)
 
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (520, 520), actions=[t("editor.copy"), t("editor.delete"), t("gp_stick_editor.save")], columns=False, guidance=('选择接触回中带时要回中的目标', 'Choose the target to recenter when the band is touched.'))
         self._center_on_screen()
         self._drag_pos = None
 
@@ -82,7 +84,7 @@ class CenterBandDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#cb_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 0;
                 border: 1px solid #444;
             }}
         """)
@@ -111,7 +113,7 @@ class CenterBandDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -154,7 +156,7 @@ class CenterBandDialog(QDialog):
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.setFont(_make_font(fn, 18, bold=True))
         save_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
         save_btn.clicked.connect(self._on_save)
@@ -170,7 +172,7 @@ class CenterBandDialog(QDialog):
         copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -187,7 +189,7 @@ class CenterBandDialog(QDialog):
         del_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)

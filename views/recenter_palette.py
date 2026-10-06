@@ -44,7 +44,7 @@ class RecenterPaletteWidget(QWidget):
         self._scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -102,12 +102,12 @@ class RecenterPaletteWidget(QWidget):
             if key == self._current:
                 btn.setStyleSheet("""
                     QPushButton { background: #10B981; color: #1A1A1A; border: none;
-                        border-radius: 6px; padding: 0 10px; text-align: left; }
+                        border-radius: 0; padding: 0 10px; text-align: left; }
                     QPushButton:hover { background: #34D399; }
                 """)
             else:
                 btn.setStyleSheet(f"""
                     QPushButton {{ background: {C_GRAY}; color: #E0E0E0; border: none;
-                        border-radius: 6px; padding: 0 10px; text-align: left; }}
+                        border-radius: 0; padding: 0 10px; text-align: left; }}
                     QPushButton:hover {{ background: {C_GRAY_H}; }}
                 """)

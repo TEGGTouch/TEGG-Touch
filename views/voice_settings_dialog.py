@@ -120,13 +120,13 @@ class _CheckToggle(QWidget):
             self._box.setText(icon)
             self._box.setStyleSheet(
                 f"background: {self._accent}; color: #FFF;"
-                " border-radius: 4px;"
+                " border-radius: 0;"
             )
         else:
             self._box.setText("")
             self._box.setStyleSheet(
                 "background: #333; color: transparent;"
-                " border: 1px solid #666; border-radius: 4px;"
+                " border: 1px solid #666; border-radius: 0;"
             )
 
 
@@ -191,7 +191,7 @@ class _CommandRow(QFrame):
         self._phrase_edit.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: white;
-                border: 2px solid {C_GRAY}; border-radius: 6px;
+                border: 2px solid {C_GRAY}; border-radius: 0;
                 padding: 2px 8px;
             }}
             QLineEdit:focus {{ border-color: {C_GREEN}; }}
@@ -243,7 +243,7 @@ class _CommandRow(QFrame):
         del_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -272,7 +272,7 @@ class _CommandRow(QFrame):
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background: {C_CYBER}; color: #FFF;
-                        border: none; border-radius: 6px; padding: 0 12px;
+                        border: none; border-radius: 0; padding: 0 12px;
                     }}
                     QPushButton:hover {{ background: {C_CYBER_H}; }}
                 """)
@@ -280,7 +280,7 @@ class _CommandRow(QFrame):
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background: #404040; color: #AAA;
-                        border: none; border-radius: 6px; padding: 0 12px;
+                        border: none; border-radius: 0; padding: 0 12px;
                     }}
                     QPushButton:hover {{ background: #505050; }}
                 """)
@@ -326,6 +326,8 @@ class _ChunkSizeDialog(QDialog):
         self.setFixedWidth(440)
         _detect_icon_font()
         self._build_ui(cur)
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (520, 360), actions=[t("voice_dialog.chunk_reset"), t("voice_dialog.chunk_cancel"), t("voice_dialog.save")], columns=False, guidance=None)
         self._center_on_parent()
 
     def _build_ui(self, cur):
@@ -338,7 +340,7 @@ class _ChunkSizeDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#cs_container {{
                 background: {C_PM_BG};
-                border-radius: 8px; border: 1px solid #444;
+                border-radius: 0; border: 1px solid #444;
             }}
         """)
         outer.addWidget(container)
@@ -383,17 +385,17 @@ class _ChunkSizeDialog(QDialog):
         self._slider.setValue(cur // self._STEP)
         self._slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 4px;
+                background: #404040; height: 8px; border-radius: 0;
             }}
             QSlider::sub-page:horizontal {{
-                background: {C_GREEN}; border-radius: 4px;
+                background: {C_GREEN}; border-radius: 0;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 4px;
+                background: #404040; border-radius: 0;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: 1px solid #999;
-                width: 18px; height: 18px; margin: -5px 0; border-radius: 9px;
+                width: 18px; height: 18px; margin: -5px 0; border-radius: 0;
             }}
             QSlider::handle:horizontal:hover {{
                 background: {C_GREEN}; border-color: {C_GREEN_H};
@@ -428,7 +430,7 @@ class _ChunkSizeDialog(QDialog):
         reset_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px; padding: 0 14px;
+                border: none; border-radius: 0; padding: 0 14px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -444,7 +446,7 @@ class _ChunkSizeDialog(QDialog):
         cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px; padding: 0 18px;
+                border: none; border-radius: 0; padding: 0 18px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -458,7 +460,7 @@ class _ChunkSizeDialog(QDialog):
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER}; color: #FFF;
-                border: none; border-radius: 6px; padding: 0 22px;
+                border: none; border-radius: 0; padding: 0 22px;
             }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
@@ -541,12 +543,12 @@ class VoiceSettingsDialog(QDialog):
     apps_changed = pyqtSignal(list)      # 应用池变更
 
     # 三列布局: 列表 / 编辑 / 候选按键面板
-    COL1_W = 280     # 指令列表 + 底部 mic/test/language
-    COL2_W = 320     # 当前选中指令编辑区
+    COL1_W = 240     # 指令列表 + 底部 mic/test/language
+    COL2_W = 390     # 当前选中指令编辑区
     PADDING = 20
     GUTTER = 20      # 列间距
-    WIN_W = 1200
-    WIN_H = 960
+    WIN_W = 1280
+    WIN_H = 820
     COL3_W = WIN_W - PADDING * 2 - COL1_W - COL2_W - GUTTER * 2 - 2  # = 538
 
     def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, xmacros=None, voice_auto_start=True, voice_chunk_size=None, apps=None, recenter_targets=None):
@@ -579,6 +581,8 @@ class VoiceSettingsDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1280, 820), actions=[t("voice_dialog.add_command"), t("voice_dialog.copy"), t("voice_dialog.delete_command"), t("voice_dialog.save")], columns=True, guidance=('① 选择指令 → ② 修改口令与行为 → ③ 测试指令 → ④ 保存', '1 Select a command → 2 Edit phrase and behavior → 3 Test → 4 Save'), scope=self._editor_form, scope_actions=[t("voice_dialog.copy"), t("voice_dialog.delete_command"), t("voice_dialog.save")])
         self._load_commands()
         self._center_on_screen()
 
@@ -592,7 +596,7 @@ class VoiceSettingsDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#vs_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 0;
                 border: 1px solid #444;
             }}
         """)
@@ -629,7 +633,7 @@ class VoiceSettingsDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -638,17 +642,22 @@ class VoiceSettingsDialog(QDialog):
         root.addLayout(title_row)
 
         # Tip
-        tip = QLabel(t("voice_dialog.tip"))
-        tip.setFont(_make_font(fn, 14))
-        tip.setStyleSheet("color: #888; background: transparent;")
-        tip.setWordWrap(True)
-        root.addWidget(tip)
-        root.addSpacing(16)
 
         # ── 三列布局: 指令列表 | 编辑区 | 候选按键面板 ──
         columns = QHBoxLayout()
         columns.setSpacing(0)
 
+        from views.ui_components import section_heading
+        recognition = QHBoxLayout()
+        recognition.setSpacing(24)
+        controls = QWidget()
+        controls_col = QVBoxLayout(controls)
+        controls_col.setContentsMargins(0, 0, 0, 0)
+        controls_col.addWidget(section_heading("识别设置", "Recognition settings"))
+        recognition.addWidget(controls, 1)
+        self._recognition_layout = controls_col
+        root.addLayout(recognition)
+        root.addSpacing(12)
         # Col1
         col1 = self._build_col1_list(fn)
         col1.setFixedWidth(self.COL1_W)
@@ -698,7 +707,7 @@ class VoiceSettingsDialog(QDialog):
                 color: #E0E0E0; outline: none;
             }}
             QListWidget::item {{
-                background: {C_GRAY}; border-radius: 6px;
+                background: {C_GRAY}; border-radius: 0;
                 padding: 8px 10px;
             }}
             QListWidget::item:selected {{
@@ -711,11 +720,13 @@ class VoiceSettingsDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 0; min-height: 30px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """
+        from views.ui_components import section_heading
+        v.addWidget(section_heading("指令列表", "Commands"))
         self._cmd_list = _CommandList(_cmd_qss)
         self._cmd_list.setFont(_make_font(fn, 14))
         self._cmd_list.currentRowChanged.connect(self._on_list_row_changed)
@@ -729,24 +740,19 @@ class VoiceSettingsDialog(QDialog):
         add_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GREEN}; color: #1A1A1A;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_GREEN_H}; }}
         """)
         add_btn.clicked.connect(self._on_add_command)
         v.addWidget(add_btn)
 
-        v.addSpacing(8)
-        sep = QFrame(); sep.setFixedHeight(1); sep.setStyleSheet("background: #444;")
-        v.addWidget(sep)
-        v.addSpacing(8)
-
-        # 底部固定区: 麦克风 / 测试 / 语言
-        v.addLayout(self._build_bottom_status(fn))
+        # Separate recognition setup from command editing.
+        self._recognition_layout.addLayout(self._build_bottom_status(fn))
         return wrap
 
     def _build_bottom_status(self, fn):
-        col = QVBoxLayout()
+        col = QHBoxLayout()
         col.setSpacing(8)
 
         # 麦克风状态点 + 设备下拉
@@ -774,7 +780,7 @@ class VoiceSettingsDialog(QDialog):
         self._mic_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {C_INPUT_BG}; color: #E0E0E0;
-                border: 1px solid {C_GRAY}; border-radius: 6px;
+                border: 1px solid {C_GRAY}; border-radius: 0;
                 padding: 2px 28px 2px 8px;
             }}
             QComboBox:hover {{ border-color: #666; }}
@@ -786,10 +792,11 @@ class VoiceSettingsDialog(QDialog):
             QComboBox QAbstractItemView {{
                 background: #2A2A2A; color: #E0E0E0;
                 selection-background-color: {C_CYBER};
-                border: 1px solid #444; border-radius: 4px;
+                border: 1px solid #444; border-radius: 0;
             }}
         """)
-        col.addWidget(self._mic_combo)
+        self._mic_combo.setMaximumWidth(320)
+        col.addWidget(self._mic_combo, 1)
 
         # 测试指令按钮 + 左侧「识别延迟」齿轮小按钮
         test_row = QHBoxLayout()
@@ -803,7 +810,7 @@ class VoiceSettingsDialog(QDialog):
         self._chunk_btn.setToolTip(t("voice_dialog.chunk_tooltip"))
         self._chunk_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_GRAY}; border: none; border-radius: 6px;
+                background: {C_GRAY}; border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -831,12 +838,13 @@ class VoiceSettingsDialog(QDialog):
         self._test_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GREEN}; color: #333333;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: #34D399; }}
         """)
         self._test_btn.clicked.connect(self._on_test_commands)
-        test_row.addWidget(self._test_btn, 1)
+        test_row.addWidget(self._test_btn)
+        self._test_btn.setMinimumWidth(100)
         col.addLayout(test_row)
 
         # 语言下拉 (识别语言)
@@ -858,6 +866,7 @@ class VoiceSettingsDialog(QDialog):
         self._lang_combo.currentIndexChanged.connect(self._on_lang_combo_changed)
         lang_row.addWidget(self._lang_combo, 1)
         col.addLayout(lang_row)
+        col.addStretch()
 
         # 枚举设备 (与原版相同逻辑)
         self._mic_devices = []
@@ -903,7 +912,7 @@ class VoiceSettingsDialog(QDialog):
         self._phrase_edit.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: white;
-                border: 2px solid {C_GRAY}; border-radius: 6px;
+                border: 2px solid {C_GRAY}; border-radius: 0;
                 padding: 2px 8px;
             }}
             QLineEdit:focus {{ border-color: {C_GREEN}; }}
@@ -974,7 +983,7 @@ class VoiceSettingsDialog(QDialog):
         copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -990,7 +999,7 @@ class VoiceSettingsDialog(QDialog):
         del_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -1004,7 +1013,7 @@ class VoiceSettingsDialog(QDialog):
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GREEN}; color: #1A1A1A;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_GREEN_H}; }}
         """)
@@ -1020,6 +1029,9 @@ class VoiceSettingsDialog(QDialog):
         has = (self._current_idx >= 0 and self._current_idx < len(self._commands))
         self._editor_form.setVisible(has)
         self._editor_hint.setVisible(not has)
+        for button in getattr(self, "_ui_actions", []):
+            if button.text() in (t("voice_dialog.delete_command"), t("voice_dialog.save"), t("voice_dialog.copy"),):
+                button.setEnabled(has)
 
     # ── (legacy 原文未删, 下面是 _build_lang_selector 旧代码, 已不再被调用) ──
 
@@ -1105,7 +1117,7 @@ class VoiceSettingsDialog(QDialog):
         self._lang_zh_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER if is_zh else '#404040'};
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CYBER_H if is_zh else '#505050'}; }}
         """)
@@ -1118,7 +1130,7 @@ class VoiceSettingsDialog(QDialog):
         self._lang_en_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER if not is_zh else '#404040'};
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CYBER_H if not is_zh else '#505050'}; }}
         """)
@@ -1146,7 +1158,7 @@ class VoiceSettingsDialog(QDialog):
         self._mic_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {C_INPUT_BG}; color: #E0E0E0;
-                border: 2px solid {C_GRAY}; border-radius: 6px;
+                border: 2px solid {C_GRAY}; border-radius: 0;
                 padding: 2px 28px 2px 8px;
             }}
             QComboBox:hover {{ border-color: #666; }}
@@ -1158,7 +1170,7 @@ class VoiceSettingsDialog(QDialog):
             QComboBox QAbstractItemView {{
                 background: #2A2A2A; color: #E0E0E0;
                 selection-background-color: {C_CYBER};
-                border: 1px solid #444; border-radius: 4px;
+                border: 1px solid #444; border-radius: 0;
             }}
         """)
         row.addWidget(self._mic_combo, 1)
@@ -1170,7 +1182,7 @@ class VoiceSettingsDialog(QDialog):
         self._test_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px; padding: 0 10px;
+                border: none; border-radius: 0; padding: 0 10px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -1321,7 +1333,7 @@ class VoiceSettingsDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 0; min-height: 30px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
@@ -1406,7 +1418,7 @@ class VoiceSettingsDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -1525,7 +1537,7 @@ class VoiceSettingsDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 0; min-height: 30px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -1542,7 +1554,7 @@ class VoiceSettingsDialog(QDialog):
         new_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {self.C_MACRO}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: #7C3AED; }}
         """)
@@ -1601,7 +1613,7 @@ class VoiceSettingsDialog(QDialog):
             row.setObjectName("macro_row")
             row.setStyleSheet(f"""
                 QFrame#macro_row {{
-                    background: {C_GRAY}; border-radius: 6px;
+                    background: {C_GRAY}; border-radius: 0;
                 }}
                 QFrame#macro_row:hover {{
                     background: {self.C_MACRO};
@@ -1631,7 +1643,7 @@ class VoiceSettingsDialog(QDialog):
                 edit_btn.setFont(_make_font(fn, 14))
             edit_btn.setStyleSheet("""
                 QPushButton { color: white; background: transparent; border: none; }
-                QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+                QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 0; }
             """)
             edit_btn.clicked.connect(lambda _, idx=i: self._edit_macro(idx))
             row_lay.addWidget(edit_btn)
@@ -1647,7 +1659,7 @@ class VoiceSettingsDialog(QDialog):
                 del_btn.setFont(_make_font(fn, 12))
             del_btn.setStyleSheet("""
                 QPushButton { color: white; background: transparent; border: none; }
-                QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+                QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 0; }
             """)
             del_btn.clicked.connect(lambda _, idx=i: self._delete_macro(idx))
             row_lay.addWidget(del_btn)
@@ -1793,7 +1805,7 @@ class VoiceSettingsDialog(QDialog):
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background: {C_GREEN}; color: #1A1A1A;
-                        border: none; border-radius: 6px; padding: 0 12px;
+                        border: none; border-radius: 0; padding: 0 12px;
                     }}
                     QPushButton:hover {{ background: {C_GREEN_H}; }}
                 """)
@@ -1801,7 +1813,7 @@ class VoiceSettingsDialog(QDialog):
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background: #404040; color: #AAA;
-                        border: none; border-radius: 6px; padding: 0 12px;
+                        border: none; border-radius: 0; padding: 0 12px;
                     }}
                     QPushButton:hover {{ background: #505050; }}
                 """)
@@ -1828,7 +1840,7 @@ class VoiceSettingsDialog(QDialog):
         hl.addWidget(tlbl)
         tag = QLabel(t('voice_dialog.mode_selected'))
         tag.setFont(_make_font(fn, 11, bold=True))
-        tag.setStyleSheet("color: #000; background: #10B981; border-radius: 9px; padding: 1px 10px;")
+        tag.setStyleSheet("color: #000; background: #10B981; border-radius: 0; padding: 1px 10px;")
         hl.addWidget(tag)
         hl.addStretch()
         hint = QLabel(t('voice_dialog.card_click_hint'))
@@ -1859,7 +1871,7 @@ class VoiceSettingsDialog(QDialog):
             bg = '#202A24' if active else '#1E1E1E'
             c['frame'].setStyleSheet(
                 f"QFrame#behcard_{mode} {{ background: {bg}; "
-                f"border: 2px solid {border}; border-radius: 10px; }}")
+                f"border: 2px solid {border}; border-radius: 0; }}")
         # 右栏跟随模式: 触发按键→候选Tab; 回中→回中目标列表
         if hasattr(self, '_col3_stack'):
             if self._current_mode == 'recenter':

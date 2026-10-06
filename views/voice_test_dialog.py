@@ -229,6 +229,14 @@ class VoiceTestDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (800, 640), actions=[t("voice_test.stop")], columns=True, guidance=None)
+        from views.ui_components import _remove_widget
+        footer = self._ui_footer.layout()
+        for label in (self._count_lbl, self._time_lbl):
+            _remove_widget(self._ui_body.layout(), label)
+        footer.insertWidget(0, self._count_lbl)
+        footer.insertWidget(1, self._time_lbl)
         self._center_on_screen()
 
         # 运行计时器
@@ -249,7 +257,7 @@ class VoiceTestDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#vt_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 0;
                 border: 1px solid #444;
             }}
         """)
@@ -299,7 +307,7 @@ class VoiceTestDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -312,7 +320,7 @@ class VoiceTestDialog(QDialog):
         self._waveform.setStyleSheet(f"""
             background: #141414;
             border: 1px solid #333;
-            border-radius: 8px;
+            border-radius: 0;
         """)
         root.addWidget(self._waveform)
 
@@ -357,7 +365,7 @@ class VoiceTestDialog(QDialog):
                 background: transparent; width: 6px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 3px; min-height: 20px;
+                background: #404040; border-radius: 0; min-height: 20px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
@@ -400,7 +408,7 @@ class VoiceTestDialog(QDialog):
         stop_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #E0E0E0;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; color: #FFF; }}
         """)

@@ -114,7 +114,7 @@ class GpStickEditorDialog(QDialog):
     xmacros_changed = pyqtSignal(list)   # 统一混合宏池变更
     apps_changed = pyqtSignal(list)      # 应用池变更
 
-    LEFT_W = 440
+    LEFT_W = 480
     RIGHT_W = 560
     PADDING = 20
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20  # 1040
@@ -141,6 +141,8 @@ class GpStickEditorDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1120, 820), actions=[t("gp_stick_editor.copy"), t("gp_stick_editor.delete"), t("gp_stick_editor.save")], columns=True, guidance=('① 配置摇杆 → ② 按需设置鼠标动作 → ③ 保存', '1 Configure the stick → 2 Add optional mouse actions → 3 Save'))
         self._center_on_screen()
         self._drag_pos = None
 
@@ -156,7 +158,7 @@ class GpStickEditorDialog(QDialog):
         container.setObjectName("gpstick_container")
         container.setStyleSheet(f"""
             QFrame#gpstick_container {{
-                background: {_C_BG}; border-radius: 4px; border: 1px solid {_C_BORDER};
+                background: {_C_BG}; border-radius: 0; border: 1px solid {_C_BORDER};
             }}
         """)
         outer.addWidget(container)
@@ -181,7 +183,7 @@ class GpStickEditorDialog(QDialog):
         else:
             close_btn.setFont(_font(fn, 18, bold=True))
         close_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         close_btn.clicked.connect(self.reject)
@@ -218,7 +220,7 @@ class GpStickEditorDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -419,7 +421,7 @@ class GpStickEditorDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -503,7 +505,7 @@ class GpStickEditorDialog(QDialog):
             QListWidget::item:selected {{ background: transparent; }}
             QListWidget::item:hover {{ background: transparent; }}
             QScrollBar:vertical {{ background: transparent; width: 8px; border: none; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px; min-height: 30px; }}
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 0; min-height: 30px; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """)
@@ -515,7 +517,7 @@ class GpStickEditorDialog(QDialog):
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         new_btn.setFont(_font(fn, 15, bold=True))
         new_btn.setStyleSheet(f"""
-            QPushButton {{ background: {_C_MACRO}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {_C_MACRO}; color: #FFF; border: none; border-radius: 0; }}
             QPushButton:hover {{ background: #7C3AED; }}
         """)
         new_btn.clicked.connect(self._new_macro)
@@ -565,7 +567,7 @@ class GpStickEditorDialog(QDialog):
             row.setFixedHeight(40)
             row.setObjectName("gpsmac_row")
             row.setStyleSheet(f"""
-                QFrame#gpsmac_row {{ background: {C_GRAY}; border-radius: 6px; }}
+                QFrame#gpsmac_row {{ background: {C_GRAY}; border-radius: 0; }}
                 QFrame#gpsmac_row:hover {{ background: {_C_MACRO}; }}
             """)
             row.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -589,7 +591,7 @@ class GpStickEditorDialog(QDialog):
                     b.setText(fallback); b.setFont(_font(fn, 13))
                 b.setStyleSheet("""
                     QPushButton { color: white; background: transparent; border: none; }
-                    QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+                    QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 0; }
                 """)
                 b.clicked.connect(slot)
                 rl.addWidget(b)
@@ -697,7 +699,7 @@ class GpStickEditorDialog(QDialog):
         self._name_edit.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: white;
-                border: 2px solid #555; border-radius: 6px; padding: 4px 8px;
+                border: 2px solid #555; border-radius: 0; padding: 4px 8px;
             }}
             QLineEdit:focus {{ border-color: {_C_BLUE}; }}
         """)
@@ -782,20 +784,20 @@ class GpStickEditorDialog(QDialog):
         tm = _DefaultMarkedSlider.TRACK_MARGIN_TOP
         slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 6px; border-radius: 3px;
+                background: #404040; height: 6px; border-radius: 0;
                 margin: {tm}px 0 0 0;
             }}
             QSlider::sub-page:horizontal {{
-                background: {_C_BLUE}; border-radius: 3px;
+                background: {_C_BLUE}; border-radius: 0;
                 margin: {tm}px 0 0 0;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: #404040; border-radius: 0;
                 margin: {tm}px 0 0 0;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: 1px solid #999;
-                width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
+                width: 16px; height: 16px; margin: -5px 0; border-radius: 0;
             }}
             QSlider::handle:horizontal:hover {{ background: {_C_BLUE}; border-color: {_C_BLUE_H}; }}
         """)
@@ -843,7 +845,7 @@ class GpStickEditorDialog(QDialog):
         copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -858,7 +860,7 @@ class GpStickEditorDialog(QDialog):
         del_btn.setFont(_font(fn, 18))
         del_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         del_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         del_btn.clicked.connect(self._on_delete)
@@ -869,7 +871,7 @@ class GpStickEditorDialog(QDialog):
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.setFont(_font(fn, 18, bold=True))
         save_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
         save_btn.clicked.connect(self._on_save)
@@ -898,7 +900,7 @@ class GpStickEditorDialog(QDialog):
         rb.setStyleSheet(f"""
             QRadioButton {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
             QRadioButton::indicator {{
-                width: 16px; height: 16px; border-radius: 9px;
+                width: 16px; height: 16px; border-radius: 0;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QRadioButton::indicator:hover {{ border-color: {_C_BLUE_H}; }}
@@ -916,7 +918,7 @@ class GpStickEditorDialog(QDialog):
         chk.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
+                width: 16px; height: 16px; border-radius: 0;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}

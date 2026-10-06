@@ -34,6 +34,8 @@ class AboutDialog(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(620, 620)
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (680, 640), actions=[], columns=False, guidance=None)
         self._center_on_screen()
         self._drag_pos = None
 
@@ -51,7 +53,7 @@ class AboutDialog(QDialog):
         container.setStyleSheet("""
             QFrame#about_container {
                 background: #2D2D2D;
-                border-radius: 4px;
+                border-radius: 0;
                 border: 1px solid #444;
             }
             QLabel { color: #CCC; }
@@ -64,6 +66,10 @@ class AboutDialog(QDialog):
 
         # 关闭按钮 (右上角, 与工具栏关闭按钮同规格)
         header = QHBoxLayout()
+        from views.ui_components import ui_text
+        heading = QLabel(ui_text("关于蛋挞", "About TEGG Touch"))
+        heading.setStyleSheet("color: #E0E0E0; background: transparent;")
+        header.addWidget(heading)
         header.addStretch()
         close_btn = QPushButton()
         close_btn.setFixedSize(40, 40)
@@ -77,7 +83,7 @@ class AboutDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -141,7 +147,7 @@ class AboutDialog(QDialog):
             qr_label.setText(t("about.qr_missing"))
             qr_label.setStyleSheet("""
                 background: #3A3A3A; color: #888;
-                border: 1px solid #555; border-radius: 8px;
+                border: 1px solid #555; border-radius: 0;
                 font-size: 14px;
             """)
             qr_label.setFixedSize(160, 160)

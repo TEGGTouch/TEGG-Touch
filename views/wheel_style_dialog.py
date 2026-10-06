@@ -129,13 +129,13 @@ class _CheckToggle(QWidget):
             self._box.setText(icon)
             self._box.setStyleSheet(
                 f"background: {C_ACCENT}; color: #FFF;"
-                " border-radius: 4px;"
+                " border-radius: 0;"
             )
         else:
             self._box.setText("")
             self._box.setStyleSheet(
                 "background: #333; color: transparent;"
-                " border: 1px solid #666; border-radius: 4px;"
+                " border: 1px solid #666; border-radius: 0;"
             )
 
 
@@ -605,7 +605,7 @@ class _TypeCard(QFrame):
             _TypeCard {{
                 background: {C_CARD_NORMAL};
                 border: 2px solid {border};
-                border-radius: 8px;
+                border-radius: 0;
             }}
             _TypeCard:hover {{
                 background: {C_CARD_HOVER};
@@ -668,6 +668,8 @@ class WheelStyleDialog(QDialog):
         self.setFixedSize(self.WIN_W, self.WIN_H)
 
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1120, 760), actions=[self._reset_btn, t("wheel_style.cancel"), t("wheel_style.save")], columns=False, guidance=('① 选择轮盘样式 → ② 调整环与分区 → ③ 确定', '1 Choose a wheel style → 2 Set rings and sectors → 3 Confirm'))
         self._select_type(self._selected_type)
         self._center_on_screen()
         self._drag_pos = None
@@ -698,7 +700,7 @@ class WheelStyleDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#ws_container {{
                 background: {C_BG};
-                border-radius: 4px;
+                border-radius: 0;
                 border: 1px solid #444;
             }}
         """)
@@ -727,7 +729,7 @@ class WheelStyleDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -840,7 +842,7 @@ class WheelStyleDialog(QDialog):
         self._reset_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CARD_NORMAL}; color: #E0E0E0;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CARD_HOVER}; }}
         """)
@@ -854,7 +856,7 @@ class WheelStyleDialog(QDialog):
         cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CARD_NORMAL}; color: #E0E0E0;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: {C_CARD_HOVER}; }}
         """)
@@ -868,7 +870,7 @@ class WheelStyleDialog(QDialog):
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_ACCENT}; color: #FFF;
-                border: none; border-radius: 6px;
+                border: none; border-radius: 0;
             }}
             QPushButton:hover {{ background: #E11D48; }}
         """)
@@ -1007,7 +1009,7 @@ class WheelStyleDialog(QDialog):
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {bg}; color: {fg};
-                    border: none; border-radius: 4px; padding: 0 8px;
+                    border: none; border-radius: 0; padding: 0 8px;
                 }}
                 QPushButton:hover {{ background: {bg_h}; color: #FFF; }}
             """)

@@ -76,7 +76,7 @@ class GpWheelMouseDialog(QDialog):
     xmacros_changed = pyqtSignal(list)   # 统一混合宏池变更
     apps_changed = pyqtSignal(list)      # 应用池变更
 
-    LEFT_W = 440
+    LEFT_W = 480
     RIGHT_W = 440
     PADDING = 20
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20    # 940
@@ -104,6 +104,8 @@ class GpWheelMouseDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1120, 760), actions=["取消", "保存"], columns=True, guidance=None)
         self._center_on_screen()
         self._drag_pos = None
 
@@ -118,7 +120,7 @@ class GpWheelMouseDialog(QDialog):
         container.setObjectName("gpwm_container")
         container.setStyleSheet(f"""
             QFrame#gpwm_container {{
-                background: {_C_BG}; border-radius: 4px; border: 1px solid {_C_BORDER};
+                background: {_C_BG}; border-radius: 0; border: 1px solid {_C_BORDER};
             }}
         """)
         outer.addWidget(container)
@@ -143,7 +145,7 @@ class GpWheelMouseDialog(QDialog):
         else:
             close_btn.setFont(_font(fn, 18, bold=True))
         close_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 0; }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         close_btn.clicked.connect(self.reject)
@@ -195,7 +197,7 @@ class GpWheelMouseDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         """)
         body = QWidget()
@@ -302,7 +304,7 @@ class GpWheelMouseDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         """)
         return scroll
@@ -404,7 +406,7 @@ class GpWheelMouseDialog(QDialog):
             QListWidget::item:selected {{ background: transparent; }}
             QListWidget::item:hover {{ background: transparent; }}
             QScrollBar:vertical {{ background: transparent; width: 8px; border: none; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px; min-height: 30px; }}
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 0; min-height: 30px; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         """)
         lay.addWidget(self._macro_list, 1)
@@ -414,7 +416,7 @@ class GpWheelMouseDialog(QDialog):
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         new_btn.setFont(_font(fn, 15, bold=True))
         new_btn.setStyleSheet(f"""
-            QPushButton {{ background: {_C_MACRO}; color: #FFF; border: none; border-radius: 6px; }}
+            QPushButton {{ background: {_C_MACRO}; color: #FFF; border: none; border-radius: 0; }}
             QPushButton:hover {{ background: #7C3AED; }}
         """)
         new_btn.clicked.connect(self._new_macro)
@@ -444,7 +446,7 @@ class GpWheelMouseDialog(QDialog):
             row.setFixedHeight(40)
             row.setObjectName("gpwmmac_row")
             row.setStyleSheet(f"""
-                QFrame#gpwmmac_row {{ background: {C_GRAY}; border-radius: 6px; }}
+                QFrame#gpwmmac_row {{ background: {C_GRAY}; border-radius: 0; }}
                 QFrame#gpwmmac_row:hover {{ background: {_C_MACRO}; }}
             """)
             row.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -467,7 +469,7 @@ class GpWheelMouseDialog(QDialog):
                     b.setText(fallback); b.setFont(_font(fn, 12))
                 b.setStyleSheet("""
                     QPushButton { color: white; background: transparent; border: none; }
-                    QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+                    QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 0; }
                 """)
                 b.clicked.connect(slot)
                 rl.addWidget(b)
@@ -572,7 +574,7 @@ class GpWheelMouseDialog(QDialog):
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cancel_btn.setFont(_font(fn, 16))
         cancel_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_GRAY}; color: #E0E0E0; border: none; border-radius: 6px; padding: 0 24px; }}
+            QPushButton {{ background: {C_GRAY}; color: #E0E0E0; border: none; border-radius: 0; padding: 0 24px; }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         cancel_btn.clicked.connect(self.reject)
@@ -583,7 +585,7 @@ class GpWheelMouseDialog(QDialog):
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.setFont(_font(fn, 16, bold=True))
         save_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 6px; padding: 0 32px; }}
+            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 0; padding: 0 32px; }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
         save_btn.clicked.connect(self._on_save)

@@ -174,6 +174,7 @@ class OverlayWindow(QGraphicsView):
         # ── 软键盘 (parent=self ensures Z-order above overlay) ──
         self._virtual_keyboard = VirtualKeyboard(parent=self)
         self._virtual_keyboard.hide()
+        self._virtual_keyboard.installEventFilter(self)
 
         # ── Toast 通知 ──
         self._toast = ToastWidget(parent=self)
@@ -606,6 +607,12 @@ class OverlayWindow(QGraphicsView):
         """切换自动回中"""
         self._run_controller.auto_center = not self._run_controller.auto_center
         self._run_toolbar.update_auto_center(self._run_controller.auto_center)
+
+    def eventFilter(self, obj, event):
+        if obj is getattr(self, '_virtual_keyboard', None):
+            if event.type() in (QEvent.Type.Show, QEvent.Type.Hide):
+                self._edit_toolbar.set_keyboard_visible(event.type() == QEvent.Type.Show)
+        return super().eventFilter(obj, event)
 
     def _toggle_soft_keyboard(self):
         """切换软键盘 — 吸附在当前活动工具栏上方 (匹配原版 toggle_soft_keyboard)"""
