@@ -13,6 +13,7 @@ from PyQt6.QtGui import QFont
 
 from core.i18n import t, get_font
 from core.constants import APP_VERSION
+from core.update_manifest import ReleaseInfo
 
 from views.edit_toolbar import (
     _detect_icon_font, _make_font,
@@ -21,21 +22,30 @@ from views.edit_toolbar import (
 from core.constants import C_PM_BG, C_CYBER, C_CYBER_H, C_GRAY
 
 
-def start_update_flow(parent, version: str, url: str, body: str) -> "UpdateDialog":
+def start_update_flow(parent, release: ReleaseInfo) -> "UpdateDialog":
     """弹出新版本提示弹窗并接好「下载 → 应用升级」流程。返回该弹窗。
 
     自动检查 (main.py) 与设置里手动「检查更新」共用此入口, 避免重复接线。
     """
     from core.update_installer import UpdateInstaller, apply_update
 
-    dlg = UpdateDialog(version, url, body, parent)
+    release.validate()
+    app = QApplication.instance()
+    existing = getattr(app, '_active_update_dialog', None)
+    if existing is not None and (existing.isVisible() or existing._installing):
+        existing.show()
+        existing.raise_()
+        existing.activateWindow()
+        return existing
+    dlg = UpdateDialog(release.version, release.url, release.notes, parent)
+    app._active_update_dialog = dlg
     dlg.show()
     dlg.raise_()
     dlg.activateWindow()
     parent._update_dialog = dlg  # 保活引用
 
     def _start_install(zip_url):
-        installer = UpdateInstaller(zip_url, parent=parent)
+        installer = UpdateInstaller(release, parent=parent)
         installer.progress.connect(dlg.on_progress)
 
         def _on_finished_ok(zip_path):
@@ -64,6 +74,7 @@ class UpdateDialog(QDialog):
         super().__init__(parent)
         self._url = url
         self._version = version
+        self._installing = False
         self.setWindowFlags(
             Qt.WindowType.Dialog |
             Qt.WindowType.FramelessWindowHint |
@@ -153,6 +164,7 @@ class UpdateDialog(QDialog):
         # ── 更新说明 ──
         if body and body.strip():
             notes = QLabel(body.strip()[:1200])
+            notes.setTextFormat(Qt.TextFormat.PlainText)
             notes.setStyleSheet(f"""
                 color: #BBB; font-size: 14px;
                 font-family: '{font_name}';
@@ -224,8 +236,9 @@ class UpdateDialog(QDialog):
         layout.addLayout(btn_row)
 
     def _on_install_clicked(self):
-        if not self._url:
+        if not self._url or self._installing:
             return
+        self._installing = True
         self._install_btn.setEnabled(False)
         self._skip_btn.setEnabled(False)
         self._status_lbl.setText(t("update.downloading"))
@@ -259,6 +272,7 @@ class UpdateDialog(QDialog):
         self._status_lbl.setText(t("update.applying"))
 
     def on_failed(self, msg: str):
+        self._installing = False
         self._install_btn.setEnabled(True)
         self._skip_btn.setEnabled(True)
         self._progress_bar.setVisible(False)
@@ -266,6 +280,12 @@ class UpdateDialog(QDialog):
         self._status_lbl.setStyleSheet(
             f"color: #F87171; font-size: 13px; font-family: '{get_font()}';"
         )
+
+    def closeEvent(self, event):
+        if self._installing:
+            event.ignore()
+            return
+        super().closeEvent(event)
 
     # ── 定位 + 拖拽 ──
 

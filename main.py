@@ -85,7 +85,7 @@ def _check_for_updates(parent):
 
     checker = UpdateChecker(parent)
     checker.update_available.connect(
-        lambda version, url, body: start_update_flow(parent, version, url, body))
+        lambda release: start_update_flow(parent, release))
     checker.start()
     parent._update_checker = checker
 

@@ -95,10 +95,15 @@ Log "WaitPid=$WaitPid ZipPath=$ZipPath InstallDir=$InstallDir ExePath=$ExePath"
 
 SetStatus "等待主程序退出..."
 try {
-    Wait-Process -Id $WaitPid -Timeout 30 -ErrorAction SilentlyContinue
+    if (Get-Process -Id $WaitPid -ErrorAction SilentlyContinue) {
+        Wait-Process -Id $WaitPid -Timeout 30 -ErrorAction Stop
+    }
     Log "main process exited"
 } catch {
     Log "wait-process failed or timed out: $_"
+    SetStatus "主程序未退出, 升级中止"
+    if ($splash) { $splash.Close() }
+    exit 3
 }
 Start-Sleep -Milliseconds 800
 [System.Windows.Forms.Application]::DoEvents() 2>$null
@@ -107,7 +112,7 @@ $TmpRoot = Join-Path $env:TEMP ("teggtouch_extract_" + [Guid]::NewGuid().ToStrin
 New-Item -ItemType Directory -Force -Path $TmpRoot | Out-Null
 SetStatus "正在解压新版本 (约 10-15 秒)..."
 try {
-    Expand-Archive -Path $ZipPath -DestinationPath $TmpRoot -Force
+    Expand-Archive -LiteralPath $ZipPath -DestinationPath $TmpRoot -Force -ErrorAction Stop
 } catch {
     Log "ERROR: Expand-Archive failed: $_"
     SetStatus "解压失败, 升级中止"
@@ -136,7 +141,7 @@ Log "source dir: $Src"
 
 SetStatus "正在替换文件..."
 $RoboArgs = @(
-    $Src, $InstallDir, "/E",
+    ('"' + $Src + '"'), ('"' + $InstallDir + '"'), "/E",
     "/XD", "profiles", "settings", "logs",
     "/XF", "config.json", "config.json.bak",
     "/NFL", "/NDL", "/NJH", "/NJS", "/NP",
@@ -147,6 +152,9 @@ $proc = Start-Process -FilePath "robocopy" -ArgumentList $RoboArgs -NoNewWindow 
 Log "robocopy exit code: $($proc.ExitCode)"
 if ($proc.ExitCode -ge 8) {
     Log "ERROR: robocopy reported failure"
+    SetStatus "替换文件失败, 请保留更新包并重试"
+    if ($splash) { $splash.Close() }
+    exit 4
 }
 
 # 写更新完成标记 — 新版首启据此弹"已更新 + 程序位置"提示 (仅覆盖成功时写)

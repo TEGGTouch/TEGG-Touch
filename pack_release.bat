@@ -43,9 +43,9 @@ if exist "dist\%RELEASE_NAME%.zip" (
     echo 文件: dist\%RELEASE_NAME%.zip
     echo.
 
-    if exist "%~dp0pack_release_oss.bat" (
-        call "%~dp0pack_release_oss.bat" "dist\%RELEASE_NAME%.zip"
-    )
+    echo 本步骤只生成本地 ZIP，不上传、不修改正式更新清单。
+    echo 正式发布前先检查: python scripts\publish_release.py
+    echo 确认发布: python scripts\publish_release.py --publish
     echo.
 
     echo 用户使用方式:

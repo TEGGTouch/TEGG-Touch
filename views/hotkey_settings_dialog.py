@@ -1895,11 +1895,11 @@ class HotkeySettingsDialog(QDialog):
         checker = UpdateChecker(self, force=True)
         self._manual_update_checker = checker  # 保活引用, 防 QThread 被 GC
 
-        def _on_avail(version, url, body):
+        def _on_avail(release):
             self._update_status_lbl.setText("")
             self._check_update_btn.setEnabled(True)
             from views.update_dialog import start_update_flow
-            start_update_flow(self, version, url, body)
+            start_update_flow(self, release)
 
         def _on_none():
             self._check_update_btn.setEnabled(True)

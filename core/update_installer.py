@@ -1,6 +1,6 @@
 """
 TEGG Touch - update_installer.py
-A 方案自动升级器: 下载全量 zip → 写 updater.ps1 → spawn powershell → 主程序退出 → ps1 接管覆盖 + 重启 + 清理.
+OSS 自动升级器: 下载并校验全量 zip → updater.ps1 → 覆盖 + 重启 + 清理.
 
 UI 走 UpdateInstaller (QThread) 暴露 progress/finished/failed 信号; UpdateDialog 接进度条.
 """
@@ -11,32 +11,17 @@ import os
 import sys
 import subprocess
 import tempfile
-import urllib.request
-import urllib.error
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
 from core.constants import APP_VERSION
+from core.update_manifest import ReleaseInfo, open_update_url, validate_archive
 
 logger = logging.getLogger(__name__)
 
-# 本地下载镜像 (大陆 OSS / CDN) — 不进 git, 从 core/_update_mirror.py 读
-# 文件不存在或未配置时 _OSS_BASE = "", 跳过 OSS 走 GH 直连 + ghproxy
-try:
-    from core._update_mirror import OSS_BASE as _OSS_BASE
-except ImportError:
-    _OSS_BASE = ""
-
-# ghproxy 系列国际镜像 fallback — 拼前缀到原 GH URL
-_GH_MIRROR_PREFIXES = [
-    "https://ghproxy.com/",
-    "https://gh-proxy.com/",
-    "https://mirror.ghproxy.com/",
-]
-
 _DOWNLOAD_CHUNK = 64 * 1024              # 64KB chunks
-_DOWNLOAD_TIMEOUT_PER_MIRROR = 20        # 单个镜像连接超时 (秒)
+_DOWNLOAD_TIMEOUT = 30
 
 
 class UpdateError(Exception):
@@ -139,10 +124,15 @@ Log "WaitPid=$WaitPid ZipPath=$ZipPath InstallDir=$InstallDir ExePath=$ExePath"
 
 SetStatus "等待主程序退出..."
 try {
-    Wait-Process -Id $WaitPid -Timeout 30 -ErrorAction SilentlyContinue
+    if (Get-Process -Id $WaitPid -ErrorAction SilentlyContinue) {
+        Wait-Process -Id $WaitPid -Timeout 30 -ErrorAction Stop
+    }
     Log "main process exited"
 } catch {
     Log "wait-process failed or timed out: $_"
+    SetStatus "主程序未退出, 升级中止"
+    if ($splash) { $splash.Close() }
+    exit 3
 }
 Start-Sleep -Milliseconds 800
 [System.Windows.Forms.Application]::DoEvents() 2>$null
@@ -151,7 +141,7 @@ $TmpRoot = Join-Path $env:TEMP ("teggtouch_extract_" + [Guid]::NewGuid().ToStrin
 New-Item -ItemType Directory -Force -Path $TmpRoot | Out-Null
 SetStatus "正在解压新版本 (约 10-15 秒)..."
 try {
-    Expand-Archive -Path $ZipPath -DestinationPath $TmpRoot -Force
+    Expand-Archive -LiteralPath $ZipPath -DestinationPath $TmpRoot -Force -ErrorAction Stop
 } catch {
     Log "ERROR: Expand-Archive failed: $_"
     SetStatus "解压失败, 升级中止"
@@ -179,7 +169,7 @@ Log "source dir: $Src"
 
 SetStatus "正在替换文件..."
 $RoboArgs = @(
-    $Src, $InstallDir, "/E",
+    ('"' + $Src + '"'), ('"' + $InstallDir + '"'), "/E",
     "/XD", "profiles", "settings", "logs",
     "/XF", "config.json", "config.json.bak",
     "/NFL", "/NDL", "/NJH", "/NJS", "/NP",
@@ -190,6 +180,9 @@ $proc = Start-Process -FilePath "robocopy" -ArgumentList $RoboArgs -NoNewWindow 
 Log "robocopy exit code: $($proc.ExitCode)"
 if ($proc.ExitCode -ge 8) {
     Log "ERROR: robocopy reported failure"
+    SetStatus "替换文件失败, 请保留更新包并重试"
+    if ($splash) { $splash.Close() }
+    exit 4
 }
 
 # 写更新完成标记 — 新版首启据此弹"已更新 + 程序位置"提示 (仅覆盖成功时写)
@@ -224,80 +217,48 @@ if ($splash) {
 
 
 # ─────────────────────────────────────────────────────────────────────
-# 下载: 直连 + 镜像顺序 fallback, 带进度回调
+# 下载: 官方直链、大小 + SHA256 + ZIP 校验，通过后才原子改名
 # ─────────────────────────────────────────────────────────────────────
 
-def _download(url: str, dest: str, on_progress, timeout: int) -> int:
-    """单源下载, 返回总字节数. 失败抛 URLError / OSError."""
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": f"TEGGTouch/{APP_VERSION}"},
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        total = int(resp.headers.get("Content-Length", "0") or 0)
-        downloaded = 0
-        with open(dest, "wb") as f:
-            while True:
-                chunk = resp.read(_DOWNLOAD_CHUNK)
-                if not chunk:
-                    break
-                f.write(chunk)
-                downloaded += len(chunk)
-                if on_progress:
-                    on_progress(downloaded, total)
-        return downloaded
-
-
-def _build_candidate_urls(gh_url: str) -> list[tuple[str, str]]:
-    """从 GH release asset URL 推导出全部候选下载源.
-    返回 [(name, url), ...] 顺序就是尝试顺序: 本地镜像 (若配置) → GH 直连 → ghproxy
-    """
-    candidates: list[tuple[str, str]] = []
-    # 本地镜像 (OSS/CDN, 大陆加速) — 仅当 core/_update_mirror.py 存在且 OSS_BASE 非空时
-    if _OSS_BASE:
-        fname = gh_url.rstrip("/").split("/")[-1]
-        if fname and fname.lower().endswith(".zip"):
-            candidates.append(("本地镜像", _OSS_BASE + fname))
-    # GH 直连
-    candidates.append(("GitHub 直连", gh_url))
-    # ghproxy 国际镜像 fallback
-    for prefix in _GH_MIRROR_PREFIXES:
-        candidates.append((f"GH 镜像 {prefix}", prefix + gh_url))
-    return candidates
-
-
-def download_with_fallback(url: str, dest: str, on_progress=None) -> str:
-    """按 OSS → GH 直连 → ghproxy 顺序尝试. 返回下载后的文件路径 (= dest). 全失败抛 UpdateError."""
-    last_err: Exception | None = None
-    for name, try_url in _build_candidate_urls(url):
-        logger.info(f"downloading from {name}: {try_url}")
+def download_release(release: ReleaseInfo, dest: str, on_progress=None, cancelled=None) -> str:
+    release.validate()
+    part = dest + ".part"
+    digest, downloaded = hashlib.sha256(), 0
+    try:
+        with open_update_url(release.url, timeout=_DOWNLOAD_TIMEOUT) as response:
+            length = response.headers.get("Content-Length")
+            if length is not None and int(length) != release.size:
+                raise UpdateError("更新包大小与清单不符")
+            with open(part, "wb") as output:
+                while True:
+                    if cancelled and cancelled():
+                        raise UpdateError("已取消下载")
+                    chunk = response.read(_DOWNLOAD_CHUNK)
+                    if not chunk:
+                        break
+                    downloaded += len(chunk)
+                    if downloaded > release.size:
+                        raise UpdateError("更新包大小超过清单记录")
+                    output.write(chunk)
+                    digest.update(chunk)
+                    if on_progress:
+                        on_progress(downloaded, release.size)
+        if downloaded != release.size:
+            raise UpdateError("更新包下载不完整")
+        if digest.hexdigest() != release.sha256.lower():
+            raise UpdateError("SHA-256 校验失败")
+        validate_archive(part)
+        if cancelled and cancelled():
+            raise UpdateError("已取消下载")
+        os.replace(part, dest)
+        return dest
+    except Exception as e:
         try:
-            _download(try_url, dest, on_progress, _DOWNLOAD_TIMEOUT_PER_MIRROR)
-            logger.info(f"download succeeded ({name}) → {dest}")
-            return dest
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as e:
-            last_err = e
-            logger.warning(f"download failed via {name}: {e}")
-            try:
-                if os.path.exists(dest):
-                    os.remove(dest)
-            except Exception:
-                pass
-            continue
-    raise UpdateError(f"all sources failed: {last_err}")
-
-
-def verify_sha256(path: str, expected_hex: str) -> bool:
-    """文件 sha256 校验, expected_hex 为 None / 空字符串时直接 True (跳过)."""
-    if not expected_hex:
-        return True
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(_DOWNLOAD_CHUNK), b""):
-            h.update(chunk)
-    actual = h.hexdigest().lower()
-    expected = expected_hex.strip().lower()
-    return actual == expected
+            if os.path.isfile(part):
+                os.remove(part)
+        except OSError:
+            logger.warning("Failed to clean partial download: %s", part)
+        raise UpdateError(str(e)) from e
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -317,45 +278,36 @@ class UpdateInstaller(QThread):
     finished_ok = pyqtSignal(str)
     failed = pyqtSignal(str)
 
-    def __init__(self, zip_url: str, expected_sha256: str = "", parent=None):
+    def __init__(self, release: ReleaseInfo, parent=None):
         super().__init__(parent)
-        self._zip_url = zip_url
-        self._expected_sha256 = expected_sha256
+        self._release = release
         self._dest_path: str | None = None
 
     def run(self):
+        tmp_dir = None
         try:
-            tmp_dir = os.path.join(tempfile.gettempdir(), "teggtouch_update")
-            os.makedirs(tmp_dir, exist_ok=True)
-            # 清掉上次升级失败遗留的 zip / ps1 (每个 zip ~148MB, 累积几次就把 C 盘吃干)
-            for f in os.listdir(tmp_dir):
-                fp = os.path.join(tmp_dir, f)
-                if os.path.isfile(fp):
-                    try:
-                        os.remove(fp)
-                        logger.info(f"cleaned old temp file: {f}")
-                    except Exception as e:
-                        logger.debug(f"failed to clean {f}: {e}")
-            # 用 URL 的文件名 (TEGGTouch_v{V}.zip), 防重名加 PID
-            filename = self._zip_url.rstrip("/").split("/")[-1] or "TEGGTouch_update.zip"
+            self._release.validate()
+            tmp_dir = tempfile.mkdtemp(prefix="teggtouch-update-")
+            filename = f"TEGGTouch_v{self._release.version}.zip"
             dest = os.path.join(tmp_dir, filename)
             self._dest_path = dest
 
             def _on_progress(downloaded, total):
                 self.progress.emit(downloaded, total)
 
-            download_with_fallback(self._zip_url, dest, _on_progress)
-
-            if not verify_sha256(dest, self._expected_sha256):
-                self.failed.emit("SHA-256 校验失败")
-                return
-
+            download_release(self._release, dest, _on_progress, self.isInterruptionRequested)
             self.finished_ok.emit(dest)
         except UpdateError as e:
             self.failed.emit(str(e))
         except Exception as e:
             logger.exception("UpdateInstaller crashed")
             self.failed.emit(f"未知错误: {e}")
+        finally:
+            if tmp_dir:
+                try:
+                    os.rmdir(tmp_dir)  # failure only; never deletes a verified ZIP
+                except OSError:
+                    pass
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -379,9 +331,10 @@ def _get_install_dir_and_exe() -> tuple[str, str]:
 def apply_update(zip_path: str) -> None:
     """写 updater.ps1 → 启动 powershell → 退出主程序.
     调用此函数后 app 会立即 quit, 后续控制权交给 ps1."""
+    if not getattr(sys, "frozen", False):
+        raise UpdateError("源码运行环境不能就地更新，请运行打包后的蛋挞")
     install_dir, exe_path = _get_install_dir_and_exe()
-    tmp_dir = os.path.join(tempfile.gettempdir(), "teggtouch_update")
-    os.makedirs(tmp_dir, exist_ok=True)
+    tmp_dir = os.path.dirname(os.path.abspath(zip_path))
     ps1_path = os.path.join(tmp_dir, "updater.ps1")
     # 必须用 utf-8-sig (带 BOM); Windows PowerShell 5.x 默认读 .ps1 是系统 codepage,
     # 没 BOM 时中文字符会被当 GBK 解析, 整个脚本语法被破坏, splash 看不到 / exe 启动失败.

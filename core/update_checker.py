@@ -1,83 +1,53 @@
-"""
-TEGG Touch - update_checker.py
-后台检查 GitHub Releases 是否有新版本。
-
-使用 urllib (stdlib) 请求 GitHub API，24 小时内不重复检查。
-"""
+"""Background OSS update check. GitHub is not needed by the client."""
 
 import json
 import logging
 import os
 import time
-import urllib.request
-import urllib.error
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from core.constants import APP_VERSION, APP_DIR
+from core.update_manifest import (LATEST_URL, MAX_MANIFEST_BYTES, is_newer as _is_newer,
+                                  open_update_url, parse_manifest)
 
 logger = logging.getLogger(__name__)
-
-# GitHub Releases API
-_GITHUB_API_URL = "https://api.github.com/repos/TEGGTouch/TEGG-Touch/releases/latest"
-_REQUEST_TIMEOUT = 5  # seconds
-
-# 冷却文件: 24 小时内不重复检查
 _COOLDOWN_FILE = os.path.join(APP_DIR, "settings", "last_update_check.json")
 _COOLDOWN_SECONDS = 24 * 60 * 60
 
 
-def _parse_version(tag: str) -> tuple:
-    """读取版本数字，兼容 preview/build 后缀，避免测试版被误判为 (0,)。"""
-    tag = tag.strip().lstrip("vV")
-    try:
-        return tuple(int(x) for x in tag.split("-", 1)[0].split("+", 1)[0].split("."))
-    except (ValueError, AttributeError):
-        return (0,)
-
-
-def _is_newer(remote_tag: str, local_version: str) -> bool:
-    """remote_tag > local_version ?"""
-    remote, local = _parse_version(remote_tag), _parse_version(local_version)
-    return remote > local or (remote == local and '-' in local_version and '-' not in remote_tag)
-
-
 def _should_check() -> bool:
-    """检查冷却文件，判断是否需要请求 API。"""
     try:
-        if os.path.exists(_COOLDOWN_FILE):
-            with open(_COOLDOWN_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            last_ts = data.get("last_check", 0)
-            if time.time() - last_ts < _COOLDOWN_SECONDS:
-                return False
-    except Exception:
-        pass
-    return True
+        with open(_COOLDOWN_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        # A GitHub timestamp must not delay the first OSS check after migration.
+        age = time.time() - data.get("last_check", 0)
+        return data.get("source") != LATEST_URL or not 0 <= age < _COOLDOWN_SECONDS
+    except (OSError, ValueError, TypeError, AttributeError):
+        return True
 
 
 def _save_check_timestamp():
-    """记录本次检查时间。"""
     try:
         os.makedirs(os.path.dirname(_COOLDOWN_FILE), exist_ok=True)
         with open(_COOLDOWN_FILE, "w", encoding="utf-8") as f:
-            json.dump({"last_check": time.time()}, f)
-    except Exception as e:
-        logger.debug(f"Failed to save update check timestamp: {e}")
+            json.dump({"last_check": time.time(), "source": LATEST_URL}, f)
+    except OSError as e:
+        logger.debug("Failed to save update check timestamp: %s", e)
+
+
+def fetch_latest():
+    with open_update_url(LATEST_URL) as response:
+        raw = response.read(MAX_MANIFEST_BYTES + 1)
+    if len(raw) > MAX_MANIFEST_BYTES:
+        raise ValueError("更新清单过大")
+    return parse_manifest(json.loads(raw.decode("utf-8")))
 
 
 class UpdateChecker(QThread):
-    """后台线程: 检查 GitHub 最新 Release。
+    """force=True bypasses the daily cooldown for manual checks."""
 
-    Signals:
-        update_available(version, url, body)  — 有新版本时发射
-        no_update_available()                 — 已是最新版 (供手动检查给反馈)
-        check_failed(msg)                     — 检查失败/网络错误 (供手动检查给反馈)
-
-    force=True: 跳过 24h 冷却, 用于用户在设置里手动点「检查更新」。
-    """
-
-    update_available = pyqtSignal(str, str, str)  # version, html_url, body
+    update_available = pyqtSignal(object)  # ReleaseInfo, including size + digest
     no_update_available = pyqtSignal()
     check_failed = pyqtSignal(str)
 
@@ -87,46 +57,15 @@ class UpdateChecker(QThread):
 
     def run(self):
         if not self._force and not _should_check():
-            logger.debug("Update check skipped (cooldown)")
             return
-
         try:
-            req = urllib.request.Request(
-                _GITHUB_API_URL,
-                headers={
-                    "Accept": "application/vnd.github.v3+json",
-                    "User-Agent": f"TEGGTouch/{APP_VERSION}",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-
-            tag = data.get("tag_name", "")
-            html_url = data.get("html_url", "")
-            body = data.get("body", "")
-            # 优先用第一个 .zip 资源的直链, 没有就回退 release 页面
-            download_url = html_url
-            for asset in data.get("assets", []) or []:
-                name = (asset.get("name") or "").lower()
-                if name.endswith(".zip"):
-                    direct = asset.get("browser_download_url")
-                    if direct:
-                        download_url = direct
-                        break
-
+            release = fetch_latest()
             _save_check_timestamp()
-
-            if _is_newer(tag, APP_VERSION):
-                version_str = tag.lstrip("vV")
-                logger.info(f"New version available: {version_str} → {download_url}")
-                self.update_available.emit(version_str, download_url, body)
+            if _is_newer(release.version, APP_VERSION):
+                logger.info("New OSS release available: %s", release.version)
+                self.update_available.emit(release)
             else:
-                logger.debug(f"Already up to date ({APP_VERSION})")
                 self.no_update_available.emit()
-
-        except urllib.error.URLError as e:
-            logger.debug(f"Update check failed (network): {e}")
-            self.check_failed.emit(str(e))
         except Exception as e:
-            logger.debug(f"Update check failed: {e}")
+            logger.info("OSS update check failed: %s", e)
             self.check_failed.emit(str(e))

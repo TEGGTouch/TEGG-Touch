@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/python-3.10%2B-green" alt="Python">
     <img src="https://img.shields.io/badge/framework-PyQt6-41CD52" alt="PyQt6">
     <img src="https://img.shields.io/badge/license-CC%20BY--NC%204.0-orange" alt="License">
-    <img src="https://img.shields.io/badge/version-v0.2.1-brightgreen" alt="Version">
+    <img src="https://img.shields.io/badge/version-v0.5.2-brightgreen" alt="Version">
     <img src="https://img.shields.io/badge/i18n-中文%20%7C%20English-blueviolet" alt="i18n">
   </p>
 </p>
@@ -92,9 +92,13 @@ TEGG Touch creates a transparent overlay on your screen where you can freely pla
 
 ### 下载即用（推荐）| Download & Run (Recommended)
 
-前往 [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases) 下载最新版 `TEGGTouch_v0.2.1.zip`，解压后右键以管理员身份运行 `TEGGTouch.exe`。
+前往[官网](https://danta.ningshen.net/)或 [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases) 下载最新版 `TEGGTouch_v0.5.2.zip`，解压后右键以管理员身份运行 `TEGGTouch.exe`。
 
-Download `TEGGTouch_v0.2.1.zip` from [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases), extract and run `TEGGTouch.exe` as Administrator.
+Download `TEGGTouch_v0.5.2.zip` from the [website](https://danta.ningshen.net/) or [Releases](https://github.com/TEGGTouch/TEGG-Touch/releases), extract and run `TEGGTouch.exe` as Administrator.
+
+v0.5.2 起，检查更新和下载直接使用官方 OSS，不依赖 GitHub；用户确认后校验并原地更新，保留方案和设置。旧版无法访问 GitHub 时，从官网手动下载本版一次即可完成迁移。
+
+Since v0.5.2, update checks and downloads use official OSS without GitHub. Updates require confirmation and verify the package before updating in place, preserving profiles and settings. Older clients without GitHub access can migrate with one manual download from the website.
 
 ### 源码运行 | Build from Source
 

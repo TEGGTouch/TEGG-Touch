@@ -16,7 +16,23 @@ GitHub Release / OSS 下载地址、版本标签和官网版本更新方式保�
 
 每次发版同时按官网仓库的 `网站发布注意事项.md` 更新版本号、下载链接、双语手册和版本历史，再推送 `TEGGTouch-Web` 的 `master`。桌面源码归档不等于官网已经更新。
 
-## 新增云效归档
+## v0.5.2 起的 OSS 更新发布
+
+客户端只读取公开的 `https://sea-of-time.oss-cn-shanghai.aliyuncs.com/teggtouch/latest.json`，
+不需要 GitHub API、代理或 OSS 密钥。清单格式见 `core/update_manifest.py`。
+`pack_release.bat` 只生成本地 ZIP，不再隐式上传；本机旧辅助脚本及凭证继续忽略，不提交。
+
+1. Windows 构建并完成测试，ZIP 文件名仍为 `TEGGTouch_v<版本>.zip`。
+2. 在 `docs/release-notes/<版本>.md` 写更新说明；执行 `python scripts/publish_release.py` 只做本地校验。
+3. 获准正式发布后执行 `python scripts/publish_release.py --publish`：先上传 ZIP，回读并验证大小/SHA256，最后发布 `latest.json`（no-cache）。不要并发运行发布脚本。
+4. ZIP 不覆盖同名历史版本，拒绝 preview 进入 stable 清单，拒绝将清单降级或用不同文件替换同一版本。
+5. 将代码及版本标签同步 origin/github，发布同名 GitHub Release 和同一份 ZIP，供旧客户端迁移。新版运行时不依赖它。
+6. 同步官网双语内容；官网打包从 OSS 读取并核对同一份清单。最后重跑源码/二进制归档并验证。
+
+旧版只认识 GitHub，不能靠上传 JSON 改变它的行为。GitHub 不通的用户需从官网手动升级一次。
+SHA256 用于完整性校验，不等于发布者数字签名；清单和下载必须使用 HTTPS，OSS 写权限仅留在发布端。
+
+## 云效归档流程
 
 流水线[“蛋挞产品版本归档”（5274494）](https://flow.aliyun.com/pipelines/5274494)由新仓库 main 的 push 触发，定义为 `deploy/pipeline.yaml`。
 每次归档包含：
