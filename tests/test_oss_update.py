@@ -197,9 +197,11 @@ class PublisherTests(unittest.TestCase):
             return not allow_missing
         with patch.object(publisher, "current_manifest", side_effect=[None, None, data]), \
              patch.object(publisher, "upload", side_effect=upload), \
+             patch.object(publisher, "fetch_history", return_value={'schema': 1, 'product': 'TEGGTouch', 'releases': []}), \
+             patch.object(publisher, "publish_history", side_effect=lambda data: calls.append('releases.json')), \
              patch.object(publisher, "verify_remote", side_effect=verify):
             publisher.publish(Path("TEGGTouch_v0.5.2.zip"), data)
-        self.assertEqual(calls, ["check-existing", "TEGGTouch_v0.5.2.zip", "verify-zip", "latest.json"])
+        self.assertEqual(calls, ["check-existing", "TEGGTouch_v0.5.2.zip", "verify-zip", "releases.json", "latest.json"])
 
     def test_failed_asset_verification_never_promotes(self):
         with patch.object(publisher, "current_manifest", return_value=None), \

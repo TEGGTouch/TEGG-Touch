@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.update_manifest import (LATEST_URL, OSS_BASE, MAX_MANIFEST_BYTES,
                                   is_newer, open_update_url, parse_manifest, validate_archive)
+from scripts.release_history import fetch_history, merge_history, list_oss_history, verify_history_links, HISTORY_URL
 
 
 def app_version():
@@ -109,6 +110,24 @@ def upload(path, key, *, manifest=False):
     subprocess.run(command, check=True)
 
 
+def publish_history(data):
+    with tempfile.TemporaryDirectory(prefix='teggtouch-history-') as directory:
+        path = Path(directory) / 'releases.json'
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        upload(path, 'releases.json', manifest=True)
+    if fetch_history() != data:
+        raise ValueError('Public releases.json differs from the expected history')
+
+
+def sync_history():
+    data = merge_history(fetch_history(), list_oss_history()['releases'])
+    if not data['releases']:
+        raise ValueError('No public stable releases found')
+    verify_history_links(data)
+    publish_history(data)
+    return data
+
+
 def publish(zip_path, data):
     release = parse_manifest(data)
     check_promotion(data, current_manifest())
@@ -117,6 +136,9 @@ def publish(zip_path, data):
         verify_remote(release)
     # Recheck immediately before promotion; do not publish concurrently.
     check_promotion(data, current_manifest())
+    history = merge_history(fetch_history(), [
+        {'version': release.version, 'url': release.url, 'size': release.size}])
+    publish_history(history)  # verified ZIP -> history -> latest, never advertise missing files
     with tempfile.TemporaryDirectory(prefix="teggtouch-publish-") as directory:
         manifest = Path(directory) / "latest.json"
         manifest.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -129,8 +151,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--zip", type=Path)
     parser.add_argument("--notes", type=Path)
-    parser.add_argument("--publish", action="store_true", help="Upload and promote the stable update channel")
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument("--publish", action="store_true", help="Upload, append history and promote stable")
+    actions.add_argument("--sync-history", action="store_true", help="Index existing public OSS ZIPs; does not change latest.json")
     args = parser.parse_args()
+    if args.sync_history:
+        data = sync_history()
+        print('Published {} historical releases: {}'.format(len(data['releases']), HISTORY_URL))
+        return
     version = app_version()
     zip_path = args.zip or ROOT / "dist" / f"TEGGTouch_v{version}.zip"
     notes_path = args.notes or ROOT / "docs/release-notes" / f"{version}.md"
