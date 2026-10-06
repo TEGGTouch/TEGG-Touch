@@ -105,6 +105,7 @@ class RawMouseReader:
     def __init__(self):
         self._lock = threading.Lock()
         self._pending = []
+        self._wheel = 0
         self._ready = threading.Event()
         self._stopping = threading.Event()
         self._thread = None
@@ -140,6 +141,11 @@ class RawMouseReader:
         with self._lock:
             events, self._pending = self._pending, []
         return events
+
+    def drain_wheel(self):
+        with self._lock:
+            delta, self._wheel = self._wheel, 0
+        return delta
 
     def _run(self):
         hwnd = None
@@ -193,18 +199,21 @@ class RawMouseReader:
                     header = _Header.from_buffer(self._buffer)
                     if header.type == 0:
                         mouse = _Mouse.from_buffer(self._buffer, ctypes.sizeof(_Header))
-                        self.feed(mouse.flags, mouse.x, mouse.y)
+                        wheel = (ctypes.c_short(mouse.buttons >> 16).value
+                                 if mouse.buttons & 0x0400 else 0)
+                        self.feed(mouse.flags, mouse.x, mouse.y, wheel)
             except Exception:
                 if not self._error_reported:
                     log.exception('独立光标 Raw Input 数据读取失败')
                     self._error_reported = True
         return _user32.DefWindowProcW(hwnd, message, wp, lp)
 
-    def feed(self, flags, x, y):
+    def feed(self, flags, x, y, wheel=0):
         absolute = bool(flags & MOUSE_MOVE_ABSOLUTE)
-        if not absolute and not (x or y):
-            return
         with self._lock:
+            self._wheel += wheel
+            if not absolute and not (x or y):
+                return
             if not absolute and self._pending and not (self._pending[-1][0] & MOUSE_MOVE_ABSOLUTE):
                 _, old_x, old_y = self._pending[-1]
                 self._pending[-1] = (0, old_x + x, old_y + y)
@@ -223,6 +232,7 @@ class CursorProbe:
     tiny_clip: bool = False
     foreground: int = 1
     external: bool = True
+    owned: bool = False
 
 
 class AdaptivePointer:
@@ -244,6 +254,8 @@ class AdaptivePointer:
         self._release_at = None
         self._hidden_at_lock = False
         self._ignore_until = 0.0
+        self._game_foreground = None
+        self._game_centre = None
 
     def reset(self, position, now=0.0):
         self.independent = False
@@ -267,8 +279,15 @@ class AdaptivePointer:
     def advance(self, now, probe, events):
         old_mode = self.independent
         previous = self._last
-        focus_changed = previous is not None and previous.foreground != probe.foreground
-        if focus_changed or not probe.external:
+        # Our toolbar/dialog is part of the same pointer session. Keep the
+        # game's anchor while it owns focus; its client centre is not a new lock.
+        internal = probe.owned or (previous is not None and previous.owned
+                                   and probe.foreground == self._game_foreground)
+        focus_changed = (previous is not None and previous.foreground != probe.foreground
+                         and not internal)
+        if probe.external:
+            self._game_foreground, self._game_centre = probe.foreground, probe.centre
+        if focus_changed or not (probe.external or probe.owned):
             self.reset(probe.position, now + 0.15)
             self._last = probe
             return old_mode != self.independent, focus_changed
@@ -281,7 +300,8 @@ class AdaptivePointer:
         dx = sum(x for _, x, _ in events)
         dy = sum(y for _, _, y in events)
         raw_length = math.hypot(dx, dy)
-        near_centre = math.dist(probe.position, probe.centre) <= 16
+        centre = self._game_centre if probe.owned and self._game_centre else probe.centre
+        near_centre = math.dist(probe.position, centre) <= 16
         near_edge = (probe.position[0] <= self.bounds.left() + 3 or
                      probe.position[0] >= self.bounds.right() - 3 or
                      probe.position[1] <= self.bounds.top() + 3 or
@@ -302,7 +322,7 @@ class AdaptivePointer:
             # Native menus usually reveal the OS cursor. Custom-cursor menus
             # can also be recognised by sustained travel away from the anchor.
             released = not probe.tiny_clip and (
-                (self._hidden_at_lock and probe.visible) or not near_centre)
+                (self._hidden_at_lock and probe.visible and not probe.owned) or not near_centre)
             if released:
                 if self._release_at is None:
                     self._release_at = now
@@ -314,7 +334,8 @@ class AdaptivePointer:
             return old_mode != self.independent, False
 
         self.position = probe.position
-        if now < self._ignore_until or near_edge or not (near_centre or probe.tiny_clip):
+        if (now < self._ignore_until or near_edge or not (near_centre or probe.tiny_clip)
+                or (probe.owned and self._game_centre is None)):
             self._samples.clear()
             return False, False
         if self._samples and now - self._samples[-1][0] > 0.08:
@@ -354,6 +375,7 @@ class CursorInput(QObject):
         self._diag_at = 0.0
         self._diag_raw = [0, 0]
         self._diag_motion = False
+        self._wheel_delta = 0
 
     @property
     def independent(self):
@@ -378,6 +400,7 @@ class CursorInput(QObject):
             self._reader.stop()
             self._reader = None
         self._model.reset((QCursor.pos().x(), QCursor.pos().y()))
+        self._wheel_delta = 0
         if was_independent:
             self.mode_changed.emit(False)
 
@@ -416,7 +439,8 @@ class CursorInput(QObject):
         if hit_pid.value == os.getpid():
             visible = False
         return CursorProbe((point.x(), point.y()), centre_qt, visible, tiny,
-                           int(hwnd or 0), bool(pid.value and pid.value != os.getpid()))
+                           int(hwnd or 0), bool(pid.value and pid.value != os.getpid()),
+                           pid.value == os.getpid())
 
     def poll(self):
         """Return True on a transition so held pointer actions can be released."""
@@ -431,6 +455,8 @@ class CursorInput(QObject):
         now = time.monotonic()
         events = self._reader.drain()
         changed, focus_changed = self._model.advance(now, probe, events)
+        wheel = self._reader.drain_wheel()
+        self._wheel_delta += wheel if self.independent else 0
         for flags, x, y in events:
             if not (flags & MOUSE_MOVE_ABSOLUTE):
                 self._diag_raw[0] += x
@@ -451,6 +477,10 @@ class CursorInput(QObject):
                      self._model.gain)
             self.mode_changed.emit(self.independent)
         return changed or focus_changed
+
+    def take_wheel_delta(self):
+        delta, self._wheel_delta = self._wheel_delta, 0
+        return delta
 
     def position(self):
         if not self.independent:

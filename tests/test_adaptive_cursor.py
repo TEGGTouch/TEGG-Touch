@@ -214,6 +214,7 @@ class SourceTests(unittest.TestCase):
     def test_position_reads_do_not_reconsume_raw_motion(self):
         reader = Mock(alive=True)
         reader.drain.return_value = [(0, 4, 0)]
+        reader.drain_wheel.return_value = 0
         source = CursorInput()
         source._reader = reader
         source._model.independent = True

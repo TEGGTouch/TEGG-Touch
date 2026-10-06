@@ -129,11 +129,13 @@ class RunController(QObject):
     request_toggle_cursor = pyqtSignal()    # F3: 切换自绘光标显隐
     key_remap_state_changed = pyqtSignal(bool)  # 键盘映射总开关状态
 
-    def __init__(self, scene, window):
+    def __init__(self, scene, window, cursor_input=None):
         super().__init__()
         self._scene = scene
         self._window = window
-        self.cursor_input = CursorInput(self)
+        self.cursor_input = cursor_input if cursor_input is not None else CursorInput(self)
+        self._owns_cursor_input = cursor_input is None
+        self._pointer_ui_active = False
         self._active = False
 
         # 硬件按键状态缓存 (用于侧键检测)
@@ -281,7 +283,7 @@ class RunController(QObject):
         # 键盘映射: 现扫当前 profile 的 key_remaps, 有才装钩子
         self._start_key_remap()
 
-        if self._window is not None:
+        if self._owns_cursor_input and self._window is not None:
             self.cursor_input.start(QRect(self._window.mapToGlobal(QPoint(0, 0)),
                                           self._window.size()))
         self._timer.start()
@@ -334,7 +336,8 @@ class RunController(QObject):
         """退出运行模式"""
         self._active = False
         self._timer.stop()
-        self.cursor_input.stop()
+        if self._owns_cursor_input:
+            self.cursor_input.stop()
         self._ac_start_time = None
         self._stop_voice()
         # 键盘映射: 先卸钩子 (内部会释放按下中的目标), 再走下面的通用兜底释放
@@ -434,6 +437,13 @@ class RunController(QObject):
 
     # ── 主循环 ──
 
+    def set_pointer_ui_active(self, active):
+        if active != self._pointer_ui_active:
+            self._pointer_ui_active = active
+            if self._active:
+                self._reset_pointer_actions()
+                self.auto_center_progress.emit(-1, 0, 0)
+
     def _tick(self):
         """轮询循环 — 快捷键 + hover/click + 侧键 + 滚轮 + 自动回中"""
         if not self._active:
@@ -446,7 +456,7 @@ class RunController(QObject):
         if not self._active:  # stop 可能在 _check_hotkeys 中被调用
             return
 
-        if self.cursor_input.poll():
+        if self._owns_cursor_input and self.cursor_input.poll():
             self._reset_pointer_actions()
             # A focus/mode change must not replay old wheel events or held clicks.
             poll_wheel_events()
@@ -455,6 +465,10 @@ class RunController(QObject):
         # 1b. 键盘映射的慢路径事件 (宏/手柄/鼠标/应用/回中; 纯键盘键已在钩子内直发)
         for dst, act in keyboard_hook.poll_events():
             self._smart_trigger(dst, act)
+
+        if self._pointer_ui_active:
+            poll_wheel_events()
+            return
 
         # 2. 处理滚轮事件
         wheel_events = poll_wheel_events()

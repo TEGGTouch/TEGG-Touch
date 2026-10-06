@@ -17,6 +17,7 @@ from core.constants import (
     DEFAULT_SCENE_SCALE, SCENE_SCALE_MIN, SCENE_SCALE_MAX,
 )
 from core.system_tuning import frame_interval_ms
+from core.cursor_input import CursorInput
 from core.config_manager import (
     init_profiles, load_hotkeys, get_active_profile_name,
     load_profile, save_profile, set_active_profile,
@@ -25,6 +26,7 @@ from core.input_engine import install_wheel_hook, uninstall_wheel_hook, release_
 from scene.overlay_scene import OverlayScene
 from engine.run_controller import RunController
 from engine.passthrough_manager import PassthroughManager
+from engine.ui_pointer import UiPointerController
 
 from views.edit_toolbar import EditToolbar
 from views.run_toolbar import RunToolbar, CollapsedBubble
@@ -95,7 +97,8 @@ class OverlayWindow(QGraphicsView):
 
         # ── 引擎初始化 ──
         self._pt_manager = PassthroughManager(self)
-        self._run_controller = RunController(self._scene, self)
+        self._cursor_input = CursorInput(self)
+        self._run_controller = RunController(self._scene, self, self._cursor_input)
 
         # 连接运行控制器信号
         self._run_controller.request_edit_mode.connect(self.to_edit)
@@ -201,6 +204,8 @@ class OverlayWindow(QGraphicsView):
         self._smart_pt_timer = QTimer(self)
         self._smart_pt_timer.setInterval(frame_interval_ms())
         self._smart_pt_timer.timeout.connect(self._poll_smart_passthrough)
+        self._pointer_controller = UiPointerController(
+            self, self._cursor_input, self._run_controller, self._virtual_cursor)
 
         # 连接场景信号
         self._scene.button_double_clicked.connect(self._open_button_editor)
@@ -224,6 +229,7 @@ class OverlayWindow(QGraphicsView):
         # ── 外观 (wheel_style + cursor_styles) per-profile, 启动同时按 profile 配置应用 ──
         self._resolve_appearance_from_profile(_hk)
         self._apply_appearance_to_items()
+        self._set_drawn_cursor(True)
 
     def _load_profile(self):
         """加载方案配置，创建场景中的按钮"""
@@ -306,6 +312,8 @@ class OverlayWindow(QGraphicsView):
         # (重复进入会孤儿化语音引擎并泄漏虚拟盘符 → 语音失灵)
         if self._current_mode == 'run':
             return
+        self._pointer_controller.cancel()
+        self._run_controller.set_pointer_ui_active(False)
         # 关闭所有编辑模式弹窗
         from PyQt6.QtWidgets import QDialog
         for dlg in self.findChildren(QDialog):
@@ -375,6 +383,7 @@ class OverlayWindow(QGraphicsView):
 
     def to_edit(self):
         """切换到编辑模式"""
+        self._pointer_controller.cancel()
         self._current_mode = 'edit'
         self._run_controller.stop()
         uninstall_wheel_hook()
@@ -476,11 +485,10 @@ class OverlayWindow(QGraphicsView):
         注: 穿透(click-through)模式下光标属于下层游戏, 这里藏不掉 — 仅对非穿透/编辑模式生效。
         """
         if on:
-            self._virtual_cursor.start_tracking()
             self.viewport().setCursor(Qt.CursorShape.BlankCursor)
         else:
-            self._virtual_cursor.stop_tracking()
             self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+        self._pointer_controller.set_drawn(on)
 
     def _toggle_cursor_visibility(self):
         """F3 / 光标按钮 → 切换自绘光标显隐 (per-profile 持久化)。"""
@@ -1314,11 +1322,17 @@ class OverlayWindow(QGraphicsView):
         self._restore_toolbars_for_mode()
         if self._current_mode == 'edit':
             self._smart_pt_timer.start()
+        self._pointer_controller.start()
+
+    def hideEvent(self, event):
+        if hasattr(self, '_pointer_controller'):
+            self._pointer_controller.stop()
+            self._run_controller.set_pointer_ui_active(True)
+        super().hideEvent(event)
 
     def _poll_smart_passthrough(self):
         """每帧检查光标位置，切换 WS_EX_TRANSPARENT — 对齐原版 update_loop"""
-        from PyQt6.QtGui import QCursor
-        global_pos = QCursor.pos()
+        global_pos = self._cursor_input.position()
         view_pos = self.mapFromGlobal(global_pos)
         scene_pos = self.mapToScene(view_pos)
         item = self._scene.itemAt(scene_pos, self.transform())
@@ -1326,15 +1340,15 @@ class OverlayWindow(QGraphicsView):
 
     def mousePressEvent(self, event):
         """智能穿透: 空白区域的点击转发到底层窗口（轮询间隙兜底）"""
-        if self._current_mode == 'run' and self._run_controller.cursor_input.independent:
-            # Native events contain the game's locked OS position. The polling
-            # path dispatches this physical click at our logical position.
-            event.accept()
-            return
         scene_pos = self.mapToScene(event.pos())
         item = self._scene.itemAt(scene_pos, self.transform())
 
         if item is None:
+            if self._cursor_input.independent:
+                # A logical empty-space click must not be reinjected at the
+                # game's locked physical position. Native input already reaches it.
+                event.accept()
+                return
             # 空白区域 — 无论编辑/运行模式都转发点击
             self._pt_manager.forward_click_to_game(
                 event.globalPosition().toPoint(), event.button())
@@ -1342,21 +1356,10 @@ class OverlayWindow(QGraphicsView):
             return
         super().mousePressEvent(event)
 
-    def mouseReleaseEvent(self, event):
-        if self._current_mode == 'run' and self._run_controller.cursor_input.independent:
-            event.accept()
-            return
-        super().mouseReleaseEvent(event)
-
-    def mouseDoubleClickEvent(self, event):
-        if self._current_mode == 'run' and self._run_controller.cursor_input.independent:
-            event.accept()
-            return
-        super().mouseDoubleClickEvent(event)
-
     def closeEvent(self, event):
         """关闭时保存配置并退出进程"""
         self._smart_pt_timer.stop()
+        self._pointer_controller.stop()
         self._run_controller.stop()
         release_all_keys()  # 兜底释放所有残留按键，防止卡键
         uninstall_wheel_hook()
