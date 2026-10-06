@@ -232,7 +232,7 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
                 if label.text() and not any(0xE000 <= ord(c) <= 0xF8FF for c in label.text()):
                     label.setFont(font)
     for label in header.findChildren(QLabel):
-        if label is not marker and label.text() and not any(0xE000 <= ord(c) <= 0xF8FF for c in label.text()):
+        if label is not marker and not any(0xE000 <= ord(c) <= 0xF8FF for c in label.text()):
             font = QFont(get_font())
             font.setPixelSize(20)
             font.setBold(True)
