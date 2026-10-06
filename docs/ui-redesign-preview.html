@@ -5,39 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>蛋挞 · UI 改造视觉稿</title>
   <style>
-    :root { color-scheme: dark; --ink: #0f1923; --panel: #1f2731; --line: #2b3540; --bone: #ece8e1; --muted: #a5aea9; --accent: #2bb5a0; --danger: #ff4655; --blue: #5b8def; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #090f16; color: var(--bone); font: 14px/1.6 "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; }
+    :root { color-scheme: dark; --ink: #2d2d2d; --panel: #3a3a3a; --line: #444444; --bone: #e0e0e0; --muted: #aaaaaa; --accent: #0284c7; --primary: #0c4a6e; --brand: #f59e0b; --amber: #f59e0b; --green: #10b981; --danger: #8b2020; --blue: #1976d2; }
+    * { box-sizing: border-box; border-radius: 0; }
+    body { margin: 0; background: #202020; color: var(--bone); font: 14px/1.6 "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; }
     button, input, select { font: inherit; }
     button { cursor: pointer; }
     button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-    button { color: var(--bone); background: var(--panel); border: 1px solid #52616d; min-height: 40px; padding: 7px 13px; white-space: nowrap; }
+    button { color: var(--bone); background: var(--panel); border: 1px solid #555555; min-height: 40px; padding: 7px 13px; white-space: nowrap; }
     button:hover { border-color: var(--bone); }
-    button.primary { color: var(--ink); background: var(--accent); border-color: var(--accent); font-weight: 600; }
-    button.primary:hover { background: var(--bone); border-color: var(--bone); }
-    button.danger { color: #ffc5ca; background: #321e29; border-color: #ab4550; }
-    button.selected, button[aria-selected="true"] { color: var(--bone); background: #163a3c; border-color: var(--accent); }
+    button.primary { color: #ffffff; background: var(--primary); border-color: var(--accent); font-weight: 600; }
+    button.primary:hover { background: var(--accent); }
+    button.launch { color: #202020; background: var(--amber); border-color: var(--amber); font-weight: 600; }
+    button.launch:hover { background: #d97706; border-color: #d97706; }
+    button.danger { color: #ffffff; background: #6e1e1e; border-color: var(--danger); }
+    button.selected, button[aria-selected="true"] { color: var(--bone); background: var(--primary); border-color: var(--accent); }
     .latin { font-family: Bahnschrift, "Arial Narrow", sans-serif; letter-spacing: 1.4px; }
     .muted { color: var(--muted); }
     .page { max-width: 1320px; margin: 0 auto; padding: 44px 32px 56px; }
-    .eyebrow { font-size: 11px; color: var(--accent); margin: 0 0 8px; }
+    .eyebrow { font-size: 11px; color: var(--brand); margin: 0 0 8px; }
     .intro { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 36px; }
     h1 { font-size: 30px; line-height: 1.35; margin: 0 0 10px; font-weight: 600; }
+    h1 span { color: var(--brand); }
     .intro p { margin: 0; color: var(--muted); }
-    .scope { border-left: 2px solid var(--accent); padding-left: 16px; font-size: 12px; flex: 0 0 280px; }
+    .scope { border-left: 2px solid var(--amber); padding-left: 16px; font-size: 12px; flex: 0 0 280px; }
     .scope strong { display: block; color: var(--bone); font-weight: 500; margin-bottom: 4px; }
     .section-label { display: flex; align-items: center; gap: 12px; margin: 28px 0 12px; font-size: 12px; }
-    .section-label .number { color: var(--accent); font-size: 11px; }
+    .section-label .number { color: var(--muted); font-size: 11px; }
     .section-label::after { content: ""; height: 1px; background: var(--line); flex: 1; }
-    .surface { position: relative; background: var(--ink); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
-    .surface::after { content: ""; position: absolute; width: 15px; height: 15px; right: -1px; top: -1px; background: #090f16; clip-path: polygon(100% 0, 100% 100%, 0 0); pointer-events: none; }
+    .surface { position: relative; background: var(--ink); border: 1px solid #555555; }
+    .edit-toolbar, .run-toolbar { border-left: 2px solid var(--brand); }
+    .color-map { display: flex; flex-wrap: wrap; gap: 10px 20px; border-block: 1px solid var(--line); padding: 13px 0; color: var(--muted); font-size: 12px; }
+    .color-map strong { font-weight: 500; color: var(--bone); margin-right: 8px; }
+    .color-map .swatch { display: inline-block; width: 8px; height: 8px; background: var(--field-color); margin-right: 7px; }
     .edit-toolbar { padding: 12px 18px 14px 12px; }
     .toolbar-main, .toolbar-group { display: flex; gap: 8px; align-items: center; }
     .toolbar-main { flex-wrap: wrap; gap: 12px; }
     .grip { color: #829098; font-size: 20px; line-height: 1; letter-spacing: -3px; padding: 0 6px 0 0; cursor: move; user-select: none; }
-    .profile { text-align: left; min-width: 144px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .profile { text-align: left; min-width: 144px; display: flex; align-items: center; justify-content: space-between; gap: 18px; background: var(--primary); border-color: var(--accent); }
     .profile span { color: var(--muted); }
-    .toolbar-group + .toolbar-group { border-left: 1px solid #43515e; padding-left: 12px; }
+    .toolbar-group + .toolbar-group { border-left: 1px solid #555555; padding-left: 12px; }
     .toolbar-window { margin-left: auto; display: flex; gap: 6px; align-items: center; }
     .icon-button { min-width: 40px; padding: 7px 10px; background: transparent; }
     .toolbar-settings { border-top: 1px solid var(--line); margin: 12px 0 0 24px; padding-top: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 24px; }
@@ -45,41 +51,43 @@
     .toolbar-settings .setting { display: flex; gap: 12px; align-items: center; }
     .toolbar-settings button { min-height: 34px; padding: 4px 12px; }
     .slider-display { display: flex; gap: 12px; align-items: center; }
-    .slider-track { width: 146px; height: 4px; background: #52616d; position: relative; }
-    .slider-track::before { content: ""; display: block; width: var(--fill, 70%); height: 100%; background: var(--accent); }
+    .slider-track { width: 146px; height: 4px; background: #555555; position: relative; }
+    .slider-track::before { content: ""; display: block; width: var(--fill, 70%); height: 100%; background: var(--slider-color, var(--accent)); }
     .slider-track::after { content: ""; position: absolute; width: 10px; height: 18px; background: var(--bone); left: var(--fill, 70%); top: -7px; }
-    .slider-number { color: var(--accent); min-width: 40px; font-family: Bahnschrift, sans-serif; font-size: 14px; }
+    .slider-number { color: var(--slider-color, var(--accent)); min-width: 40px; font-family: Bahnschrift, sans-serif; font-size: 14px; }
     .mode-note { margin-left: auto; font-size: 11px; color: var(--muted); }
     .run-toolbar { padding: 12px 18px 12px 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
     .run-profile { min-width: 154px; line-height: 1.5; margin-right: auto; }
     .run-profile strong { font-weight: 500; }
-    .run-profile .status { font-size: 11px; color: var(--accent); }
-    .status::before { content: ""; display: inline-block; background: var(--accent); width: 5px; height: 5px; margin-right: 6px; vertical-align: 2px; }
+    .run-profile .status { font-size: 11px; color: #4ade80; }
+    .status::before { content: ""; display: inline-block; background: #4ade80; width: 5px; height: 5px; margin-right: 6px; vertical-align: 2px; }
     .run-toolbar button { padding-inline: 10px; font-size: 13px; }
     .key-hint { color: var(--muted); margin-left: 4px; font: 11px Bahnschrift, sans-serif; }
-    .run-toolbar .passthrough { border-color: #5476b8; background: #182638; }
-    .run-toolbar .passthrough .key-hint { color: #b9cffa; }
-    .run-toolbar .danger .key-hint { color: #ffc5ca; }
+    .run-toolbar .run-enabled { border-color: #1e8e38; background: #176f2c; color: #ffffff; }
+    .run-toolbar .passthrough { border-color: #2196f3; background: var(--blue); color: #ffffff; }
+    .run-toolbar .passthrough .key-hint, .run-toolbar .run-enabled .key-hint, .run-toolbar .danger .key-hint { color: #ffffff; }
     .review-nav { display: flex; gap: 8px; margin-left: auto; }
     .review-nav button { min-height: 34px; padding: 4px 14px; font-size: 12px; }
-    .review-nav button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: transparent; }
+    .review-nav button[aria-pressed="true"] { border-color: var(--brand); color: var(--brand); background: transparent; }
     .dialog { min-height: 634px; }
     .dialog-header { min-height: 80px; margin: 0 24px; padding: 17px 0 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
-    .dialog-header .marker { width: 8px; height: 8px; background: var(--accent); }
+    .dialog-header .marker { width: 8px; height: 8px; background: var(--brand); }
     .dialog-title { margin: 0; font-size: 21px; line-height: 1.4; font-weight: 600; }
     .dialog-subtitle { color: var(--muted); font-size: 10px; margin-top: 3px; }
     .dialog-header .close { margin-left: auto; background: transparent; border-color: var(--line); }
     .editor-content { display: grid; grid-template-columns: minmax(300px, .95fr) minmax(360px, 1.35fr); min-height: 494px; }
     .fields { padding: 20px 24px 24px; border-right: 1px solid var(--line); }
     .section-heading { display: flex; gap: 10px; align-items: center; font-size: 13px; margin: 0 0 12px; font-weight: 500; }
-    .section-heading span { color: var(--accent); font: 10px Bahnschrift, sans-serif; }
+    .section-heading span { color: var(--muted); font: 10px Bahnschrift, sans-serif; }
     .field-row { display: grid; grid-template-columns: 104px 1fr; gap: 12px; align-items: center; margin-bottom: 10px; }
     .field-label { color: var(--muted); font-size: 13px; }
-    input[type="text"] { width: 100%; min-width: 0; height: 40px; color: var(--bone); background: var(--panel); border: 1px solid #52616d; padding: 8px 12px; }
-    input[type="text"]:focus { border-color: var(--accent); }
-    .field-key { display: flex; align-items: center; min-height: 40px; gap: 5px; background: var(--panel); border: 1px solid #52616d; padding: 6px 9px; }
-    .field-key .tag { background: #364650; padding: 1px 9px; font-family: Bahnschrift, sans-serif; }
-    .field-key.active { border-color: var(--accent); }
+    .action-field .field-label::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; background: var(--field-color); vertical-align: 1px; }
+    input[type="text"] { width: 100%; min-width: 0; height: 40px; color: var(--bone); background: var(--panel); border: 1px solid #555555; padding: 8px 12px; }
+    input[type="text"]:focus { border-color: var(--field-color, var(--accent)); }
+    .field-key { display: flex; align-items: center; min-height: 40px; gap: 5px; background: var(--panel); border: 1px solid #555555; padding: 6px 9px; }
+    .field-key .tag { background: var(--field-color, var(--accent)); color: #ffffff; padding: 1px 9px; font-family: Bahnschrift, sans-serif; }
+    .field-key.active { border-color: var(--field-color, var(--accent)); }
+    .field-key .tag.light { color: #202020; }
     .field-key .empty { color: var(--muted); font-size: 12px; }
     .section-divider { height: 1px; background: var(--line); margin: 20px 0; }
     .segments { display: flex; gap: 8px; margin-bottom: 9px; }
@@ -94,7 +102,7 @@
     .palette-tabs button[aria-selected="true"] { color: var(--bone); border-bottom-color: var(--accent); }
     .palette-category { font-size: 12px; color: var(--muted); margin: 20px 0 10px; }
     .key-grid { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
-    .key-grid button { padding: 0; min-height: 36px; font: 13px Bahnschrift, sans-serif; background: var(--panel); border-color: #52616d; }
+    .key-grid button { padding: 0; min-height: 36px; font: 13px Bahnschrift, sans-serif; background: var(--panel); border-color: #555555; }
     .key-grid button:hover { border-color: var(--accent); }
     .key-grid button.chosen { color: var(--accent); border-color: var(--accent); }
     .modifier-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
@@ -110,16 +118,30 @@
     .settings-body { padding: 22px 28px; }
     .settings-body h3 { font-size: 16px; font-weight: 500; margin: 0 0 5px; }
     .hotkey-row { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 12px; align-items: center; border-bottom: 1px solid var(--line); padding: 13px 0; }
+    .hotkey-name::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 8px; background: var(--field-color); vertical-align: 2px; }
     .hotkey-row small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .hotkey-value { background: var(--panel); border: 1px solid #52616d; padding: 8px 12px; font-family: Bahnschrift, sans-serif; }
+    .hotkey-value { background: var(--panel); border: 1px solid #555555; border-left: 2px solid var(--field-color); padding: 8px 12px; font-family: Bahnschrift, sans-serif; }
     .settings-palette { border-left: 1px solid var(--line); }
     .settings-palette .key-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
     .settings-palette .modifier-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .caption { color: var(--muted); font-size: 12px; margin: 13px 0 0; }
     .page-footer { border-top: 1px solid var(--line); margin-top: 30px; padding-top: 18px; display: flex; justify-content: space-between; gap: 20px; font-size: 12px; color: var(--muted); }
-    .page-footer a { color: var(--accent); text-decoration: none; }
+    .page-footer a { color: var(--brand); text-decoration: none; }
+    .function-colors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .function-case { padding: 18px; background: var(--ink); border: 1px solid var(--line); min-width: 0; }
+    .function-case h3 { font-size: 15px; margin: 0 0 3px; font-weight: 500; display: flex; align-items: center; gap: 9px; }
+    .function-case h3::before { content: ""; width: 7px; height: 7px; background: var(--function-color); }
+    .function-case p { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+    .function-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .function-actions button { min-height: 36px; padding: 5px 12px; font-size: 12px; }
+    .function-actions .feature-button { background: var(--function-color); color: var(--function-text, #202020); border-color: var(--function-color); }
+    .function-actions .feature-button:hover { background: var(--function-hover); border-color: var(--function-hover); }
+    .function-actions .feature-button:focus-visible { outline-color: var(--function-color); }
+    .function-selection { border: 1px solid var(--function-color); background: var(--panel); padding: 7px 10px; margin-bottom: 10px; font-size: 12px; }
+    .function-case .subnote { margin: 12px 0 0; line-height: 1.7; }
+    .mini-tab { border-bottom: 2px solid var(--function-color); color: var(--bone); padding-bottom: 5px; display: inline-block; margin-bottom: 12px; font-size: 12px; }
     [hidden] { display: none !important; }
-    @media (max-width: 1000px) { .page { padding: 28px 20px; } .intro { align-items: start; } .scope { flex-basis: 220px; } .toolbar-window { margin-left: 0; } .mode-note { display: none; } .editor-content { grid-template-columns: minmax(280px, 1fr) minmax(310px, 1fr); } .fields, .palette { padding-inline: 18px; } .palette-tabs { gap: 14px; } .settings-content { grid-template-columns: 140px minmax(230px, 1fr) minmax(240px, 1fr); } .settings-body { padding-inline: 18px; } }
+    @media (max-width: 1000px) { .page { padding: 28px 20px; } .intro { align-items: start; } .scope { flex-basis: 220px; } .toolbar-window { margin-left: 0; } .mode-note { display: none; } .editor-content { grid-template-columns: minmax(280px, 1fr) minmax(310px, 1fr); } .fields, .palette { padding-inline: 18px; } .palette-tabs { gap: 14px; } .settings-content { grid-template-columns: 140px minmax(230px, 1fr) minmax(240px, 1fr); } .settings-body { padding-inline: 18px; } .function-colors { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 700px) { .intro { display: block; } .scope { margin-top: 20px; } .editor-content, .settings-content { grid-template-columns: 1fr; } .fields { border-right: none; border-bottom: 1px solid var(--line); } .toolbar-settings { margin-left: 0; gap: 14px; } .toolbar-group { flex-wrap: wrap; } .toolbar-group + .toolbar-group { border-left: none; padding-left: 0; } .settings-sidebar { border-right: none; border-bottom: 1px solid var(--line); display: flex; overflow: auto; } .settings-sidebar button { width: auto; } .settings-palette { border-left: none; border-top: 1px solid var(--line); } .dialog-footer { flex-wrap: wrap; } .dialog-footer .footer-note { width: 100%; } .section-label { flex-wrap: wrap; } .review-nav { margin-left: 0; } .page-footer { display: block; } }
   </style>
 </head>
@@ -127,12 +149,14 @@
   <main class="page">
     <div class="intro">
       <div>
-        <p class="eyebrow latin">TEGG TOUCH / INTERFACE STUDY 01</p>
-        <h1>蛋挞，更清晰的编辑与运行界面</h1>
-        <p>沿用 inpuTEGG 的深色、细线和切角，让工具与内容各有层级。</p>
+        <p class="eyebrow latin">TEGG TOUCH / INTERFACE STUDY 03</p>
+        <h1><span>蛋挞</span>，更清晰的编辑与运行界面</h1>
+        <p>琥珀色基调、方角、细线，保留各功能内部的整套配色。</p>
       </div>
       <div class="scope"><strong>UI 改造 · 视觉评审稿</strong>画布上的操作按钮、轮盘和回中带保持原样。<br>此页展示工具栏与代表性弹窗。</div>
     </div>
+
+    <div class="color-map" aria-label="蛋挞现有动作配色"><strong>编辑字段 ↔ 运行反馈</strong><span style="--field-color:#0284C7"><i class="swatch" aria-hidden="true"></i>悬停</span><span style="--field-color:#F59E0B"><i class="swatch" aria-hidden="true"></i>左键</span><span style="--field-color:#10B981"><i class="swatch" aria-hidden="true"></i>右键</span><span style="--field-color:#A855F7"><i class="swatch" aria-hidden="true"></i>中键</span><span style="--field-color:#EC4899"><i class="swatch" aria-hidden="true"></i>滚轮向上</span><span style="--field-color:#F43F5E"><i class="swatch" aria-hidden="true"></i>滚轮向下</span><span style="--field-color:#06B6D4"><i class="swatch" aria-hidden="true"></i>侧键1</span><span style="--field-color:#8B5CF6"><i class="swatch" aria-hidden="true"></i>侧键2</span></div>
 
     <div class="section-label"><span class="number latin">01</span>编辑模式 · 保留两行，按操作分组</div>
     <section class="surface edit-toolbar" aria-label="编辑工具栏视觉样板">
@@ -141,13 +165,13 @@
         <div class="toolbar-group"><button class="profile" type="button">默认方案 <span>⌄</span></button></div>
         <div class="toolbar-group"><button type="button">＋ 按键</button><button type="button">＋ 回中带</button><button type="button">中心轮盘</button></div>
         <div class="toolbar-group"><button type="button">语音</button><button type="button">软键盘</button><button type="button">键盘映射</button></div>
-        <div class="toolbar-group"><button class="primary" type="button">▶ 启动</button></div>
+        <div class="toolbar-group"><button class="launch" type="button">▶ 启动</button></div>
         <div class="toolbar-window"><button class="icon-button" type="button" aria-label="最小化">─</button><button class="icon-button" type="button" aria-label="设置">⚙</button><button class="icon-button" type="button" aria-label="关闭">×</button></div>
       </div>
       <div class="toolbar-settings">
-        <div class="setting"><span class="small-label">模拟模式</span><button type="button">键盘 ⌄</button></div>
-        <div class="setting"><span class="small-label">透明度</span><div class="slider-display"><span class="slider-track" style="--fill:75%" aria-hidden="true"></span><span class="slider-number">75%</span></div></div>
-        <div class="setting"><span class="small-label">场景缩放</span><div class="slider-display"><span class="slider-track" style="--fill:33%" aria-hidden="true"></span><span class="slider-number">100%</span></div></div>
+        <div class="setting"><span class="small-label">模拟模式</span><button class="primary" type="button">键盘 ⌄</button></div>
+        <div class="setting" style="--slider-color:#F59E0B"><span class="small-label">透明度</span><div class="slider-display"><span class="slider-track" style="--fill:75%" aria-hidden="true"></span><span class="slider-number">75%</span></div></div>
+        <div class="setting" style="--slider-color:#10B981"><span class="small-label">场景缩放</span><div class="slider-display"><span class="slider-track" style="--fill:33%" aria-hidden="true"></span><span class="slider-number">100%</span></div></div>
         <span class="mode-note latin">EDIT MODE</span>
       </div>
     </section>
@@ -157,10 +181,10 @@
       <span class="grip" aria-label="拖拽区域">⠿</span>
       <div class="run-profile"><strong>默认方案</strong><div class="status">运行中</div></div>
       <div class="toolbar-group"><button type="button">光标 <span class="key-hint">F3</span></button><button type="button">悬浮球 <span class="key-hint">F4</span></button></div>
-      <div class="toolbar-group"><button type="button">语音 <span class="key-hint">F5</span></button><button class="selected" type="button">✓ 回中 <span class="key-hint">F6</span></button><button type="button">显示/隐藏 <span class="key-hint">F7</span></button><button type="button">软键盘 <span class="key-hint">F8</span></button></div>
-      <div class="toolbar-group"><button class="passthrough" type="button">穿透 ON <span class="key-hint">F9</span></button><button class="danger" type="button">■ 停止 <span class="key-hint">F12</span></button></div>
+      <div class="toolbar-group"><button type="button">语音 <span class="key-hint">F5</span></button><button class="run-enabled" type="button">✓ 回中 <span class="key-hint">F6</span></button><button type="button">显示/隐藏 <span class="key-hint">F7</span></button><button type="button">软键盘 <span class="key-hint">F8</span></button></div>
+      <div class="toolbar-group"><button class="passthrough" type="button">穿透 OFF <span class="key-hint">F10</span></button><button class="danger" type="button">■ 停止 <span class="key-hint">F12</span></button></div>
     </section>
-    <p class="caption">快捷键使用默认配置示意，正式界面继续显示用户当前绑定。</p>
+    <p class="caption">沿用现有状态色：穿透 ON 为灰，OFF 为蓝；回中开启为深绿。快捷键使用默认配置示意。</p>
 
     <div class="section-label"><span class="number latin">03</span>弹窗 · 标题、内容与操作区统一<div class="review-nav" aria-label="切换视觉样板"><button type="button" data-preview="editor" aria-pressed="true">按钮编辑</button><button type="button" data-preview="settings" aria-pressed="false">设置</button></div></div>
 
@@ -169,19 +193,24 @@
       <div class="editor-content">
         <div class="fields">
           <h3 class="section-heading"><span>01</span>基本信息</h3>
-          <label class="field-row"><span class="field-label">名称</span><input type="text" value="跳跃" readonly aria-label="按钮名称示意"></label>
+          <label class="field-row action-field" style="--field-color:#F59E0B"><span class="field-label">名称</span><input type="text" value="跳跃" readonly aria-label="按钮名称示意"></label>
           <div class="section-divider"></div>
           <h3 class="section-heading"><span>02</span>悬停行为</h3>
           <div class="segments"><button type="button" class="selected">悬停触发</button><button type="button">悬停开关</button></div>
           <p class="help">鼠标进入即按下按键，离开即松开（按住型）</p>
-          <div class="field-row"><span class="field-label">悬停时</span><div class="field-key active"><span class="tag">Space</span></div></div>
+          <div class="field-row action-field" style="--field-color:#0284C7"><span class="field-label">悬停时</span><div class="field-key active"><span class="tag">Space</span></div></div>
           <div class="delay-row"><span class="muted">悬停-触发延迟</span><span class="slider-track" style="--fill:25%" aria-hidden="true"></span><span class="slider-number">200 ms</span></div>
           <div class="delay-row"><span class="muted">悬停-释放延迟</span><span class="slider-track" style="--fill:0%" aria-hidden="true"></span><span class="slider-number">0 ms</span></div>
           <div class="delay-row"><span class="muted">触发间隔</span><span class="slider-track" style="--fill:0%" aria-hidden="true"></span><span class="slider-number">0 ms</span></div>
           <div class="section-divider"></div>
           <h3 class="section-heading"><span>03</span>鼠标触发</h3>
-          <div class="field-row"><span class="field-label">左键点击</span><div class="field-key"><span class="tag">Space</span></div></div>
-          <div class="field-row"><span class="field-label">右键点击</span><div class="field-key"><span class="empty">未设置</span></div></div>
+          <div class="field-row action-field" style="--field-color:#F59E0B"><span class="field-label">左键</span><div class="field-key"><span class="tag light">Space</span></div></div>
+          <div class="field-row action-field" style="--field-color:#10B981"><span class="field-label">右键</span><div class="field-key"><span class="tag light">E</span></div></div>
+          <div class="field-row action-field" style="--field-color:#A855F7"><span class="field-label">中键</span><div class="field-key"><span class="empty">未设置</span></div></div>
+          <div class="field-row action-field" style="--field-color:#06B6D4"><span class="field-label">侧键1</span><div class="field-key"><span class="empty">未设置</span></div></div>
+          <div class="field-row action-field" style="--field-color:#8B5CF6"><span class="field-label">侧键2</span><div class="field-key"><span class="empty">未设置</span></div></div>
+          <div class="field-row action-field" style="--field-color:#EC4899"><span class="field-label">滚轮向上</span><div class="field-key"><span class="empty">未设置</span></div></div>
+          <div class="field-row action-field" style="--field-color:#F43F5E"><span class="field-label">滚轮向下</span><div class="field-key"><span class="empty">未设置</span></div></div>
         </div>
         <div class="palette">
           <h3 class="section-heading">候选动作</h3>
@@ -209,12 +238,12 @@
         <nav class="settings-sidebar" aria-label="现有设置分类样板"><button type="button" aria-selected="true">快捷键</button><button type="button" aria-selected="false">光标</button><button type="button" aria-selected="false">按钮配色</button><button type="button" aria-selected="false">语言</button><button type="button" aria-selected="false">诊断报告</button><button type="button" aria-selected="false">关于</button></nav>
         <div class="settings-body">
           <h3>快捷键</h3><p class="help">点击右侧按键添加到输入框 ｜ Backspace 删除 ｜ 支持组合键</p>
-          <div class="hotkey-row"><div>键盘映射<small>开启或关闭现有键盘映射</small></div><div class="hotkey-value">F2</div></div>
-          <div class="hotkey-row"><div>光标<small>显示或隐藏蛋挞光标</small></div><div class="hotkey-value">F3</div></div>
-          <div class="hotkey-row"><div>悬浮球<small>收起或展开运行工具栏</small></div><div class="hotkey-value">F4</div></div>
-          <div class="hotkey-row"><div>语音<small>开启或关闭语音识别</small></div><div class="hotkey-value">F5</div></div>
-          <div class="hotkey-row"><div>自动回中<small>开启或关闭自动回中</small></div><div class="hotkey-value">F6</div></div>
-          <div class="hotkey-row"><div>停止<small>返回编辑模式</small></div><div class="hotkey-value">F12</div></div>
+          <div class="hotkey-row" style="--field-color:#F59E0B"><div><span class="hotkey-name">键盘映射</span><small>开启或关闭现有键盘映射</small></div><div class="hotkey-value">F2</div></div>
+          <div class="hotkey-row" style="--field-color:#0D9488"><div><span class="hotkey-name">光标</span><small>显示或隐藏蛋挞光标</small></div><div class="hotkey-value">F3</div></div>
+          <div class="hotkey-row" style="--field-color:#9333EA"><div><span class="hotkey-name">悬浮球</span><small>收起或展开运行工具栏</small></div><div class="hotkey-value">F4</div></div>
+          <div class="hotkey-row" style="--field-color:#10B981"><div><span class="hotkey-name">语音</span><small>开启或关闭语音识别</small></div><div class="hotkey-value">F5</div></div>
+          <div class="hotkey-row" style="--field-color:#176F2C"><div><span class="hotkey-name">自动回中</span><small>开启或关闭自动回中</small></div><div class="hotkey-value">F6</div></div>
+          <div class="hotkey-row" style="--field-color:#C42B1C"><div><span class="hotkey-name">停止</span><small>返回编辑模式</small></div><div class="hotkey-value">F12</div></div>
         </div>
         <div class="palette settings-palette">
           <h3 class="section-heading">候选按键</h3>
@@ -231,7 +260,17 @@
     </section>
 
     <p class="caption">弹窗只展示代表性字段和默认状态；正式界面保留完整字段、候选动作和禁用条件。此页的操作按钮为静态样板。</p>
-    <footer class="page-footer"><span>视觉方向：深蓝黑 / 米白 / 青绿 / 细线 / 小切角</span><a href="ui-redesign-plan.md">查看完整改造范围与实施方案 ↗</a></footer>
+    <div class="section-label"><span class="number latin">04</span>功能内部配色 · 依据现有控件整理</div>
+    <section class="function-colors" aria-label="各功能内部配色样板">
+      <article class="function-case" style="--function-color:#F59E0B;--function-hover:#D97706"><h3>键盘映射 · 琥珀</h3><p>列表、模式、Tag、焦点、候选 Tab</p><span class="mini-tab">键盘</span><div class="function-actions"><button type="button" class="feature-button">新增映射</button><button type="button" class="feature-button">保存</button><button type="button" class="feature-button">按住</button></div><p class="subnote">软键盘按下和粘滞启用用深琥珀；普通键帽保持灰。</p></article>
+      <article class="function-case" style="--function-color:#10B981;--function-hover:#059669"><h3>语音 · 绿</h3><p>指令列表、行为卡、动作选择、候选 Tab</p><span class="mini-tab">候选按键</span><div class="function-actions"><button type="button" class="feature-button">新建指令</button><button type="button" class="feature-button">保存</button><button type="button" class="feature-button">点击</button></div><p class="subnote">输出按键 Tag 仍为琥珀；测试波形与 HUD 用青色。</p></article>
+      <article class="function-case" style="--function-color:#F59E0B;--function-hover:#D97706"><h3>方案 · 琥珀</h3><p>当前方案、查看边框、应用与复制确认</p><div class="function-selection" style="background:#F59E0B;color:#202020">✓ 默认方案 · 当前激活</div><div class="function-actions"><button type="button" class="feature-button">应用此方案</button><button type="button" class="feature-button">复制确认</button></div><p class="subnote">新建 / 复制 / 导入入口灰；详情页 Tab 的选中态仍蓝。</p></article>
+      <article class="function-case" style="--function-color:#F43F5E;--function-hover:#E11D48;--function-text:#FFFFFF"><h3>轮盘样式 · 玫红</h3><p>缩略卡、显示勾选、确定与环切分选择</p><div class="function-selection">✓ 显示中心环</div><div class="function-actions"><button type="button" class="feature-button">确定</button><button type="button" style="background:#DB2777;border-color:#DB2777;color:#FFFFFF">八向切分</button><button type="button">重置</button></div><p class="subnote">环切分选中用粉红；扇区预览的绘制保持原样。</p></article>
+      <article class="function-case" style="--function-color:#8B5CF6;--function-hover:#7C3AED;--function-text:#FFFFFF"><h3>宏 · 紫色指令 / 琥珀延迟</h3><p>名称、指令步骤和延迟分别着色</p><div class="function-actions"><button type="button" class="feature-button">添加指令</button><button type="button" style="background:#D97706;border-color:#D97706;color:#FFFFFF">添加延迟</button><button type="button" class="primary">保存</button></div><p class="subnote">候选 Tab 亮蓝，名称和指令 Tag 紫色，延迟深琥珀。</p></article>
+      <article class="function-case" style="--function-color:#3B82F6;--function-hover:#60A5FA;--function-text:#FFFFFF"><h3>手柄 / 方向盘 · 蓝参数</h3><p>参数、滑块、默认值及转向区域</p><div class="function-actions"><button type="button" style="border-color:#F43F5E;color:#F43F5E">LT 浮标</button><button type="button" style="border-color:#F59E0B;color:#F59E0B">RT 浮标</button><button type="button" class="primary">保存</button></div><p class="subnote">中心死区显示玫红；激活标签和其他鼠标配置入口琥珀。</p></article>
+    </section>
+    <p class="caption">上述组件用于评审配色关系，并非新增产品入口。普通编辑器保存蓝、语音保存绿、键盘映射保存琥珀、轮盘确定玫红。</p>
+    <footer class="page-footer"><span>琥珀品牌 / 各功能原有配色 / 方角 / 细线</span><a href="ui-color-inventory.md">查看完整 UI 配色清单 ↗</a><a href="ui-redesign-plan.md">查看实施方案 ↗</a></footer>
   </main>
   <script>
     const previews = { editor: document.querySelector('#editor-preview'), settings: document.querySelector('#settings-preview') };
