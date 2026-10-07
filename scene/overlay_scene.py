@@ -52,6 +52,8 @@ _ICON_SETTINGS = "\uE713"   # Settings 齿轮
 _STYLE_BTN_SIZE = 30
 _STYLE_BTN_COLOR = "#F43F5E"      # 玫瑰红
 _STYLE_BTN_HOVER = "#FB7185"      # 玫瑰红 lighter
+# 轮盘编辑控件仅高于轮盘内容(5~10)，随轮盘位于普通按钮(15)下方。
+_WHEEL_CONTROLS_Z = 11
 
 
 class _WheelStyleBtn(QGraphicsObject):
@@ -63,7 +65,7 @@ class _WheelStyleBtn(QGraphicsObject):
         self._hover = False
         self.setAcceptHoverEvents(True)
         self.setCursor(_Qt.CursorShape.PointingHandCursor)
-        self.setZValue(50)
+        self.setZValue(_WHEEL_CONTROLS_Z)
 
     def boundingRect(self):
         return QRectF(0, 0, _STYLE_BTN_SIZE, _STYLE_BTN_SIZE)
@@ -77,14 +79,19 @@ class _WheelStyleBtn(QGraphicsObject):
 
         ifont = _detect_icon_font()
         if ifont:
-            painter.setPen(_QColor("#FFFFFF"))
-            painter.setFont(_QFont(ifont, 10))
-            painter.drawText(self.boundingRect(), _Qt.AlignmentFlag.AlignCenter, _ICON_SETTINGS)
+            font = _QFont(ifont, 10)
+            icon_text = _ICON_SETTINGS
         else:
             from core.i18n import get_font as _gf
-            painter.setPen(_QColor("#FFFFFF"))
-            painter.setFont(_QFont(_gf(), 10, _QFont.Weight.Bold))
-            painter.drawText(self.boundingRect(), _Qt.AlignmentFlag.AlignCenter, "\u2699")
+            font = _QFont(_gf(), 10, _QFont.Weight.Bold)
+            icon_text = "\u2699"
+        # 字体的行高与左右留白不等于图形边界，按齿轮轮廓视觉居中。
+        icon_path = _QPainterPath()
+        icon_path.addText(0, 0, font, icon_text)
+        painter.save()
+        painter.translate(self.boundingRect().center() - icon_path.boundingRect().center())
+        painter.fillPath(icon_path, _QColor("#FFFFFF"))
+        painter.restore()
 
     def hoverEnterEvent(self, event):
         self._hover = True
@@ -127,7 +134,7 @@ class _WheelResizeBtn(QGraphicsObject):
         self._drag_start_offset = 0
         self.setAcceptHoverEvents(True)
         self.setCursor(_Qt.CursorShape.SizeFDiagCursor)
-        self.setZValue(50)
+        self.setZValue(_WHEEL_CONTROLS_Z)
 
     def boundingRect(self):
         s = WHEEL_RESIZE_BTN_SIZE

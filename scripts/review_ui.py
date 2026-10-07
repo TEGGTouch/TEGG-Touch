@@ -1,6 +1,6 @@
 """Start the actual client and open an existing button editor for UI review.
 
-Run: python scripts/review_ui.py [--color | --wheel]
+Run: python scripts/review_ui.py [--color | --wheel | --controls]
 Uses main.main(), the current branch's normal profile and existing editor route.
 Captures only application widgets, never the desktop behind the overlay.
 """
@@ -22,6 +22,8 @@ def open_review():
     if window is None:
         return
     window._edit_toolbar.grab().save(str(ROOT / 'docs' / 'ui-running-toolbar.png'))
+    if '--controls' in sys.argv:
+        return  # Leave the normal canvas available for overlap / drag review.
     items = window._scene.button_items
     item = next((it for it in items if getattr(it.data, 'name', '') == '全配置示范'), None)
     if item is None:
