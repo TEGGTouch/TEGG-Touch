@@ -107,7 +107,8 @@ def main():
 
         app = QApplication(sys.argv)
         app.setApplicationName("TEGG Touch")
-        app.setApplicationVersion("0.2.1")
+        from core.constants import APP_VERSION
+        app.setApplicationVersion(APP_VERSION)
 
         # 应用级图标 (任务栏 / Alt+Tab / 标题栏)
         _icon_path = os.path.join(_APP_DIR, "assets", "icon.ico")

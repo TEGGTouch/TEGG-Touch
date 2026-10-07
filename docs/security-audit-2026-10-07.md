@@ -1,6 +1,6 @@
 # 开源源码与历史安装包凭证检查
 
-检查日期：2026-10-07。此次提交目标仅为 Codeup 的 `feature/ui-inputegg`；不推送 GitHub，不创建新 Release 或上传安装包。
+检查日期：2026-10-07。检查和修复首先提交到 Codeup 的 `feature/ui-inputegg`；随后纳入 v0.5.3 的主分支发布。本文保留检查时的历史结果，撤销已泄露密钥仍需单独处理。
 
 ## 结果
 
@@ -26,7 +26,7 @@ v0.5.1 安装包中的两项凭证与检查时本机开发配置一致。需要�
 - 额外检查私钥头、带凭证 URL、JWT 与长字符串凭证赋值，未检出新增命中。
 - 旧源码曾包含 `config.json`、`settings/hotkeys.json`、`fkb.log`、`teggtouch.log`。前两项是窗口布局与快捷键；本次扫描没有在这些历史文件中检出凭证。
 - 使用 GitHub 公开安装包 URL 的 HTTP 字节范围读取全部 18 个 ZIP 的目录与配置文件。密钥只在内存中比较；日志及本文均不含密钥值。没有执行包内程序。
-- 本机 GitHub remote 含嵌入式令牌，位于本地 `.git/config`，没有进入上述 Git blob 或提交 / 标签消息；本次只推送 Codeup。
+- 本机 GitHub remote 含嵌入式令牌，位于本地 `.git/config`，没有进入上述 Git blob 或提交 / 标签消息；初次修复只推送 Codeup，v0.5.3 后续按正常流程同步两端。
 
 ## 修复
 
