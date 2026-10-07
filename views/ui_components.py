@@ -24,6 +24,8 @@ CONTROL_BG = '#3A3A3A'
 AMBER_BG = '#F59E0B'
 AMBER_HOVER = '#D97706'
 AMBER_TEXT = '#000000'
+ROSE_ACCENT = ('#F43F5E', '#E11D48', '#000000')
+VOICE_ACCENT = ('#10B981', '#059669', '#000000')
 SCROLL_GAP = 12
 
 
@@ -39,6 +41,7 @@ class SegmentedControl(QFrame):
         self._vertical = orientation == Qt.Orientation.Vertical
         self.buttons = dict(buttons) if isinstance(buttons, dict) else dict(enumerate(buttons))
         self._selected = None
+        self._accent, self._accent_text = AMBER_BG, AMBER_TEXT
         self.setObjectName('ui_segments')
         self.setStyleSheet(f'QFrame#ui_segments {{ background: {RECESSED_BG}; border: none; border-radius: {CARD_RADIUS}px; }}')
         self._thumb = QFrame(self)
@@ -69,16 +72,23 @@ class SegmentedControl(QFrame):
 
     def _style_buttons(self):
         for key, button in self.buttons.items():
-            color = AMBER_TEXT if key == self._selected else '#AAAAAA'
+            color = self._accent_text if key == self._selected else '#AAAAAA'
             button.setStyleSheet(f'''
                 QPushButton, QRadioButton {{ background: transparent; color: {color}; border: none;
                     border-radius: {INNER_RADIUS}px; padding: 0 4px; }}
-                QPushButton:hover, QRadioButton:hover {{ color: {AMBER_TEXT if key == self._selected else '#FFFFFF'}; }}
+                QPushButton:hover, QRadioButton:hover {{ color: {self._accent_text if key == self._selected else '#FFFFFF'}; }}
                 QPushButton:disabled, QRadioButton:disabled {{ color: #666666; background: transparent; }}
                 QRadioButton::indicator {{ width: 0; height: 0; }}
             ''')
             for label in button.findChildren(QLabel):
                 label.setStyleSheet(f'color: {color}; background: transparent;')
+
+    def set_accent(self, background, foreground):
+        if (background, foreground) == (self._accent, self._accent_text):
+            return
+        self._accent, self._accent_text = background, foreground
+        self._thumb.setStyleSheet(f'background: {background}; border: none; border-radius: {INNER_RADIUS}px;')
+        self._style_buttons()
 
     def set_selected(self, key):
         if key not in self.buttons:
@@ -115,7 +125,7 @@ class SegmentedControl(QFrame):
                 painter = QPainter(obj)
                 painter.setFont(obj.font())
                 selected = self.buttons.get(self._selected) is obj
-                painter.setPen(QColor('#666' if not obj.isEnabled() else AMBER_TEXT if selected else '#AAA'))
+                painter.setPen(QColor('#666' if not obj.isEnabled() else self._accent_text if selected else '#AAA'))
                 painter.drawText(obj.rect(), Qt.AlignmentFlag.AlignCenter, obj.text())
                 return True
             if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
@@ -186,6 +196,7 @@ class _DialogPresentation(QObject):
 
     def __init__(self, dialog):
         super().__init__(dialog)
+        self._accent, self._accent_hover, self._accent_text = dialog._ui_accent
         self._styling = False
         dialog.installEventFilter(self)
         for widget in dialog.findChildren(QWidget):
@@ -197,12 +208,17 @@ class _DialogPresentation(QObject):
         widget.setProperty('ui_presentation_watched', True)
         widget.installEventFilter(self)
         self.apply(widget)
+        # New rows can arrive with an already-built subtree (e.g. macro delays).
+        for child in widget.findChildren(QWidget):
+            self.watch(child)
 
     def apply(self, widget):
         if self._styling:
             return
         self._styling = True
         try:
+            if isinstance(widget, SegmentedControl):
+                widget.set_accent(self._accent, self._accent_text)
             if isinstance(widget, QAbstractScrollArea):
                 if isinstance(widget, QScrollArea) and widget.widget() and widget.widget().layout():
                     layout = widget.widget().layout()
@@ -219,27 +235,32 @@ class _DialogPresentation(QObject):
             if isinstance(widget, QPushButton) and not widget.property('ui_color_sample'):
                 # Recolor blue button surfaces, leaving action fields, previews and values alone.
                 pattern = r'(QPushButton[^{}]*\{)([^{}]*)(\})'
-                def amber_block(match):
+                def accent_block(match):
                     body = match[2]
                     replaced = re.sub(r'(background(?:-color)?\s*:\s*)#(?:0C4A6E|0284C7|1976D2|2196F3|0078D7)\b',
-                                      lambda color: color[1] + (AMBER_HOVER if ':hover' in match[1] else AMBER_BG), body,
+                                      lambda color: color[1] + (self._accent_hover if ':hover' in match[1] else self._accent), body,
                                       flags=re.IGNORECASE)
                     if replaced != body:
                         replaced = re.sub(r'(?<![-\w])(color\s*:\s*)(?:#FFF(?:FFF)?|white)\b',
                                           r'\1#000000', replaced, flags=re.IGNORECASE)
                     return match[1] + replaced + match[3]
-                updated = re.sub(pattern, amber_block, style)
+                updated = re.sub(pattern, accent_block, style)
                 if widget.property('ui_primary') and '/* ui_primary */' not in updated:
-                    updated += f'\nQPushButton {{ background: {AMBER_BG}; color: {AMBER_TEXT}; }} QPushButton:hover {{ background: {AMBER_HOVER}; color: {AMBER_TEXT}; }} QPushButton:disabled {{ background: {CONTROL_BG}; color: #888; }}\n/* ui_primary */'
+                    updated += f'\nQPushButton {{ background: {self._accent}; color: {self._accent_text}; }} QPushButton:hover {{ background: {self._accent_hover}; color: {self._accent_text}; }} QPushButton:disabled {{ background: {CONTROL_BG}; color: #888; }}\n/* ui_primary */'
             if not widget.property('ui_color_sample'):
-                def black_on_amber(match):
-                    if not re.search(r'(?<![-\w])background(?:-color)?\s*:\s*#(?:F59E0B|D97706|B45309)\b', match[2], re.I):
+                accent_colors = {'#F59E0B': self._accent, '#D97706': self._accent_hover, '#B45309': self._accent_hover}
+                if self._accent != AMBER_BG:
+                    updated = re.sub(r'#(?:F59E0B|D97706|B45309)\b',
+                                     lambda color: accent_colors[color[0].upper()], updated, flags=re.I)
+                def text_on_accent(match):
+                    backgrounds = '|'.join(re.escape(color) for color in (AMBER_BG, AMBER_HOVER, '#B45309', self._accent, self._accent_hover))
+                    if not re.search(r'(?<![-\w])background(?:-color)?\s*:\s*(?:' + backgrounds + r')\b', match[2], re.I):
                         return match[0]
-                    body = re.sub(r'(?<![-\w])color\s*:[^;]+;', f'color: {AMBER_TEXT};', match[2], flags=re.I)
+                    body = re.sub(r'(?<![-\w])color\s*:[^;]+;', f'color: {self._accent_text};', match[2], flags=re.I)
                     if body == match[2] and not re.search(r'(?<![-\w])color\s*:', body, re.I):
-                        body += f' color: {AMBER_TEXT}; '
+                        body += f' color: {self._accent_text}; '
                     return match[1] + body + match[3]
-                updated = re.sub(r'([^{}]+\{)([^{}]*)(\})', black_on_amber, updated)
+                updated = re.sub(r'([^{}]+\{)([^{}]*)(\})', text_on_accent, updated)
             if isinstance(widget, (QLineEdit, QComboBox, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox)):
                 selector = type(widget).__name__
                 if '/* ui_input */' not in updated:
@@ -334,12 +355,14 @@ class _ActionVisibility(QObject):
 
 
 def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
-                  scope=None, scope_actions=(), page_actions=None):
+                  scope=None, scope_actions=(), page_actions=None,
+                  accent=None):
     """Adopt an existing root into fixed header / scrolling body / one-row footer.
 
     `actions` are existing button texts or button objects, in their intended order.
     Multi-column editors retain their individual scroll areas; only columns that
     do not yet scroll get a wrapper. No business callbacks are added here.
+    Child dialogs inherit their parent dialog's accent unless specified explicitly.
     """
     container = next((f for f in dialog.findChildren(QFrame)
                       if f.objectName().endswith('_container')), None)
@@ -350,6 +373,10 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
         return
     dialog._shadow_installed = True  # This shell owns its border and screen budget.
     dialog._ui_shell = True
+    if accent is None:
+        accent = getattr(dialog.parentWidget(), '_ui_accent',
+                         (AMBER_BG, AMBER_HOVER, AMBER_TEXT))
+    dialog._ui_accent = accent
     container.setStyleSheet(container.styleSheet() + f'''
         QFrame#{container.objectName()} {{ background: {PANEL_BG}; border: 1px solid #555; border-radius: {OUTER_RADIUS}px; }}
         QScrollBar:vertical {{ background: #2D2D2D; width: 8px; margin: 0; }}
@@ -396,7 +423,7 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
     header_layout = QHBoxLayout(header)
     header_layout.setContentsMargins(24, 0, 24, 0)
     marker = QLabel('▏', header)
-    marker.setStyleSheet('color: #F59E0B; font-size: 24px; background: transparent;')
+    marker.setStyleSheet(f'color: {accent[0]}; font-size: 24px; background: transparent;')
     header_layout.addWidget(marker)
     first = items.pop(0)
     if first.layout():

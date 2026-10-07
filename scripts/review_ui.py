@@ -1,6 +1,6 @@
 """Start the actual client and open an existing button editor for UI review.
 
-Run: python scripts/review_ui.py [--color | --wheel | --controls]
+Run: python scripts/review_ui.py [--color | --wheel | --controls | --themes]
 Uses main.main(), the current branch's normal profile and existing editor route.
 Captures only application widgets, never the desktop behind the overlay.
 """
@@ -24,6 +24,9 @@ def open_review():
     window._edit_toolbar.grab().save(str(ROOT / 'docs' / 'ui-running-toolbar.png'))
     if '--controls' in sys.argv:
         return  # Leave the normal canvas available for overlap / drag review.
+    if '--themes' in sys.argv:
+        open_theme_review(window)
+        return
     items = window._scene.button_items
     item = next((it for it in items if getattr(it.data, 'name', '') == '全配置示范'), None)
     if item is None:
@@ -67,6 +70,32 @@ def open_wheel_review(window, editor):
         window._scene._on_wheel_style_clicked()
 
     QTimer.singleShot(300, open_style)
+
+
+def open_theme_review(window):
+    # Capture the client's existing run widgets without starting input listeners.
+    window._run_toolbar.grab().save(str(ROOT / 'docs' / 'ui-running-run-toolbar.png'))
+    window._collapsed_bubble.grab().save(str(ROOT / 'docs' / 'ui-running-bubble.png'))
+
+    def capture_wheel():
+        from views.wheel_style_dialog import WheelStyleDialog
+        dialog = next((w for w in QApplication.instance().topLevelWidgets()
+                       if isinstance(w, WheelStyleDialog) and w.isVisible()), None)
+        if dialog:
+            dialog._select_type('dual')  # Review only; discard this selection below.
+            def finish_wheel():
+                dialog.grab().save(str(ROOT / 'docs' / 'ui-running-wheel.png'))
+                dialog.reject()
+            QTimer.singleShot(200, finish_wheel)
+
+    QTimer.singleShot(400, capture_wheel)
+    window._scene._on_wheel_style_clicked()
+    window._open_voice_settings()
+    voice = window._dlg_voice
+    voice.raise_()
+    voice.activateWindow()
+    QTimer.singleShot(500, lambda: voice.grab().save(
+        str(ROOT / 'docs' / 'ui-running-voice.png')))
 
 
 def open_color_review(window, editor):

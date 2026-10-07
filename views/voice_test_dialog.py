@@ -17,6 +17,7 @@ from PyQt6.QtGui import (
 )
 
 from core.i18n import t, get_font
+from views.ui_components import VOICE_ACCENT
 from engine.voice_engine import VoiceEngine
 
 # ── 颜色常量 (复用项目风格) ──
@@ -25,7 +26,6 @@ C_CYBER = "#00D4FF"
 C_CYBER_H = "#00B8E6"
 C_CYBER_DIM = "#0891B2"
 C_GREEN = "#10B981"
-C_AMBER = "#F59E0B"
 C_CLOSE = "#3A3A3A"
 C_CLOSE_H = "#EF4444"
 C_GRAY = "#333333"
@@ -178,7 +178,7 @@ class _LogEntry(QWidget):
 
         keys_lbl = QLabel(keys or "—")
         keys_lbl.setFont(_make_font(fn, 14))
-        keys_lbl.setStyleSheet(f"color: {C_AMBER}; background: transparent;")
+        keys_lbl.setStyleSheet(f"color: {C_GREEN}; background: transparent;")
         lay.addWidget(keys_lbl, 4)
 
         action_map = {"click": t("voice_dialog.action_click"),
@@ -230,7 +230,7 @@ class VoiceTestDialog(QDialog):
         _detect_icon_font()
         self._init_ui()
         from views.ui_components import finish_dialog
-        finish_dialog(self, (800, 640), actions=[t("voice_test.stop")], columns=True, guidance=None)
+        finish_dialog(self, (800, 640), actions=[t("voice_test.stop")], columns=True, guidance=None, accent=VOICE_ACCENT)
         from views.ui_components import _remove_widget
         footer = self._ui_footer.layout()
         for label in (self._count_lbl, self._time_lbl):
@@ -288,7 +288,7 @@ class VoiceTestDialog(QDialog):
         # 状态指示灯
         self._status_dot = QLabel("●")
         self._status_dot.setFont(_make_font(fn, 14))
-        self._status_dot.setStyleSheet(f"color: {C_AMBER}; background: transparent;")
+        self._status_dot.setStyleSheet(f"color: {C_GREEN}; background: transparent;")
         title_row.addWidget(self._status_dot)
 
         self._status_lbl = QLabel(t("voice_test.loading"))
@@ -466,7 +466,7 @@ class VoiceTestDialog(QDialog):
             self._status_dot.setStyleSheet(f"color: {C_GREEN}; background: transparent;")
             self._status_lbl.setText(t("voice_test.listening"))
         elif status_key == "voice.status_loading":
-            self._status_dot.setStyleSheet(f"color: {C_AMBER}; background: transparent;")
+            self._status_dot.setStyleSheet(f"color: {C_GREEN}; background: transparent;")
             self._status_lbl.setText(t("voice_test.loading"))
         elif status_key == "voice.status_stopped":
             # 如果已经显示了错误信息，不要用"已停止"覆盖

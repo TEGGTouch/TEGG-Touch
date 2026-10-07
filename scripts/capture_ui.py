@@ -41,7 +41,7 @@ from views.profile_manager_dialog import (
     ProfileManagerDialog, _ProfileCopyDialog, _StyledConfirmDialog,
     _StyledInputDialog, _StyledMessageDialog,
 )
-from views.run_toolbar import RunToolbar
+from views.run_toolbar import RunToolbar, CollapsedBubble
 from views.update_dialog import UpdateDialog
 from views.voice_settings_dialog import VoiceSettingsDialog, _ChunkSizeDialog
 from views.voice_test_dialog import VoiceTestDialog
@@ -94,6 +94,7 @@ def main():
         lambda: DiagExportDialog(),
         lambda: ColorPickerDialog(QColor('#F59E0B'), title='选择颜色'),
         lambda: VirtualKeyboard(),
+        lambda: CollapsedBubble(),
     ]
     output = ROOT / 'docs'
     report = []
@@ -132,6 +133,18 @@ def main():
                 window.set_sim_mode('gamepad')
                 QTest.qWait(180)
                 capture(window, 'ui-client-EditToolbar-gamepad')
+            if isinstance(window, RunToolbar):
+                window.set_profile_name('探索、建造与竞速 · 常用游戏方案 · 手柄')
+                capture(window, 'ui-client-RunToolbar-long-name')
+            if isinstance(window, VoiceSettingsDialog):
+                nested = MacroEditorDialog({'name': '语音交互', 'steps': [
+                    {'type': 'key', 'key': 'e', 'action': 'click'},
+                    {'type': 'delay', 'ms': 200},
+                ]}, parent=window, mode='mix')
+                capture(nested, 'ui-client-voice-macro')
+                nested.close()
+                nested.deleteLater()
+                app.processEvents()
             if isinstance(window, HotkeySettingsDialog):
                 for index in range(window._stack.count()):
                     window._select_page(index)

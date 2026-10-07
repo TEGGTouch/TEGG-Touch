@@ -359,6 +359,72 @@ class RedesignTests(unittest.TestCase):
         self.assertEqual(signal[0][0], result)
         self.assertEqual(dialog.result(), dialog.DialogCode.Accepted)
 
+    def test_run_profile_name_keeps_full_tooltip_and_all_actions_visible(self):
+        from views.run_toolbar import RunToolbar
+        from views.edit_toolbar import _IconTextBtn
+        for language in ('zh-CN', 'en'):
+            load_locale(language)
+            toolbar = self.show(RunToolbar())
+            full_name = '探索、建造与竞速 · 常用游戏方案 · 手柄' * 3
+            toolbar.set_profile_name(full_name)
+            app.processEvents()
+            self.assertEqual(toolbar._profile_lbl.toolTip(), full_name)
+            self.assertLessEqual(toolbar._profile_lbl.fontMetrics().horizontalAdvance(
+                toolbar._profile_lbl.text()), toolbar._profile_lbl.width())
+            for button in toolbar.findChildren(_IconTextBtn):
+                self.assertTrue(toolbar.rect().contains(button.mapTo(toolbar, QPoint())))
+                self.assertTrue(toolbar.rect().contains(button.mapTo(toolbar,
+                    button.rect().bottomRight())))
+            screen = QRect(0, 0, 1920, 1080)
+            with patch('PyQt6.QtWidgets.QApplication.primaryScreen',
+                       return_value=Mock(geometry=lambda: screen)):
+                toolbar._position_toolbar()
+                self.assertLessEqual(abs(toolbar.frameGeometry().center().x()
+                                         - screen.center().x()), 1)
+                toolbar.set_saved_position(1910, 1070)
+                self.assertTrue(screen.contains(toolbar.frameGeometry()))
+
+    def test_voice_nested_macro_editor_keeps_steps_and_emits_existing_save_signal(self):
+        from views.macro_editor_dialog import MacroEditorDialog
+        steps = [{'type': 'key', 'key': 'space', 'action': 'click'},
+                 {'type': 'delay', 'ms': 200}]
+        with patch.object(VoiceSettingsDialog, '_populate_mic_devices'):
+            voice = self.show(VoiceSettingsDialog([], xmacros=[{'name': '起跳', 'steps': steps}]))
+        saved = QSignalSpy(voice.xmacros_changed)
+        def edit_macro():
+            macro = app.activeModalWidget()
+            self.assertIsInstance(macro, MacroEditorDialog)
+            macro._add_delay_step()
+            self.action(macro, t('macro.save')).click()
+        QTimer.singleShot(0, edit_macro)
+        voice._edit_macro(0)
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0][0], [{'name': '起跳', 'steps': steps + [{'type': 'delay', 'ms': 100}]}])
+
+    def test_larger_bubble_preserves_three_click_actions_and_drag_threshold(self):
+        from views.run_toolbar import CollapsedBubble
+        bubble = self.show(CollapsedBubble())
+        clicks = [(Qt.MouseButton.LeftButton, bubble.toggle_toolbar_requested),
+                  (Qt.MouseButton.RightButton, bubble.toggle_buttons_requested),
+                  (Qt.MouseButton.MiddleButton, bubble.stop_requested)]
+        spies = [QSignalSpy(signal) for _, signal in clicks]
+        for button, _ in clicks:
+            QTest.mouseClick(bubble, button, pos=bubble.rect().center())
+        self.assertEqual([len(spy) for spy in spies], [1, 1, 1])
+        bubble.move(100, 100)
+        start = bubble.rect().center()
+        global_start = bubble.mapToGlobal(start)
+        moved = QSignalSpy(bubble.moved)
+        QTest.mousePress(bubble, Qt.MouseButton.LeftButton, pos=start)
+        move = QMouseEvent(QEvent.Type.MouseMove, QPointF(start + QPoint(20, 20)),
+            QPointF(global_start + QPoint(20, 20)), Qt.MouseButton.NoButton,
+            Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+        app.sendEvent(bubble, move)
+        QTest.mouseRelease(bubble, Qt.MouseButton.LeftButton, pos=start)
+        self.assertEqual(bubble.pos(), QPoint(120, 120))
+        self.assertEqual(len(moved), 1)
+        self.assertEqual([len(spy) for spy in spies], [1, 1, 1])
+
     def test_color_picker_native_layout_does_not_shrink_or_crop_the_shared_shell(self):
         picker = self.show(ColorPickerDialog(QColor('#F59E0B'), title='选择颜色'))
         self.assertEqual((picker.width(), picker.height()), (760, 620))

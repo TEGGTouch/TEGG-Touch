@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font, get_lang
-from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, VOICE_ACCENT, segmented_row
 from core.constants import (
     VOICE_SAMPLE_RATE, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX,
 )
@@ -23,7 +23,7 @@ from core.constants import (
 # Reuse shared components from existing dialogs
 from views.button_editor_dialog import (
     TagInput, _FlowWidget, _get_key_categories, _get_mouse_keys, populate_gp_palette,
-    C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
+    C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL,
 )
@@ -33,7 +33,6 @@ C_INPUT_BG = RECESSED_BG
 # ── 颜色常量 ──
 C_GREEN = "#10B981"
 C_GREEN_H = "#059669"
-C_AMBER_D = "#D97706"
 
 # ── 图标字体 ──
 _ICON_FONT = None
@@ -202,7 +201,7 @@ class _CommandRow(QFrame):
         """)
         r2.addWidget(self._phrase_edit)
 
-        self._keys_input = TagInput(initial_value=keys, accent_color=C_AMBER)
+        self._keys_input = TagInput(initial_value=keys, accent_color=C_GREEN, tag_text_color='#000000')
         self._keys_input.setFixedWidth(self.COL_KEYS)
         self._keys_input.setMinimumHeight(36)
         self._keys_input.focusChanged.connect(
@@ -331,7 +330,7 @@ class _ChunkSizeDialog(QDialog):
         _detect_icon_font()
         self._build_ui(cur)
         from views.ui_components import finish_dialog
-        finish_dialog(self, (520, 360), actions=[t("voice_dialog.chunk_reset"), t("voice_dialog.chunk_cancel"), t("voice_dialog.save")], columns=False, guidance=None)
+        finish_dialog(self, (520, 360), actions=[t("voice_dialog.chunk_reset"), t("voice_dialog.chunk_cancel"), t("voice_dialog.save")], columns=False, guidance=None, accent=VOICE_ACCENT)
         self._center_on_parent()
 
     def _build_ui(self, cur):
@@ -586,7 +585,7 @@ class VoiceSettingsDialog(QDialog):
         _detect_icon_font()
         self._init_ui()
         from views.ui_components import finish_dialog
-        finish_dialog(self, (1280, 820), actions=[t("voice_dialog.add_command"), t("voice_dialog.copy"), t("voice_dialog.delete_command"), t("voice_dialog.save")], columns=True, guidance=('① 选择指令 → ② 修改口令与行为 → ③ 测试指令 → ④ 保存', '1 Select a command → 2 Edit phrase and behavior → 3 Test → 4 Save'), scope=self._editor_form, scope_actions=[t("voice_dialog.copy"), t("voice_dialog.delete_command"), t("voice_dialog.save")])
+        finish_dialog(self, (1280, 820), actions=[t("voice_dialog.add_command"), t("voice_dialog.copy"), t("voice_dialog.delete_command"), t("voice_dialog.save")], columns=True, guidance=('① 选择指令 → ② 修改口令与行为 → ③ 测试指令 → ④ 保存', '1 Select a command → 2 Edit phrase and behavior → 3 Test → 4 Save'), scope=self._editor_form, scope_actions=[t("voice_dialog.copy"), t("voice_dialog.delete_command"), t("voice_dialog.save")], accent=VOICE_ACCENT)
         self._load_commands()
         self._center_on_screen()
 
@@ -937,7 +936,7 @@ class VoiceSettingsDialog(QDialog):
         keys_lbl.setFont(_make_font(fn, 13))
         keys_lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
         kform.addWidget(keys_lbl)
-        self._keys_input = TagInput(initial_value="", accent_color=C_AMBER)
+        self._keys_input = TagInput(initial_value="", accent_color=C_GREEN, tag_text_color='#000000')
         self._keys_input.setMinimumHeight(36)
         self._keys_input.focusChanged.connect(self._on_focus_changed)
         kform.addWidget(self._keys_input)
@@ -1280,7 +1279,7 @@ class VoiceSettingsDialog(QDialog):
             self._mic_lbl.setText(t("voice_dialog.mic_dep_missing"))
             self._test_btn.setEnabled(False)
         except Exception:
-            self._mic_dot.setStyleSheet("color: #F59E0B; background: transparent;")
+            self._mic_dot.setStyleSheet(f"color: {C_GREEN}; background: transparent;")
             self._mic_lbl.setText(t("voice_dialog.mic_check_failed"))
             self._test_btn.setEnabled(False)
 

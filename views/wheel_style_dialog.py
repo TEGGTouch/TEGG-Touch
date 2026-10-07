@@ -14,7 +14,7 @@ from PyQt6.QtGui import (
 )
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, SCROLL_GAP, SegmentedControl, scroll_widget
+from views.ui_components import SMALL_RADIUS, SCROLL_GAP, ROSE_ACCENT, SegmentedControl, scroll_widget
 from core.constants import (
     WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
     WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE,
@@ -326,8 +326,8 @@ class _WheelPreview(QWidget):
             else:
                 area_id = f'sector_{i}'
                 if self._hover_area == area_id:
-                    p.setBrush(QBrush(QColor("#0284C7")))
-                    p.setPen(QPen(QColor("#026AA2"), max(1, 2 * s)))
+                    p.setBrush(QBrush(QColor(C_ACCENT)))
+                    p.setPen(QPen(QColor(ROSE_ACCENT[1]), max(1, 2 * s)))
                 else:
                     p.setBrush(QBrush(QColor(C_SECTOR_FILL)))
                     p.setPen(QPen(QColor(C_SECTOR_BORDER), max(1, 2 * s)))
@@ -358,8 +358,8 @@ class _WheelPreview(QWidget):
                 else:
                     area_id = f'outer_{i}'
                     if self._hover_area == area_id:
-                        p.setBrush(QBrush(QColor("#0284C7")))
-                        p.setPen(QPen(QColor("#026AA2"), max(1, 2 * s)))
+                        p.setBrush(QBrush(QColor(C_ACCENT)))
+                        p.setPen(QPen(QColor(ROSE_ACCENT[1]), max(1, 2 * s)))
                     else:
                         p.setBrush(QBrush(QColor(C_SECTOR_FILL)))
                         p.setPen(QPen(QColor(C_SECTOR_BORDER), max(1, 2 * s)))
@@ -425,8 +425,8 @@ class _WheelPreview(QWidget):
             matched = (self._hover_area == area_id
                        or (mode != 'whole' and self._hover_area == hover_id))
             if matched:
-                p.setBrush(QBrush(QColor("#0284C7")))
-                p.setPen(QPen(QColor("#026AA2"), max(1, 2 * s)))
+                p.setBrush(QBrush(QColor(C_ACCENT)))
+                p.setPen(QPen(QColor(ROSE_ACCENT[1]), max(1, 2 * s)))
             else:
                 p.setBrush(QBrush(QColor(C_RING_FILL)))
                 p.setPen(QPen(QColor(C_RING_BORDER), max(1, 2 * s)))
@@ -694,7 +694,7 @@ class WheelStyleDialog(QDialog):
 
         self._init_ui()
         from views.ui_components import finish_dialog
-        finish_dialog(self, (1280, 820), actions=[self._reset_btn, t("wheel_style.cancel"), t("wheel_style.save")], columns=False, guidance=('① 选择轮盘样式 → ② 调整环与分区 → ③ 确定', '1 Choose a wheel style → 2 Set rings and sectors → 3 Confirm'))
+        finish_dialog(self, (1280, 820), actions=[self._reset_btn, t("wheel_style.cancel"), t("wheel_style.save")], columns=False, guidance=('① 选择轮盘样式 → ② 调整环与分区 → ③ 确定', '1 Choose a wheel style → 2 Set rings and sectors → 3 Confirm'), accent=ROSE_ACCENT)
         self._select_type(self._selected_type)
         self._center_on_screen()
         self._drag_pos = None
