@@ -105,8 +105,8 @@ class RunToolbar(QWidget):
         container.setStyleSheet(f"""
             QFrame#rt_container {{
                 background: {C_PANEL};
-                border-radius: 0;
-                border: 1px solid #555; border-left: 2px solid #F59E0B;
+                border-radius: 12px;
+                border: none;
             }}
             QToolTip {{
                 background: #1A1A1A;

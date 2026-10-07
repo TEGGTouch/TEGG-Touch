@@ -257,7 +257,7 @@ class VoiceTestDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#vt_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -307,7 +307,7 @@ class VoiceTestDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -320,7 +320,7 @@ class VoiceTestDialog(QDialog):
         self._waveform.setStyleSheet(f"""
             background: #141414;
             border: 1px solid #333;
-            border-radius: 0;
+            border-radius: 6px;
         """)
         root.addWidget(self._waveform)
 
@@ -365,7 +365,7 @@ class VoiceTestDialog(QDialog):
                 background: transparent; width: 6px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 0; min-height: 20px;
+                background: #404040; border-radius: 6px; min-height: 20px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
@@ -408,7 +408,7 @@ class VoiceTestDialog(QDialog):
         stop_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #E0E0E0;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; color: #FFF; }}
         """)

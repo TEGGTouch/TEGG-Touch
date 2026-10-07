@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
     QLabel, QFrame, QSlider,
 )
-from PyQt6.QtCore import Qt, QSize, QPoint, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QFontDatabase
 
 from core.i18n import t, get_font
@@ -20,6 +20,7 @@ from core.constants import (
     TOOLBAR_BOTTOM_MARGIN,
 )
 from views.toolbar_tip_widget import ToolbarTipWidget
+from views.ui_components import OUTER_RADIUS, INNER_RADIUS
 
 # ── 颜色常量 (与原版 widgets.py 完全一致) ──
 C_CYBER = "#0C4A6E"
@@ -93,7 +94,7 @@ class _VSep(QWidget):
         p.drawLine(x, 4, x, self.height() - 4)
 
 
-# ── 图标+文字按钮 (自适应宽度, 深灰方角) ──
+# ── 图标+文字按钮 (自适应宽度, 深灰圆角) ──
 class _IconTextBtn(QPushButton):
     """带图标字体和文字的工具栏按钮 — 宽度自适应内容。"""
 
@@ -150,7 +151,7 @@ class _IconTextBtn(QPushButton):
     def _apply_style(self):
         self.setStyleSheet(f"""
             QPushButton {{
-                background: {self._bg}; border: none; border-radius: 0;
+                background: {self._bg}; border: none; border-radius: {INNER_RADIUS}px;
             }}
             QPushButton:hover {{ background: {self._bg_h}; }}
         """)
@@ -168,21 +169,88 @@ class _IconTextBtn(QPushButton):
         self._text_lbl.setText(text)
 
 
-class _ContextButton(QPushButton):
-    """Compact mode-specific entry with the existing state-update interface."""
+class _ModeSwitch(QFrame):
+    """Two choices share one recessed track and one sliding selection."""
 
-    def __init__(self, icon, text, parent=None):
-        super().__init__(icon + " " + text, parent)
-        self._label = text
+    requested = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName('simulation_switch')
+        self.setFixedSize(144, 40)
+        self.setStyleSheet('QFrame#simulation_switch { background: #202020; border: none; border-radius: 8px; }')
+        self._thumb = QFrame(self)
+        self._thumb.setStyleSheet(f'background: {C_AMBER}; border: none; border-radius: 6px;')
+        self._thumb.setGeometry(4, 4, 68, 32)
+        self._thumb.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._animation = QPropertyAnimation(self._thumb, b'geometry', self)
+        self._animation.setDuration(160)
+        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.buttons = {}
+        for index, (mode, label) in enumerate((('keyboard', t('toolbar.sim_keyboard')),
+                                               ('gamepad', t('toolbar.sim_gamepad')))):
+            button = QPushButton(label, self)
+            button.setGeometry(4 + index * 68, 4, 68, 32)
+            button.setFont(_make_font(get_font(), 13))
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda _, picked=mode: self.requested.emit(picked))
+            self.buttons[mode] = button
+
+    def set_mode(self, mode):
+        target = QRect(72 if mode == 'gamepad' else 4, 4, 68, 32)
+        self._animation.stop()
+        if self.isVisible() and self._thumb.geometry() != target:
+            self._animation.setStartValue(self._thumb.geometry())
+            self._animation.setEndValue(target)
+            self._animation.start()
+        else:
+            self._thumb.setGeometry(target)
+        for key, button in self.buttons.items():
+            color = '#202020' if key == mode else '#AAAAAA'
+            button.setStyleSheet(f'QPushButton {{ background: transparent; color: {color}; border: none; border-radius: 6px; }}')
+
+
+class _CheckIndicator(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(20, 20)
+        self.checked = False
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor(C_AMBER if self.checked else '#AAAAAA'), 1.5))
+        painter.setBrush(QColor(C_AMBER) if self.checked else Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(2, 2, 16, 16, 3, 3)
+        if self.checked:
+            painter.setPen(QPen(QColor('#202020'), 2.0, Qt.PenStyle.SolidLine,
+                                Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.drawLine(6, 10, 9, 13)
+            painter.drawLine(9, 13, 14, 7)
+
+
+class _ComponentToggle(_IconTextBtn):
+    """Singleton entry: gray button, an empty / checked indicator, original signal."""
+
+    def __init__(self, text, width, parent=None):
+        super().__init__('', '', text, C_GRAY, C_GRAY_H, width=width, parent=parent)
+        if self._icon_lbl:
+            self.layout().removeWidget(self._icon_lbl)
+            self._icon_lbl.deleteLater()
+            self._icon_lbl = None
+        self._indicator = _CheckIndicator(self)
+        self.layout().insertWidget(0, self._indicator)
+        self.setCheckable(True)
 
     def set_colors(self, background, hover):
-        self.setStyleSheet(
-            f"QPushButton {{ background: {background}; color: #E0E0E0; "
-            "border: 1px solid #555; border-radius: 0; } "
-            f"QPushButton:hover {{ background: {hover}; }}")
+        super().set_colors(C_GRAY, C_GRAY_H)
 
     def set_icon_text(self, icon, fallback=None):
-        self.setText((fallback or "▣") + " " + self._label)
+        checked = icon == '\uE73E'
+        self.setChecked(checked)
+        self._indicator.checked = checked
+        self._indicator.update()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -239,7 +307,7 @@ class EditToolbar(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         container = QFrame()
         container.setObjectName("et_container")
-        container.setStyleSheet("QFrame#et_container { background: #2D2D2D; border: 1px solid #555; border-left: 2px solid #F59E0B; }")
+        container.setStyleSheet(f"QFrame#et_container {{ background: #2D2D2D; border: none; border-radius: {OUTER_RADIUS}px; }}")
         outer.addWidget(container)
         main = QVBoxLayout(container)
         main.setContentsMargins(16, 12, 16, 14)
@@ -251,17 +319,17 @@ class EditToolbar(QWidget):
         grip.setCursor(Qt.CursorShape.SizeAllCursor)
         header.addWidget(grip)
         self._profile_btn = self._build_profile_btn(fn)
-        self._profile_btn.setMinimumWidth(240)
+        self._profile_btn.setFixedWidth(240)
         self._prof_name_lbl.setMinimumWidth(0)
         self._prof_name_lbl.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._profile_full_name = "Default"
         self._profile_btn.setToolTip(t("tooltip.profiles"))
         self._install_tip(self._profile_btn)
-        header.addWidget(self._profile_btn, 1)
+        header.addWidget(self._profile_btn)
 
-        def slider_group(label, color, low, high, value, callback, width):
+        def slider_group(label, color, low, high, value, callback):
             widget = QWidget()
-            widget.setFixedWidth(width)
+            widget.setMinimumWidth(220)
             row = QHBoxLayout(widget)
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(8)
@@ -274,7 +342,7 @@ class EditToolbar(QWidget):
             slider.setValue(value)
             slider.setFixedHeight(24)
             slider.setMinimumWidth(54)
-            slider.setStyleSheet(f"QSlider::groove:horizontal {{ background: #505050; height: 4px; }} QSlider::sub-page:horizontal {{ background: {color}; }} QSlider::handle:horizontal {{ background: #DDD; width: 10px; margin: -7px 0; }}")
+            slider.setStyleSheet(f"QSlider::groove:horizontal {{ background: #505050; height: 6px; border-radius: 3px; }} QSlider::sub-page:horizontal {{ background: {color}; border-radius: 3px; }} QSlider::handle:horizontal {{ background: #DDD; border: none; width: 16px; height: 16px; margin: -5px 0; border-radius: 8px; }}")
             slider.valueChanged.connect(callback)
             row.addWidget(slider, 1)
             number = QLabel(f"{value}%")
@@ -283,11 +351,11 @@ class EditToolbar(QWidget):
             number.setFont(_make_font(fn, 13))
             number.setStyleSheet(f"color: {color}; background: transparent;")
             row.addWidget(number)
-            header.addWidget(widget)
+            header.addWidget(widget, 1)
             return slider, number
 
-        self._slider, self._val_lbl = slider_group(t("toolbar.opacity"), C_AMBER, 10, 90, 75, self._on_opacity, 172)
-        self._scale_slider, self._scale_val_lbl = slider_group(t("toolbar.scale"), "#10B981", 50, 200, 100, self._on_scale_changed, 170)
+        self._slider, self._val_lbl = slider_group(t("toolbar.opacity"), C_AMBER, 10, 90, 75, self._on_opacity)
+        self._scale_slider, self._scale_val_lbl = slider_group(t("toolbar.scale"), C_AMBER, 50, 200, 100, self._on_scale_changed)
         self._scale_slider.setSingleStep(10)
         self._scale_slider.setPageStep(10)
         header.addWidget(_VSep())
@@ -306,7 +374,12 @@ class EditToolbar(QWidget):
         line.setStyleSheet("background: #444;")
         main.addWidget(line)
         groups = QHBoxLayout()
-        groups.setSpacing(12)
+        groups.setSpacing(8)
+
+        remap = _IconTextBtn("\uE8AB", "⇄", t("toolbar.key_remap"), C_GRAY, C_GRAY_H)
+        self._component_width = max(108, remap.sizeHint().width() + 8)
+        remap.setFixedWidth(self._component_width)
+        self._remap_btn = remap
 
         def group(title, width=None):
             widget = QWidget()
@@ -321,25 +394,18 @@ class EditToolbar(QWidget):
             text.setStyleSheet("color: #AAA; background: transparent;")
             col.addWidget(text)
             row = QHBoxLayout()
-            row.setSpacing(6)
+            row.setSpacing(8)
             col.addLayout(row)
             return widget, row
 
-        self._mode_group, mode = group(t("toolbar.sim_mode"), 480)
-        self._mode_buttons = {}
-        for key, label in [("keyboard", t("toolbar.sim_keyboard")), ("gamepad", t("toolbar.sim_gamepad"))]:
-            button = QPushButton(label)
-            button.setFixedSize(72, 40)
-            button.setFont(_make_font(fn, 13))
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.clicked.connect(lambda _, picked=key: self._on_sim_mode_picked(picked))
-            self._mode_buttons[key] = button
-            mode.addWidget(button)
-        mode.addSpacing(4)
+        self._mode_group, mode = group(ui_text("添加模拟组件", "Add input components"), 144 + 3 * self._component_width + 24)
+        self._mode_switch = _ModeSwitch()
+        self._mode_switch.requested.connect(self._on_sim_mode_picked)
+        self._mode_buttons = self._mode_switch.buttons
+        mode.addWidget(self._mode_switch)
         self._mode_stack = QStackedWidget()
         self._mode_stack.setFixedHeight(40)
         mode.addWidget(self._mode_stack, 1)
-        buttons = []
         for specs in [
             [("_add_kb_btn", "toolbar.add_button", self.add_button_clicked.emit, "＋"),
              ("_cb_btn", "toolbar.add_center_band", self.add_center_band_clicked.emit, "＋"),
@@ -350,57 +416,60 @@ class EditToolbar(QWidget):
             page = QWidget()
             row = QHBoxLayout(page)
             row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(6)
+            row.setSpacing(8)
             for attr, label, callback, icon in specs:
-                button = _ContextButton(icon, t(label))
-                button.setFixedHeight(40)
-                button.setFont(_make_font(fn, 13))
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
+                if attr in ('_wheel_btn', '_wheel_gp_btn'):
+                    button = _ComponentToggle(t(label), self._component_width)
+                else:
+                    button = _IconTextBtn('\uE710', '+', t(label), C_GRAY, C_GRAY_H, width=self._component_width)
+                    if button._icon_lbl:
+                        button._icon_lbl.setFont(_make_font(_ICON_FONT or fn, 24))
                 button.clicked.connect(callback)
                 button.setToolTip(t(label))
                 self._install_tip(button)
                 button.set_colors(C_GRAY, C_GRAY_H)
                 setattr(self, attr, button)
-                row.addWidget(button, 1)
-                buttons.append(button)
+                row.addWidget(button)
             self._mode_stack.addWidget(page)
         self._wheel_gp_on = False
         groups.addWidget(self._mode_group)
         groups.addWidget(_VSep())
-        voice_widget, voice = group(ui_text("语音控制", "Voice control"))
-        voice_button = _IconTextBtn("\uE720", "♪", t("toolbar.voice"), C_GRAY, C_GRAY_H)
+        voice_widget, voice = group(ui_text("语音控制", "Voice control"), self._component_width)
+        voice_button = _IconTextBtn("\uE720", "♪", t("toolbar.voice"), C_GRAY, C_GRAY_H, width=self._component_width)
+        self._voice_btn = voice_button
         voice_button.clicked.connect(self.voice_clicked.emit)
         voice_button.setToolTip(ui_text("设置语音指令、识别设备，并测试当前指令", "Edit voice commands, recognition settings and test commands."))
         self._install_tip(voice_button)
         voice.addWidget(voice_button)
-        groups.addWidget(voice_widget, 1)
+        groups.addWidget(voice_widget)
         groups.addWidget(_VSep())
-        keys_widget, keys = group(t("toolbar.keyboard"), 228)
-        self._keyboard_btn = _IconTextBtn("\uE765", "⌨", ui_text("打开", "Show"), C_GRAY, C_GRAY_H)
+        keys_widget, keys = group(t("toolbar.keyboard"), self._component_width * 2 + 8)
+        self._keyboard_btn = _IconTextBtn("\uE765", "⌨", ui_text("打开", "Show"), C_GRAY, C_GRAY_H, width=self._component_width)
         self._keyboard_btn.clicked.connect(self.keyboard_clicked.emit)
         self._keyboard_btn.setToolTip(t("tooltip.keyboard"))
         self._install_tip(self._keyboard_btn)
         keys.addWidget(self._keyboard_btn)
-        remap = _IconTextBtn("\uE8AB", "⇄", t("toolbar.key_remap"), C_GRAY, C_GRAY_H)
         remap.clicked.connect(self.key_remap_clicked.emit)
         remap.setToolTip(t("tooltip.key_remap"))
         self._install_tip(remap)
         keys.addWidget(remap)
         groups.addWidget(keys_widget)
-        launch_widget, launch = group("", 96)
+        self._launch_separator = _VSep()
+        groups.addWidget(self._launch_separator)
+        launch_widget, launch = group("")
         run = _IconTextBtn("\uE768", "▶", t("toolbar.start"), C_AMBER_D, C_AMBER, fg="#FFF")
+        run.setMinimumWidth(96)
+        self._run_btn = run
         run.clicked.connect(self.run_clicked.emit)
         run.setToolTip(t("tooltip.start"))
         self._install_tip(run)
         launch.addWidget(run)
-        groups.addWidget(launch_widget)
+        groups.addWidget(launch_widget, 1)
         main.addLayout(groups)
         self._refresh_mode_visual()
 
     def _refresh_mode_visual(self):
-        for mode, button in self._mode_buttons.items():
-            selected = mode == self._sim_mode
-            button.setStyleSheet(f"QPushButton {{ background: {C_CYBER if selected else C_GRAY}; color: #E0E0E0; border: 1px solid {C_CYBER_H if selected else '#555'}; }} QPushButton:hover {{ background: {C_CYBER_H if selected else C_GRAY_H}; }}")
+        self._mode_switch.set_mode(self._sim_mode)
         self._mode_stack.setCurrentIndex(1 if self._sim_mode == 'gamepad' else 0)
 
     def set_keyboard_visible(self, visible):
@@ -419,16 +488,16 @@ class EditToolbar(QWidget):
     # ── 组件构建辅助 ─────────────────────────────────────────
 
     def _build_profile_btn(self, fn):
-        """方案选择器: Icon | Name | DropdownArrow (#0C4A6E, 原版 220px)"""
+        """Compact profile selector with a document icon for both input modes."""
         btn = QPushButton()
         btn.setFixedHeight(40)
         btn.setMinimumWidth(220)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_CYBER}; border: none; border-radius: 0;
+                background: {C_GRAY}; border: none; border-radius: {INNER_RADIUS}px;
             }}
-            QPushButton:hover {{ background: {C_CYBER_H}; }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         btn.clicked.connect(self.profile_clicked.emit)
 
@@ -438,7 +507,7 @@ class EditToolbar(QWidget):
 
         # 图标
         if _ICON_FONT:
-            ic = QLabel("\uE765")
+            ic = QLabel("\uE8A5")
             ic.setFont(_make_font(_ICON_FONT, 20))
         else:
             ic = QLabel("\U0001F4C4")
@@ -478,7 +547,7 @@ class EditToolbar(QWidget):
             btn.setFont(_make_font(get_font(), 16, bold=True))
         btn.setStyleSheet(f"""
             QPushButton {{
-                background: {bg}; color: {fg}; border: none; border-radius: 0;
+                background: {bg}; color: {fg}; border: none; border-radius: {INNER_RADIUS}px;
             }}
             QPushButton:hover {{ background: {bg_h}; }}
         """)

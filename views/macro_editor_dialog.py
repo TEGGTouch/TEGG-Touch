@@ -100,7 +100,7 @@ class _StepRow(QWidget):
         rm_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -136,7 +136,7 @@ class _StepRow(QWidget):
         self._action_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {C_INPUT_BG}; color: #E0E0E0;
-                border: 1px solid #555; border-radius: 0;
+                border: 1px solid #555; border-radius: 6px;
                 padding: 2px 6px;
             }}
             QComboBox:hover {{ border-color: {C_MACRO_KEY}; }}
@@ -167,14 +167,14 @@ class _StepRow(QWidget):
         self._delay_slider.setSingleStep(DELAY_STEP)
         self._delay_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 6px; border-radius: 0;
+                background: #404040; height: 6px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
-                background: {C_MACRO_DELAY}; border-radius: 0;
+                background: {C_MACRO_DELAY}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;
-                width: 14px; height: 14px; margin: -4px 0; border-radius: 0;
+                width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
             }}
             QSlider::handle:horizontal:hover {{ background: {C_MACRO_DELAY}; }}
         """)
@@ -188,7 +188,7 @@ class _StepRow(QWidget):
         self._delay_entry.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: {C_MACRO_DELAY};
-                border: 1px solid #555; border-radius: 0;
+                border: 1px solid #555; border-radius: 6px;
             }}
             QLineEdit:focus {{ border-color: {C_MACRO_DELAY}; }}
         """)
@@ -327,7 +327,7 @@ class MacroEditorDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#me_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #555;
             }}
         """)
@@ -361,7 +361,7 @@ class MacroEditorDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -394,7 +394,7 @@ class MacroEditorDialog(QDialog):
         self._name_style_normal = f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: white;
-                border: 2px solid #555; border-radius: 0;
+                border: 2px solid #555; border-radius: 6px;
                 padding: 4px 8px;
             }}
             QLineEdit:focus {{ border-color: {C_MACRO_NAME}; }}
@@ -430,7 +430,7 @@ class MacroEditorDialog(QDialog):
                 background: transparent; width: 6px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 0; min-height: 20px;
+                background: #404040; border-radius: 6px; min-height: 20px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
@@ -466,7 +466,7 @@ class MacroEditorDialog(QDialog):
         add_key_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_MACRO_KEY}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: #7C3AED; }}
         """)
@@ -480,7 +480,7 @@ class MacroEditorDialog(QDialog):
         add_delay_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_MACRO_DELAY}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: #B45309; }}
         """)
@@ -497,7 +497,7 @@ class MacroEditorDialog(QDialog):
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
@@ -578,12 +578,12 @@ class MacroEditorDialog(QDialog):
         sel = f"""QPushButton {{
             background: transparent; color: #FFF; border: none;
             border-bottom: 2px solid {C_CYBER_H};
-            border-radius: 0; padding: 0 14px 4px 14px;
+            border-radius: 6px; padding: 0 14px 4px 14px;
         }}"""
         off = f"""QPushButton {{
             background: transparent; color: #AAA; border: none;
             border-bottom: 2px solid transparent;
-            border-radius: 0; padding: 0 14px 4px 14px;
+            border-radius: 6px; padding: 0 14px 4px 14px;
         }} QPushButton:hover {{ color: #E0E0E0; }}"""
         for ix, b in enumerate(self._mtab_btns):
             b.setStyleSheet(sel if idx == ix else off)
@@ -595,7 +595,7 @@ class MacroEditorDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -756,7 +756,7 @@ class MacroEditorDialog(QDialog):
             self._name_edit.setStyleSheet(f"""
                 QLineEdit {{
                     background: {C_INPUT_BG}; color: white;
-                    border: 2px solid #F43F5E; border-radius: 0;
+                    border: 2px solid #F43F5E; border-radius: 6px;
                     padding: 4px 8px;
                 }}
             """)

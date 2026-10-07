@@ -14,7 +14,7 @@
       "image": "ui-client-EditToolbar.png",
       "size": [
         1070,
-        159
+        157
       ]
     },
     {
@@ -22,15 +22,15 @@
       "image": "ui-client-EditToolbar-gamepad.png",
       "size": [
         1070,
-        159
+        157
       ]
     },
     {
       "window": "RunToolbar",
       "image": "ui-client-RunToolbar.png",
       "size": [
-        1094,
-        62
+        1091,
+        60
       ]
     },
     {

@@ -84,7 +84,7 @@ class CenterBandDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#cb_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -113,7 +113,7 @@ class CenterBandDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -156,7 +156,7 @@ class CenterBandDialog(QDialog):
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.setFont(_make_font(fn, 18, bold=True))
         save_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 0; }}
+            QPushButton {{ background: {C_CYBER}; color: #FFF; border: none; border-radius: 6px; }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
         """)
         save_btn.clicked.connect(self._on_save)
@@ -172,7 +172,7 @@ class CenterBandDialog(QDialog):
         copy_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -189,7 +189,7 @@ class CenterBandDialog(QDialog):
         del_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)

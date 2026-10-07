@@ -53,7 +53,7 @@ class AboutDialog(QDialog):
         container.setStyleSheet("""
             QFrame#about_container {
                 background: #2D2D2D;
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }
             QLabel { color: #CCC; }
@@ -83,7 +83,7 @@ class AboutDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -147,7 +147,7 @@ class AboutDialog(QDialog):
             qr_label.setText(t("about.qr_missing"))
             qr_label.setStyleSheet("""
                 background: #3A3A3A; color: #888;
-                border: 1px solid #555; border-radius: 0;
+                border: 1px solid #555; border-radius: 6px;
                 font-size: 14px;
             """)
             qr_label.setFixedSize(160, 160)

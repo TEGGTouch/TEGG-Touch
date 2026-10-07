@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 from PyQt6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
 from PyQt6.QtGui import QMouseEvent
-from PyQt6.QtTest import QSignalSpy
+from PyQt6.QtTest import QSignalSpy, QTest
 from PyQt6.QtWidgets import QApplication, QScrollArea
 
 from core.i18n import load_locale, t
@@ -52,16 +52,45 @@ class RedesignTests(unittest.TestCase):
         toolbar.move(35, 80)
         initial = (toolbar.pos(), toolbar.size(), toolbar._mode_group.size())
         requested = QSignalSpy(toolbar.sim_mode_change_requested)
+        thumb = toolbar._mode_switch._thumb.geometry()
         toolbar._mode_buttons['gamepad'].click()
         self.assertEqual(list(requested), [['gamepad']])
         self.assertEqual(toolbar._sim_mode, 'keyboard')
         self.assertEqual(toolbar._mode_stack.currentIndex(), 0)
+        self.assertEqual(toolbar._mode_switch._thumb.geometry(), thumb)
         toolbar.set_sim_mode('gamepad')
-        app.processEvents()
+        QTest.qWait(180)
         self.assertEqual(toolbar._mode_stack.currentIndex(), 1)
+        self.assertEqual(toolbar._mode_switch._thumb.x(), 72)
         self.assertEqual((toolbar.pos(), toolbar.size(), toolbar._mode_group.size()), initial)
         toolbar._mode_buttons['gamepad'].click()
         self.assertEqual(len(requested), 1)
+
+    def test_component_entries_have_equal_width_and_singleton_toggle_state(self):
+        toolbar = self.show(EditToolbar())
+        toolbar.resize(1070, toolbar.height())  # Offscreen's default display is only 800 px wide.
+        app.processEvents()
+        entries = [toolbar._add_kb_btn, toolbar._cb_btn, toolbar._wheel_btn,
+                   toolbar._add_gp_btn, toolbar._add_stick_btn, toolbar._wheel_gp_btn,
+                   toolbar._voice_btn, toolbar._keyboard_btn, toolbar._remap_btn]
+        self.assertEqual({button.width() for button in entries}, {toolbar._remap_btn.width()})
+        self.assertGreater(toolbar._run_btn.width(), toolbar._remap_btn.width())
+        wheel = QSignalSpy(toolbar.wheel_clicked)
+        toolbar.set_wheel_state(True)
+        self.assertTrue(toolbar._wheel_btn.isChecked())
+        self.assertTrue(toolbar._wheel_btn._indicator.checked)
+        self.assertEqual(len(wheel), 0)
+        toolbar._wheel_btn.click()
+        self.assertFalse(toolbar._wheel_on)
+        self.assertFalse(toolbar._wheel_btn.isChecked())
+        self.assertEqual(len(wheel), 1)
+        gamepad_wheel = QSignalSpy(toolbar.gp_wheel_toggle_clicked)
+        toolbar.set_gp_wheel_state(True)
+        self.assertTrue(toolbar._wheel_gp_btn.isChecked())
+        self.assertEqual(len(gamepad_wheel), 0)
+        toolbar._wheel_gp_btn.click()
+        self.assertFalse(toolbar._wheel_gp_on)
+        self.assertEqual(len(gamepad_wheel), 1)
 
     def test_long_profile_name_and_keyboard_status_keep_header_stable(self):
         toolbar = self.show(EditToolbar())

@@ -54,7 +54,7 @@ class PostUpdateDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#post_update_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
             QLabel {{ color: #CCC; background: transparent; }}
@@ -82,7 +82,7 @@ class PostUpdateDialog(QDialog):
             close_btn.setText("✕")
             close_btn.setFont(_make_font(fn, 15, bold=True))
         close_btn.setStyleSheet(f"""
-            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 0; }}
+            QPushButton {{ background: {C_CLOSE}; color: #FFF; border: none; border-radius: 6px; }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
         close_btn.clicked.connect(self.accept)
@@ -108,7 +108,7 @@ class PostUpdateDialog(QDialog):
         path_box = QLabel(self._install_dir)
         path_box.setStyleSheet(f"""
             color: #E5E5E5; font-size: 13px; font-family: '{fn}';
-            padding: 10px; background: {C_GRAY}; border-radius: 0;
+            padding: 10px; background: {C_GRAY}; border-radius: 6px;
         """)
         path_box.setWordWrap(True)
         path_box.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -125,7 +125,7 @@ class PostUpdateDialog(QDialog):
         open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         open_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_CYBER}; color: #FFF; border: none; border-radius: 0;
+                background: {C_CYBER}; color: #FFF; border: none; border-radius: 6px;
                 padding: 0 22px; font-size: 15px;
             }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}
@@ -138,7 +138,7 @@ class PostUpdateDialog(QDialog):
         ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         ok_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_AMBER}; color: #000; border: none; border-radius: 0;
+                background: {C_AMBER}; color: #000; border: none; border-radius: 6px;
                 padding: 0 22px; font-size: 15px; font-weight: bold;
             }}
             QPushButton:hover {{ background: {C_AMBER_D}; }}

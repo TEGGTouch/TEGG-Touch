@@ -77,7 +77,7 @@ class AppPaletteWidget(QWidget):
         self._search.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: #E0E0E0;
-                border: 1px solid #555; border-radius: 0; padding: 2px 8px;
+                border: 1px solid #555; border-radius: 6px; padding: 2px 8px;
             }}
             QLineEdit:focus {{ border-color: {C_CYBER}; }}
         """)
@@ -91,7 +91,7 @@ class AppPaletteWidget(QWidget):
         self._refresh_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 0; padding: 0 14px;
+                border: none; border-radius: 6px; padding: 0 14px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -106,7 +106,7 @@ class AppPaletteWidget(QWidget):
         self._scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -164,7 +164,7 @@ class AppPaletteWidget(QWidget):
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0; border: none;
-                border-radius: 0; padding: 0 10px; text-align: left;
+                border-radius: 6px; padding: 0 10px; text-align: left;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)

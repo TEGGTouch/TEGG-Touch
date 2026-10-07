@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from PyQt6.QtCore import QPoint
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QScrollArea
 from core.i18n import load_locale
 from core.config_manager import init_profiles, list_profiles
@@ -116,6 +117,7 @@ def main():
             capture(window, 'ui-client-' + name)
             if isinstance(window, EditToolbar):
                 window.set_sim_mode('gamepad')
+                QTest.qWait(180)
                 capture(window, 'ui-client-EditToolbar-gamepad')
             if isinstance(window, HotkeySettingsDialog):
                 for index in range(window._stack.count()):

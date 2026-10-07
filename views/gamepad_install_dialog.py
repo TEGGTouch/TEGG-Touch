@@ -113,7 +113,7 @@ class GamepadInstallDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -146,10 +146,10 @@ class GamepadInstallDialog(QDialog):
         self._bar.setFixedHeight(8)
         self._bar.setStyleSheet(f"""
             QProgressBar {{
-                background: #2A2A2A; border: none; border-radius: 0;
+                background: #2A2A2A; border: none; border-radius: 6px;
             }}
             QProgressBar::chunk {{
-                background: {C_CYBER_H}; border-radius: 0;
+                background: {C_CYBER_H}; border-radius: 6px;
             }}
         """)
         self._bar.setVisible(False)
@@ -179,7 +179,7 @@ class GamepadInstallDialog(QDialog):
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {bg}; color: {fg};
-                border: none; border-radius: 0; padding: 0 18px;
+                border: none; border-radius: 6px; padding: 0 18px;
             }}
             QPushButton:hover {{ background: {bg_h}; }}
             QPushButton:disabled {{ background: #333; color: #666; }}
@@ -201,7 +201,7 @@ class GamepadInstallDialog(QDialog):
             self._btn_primary.setStyleSheet(f"""
                 QPushButton {{
                     background: {primary_color[0]}; color: #FFF;
-                    border: none; border-radius: 0; padding: 0 18px;
+                    border: none; border-radius: 6px; padding: 0 18px;
                 }}
                 QPushButton:hover {{ background: {primary_color[1]}; }}
                 QPushButton:disabled {{ background: #333; color: #666; }}

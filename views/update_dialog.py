@@ -101,7 +101,7 @@ class UpdateDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#update_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
             QLabel {{ color: #CCC; }}
@@ -134,7 +134,7 @@ class UpdateDialog(QDialog):
         self._close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -172,7 +172,7 @@ class UpdateDialog(QDialog):
                 font-family: '{font_name}';
                 padding: 12px;
                 background: {C_GRAY};
-                border-radius: 0;
+                border-radius: 6px;
             """)
             notes.setWordWrap(True)
             notes.setMaximumHeight(220)
@@ -191,10 +191,10 @@ class UpdateDialog(QDialog):
         self._progress_bar.setTextVisible(False)
         self._progress_bar.setStyleSheet(f"""
             QProgressBar {{
-                background: #1F1F1F; border: none; border-radius: 0;
+                background: #1F1F1F; border: none; border-radius: 6px;
             }}
             QProgressBar::chunk {{
-                background: {C_CYBER}; border-radius: 0;
+                background: {C_CYBER}; border-radius: 6px;
             }}
         """)
         self._progress_bar.setVisible(False)
@@ -210,7 +210,7 @@ class UpdateDialog(QDialog):
         self._skip_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #CCC;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
                 padding: 0 28px; font-size: 16px;
             }}
             QPushButton:hover {{ background: #505050; }}
@@ -224,7 +224,7 @@ class UpdateDialog(QDialog):
         self._install_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CYBER}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
                 padding: 0 28px; font-size: 16px; font-weight: bold;
             }}
             QPushButton:hover {{ background: {C_CYBER_H}; }}

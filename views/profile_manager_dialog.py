@@ -75,7 +75,7 @@ class _StyledInputDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#sid_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -105,7 +105,7 @@ class _StyledInputDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -126,7 +126,7 @@ class _StyledInputDialog(QDialog):
         self._entry.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_GRAY}; color: white;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
                 padding: 8px 12px;
                 selection-background-color: {C_AMBER};
                 selection-color: black;
@@ -150,7 +150,7 @@ class _StyledInputDialog(QDialog):
         confirm_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_AMBER}; color: black;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_AMBER_D}; }}
         """)
@@ -228,7 +228,7 @@ class _StyledConfirmDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#scd_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -258,7 +258,7 @@ class _StyledConfirmDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -286,7 +286,7 @@ class _StyledConfirmDialog(QDialog):
         yes_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {ac}; color: {ac_fg};
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {ac_hover}; }}
         """)
@@ -302,7 +302,7 @@ class _StyledConfirmDialog(QDialog):
         no_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #EEE;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -365,7 +365,7 @@ class _StyledMessageDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#smd_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -395,7 +395,7 @@ class _StyledMessageDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -422,7 +422,7 @@ class _StyledMessageDialog(QDialog):
         ok_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_AMBER}; color: black;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_AMBER_D}; }}
         """)
@@ -471,7 +471,7 @@ class _Chip(QLabel):
         self.setStyleSheet(f"""
             QLabel {{
                 background: {color}; color: white;
-                border-radius: 0; padding: 1px 6px;
+                border-radius: 6px; padding: 1px 6px;
             }}
         """)
         self.setFixedHeight(18)
@@ -743,7 +743,7 @@ class _ProfileCopyDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#pc_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -772,7 +772,7 @@ class _ProfileCopyDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -795,7 +795,7 @@ class _ProfileCopyDialog(QDialog):
         left_frame.setFixedWidth(240)
         left_frame.setObjectName("pc_card")
         left_frame.setStyleSheet(
-            "QFrame#pc_card { background: #232323; border: 1px solid #3A3A3A; border-radius: 0; }")
+            "QFrame#pc_card { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         left = QVBoxLayout(left_frame)
         left.setContentsMargins(16, 14, 16, 14)
         left.setSpacing(8)
@@ -868,7 +868,7 @@ class _ProfileCopyDialog(QDialog):
         cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
@@ -882,7 +882,7 @@ class _ProfileCopyDialog(QDialog):
         ok_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_AMBER}; color: black;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_AMBER_D}; color: white; }}
         """)
@@ -905,7 +905,7 @@ class _ProfileCopyDialog(QDialog):
         bg = "#262220" if selected else "#222222"
         card.setStyleSheet(
             f"QFrame#pc_target_card {{ background: {bg}; "
-            f"border: 2px solid {border}; border-radius: 0; }}")
+            f"border: 2px solid {border}; border-radius: 6px; }}")
 
     def _build_target_card_new(self, fn) -> QFrame:
         card = self._make_clickable_card(lambda: self._select_target_card('new'))
@@ -932,7 +932,7 @@ class _ProfileCopyDialog(QDialog):
         self._new_name_edit.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_GRAY}; color: white;
-                border: none; border-radius: 0; padding: 4px 10px;
+                border: none; border-radius: 6px; padding: 4px 10px;
             }}
             QLineEdit:disabled {{ background: #2A2A2A; color: #555; }}
         """)
@@ -1003,11 +1003,11 @@ class _ProfileCopyDialog(QDialog):
         sel_fg = "black" if active else "#CCC"
         self._target_list.setStyleSheet(f"""
             QListWidget {{
-                background: {C_PM_BG}; border: 1px solid #3A3A3A; border-radius: 0;
+                background: {C_PM_BG}; border: 1px solid #3A3A3A; border-radius: 6px;
                 color: #E0E0E0; padding: 4px;
                 outline: none;
             }}
-            QListWidget::item {{ padding: 6px 8px; border-radius: 0; }}
+            QListWidget::item {{ padding: 6px 8px; border-radius: 6px; }}
             QListWidget::item:hover {{ background: rgba(255,255,255,0.06); }}
             QListWidget::item:selected {{
                 background: {sel_bg}; color: {sel_fg};
@@ -1017,7 +1017,7 @@ class _ProfileCopyDialog(QDialog):
                 background: transparent; width: 8px; border: none; margin: 0;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 0; min-height: 30px;
+                background: #404040; border-radius: 6px; min-height: 30px;
             }}
             QScrollBar::handle:vertical:hover {{ background: #555; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -1033,7 +1033,7 @@ class _ProfileCopyDialog(QDialog):
             QCheckBox {{ color: #E0E0E0; background: transparent; border: none; spacing: 8px; }}
             QCheckBox:disabled {{ color: #666; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 0;
+                width: 16px; height: 16px; border-radius: 3px;
                 border: 2px solid #555; background: {C_GRAY};
             }}
             QCheckBox::indicator:hover {{ border-color: {C_AMBER}; }}
@@ -1054,7 +1054,7 @@ class _ProfileCopyDialog(QDialog):
         rb.setStyleSheet(f"""
             QRadioButton {{ color: #E0E0E0; background: transparent; border: none; spacing: 8px; }}
             QRadioButton::indicator {{
-                width: 16px; height: 16px; border-radius: 0;
+                width: 16px; height: 16px; border-radius: 8px;
                 border: 2px solid #666; background: {C_PM_BG};
             }}
             QRadioButton::indicator:hover {{ border-color: {C_AMBER}; }}
@@ -1161,7 +1161,7 @@ class _ProfileDetailPanel(QFrame):
         self._apply_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_AMBER}; color: black;
-                border: none; border-radius: 0; padding: 0 16px;
+                border: none; border-radius: 6px; padding: 0 16px;
             }}
             QPushButton:hover {{ background: {C_AMBER_D}; color: white; }}
             QPushButton:disabled {{ background: #404040; color: #888; }}
@@ -1199,7 +1199,7 @@ class _ProfileDetailPanel(QFrame):
             scroll.setStyleSheet("""
                 QScrollArea { background: transparent; border: none; }
                 QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-                QScrollBar::handle:vertical { background: #404040; border-radius: 0; min-height: 30px; }
+                QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
                 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             """)
             body = QWidget()
@@ -1226,7 +1226,7 @@ class _ProfileDetailPanel(QFrame):
                 b.setStyleSheet(f"""
                     QPushButton {{
                         background: {C_CYBER if False else "#0C4A6E"}; color: white;
-                        border: none; border-radius: 0;
+                        border: none; border-radius: 6px;
                     }}
                     QPushButton:hover {{ background: #0284C7; }}
                 """)
@@ -1234,7 +1234,7 @@ class _ProfileDetailPanel(QFrame):
                 b.setStyleSheet(f"""
                     QPushButton {{
                         background: {C_GRAY}; color: #CCC;
-                        border: none; border-radius: 0;
+                        border: none; border-radius: 6px;
                     }}
                     QPushButton:hover {{ background: {C_GRAY_H}; color: white; }}
                 """)
@@ -1502,7 +1502,7 @@ class _ProfileRowWidget(QFrame):
         self.setObjectName("profile_row")
         self.setStyleSheet(f"""
             QFrame#profile_row {{
-                background: {bg}; border-radius: 0; border: {border};
+                background: {bg}; border-radius: 6px; border: {border};
             }}
         """)
 
@@ -1547,7 +1547,7 @@ class _ProfileRowWidget(QFrame):
             QPushButton {{
                 color: {fg}; background: transparent; border: none;
             }}
-            QPushButton:hover {{ background: {hover_bg}; border-radius: 0; }}
+            QPushButton:hover {{ background: {hover_bg}; border-radius: 6px; }}
         """)
         edit_btn.clicked.connect(lambda: self.rename_clicked.emit(self._name))
         layout.addWidget(edit_btn)
@@ -1574,7 +1574,7 @@ class _ProfileRowWidget(QFrame):
                 QPushButton {{
                     color: {fg}; background: transparent; border: none;
                 }}
-                QPushButton:hover {{ background: {hover_bg}; border-radius: 0; }}
+                QPushButton:hover {{ background: {hover_bg}; border-radius: 6px; }}
             """)
             del_btn.clicked.connect(lambda: self.delete_clicked.emit(self._name))
         layout.addWidget(del_btn)
@@ -1593,7 +1593,7 @@ class _ProfileRowWidget(QFrame):
             QPushButton {{
                 color: {fg}; background: transparent; border: none;
             }}
-            QPushButton:hover {{ background: {hover_bg}; border-radius: 0; }}
+            QPushButton:hover {{ background: {hover_bg}; border-radius: 6px; }}
         """)
         exp_btn.clicked.connect(lambda: self.export_clicked.emit(self._name))
         layout.addWidget(exp_btn)
@@ -1641,7 +1641,7 @@ class ProfileManagerDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#pm_container {{
                 background: {C_PM_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -1672,7 +1672,7 @@ class ProfileManagerDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -1732,7 +1732,7 @@ class ProfileManagerDialog(QDialog):
                 padding-left: 10px;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 0; min-height: 30px;
+                background: #404040; border-radius: 6px; min-height: 30px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 height: 0;
@@ -1752,7 +1752,7 @@ class ProfileManagerDialog(QDialog):
         btn_style = f"""
             QPushButton {{
                 background: {C_GRAY}; color: #E0E0E0;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
                 padding: 8px 0px; font-size: 16px;
             }}
             QPushButton:hover {{ background: {C_GRAY_H}; }}

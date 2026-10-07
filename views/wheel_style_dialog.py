@@ -129,13 +129,13 @@ class _CheckToggle(QWidget):
             self._box.setText(icon)
             self._box.setStyleSheet(
                 f"background: {C_ACCENT}; color: #FFF;"
-                " border-radius: 0;"
+                " border-radius: 6px;"
             )
         else:
             self._box.setText("")
             self._box.setStyleSheet(
                 "background: #333; color: transparent;"
-                " border: 1px solid #666; border-radius: 0;"
+                " border: 1px solid #666; border-radius: 6px;"
             )
 
 
@@ -605,7 +605,7 @@ class _TypeCard(QFrame):
             _TypeCard {{
                 background: {C_CARD_NORMAL};
                 border: 2px solid {border};
-                border-radius: 0;
+                border-radius: 6px;
             }}
             _TypeCard:hover {{
                 background: {C_CARD_HOVER};
@@ -700,7 +700,7 @@ class WheelStyleDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#ws_container {{
                 background: {C_BG};
-                border-radius: 0;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -729,7 +729,7 @@ class WheelStyleDialog(QDialog):
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -842,7 +842,7 @@ class WheelStyleDialog(QDialog):
         self._reset_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CARD_NORMAL}; color: #E0E0E0;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CARD_HOVER}; }}
         """)
@@ -856,7 +856,7 @@ class WheelStyleDialog(QDialog):
         cancel_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CARD_NORMAL}; color: #E0E0E0;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CARD_HOVER}; }}
         """)
@@ -870,7 +870,7 @@ class WheelStyleDialog(QDialog):
         save_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_ACCENT}; color: #FFF;
-                border: none; border-radius: 0;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: #E11D48; }}
         """)
@@ -1009,7 +1009,7 @@ class WheelStyleDialog(QDialog):
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {bg}; color: {fg};
-                    border: none; border-radius: 0; padding: 0 8px;
+                    border: none; border-radius: 6px; padding: 0 8px;
                 }}
                 QPushButton:hover {{ background: {bg_h}; color: #FFF; }}
             """)
