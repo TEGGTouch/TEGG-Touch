@@ -46,6 +46,7 @@ from views.update_dialog import UpdateDialog
 from views.voice_settings_dialog import VoiceSettingsDialog, _ChunkSizeDialog
 from views.voice_test_dialog import VoiceTestDialog
 from views.wheel_style_dialog import WheelStyleDialog
+from views.virtual_keyboard import VirtualKeyboard
 
 
 def item(data):
@@ -92,6 +93,7 @@ def main():
         lambda: GamepadInstallDialog(),
         lambda: DiagExportDialog(),
         lambda: ColorPickerDialog(QColor('#F59E0B'), title='选择颜色'),
+        lambda: VirtualKeyboard(),
     ]
     output = ROOT / 'docs'
     report = []
@@ -137,6 +139,10 @@ def main():
             if isinstance(window, GpWheelEditorDialog):
                 window._select_mode_tab(1)
                 capture(window, 'ui-client-direction-advanced')
+            if isinstance(window, WheelStyleDialog):
+                for wheel_type in ('large', 'double', 'dual'):
+                    window._select_type(wheel_type)
+                    capture(window, 'ui-client-wheel-' + wheel_type)
             window.close()
             window.deleteLater()
             app.processEvents()
@@ -144,8 +150,10 @@ def main():
         # Simulate the available logical area of a smaller / highly scaled screen.
         with patch('views.ui_components.dialog_size',
                    side_effect=lambda dlg, preferred: (min(preferred[0], 1216), min(preferred[1], 620))):
-            for index in (2, 5, 7, 8, 11):
+            for index in (2, 5, 7, 8, 11, 12):
                 window = factories[index]()
+                if isinstance(window, WheelStyleDialog):
+                    window._select_type('dual')
                 capture(window, 'ui-compact-' + type(window).__name__)
                 for sc in window.findChildren(QScrollArea):
                     if sc.isVisible():

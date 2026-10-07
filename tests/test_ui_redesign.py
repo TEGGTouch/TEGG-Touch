@@ -300,6 +300,65 @@ class RedesignTests(unittest.TestCase):
                  options=QColorDialog.ColorDialogOption.ShowAlphaChannel)
         self.assertEqual(result.rgba(), chosen.rgba())
 
+    def test_wheel_style_scrolls_only_the_type_list_and_keeps_content_visible(self):
+        from views.wheel_style_dialog import WheelStyleDialog
+        for lang in ('zh-CN', 'en'):
+            load_locale(lang)
+            with patch('views.ui_components.dialog_size', side_effect=lambda dlg, preferred: (1216, 620)):
+                dialog = self.show(WheelStyleDialog(wheel_mode='double'))
+            scrolls = dialog.findChildren(QScrollArea)
+            self.assertEqual(scrolls, [dialog._type_scroll])
+            self.assertGreater(dialog._type_scroll.verticalScrollBar().maximum(), 0)
+            positions = [panel.geometry() for panel in (dialog._preview_panel, dialog._info_panel)]
+            for wheel_type in ('small', 'large', 'double', 'dual'):
+                dialog._select_type(wheel_type)
+                app.processEvents()
+                for panel in (dialog._preview_panel, dialog._info_panel):
+                    self.assertTrue(dialog._ui_body.rect().contains(panel.geometry()))
+                preview = dialog._current_preview
+                self.assertTrue(dialog._preview_panel.rect().contains(preview.geometry()))
+                self.assertGreaterEqual(dialog._reset_btn.width(),
+                    dialog._reset_btn.fontMetrics().horizontalAdvance(dialog._reset_btn.text()) + 64)
+                for track in (dialog._center_mode_wrap, dialog._middle_mode_wrap):
+                    if track.isVisible():
+                        self.assertTrue(dialog._info_panel.rect().contains(
+                            QRect(track.mapTo(dialog._info_panel, QPoint()), track.size())))
+            dialog._type_scroll.verticalScrollBar().setValue(dialog._type_scroll.verticalScrollBar().maximum())
+            app.processEvents()
+            self.assertEqual([panel.geometry() for panel in (dialog._preview_panel, dialog._info_panel)], positions)
+
+    def test_wheel_vertical_choices_keep_ring_modes_visibility_and_save(self):
+        from views.wheel_style_dialog import WheelStyleDialog
+        from core.constants import RING_MODES
+        dialog = self.show(WheelStyleDialog(wheel_mode='double'))
+        for mode in RING_MODES:
+            dialog._center_mode_btns[mode].click()
+            self.assertEqual(dialog._center_ring_mode, mode)
+            self.assertEqual(dialog._current_preview._center_ring_mode, mode)
+        dialog._middle_mode_btns['half_h'].click()
+        dialog._ring_cb.setChecked(False)
+        dialog._center_mode_btns['whole'].click()
+        self.assertEqual(dialog._center_ring_mode, 'octa')
+        self.assertFalse(dialog._current_preview._center_ring_visible)
+        self.action(dialog, t('wheel_style.save')).click()
+        result = dialog.get_result()
+        self.assertEqual(result['wheel_center_ring_mode'], 'octa')
+        self.assertEqual(result['wheel_inner_ring_mode'], 'half_h')
+        self.assertFalse(result['wheel_center_ring_visible'])
+
+    def test_wider_wheel_reset_keeps_inner_and_outer_default_keys(self):
+        from views.wheel_style_dialog import WheelStyleDialog
+        from core.constants import default_wheel_sectors, default_wheel_outer_sectors
+        dialog = self.show(WheelStyleDialog(wheel_mode='large'))
+        dialog._select_type('dual')
+        signal = QSignalSpy(dialog.settings_changed)
+        dialog._reset_btn.click()
+        result = dialog.get_result()
+        self.assertEqual(result['reset_sectors'], default_wheel_sectors())
+        self.assertEqual(result['reset_outer_sectors'], default_wheel_outer_sectors())
+        self.assertEqual(signal[0][0], result)
+        self.assertEqual(dialog.result(), dialog.DialogCode.Accepted)
+
     def test_color_picker_native_layout_does_not_shrink_or_crop_the_shared_shell(self):
         picker = self.show(ColorPickerDialog(QColor('#F59E0B'), title='选择颜色'))
         self.assertEqual((picker.width(), picker.height()), (760, 620))

@@ -19,6 +19,8 @@
   <article><h3>编辑工具栏 · 方案 / 透明度 / 缩放 / 窗口操作；添加模拟组件 / 语音控制 / 软键盘 / 启动</h3><a href="ui-running-toolbar.png"><img src="ui-running-toolbar.png" alt="运行中的三行编辑工具栏"></a></article>
   <article><h3>当前方案的“全配置示范” · 原按钮编辑入口</h3><a href="ui-running-editor.png"><img src="ui-running-editor.png" alt="运行中的按钮编辑器，标题底栏固定，字段和候选分别滚动"></a></article>
   <article><h3>配色面板 · 确认 / 取消移到固定底栏</h3><a href="ui-running-color.png"><img src="ui-running-color.png" alt="运行中的配色面板，灰色取消与琥珀底黑字确定按钮"></a></article>
+  <article><h3>轮盘样式 · 左侧滚动 / 五行环划分 / 加宽重置按钮</h3><a href="ui-running-wheel.png"><img src="ui-running-wheel.png" alt="运行中的轮盘样式，右侧固定配置与五行选择"></a></article>
+  <article><h3>软键盘 · 标准 12 px 外框圆角</h3><a href="ui-running-keyboard.png"><img src="ui-running-keyboard.png" alt="运行中的软键盘，标准外框圆角"></a></article>
   <div class="grid">
    <article><h3>键盘模式 · 1070×157</h3><a href="ui-client-EditToolbar.png"><img src="ui-client-EditToolbar.png" alt="键盘模拟模式"></a></article>
    <article><h3>手柄模式 · 同宽，入口随模式变化</h3><a href="ui-client-EditToolbar-gamepad.png"><img src="ui-client-EditToolbar-gamepad.png" alt="手柄模拟模式"></a></article>
@@ -42,12 +44,15 @@ const groups={
   ['GpWheelEditorDialog','方向盘 · 轻松操控'],
   ['direction-advanced','方向盘 · 复杂设置与 LT / RT'],
   ['GpWheelMouseDialog','方向盘 · 其他鼠标按键'],
-  ['WheelStyleDialog','轮盘样式 · 保留原控件预览'],
+  ['WheelStyleDialog','轮盘样式 · 左侧独立滚动，右侧固定'],
+  ['wheel-large','单环轮盘 · 五行环划分'],
+  ['wheel-double','双环轮盘 · 两套五行选择并列'],
+  ['wheel-dual','单环双轮盘 · 加宽内外方向键重置按钮'],
   ['CenterBandDialog','回中带 · 目标选择'],
   ['ProfileManagerDialog','方案管理 · 查看与应用仍是两个操作']],
  'settings-grid':[['settings-0','快捷键'],['settings-1','光标配色'],['settings-5','按钮配色与方向盘预览'],['settings-2','语言'],['settings-3','日志与诊断'],['settings-4','关于蛋挞']],
  'auxiliary-grid':[['ColorPickerDialog','配色 · 原 Qt 取色组件与标准底栏按钮'],['VoiceTestDialog','语音测试 · 波形 / 结果 / 固定状态栏'],['_ChunkSizeDialog','语音识别延迟'],['_ProfileCopyDialog','方案复制'],['_StyledInputDialog','方案命名'],['_StyledConfirmDialog','方案删除确认'],['_StyledMessageDialog','消息提示'],['GamepadInstallDialog','手柄驱动状态'],['DiagExportDialog','诊断打包状态'],['UpdateDialog','更新提示'],['PostUpdateDialog','更新完成'],['AboutDialog','独立关于窗口']],
- 'compact-grid':[['ButtonEditorDialog','按钮编辑 · 1120×620'],['VoiceSettingsDialog','语音 · 1216×620'],['KeyRemapDialog','映射 · 1216×620'],['HotkeySettingsDialog','设置 · 1216×620'],['GpWheelEditorDialog','方向盘 · 1216×620']]
+ 'compact-grid':[['ButtonEditorDialog','按钮编辑 · 1120×620'],['VoiceSettingsDialog','语音 · 1216×620'],['KeyRemapDialog','映射 · 1216×620'],['HotkeySettingsDialog','设置 · 1216×620'],['GpWheelEditorDialog','方向盘 · 1216×620'],['WheelStyleDialog','轮盘样式 · 左侧滚动，预览等比例适配']]
 };
 for(const [id,entries] of Object.entries(groups)){
  const grid=document.getElementById(id);

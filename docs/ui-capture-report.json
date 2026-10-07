@@ -207,8 +207,38 @@
       "window": "WheelStyleDialog",
       "image": "ui-client-WheelStyleDialog.png",
       "size": [
-        1120,
-        760
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-client-wheel-large.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-client-wheel-double.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-client-wheel-dual.png",
+      "size": [
+        1280,
+        820
       ],
       "header": 64,
       "footer": 72
@@ -334,6 +364,14 @@
       "footer": 72
     },
     {
+      "window": "VirtualKeyboard",
+      "image": "ui-client-VirtualKeyboard.png",
+      "size": [
+        1070,
+        296
+      ]
+    },
+    {
       "window": "ButtonEditorDialog",
       "image": "ui-compact-ButtonEditorDialog.png",
       "size": [
@@ -376,6 +414,16 @@
     {
       "window": "HotkeySettingsDialog",
       "image": "ui-compact-HotkeySettingsDialog.png",
+      "size": [
+        1216,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-compact-WheelStyleDialog.png",
       "size": [
         1216,
         620

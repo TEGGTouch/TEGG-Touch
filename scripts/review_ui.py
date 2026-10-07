@@ -1,6 +1,6 @@
 """Start the actual client and open an existing button editor for UI review.
 
-Run: python scripts/review_ui.py [--color]
+Run: python scripts/review_ui.py [--color | --wheel]
 Uses main.main(), the current branch's normal profile and existing editor route.
 Captures only application widgets, never the desktop behind the overlay.
 """
@@ -36,6 +36,35 @@ def open_review():
         QTimer.singleShot(500, lambda: editor.grab().save(str(ROOT / 'docs' / 'ui-running-editor.png')))
     if '--color' in sys.argv:
         QTimer.singleShot(800, lambda: open_color_review(window, editor))
+    elif '--wheel' in sys.argv:
+        QTimer.singleShot(800, lambda: open_wheel_review(window, editor))
+
+
+def open_wheel_review(window, editor):
+    if editor:
+        editor.close()
+    keyboard = window._virtual_keyboard
+    keyboard.position_above_toolbar(window._edit_toolbar)
+    keyboard.show()
+
+    def open_style():
+        keyboard.grab().save(str(ROOT / 'docs' / 'ui-running-keyboard.png'))
+        keyboard.hide()
+
+        def capture_style():
+            from views.wheel_style_dialog import WheelStyleDialog
+            dialog = next((w for w in QApplication.instance().topLevelWidgets()
+                           if isinstance(w, WheelStyleDialog) and w.isVisible()), None)
+            if dialog:
+                # Review the widest reset label; this remains an unsaved selection.
+                dialog._select_type('dual')
+                QTimer.singleShot(200, lambda: dialog.grab().save(
+                    str(ROOT / 'docs' / 'ui-running-wheel.png')))
+
+        QTimer.singleShot(400, capture_style)
+        window._scene._on_wheel_style_clicked()
+
+    QTimer.singleShot(300, open_style)
 
 
 def open_color_review(window, editor):

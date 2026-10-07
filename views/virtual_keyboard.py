@@ -15,6 +15,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor, QFont, QFontDatabase
 
 from core.i18n import t, get_font
+from views.ui_components import OUTER_RADIUS
 from core.input_engine import trigger
 
 # ── 尺寸常量 ──
@@ -255,7 +256,7 @@ class VirtualKeyboard(QWidget):
         container.setStyleSheet(f"""
             QFrame#kb_container {{
                 background: {C_PANEL};
-                border-radius: 4px;
+                border-radius: {OUTER_RADIUS}px;
                 border: 1px solid #444;
             }}
         """)

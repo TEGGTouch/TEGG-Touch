@@ -6,7 +6,7 @@ TEGG Touch 蛋挞 (PyQt6) - wheel_style_dialog.py
 import math
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QWidget, QFrame, QApplication, QCheckBox, QSizePolicy,
+    QWidget, QFrame, QApplication, QCheckBox, QSizePolicy, QLayout,
 )
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QSize
 from PyQt6.QtGui import (
@@ -14,7 +14,7 @@ from PyQt6.QtGui import (
 )
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, segmented_row
+from views.ui_components import SMALL_RADIUS, SCROLL_GAP, SegmentedControl, scroll_widget
 from core.constants import (
     WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
     WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE,
@@ -632,6 +632,30 @@ class _TypeCard(QFrame):
 # WheelStyleDialog — 主弹窗
 # ═══════════════════════════════════════════════════════
 
+class _PreviewPanel(QWidget):
+    """Keep the preview visible when the available height is smaller than 1:1."""
+
+    def __init__(self):
+        super().__init__()
+        self.preview = None
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+
+    def fit_preview(self):
+        preview = self.preview
+        if preview is None:
+            return
+        diameter = preview._wtype['r_outer'] * 2
+        available = self.rect().marginsRemoved(self.layout().contentsMargins())
+        preview._scale = min(1.0, max(1, min(available.width(), available.height()) - 20) / diameter)
+        size = int(diameter * preview._scale) + 20
+        preview.setFixedSize(size, size)
+        preview.update()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.fit_preview()
+
+
 class WheelStyleDialog(QDialog):
     """轮盘样式管理弹窗"""
 
@@ -640,7 +664,7 @@ class WheelStyleDialog(QDialog):
     WIN_W = 1060
     WIN_H = 720
     PAD = 20
-    INFO_W = 220
+    INFO_W = 360
 
     def __init__(self, wheel_mode='small', center_ring_visible=True,
                  middle_ring_visible=True,
@@ -670,7 +694,7 @@ class WheelStyleDialog(QDialog):
 
         self._init_ui()
         from views.ui_components import finish_dialog
-        finish_dialog(self, (1120, 760), actions=[self._reset_btn, t("wheel_style.cancel"), t("wheel_style.save")], columns=False, guidance=('① 选择轮盘样式 → ② 调整环与分区 → ③ 确定', '1 Choose a wheel style → 2 Set rings and sectors → 3 Confirm'))
+        finish_dialog(self, (1280, 820), actions=[self._reset_btn, t("wheel_style.cancel"), t("wheel_style.save")], columns=False, guidance=('① 选择轮盘样式 → ② 调整环与分区 → ③ 确定', '1 Choose a wheel style → 2 Set rings and sectors → 3 Confirm'))
         self._select_type(self._selected_type)
         self._center_on_screen()
         self._drag_pos = None
@@ -759,7 +783,9 @@ class WheelStyleDialog(QDialog):
         left_widget.setFixedWidth(154)
         left_widget.setContentsMargins(0, 0, 0, 0)
         left_widget.setStyleSheet("background: transparent;")
-        body.addWidget(left_widget)
+        self._type_scroll = scroll_widget(left_widget)
+        self._type_scroll.setFixedWidth(154 + SCROLL_GAP + 8)
+        body.addWidget(self._type_scroll)
 
         # 分隔线 1
         div1 = QFrame()
@@ -776,9 +802,11 @@ class WheelStyleDialog(QDialog):
         self._current_preview = None
         mid.addLayout(self._preview_container, 1)
 
-        mid_widget = QWidget()
+        mid_widget = _PreviewPanel()
         mid_widget.setLayout(mid)
+        mid.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
         mid_widget.setStyleSheet("background: transparent;")
+        self._preview_panel = mid_widget
         body.addWidget(mid_widget, 1)
 
         body.addSpacing(10)
@@ -807,31 +835,48 @@ class WheelStyleDialog(QDialog):
         info_sep.setStyleSheet("background: #444;")
         info_panel.addWidget(info_sep)
 
+        # 两套环划分并列，保持右侧配置可见，不增加滚动区域。
+        ring_groups = QHBoxLayout()
+        ring_groups.setContentsMargins(0, 0, 0, 0)
+        ring_groups.setSpacing(12)
+        center_group = QWidget()
+        center_layout = QVBoxLayout(center_group)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(10)
+
         # 设置区域 — 带勾号 checkbox
         self._ring_cb = _CheckToggle(
             t("wheel_style.show_center_ring"), fn,
             checked=self._center_ring_visible)
         self._ring_cb.toggled.connect(self._on_ring_toggled)
-        info_panel.addWidget(self._ring_cb)
+        center_layout.addWidget(self._ring_cb)
 
         # 中心环 mode 按钮组 (整环 / 上下 / 左右 / 四分 / 八分)
-        self._center_mode_btns, self._center_mode_wrap = self._build_ring_mode_row(
+        self._center_mode_btns, self._center_mode_wrap = self._build_ring_mode_selector(
             fn, self._center_ring_mode, self._on_center_mode_clicked)
-        info_panel.addWidget(self._center_mode_wrap)
+        center_layout.addWidget(self._center_mode_wrap)
+        ring_groups.addWidget(center_group, 1)
+        self._center_group = center_group
 
-        info_panel.addSpacing(6)
+        middle_group = QWidget()
+        middle_layout = QVBoxLayout(middle_group)
+        middle_layout.setContentsMargins(0, 0, 0, 0)
+        middle_layout.setSpacing(10)
 
         # 中二环复选框 (仅双环模式)
         self._middle_ring_cb = _CheckToggle(
             t("wheel_style.show_middle_ring"), fn,
             checked=self._middle_ring_visible)
         self._middle_ring_cb.toggled.connect(self._on_middle_ring_toggled)
-        info_panel.addWidget(self._middle_ring_cb)
+        middle_layout.addWidget(self._middle_ring_cb)
 
         # 中二环 mode 按钮组
-        self._middle_mode_btns, self._middle_mode_wrap = self._build_ring_mode_row(
+        self._middle_mode_btns, self._middle_mode_wrap = self._build_ring_mode_selector(
             fn, self._middle_ring_mode, self._on_middle_mode_clicked)
-        info_panel.addWidget(self._middle_mode_wrap)
+        middle_layout.addWidget(self._middle_mode_wrap)
+        ring_groups.addWidget(middle_group, 1)
+        self._middle_group = middle_group
+        info_panel.addLayout(ring_groups)
 
         info_panel.addStretch()
 
@@ -882,6 +927,7 @@ class WheelStyleDialog(QDialog):
         info_widget.setLayout(info_panel)
         info_widget.setFixedWidth(self.INFO_W)
         info_widget.setStyleSheet("background: transparent;")
+        self._info_panel = info_widget
         body.addWidget(info_widget)
 
         root.addLayout(body, 1)
@@ -905,10 +951,14 @@ class WheelStyleDialog(QDialog):
         preview.area_clicked.connect(self._on_area_clicked)
         self._preview_container.addWidget(preview, 0, Qt.AlignmentFlag.AlignCenter)
         self._current_preview = preview
+        self._preview_panel.preview = preview
+        self._preview_panel.fit_preview()
 
         # 更新右侧信息面板
         self._info_title.setText(_wheel_type_name(type_id))
         self._info_desc.setText(t(f"wheel_style.desc_{type_id}"))
+        self._center_group.setVisible(type_id != 'small')
+        self._middle_group.setVisible(type_id == 'double')
 
         # 复选框可见性:
         # small: 无环，两个 checkbox 都隐藏
@@ -943,6 +993,8 @@ class WheelStyleDialog(QDialog):
             self._middle_mode_wrap.setVisible(False)
             self._reset_btn.setText(t("wheel_style.reset_sectors"))
         # 更新 mode 按钮 enabled (依赖勾选状态)
+        self._reset_btn.setMinimumWidth(max(180, self._reset_btn.fontMetrics().horizontalAdvance(
+            self._reset_btn.text()) + 64))
         self._update_mode_btns_enabled()
 
         # 防止 widget 重建导致弹窗掉到 overlay 后面
@@ -963,48 +1015,27 @@ class WheelStyleDialog(QDialog):
 
     # ── 中心环 / 中二环 mode 按钮 ──
 
-    def _build_ring_mode_row(self, fn, current_mode: str, on_click):
-        """生成 5 个 mode 按钮容器 widget (两行: 上 3 下 2)。
-
-        返回 (btns_dict, container_widget)。btns_dict: mode_id → QPushButton
-        """
-        wrap = QWidget()
-        wrap.setStyleSheet("background: transparent;")
-        col = QVBoxLayout(wrap)
-        col.setContentsMargins(28, 4, 0, 0)
-        col.setSpacing(4)
-
-        rows = [RING_MODES[:3], RING_MODES[3:]]   # 上: whole/half_h/half_v, 下: quad/octa
+    def _build_ring_mode_selector(self, fn, current_mode: str, on_click):
+        """五行共用一个深灰槽，复用原模式选择与启用逻辑。"""
         btns = {}
-        tracks = []
-        for row_modes in rows:
-            row = QHBoxLayout()
-            row.setSpacing(4)
-            for mode in row_modes:
-                label = t(f"wheel_style.ring_mode_{mode}")
-                btn = QPushButton(label)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setFixedHeight(24)
-                btn.setFont(_make_font(fn, 11))
-                btn.setToolTip(t(f"wheel_style.ring_mode_tip_{mode}"))
-                btn.clicked.connect(lambda _, m=mode: on_click(m))
-                row.addWidget(btn)
-                btns[mode] = btn
-            row.addStretch()
-            tracks.append(segmented_row(row, {mode: btns[mode] for mode in row_modes}))
-            col.addLayout(row)
+        for mode in RING_MODES:
+            btn = QPushButton(t(f"wheel_style.ring_mode_{mode}"))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(40)
+            btn.setFont(_make_font(fn, 16))
+            btn.setToolTip(t(f"wheel_style.ring_mode_tip_{mode}"))
+            btn.clicked.connect(lambda _, m=mode: on_click(m))
+            btns[mode] = btn
+        track = SegmentedControl(btns, orientation=Qt.Orientation.Vertical)
         for btn in btns.values():
-            btn._ring_tracks = tracks
+            btn._ring_track = track
         self._apply_mode_btns_style(btns, current_mode, enabled=True)
-        return btns, wrap
+        return btns, track
 
     def _apply_mode_btns_style(self, btns: dict, current: str, enabled: bool):
         for button in btns.values():
             button.setEnabled(enabled)
-        for track in next(iter(btns.values()))._ring_tracks:
-            track.set_selected(current)
-            if current not in track.buttons:
-                track.clear_selection()
+        next(iter(btns.values()))._ring_track.set_selected(current)
 
     def _on_center_mode_clicked(self, mode: str):
         self._center_ring_mode = mode

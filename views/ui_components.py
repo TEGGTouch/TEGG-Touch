@@ -34,8 +34,9 @@ def text_on_surface(background, normal='#FFFFFF'):
 class SegmentedControl(QFrame):
     """A shared recessed track; adopt existing buttons without changing their clicks."""
 
-    def __init__(self, buttons, parent=None):
+    def __init__(self, buttons, parent=None, orientation=Qt.Orientation.Horizontal):
         super().__init__(parent)
+        self._vertical = orientation == Qt.Orientation.Vertical
         self.buttons = dict(buttons) if isinstance(buttons, dict) else dict(enumerate(buttons))
         self._selected = None
         self.setObjectName('ui_segments')
@@ -47,12 +48,12 @@ class SegmentedControl(QFrame):
         self._animation = QPropertyAnimation(self._thumb, b'geometry', self)
         self._animation.setDuration(160)
         self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        row = QHBoxLayout(self)
+        row = QVBoxLayout(self) if self._vertical else QHBoxLayout(self)
         row.setContentsMargins(4, 4, 4, 4)
         row.setSpacing(0)
         height = max((button.minimumHeight() for button in self.buttons.values()), default=32)
         height = max(24, height)
-        self.setFixedHeight(height + 8)
+        self.setFixedHeight(height * (len(self.buttons) if self._vertical else 1) + 8)
         for key, button in self.buttons.items():
             button.setFixedHeight(height)
             button.setMinimumWidth(0)
@@ -141,6 +142,8 @@ class SegmentedControl(QFrame):
         self._place_thumb()
 
     def _fit_buttons(self):
+        if self._vertical:
+            return
         available = max(0, self.width() - 8)
         required = [button.fontMetrics().horizontalAdvance(button.text()) + 16 +
                     (button.iconSize().width() + 4 if not button.icon().isNull() else 0)
