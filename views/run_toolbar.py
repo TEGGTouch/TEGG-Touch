@@ -1,6 +1,6 @@
 """
 TEGG Touch 蛋挞 (PyQt6) - run_toolbar.py
-运行模式工具栏 — 60px 高单行，240px 纯文字方案区域。
+运行模式工具栏 — 60px 高单行，160px 纯文字方案区域。
 保留光标、悬浮球、语音、回中、显隐、软键盘、穿透与停止入口。
 """
 
@@ -31,7 +31,7 @@ C_BLUE_H = "#2196F3"
 # 运行工具栏最小宽度与固定高度
 RUN_W = 1070
 RUN_H = 60
-RUN_PROFILE_W = 240
+RUN_PROFILE_W = 160
 RUN_BOTTOM_MARGIN = 50
 
 

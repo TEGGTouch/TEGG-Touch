@@ -29,7 +29,7 @@
       "window": "RunToolbar",
       "image": "ui-client-RunToolbar.png",
       "size": [
-        1300,
+        1220,
         60
       ]
     },
@@ -37,7 +37,7 @@
       "window": "RunToolbar",
       "image": "ui-client-RunToolbar-long-name.png",
       "size": [
-        1300,
+        1220,
         60
       ]
     },
