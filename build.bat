@@ -50,8 +50,9 @@ xcopy /E /I /Y "locales" "%OUT%\locales" >nul
 :: 语音模型 (用户可管理)
 xcopy /E /I /Y "models\vosk" "%OUT%\models\vosk" >nul
 
-:: 默认设置
-xcopy /E /I /Y "settings" "%OUT%\settings" >nul
+:: 不复制开发机 settings：可能含 agent.json 密钥及运行缓存。
+:: 缺少此目录时，程序从内置默认值初始化用户设置。
+if not exist "%OUT%\settings" mkdir "%OUT%\settings"
 
 :: 默认方案模板
 if not exist "%OUT%\core" mkdir "%OUT%\core"
@@ -70,6 +71,11 @@ rename "dist\TEGGTouch" "TEGGTouch_v%VER%"
 set OUT=%VOUT%
 
 echo [5/5] 验证产物...
+python scripts\check_release_config.py "%OUT%"
+if errorlevel 1 (
+    echo ✗ 发布配置检查失败，停止打包。
+    exit /b 1
+)
 echo      - TEGGTouch.exe
 if exist "%OUT%\locales"        (echo      - locales        √) else (echo      - locales        ✗)
 if exist "%OUT%\assets"         (echo      - assets         √) else (echo      - assets         ✗)

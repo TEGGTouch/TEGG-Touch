@@ -22,7 +22,7 @@ GitHub Release / OSS 下载地址、版本标签和官网版本更新方式保�
 不需要 GitHub API、代理或 OSS 密钥。清单格式见 `core/update_manifest.py`。
 `pack_release.bat` 只生成本地 ZIP，不再隐式上传；本机旧辅助脚本及凭证继续忽略，不提交。
 
-1. Windows 构建并完成测试，ZIP 文件名仍为 `TEGGTouch_v<版本>.zip`。
+1. Windows 构建并完成测试，ZIP 文件名仍为 `TEGGTouch_v<版本>.zip`。`build.bat` 不复制本机 `settings`；缺少配置时程序使用内置默认值。构建 / 压缩 / 发布前运行 `scripts/check_release_config.py`，拦截开发凭证、`agent.json`、运行缓存及嵌套非空密钥字段；公共 CA 证书与不含凭证的方案 / 快捷键保留。
 2. 在 `docs/release-notes/<版本>.md` 写更新说明；执行 `python scripts/publish_release.py` 只做本地校验。
 3. 获准正式发布后执行 `python scripts/publish_release.py --publish`：先上传 ZIP，回读并验证大小/SHA256，追加 `releases.json` 历史索引，再发布 `latest.json`（两份 JSON 均 no-cache）。不要并发运行发布脚本。
 4. ZIP 不覆盖同名历史版本，拒绝 preview 进入 stable 清单，拒绝将清单降级或用不同文件替换同一版本。

@@ -26,6 +26,10 @@ if not exist "%DIST_DIR%\TEGGTouch.exe" (
     exit /b 1
 )
 
+:: 压缩前拦截开发配置、密钥和缓存，避免生成含凭证的发布包。
+python scripts\check_release_config.py "%DIST_DIR%"
+if errorlevel 1 exit /b 1
+
 :: 清理旧发布包
 if exist "dist\%RELEASE_NAME%.zip" del /q "dist\%RELEASE_NAME%.zip"
 
@@ -35,6 +39,8 @@ echo 正在压缩发布包: dist\%RELEASE_NAME%.zip ...
 pwsh -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath 'dist\%RELEASE_NAME%.zip' -Force"
 
 if exist "dist\%RELEASE_NAME%.zip" (
+    python scripts\check_release_config.py "dist\%RELEASE_NAME%.zip"
+    if errorlevel 1 exit /b 1
     echo.
     echo ==========================================
     echo    ★ 发布包生成成功！ v%VER% ★
