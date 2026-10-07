@@ -18,6 +18,7 @@ from PyQt6.QtCore import Qt, QPoint, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from core.i18n import t, get_font
+from views.ui_components import RECESSED_BG, segmented_row
 from core.constants import (
     APP_DIR, APP_PREFIX, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
     ACTION_COLORS,
@@ -28,6 +29,8 @@ from views.button_editor_dialog import (
     TagInput, _FlowWidget, _ColorDot, _make_font, _detect_icon_font, _ICON_FONT,
     _get_key_categories, _get_mouse_keys, populate_gp_palette,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 
 _C_BG = C_PM_BG
@@ -76,7 +79,7 @@ class GpWheelMouseDialog(QDialog):
     xmacros_changed = pyqtSignal(list)   # 统一混合宏池变更
     apps_changed = pyqtSignal(list)      # 应用池变更
 
-    LEFT_W = 440
+    LEFT_W = 480
     RIGHT_W = 440
     PADDING = 20
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20    # 940
@@ -104,6 +107,8 @@ class GpWheelMouseDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1120, 760), actions=["取消", "保存"], columns=True, guidance=None)
         self._center_on_screen()
         self._drag_pos = None
 
@@ -118,7 +123,7 @@ class GpWheelMouseDialog(QDialog):
         container.setObjectName("gpwm_container")
         container.setStyleSheet(f"""
             QFrame#gpwm_container {{
-                background: {_C_BG}; border-radius: 4px; border: 1px solid {_C_BORDER};
+                background: {_C_BG}; border-radius: 6px; border: 1px solid {_C_BORDER};
             }}
         """)
         outer.addWidget(container)
@@ -195,7 +200,7 @@ class GpWheelMouseDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         """)
         body = QWidget()
@@ -282,6 +287,7 @@ class GpWheelMouseDialog(QDialog):
             b.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
             tab_row.addWidget(b)
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._tab_btns)
         wlay.addLayout(tab_row)
 
         self._tab_stack = QStackedWidget()
@@ -302,7 +308,7 @@ class GpWheelMouseDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         """)
         return scroll
@@ -404,7 +410,7 @@ class GpWheelMouseDialog(QDialog):
             QListWidget::item:selected {{ background: transparent; }}
             QListWidget::item:hover {{ background: transparent; }}
             QScrollBar:vertical {{ background: transparent; width: 8px; border: none; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px; min-height: 30px; }}
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 6px; min-height: 30px; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
         """)
         lay.addWidget(self._macro_list, 1)
@@ -521,18 +527,7 @@ class GpWheelMouseDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = f"""QPushButton {{
-            background: transparent; color: #FFF; border: none;
-            border-bottom: 2px solid {C_CYBER_H};
-            border-radius: 0; padding: 0 14px 4px 14px;
-        }}"""
-        off = f"""QPushButton {{
-            background: transparent; color: #AAA; border: none;
-            border-bottom: 2px solid transparent;
-            border-radius: 0; padding: 0 14px 4px 14px;
-        }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        for ix, b in enumerate(self._tab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     # ── 面板点击 / 焦点 ──
 

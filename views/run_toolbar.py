@@ -1,20 +1,17 @@
 """
 TEGG Touch 蛋挞 (PyQt6) - run_toolbar.py
-运行模式工具栏 — 匹配原版 Tkinter 布局。
-
-原版布局 (单行, 1070×60):
-  DragHandle | Profile(210px,#AAA) | Sep | AutoCenter(150px) | ShowHide(160px)
-  | Keyboard(140px) | Passthrough(180px,2-state) | Sep | Stop(130px)
+运行模式工具栏 — 60px 高单行，160px 纯文字方案区域。
+保留光标、悬浮球、语音、回中、显隐、软键盘、穿透与停止入口。
 """
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QFrame,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QIcon, QPixmap
+from PyQt6.QtGui import QIcon, QPixmap
 
 from core.i18n import t, get_font
-from core.constants import PT_ON, PT_OFF, TOOLBAR_WIDTH
+from core.constants import PT_ON, PT_OFF
 
 # 共用组件 & 颜色常量 (从 edit_toolbar 导入)
 from views.edit_toolbar import (
@@ -22,8 +19,8 @@ from views.edit_toolbar import (
     C_GRAY, C_GRAY_H, C_CLOSE, C_CLOSE_H, C_PANEL,
     C_AMBER, C_AMBER_D,
 )
-import views.edit_toolbar as _et
 from views.toolbar_tip_widget import ToolbarTipWidget
+from views.ui_components import OUTER_RADIUS
 
 # 运行工具栏专用颜色
 C_GREEN = "#176F2C"
@@ -31,9 +28,10 @@ C_GREEN_H = "#1E8E38"
 C_BLUE = "#1976D2"
 C_BLUE_H = "#2196F3"
 
-# 运行工具栏尺寸 (与软键盘宽度保持一致)
+# 运行工具栏最小宽度与固定高度
 RUN_W = 1070
 RUN_H = 60
+RUN_PROFILE_W = 160
 RUN_BOTTOM_MARGIN = 50
 
 
@@ -71,6 +69,7 @@ class RunToolbar(QWidget):
         self._tip = ToolbarTipWidget()
 
         self._init_ui()
+        self.setFixedHeight(RUN_H)
         self._position_toolbar()
 
     # ── UI 构建 ──────────────────────────────────────────────
@@ -105,8 +104,8 @@ class RunToolbar(QWidget):
         container.setStyleSheet(f"""
             QFrame#rt_container {{
                 background: {C_PANEL};
-                border-radius: 4px;
-                border: 1px solid #444;
+                border-radius: 12px;
+                border: none;
             }}
             QToolTip {{
                 background: #1A1A1A;
@@ -125,27 +124,12 @@ class RunToolbar(QWidget):
         # ── 1. 拖拽把手 ──
         row.addWidget(_DragHandle())
 
-        # ── 2. 方案 icon + 名称 (与编辑工具栏一致) ──
-        prof_box = QHBoxLayout()
-        prof_box.setSpacing(6)
-        prof_box.setContentsMargins(0, 0, 0, 0)
-
-        if _et._ICON_FONT:
-            self._prof_icon = QLabel("\uE765")
-            self._prof_icon.setFont(_make_font(_et._ICON_FONT, 16))
-        else:
-            self._prof_icon = QLabel("\U0001F4C4")
-            self._prof_icon.setFont(_make_font(fn, 16))
-        self._prof_icon.setStyleSheet("color: #AAA; background: transparent;")
-        prof_box.addWidget(self._prof_icon)
-
+        # ── 2. 方案名称：与按钮同字号，纯文字显示更多信息 ──
         self._profile_lbl = QLabel()
-        self._profile_lbl.setFont(_make_font(fn, 16, bold=True))
+        self._profile_lbl.setFont(_make_font(fn, 14))
         self._profile_lbl.setStyleSheet("color: #AAA; background: transparent;")
-        self._profile_lbl.setMaximumWidth(210)
-        prof_box.addWidget(self._profile_lbl)
-
-        row.addLayout(prof_box)
+        self._profile_lbl.setFixedWidth(RUN_PROFILE_W)
+        row.addWidget(self._profile_lbl)
 
         # 弹簧 → 将所有按钮推到右侧
         row.addStretch()
@@ -325,11 +309,11 @@ class RunToolbar(QWidget):
                 f"color: {m['fg']}; background: transparent;")
 
     def set_profile_name(self, name):
-        """显示 icon + 方案名称（过长则截断为 ...）"""
-        from PyQt6.QtGui import QFontMetrics
-        metrics = QFontMetrics(self._profile_lbl.font())
+        """显示方案名称（过长则截断为 ...，悬停可查看全文）。"""
+        from PyQt6.QtGui import QFontMetricsF
+        metrics = QFontMetricsF(self._profile_lbl.font())
         elided = metrics.elidedText(
-            name, Qt.TextElideMode.ElideRight, self._profile_lbl.maximumWidth())
+            name, Qt.TextElideMode.ElideRight, self._profile_lbl.width() - 4)
         self._profile_lbl.setText(elided)
         self._profile_lbl.setToolTip(name)  # 完整名称显示在 tooltip
 
@@ -341,7 +325,7 @@ class RunToolbar(QWidget):
         _ps = QApplication.primaryScreen()
         screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
         self.adjustSize()
-        w = min(RUN_W, screen.width() - 40)
+        w = min(max(RUN_W, self.minimumSizeHint().width()), screen.width() - 40)
         h = self.sizeHint().height()
         x = (screen.width() - w) // 2
         y = screen.height() - h - RUN_BOTTOM_MARGIN
@@ -355,7 +339,7 @@ class RunToolbar(QWidget):
             _ps = QApplication.primaryScreen()
             screen = _ps.geometry() if _ps else QRect(0, 0, 1920, 1080)
             self.adjustSize()
-            w = min(RUN_W, screen.width() - 40)
+            w = min(max(RUN_W, self.minimumSizeHint().width()), screen.width() - 40)
             h = self.sizeHint().height()
             # 确保在屏幕范围内
             x = max(0, min(x, screen.width() - w))
@@ -429,7 +413,7 @@ class CollapsedBubble(QWidget):
     stop_requested = pyqtSignal()
     moved = pyqtSignal(int, int)         # 拖拽结束后发出 (x, y)
 
-    SIZE = 56
+    SIZE = RUN_H
     DRAG_THRESHOLD = 4    # 鼠标移动 >4px 才视为拖拽, 否则当点击
 
     def __init__(self, parent=None):
@@ -464,15 +448,15 @@ class CollapsedBubble(QWidget):
         self._frame = frame
         frame.installEventFilter(self)
         frame.setObjectName("bubble")
-        # hover 比常态背景加深 ~12%，可感知但不刺眼
+        # 与运行工具栏同一面板灰；悬停通过边框提示。
         frame.setStyleSheet(f"""
             QFrame#bubble {{
                 background: {C_PANEL};
-                border-radius: 10px;
+                border-radius: {OUTER_RADIUS}px;
                 border: 1px solid #444;
             }}
             QFrame#bubble:hover {{
-                background: #1F1F1F;
+                background: {C_PANEL};
                 border: 1px solid #555;
             }}
         """)
@@ -483,11 +467,12 @@ class CollapsedBubble(QWidget):
         lbl = QLabel()
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet("background: transparent;")
-        # 从 assets/icon.ico 加载 (内含多分辨率), 缩放到 40px 居中显示
+        # 从 assets/icon.ico 加载 (内含多分辨率)，保持正方形并居中显示。
         import os
         from core.constants import APP_DIR
         _ico_path = os.path.join(APP_DIR, "assets", "icon.ico")
-        _pm = QIcon(_ico_path).pixmap(40, 40) if os.path.exists(_ico_path) else QPixmap()
+        icon_size = self.SIZE - 16
+        _pm = QIcon(_ico_path).pixmap(icon_size, icon_size) if os.path.exists(_ico_path) else QPixmap()
         if not _pm.isNull():
             lbl.setPixmap(_pm)
         else:

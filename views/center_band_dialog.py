@@ -66,6 +66,8 @@ class CenterBandDialog(QDialog):
         self.setFixedSize(self.WIN_W, self.WIN_H)
 
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (520, 520), actions=[t("editor.copy"), t("editor.delete"), t("gp_stick_editor.save")], columns=False, guidance=('选择回中目标', 'Choose a recenter target'))
         self._center_on_screen()
         self._drag_pos = None
 
@@ -82,7 +84,7 @@ class CenterBandDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#cb_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)

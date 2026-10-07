@@ -114,6 +114,9 @@ class DiagExportDialog(QDialog):
         self.setFixedSize(440, 220)
         self._result_path: str | None = None
         self._build_ui()
+        from views.ui_components import finish_dialog
+        header_close = finish_dialog(self, (520, 320), actions=[self._open_btn, self._close_btn], columns=False, guidance=None)
+        header_close.hide()  # Original export cannot be closed while packing.
         self._center_on_screen()
         # 自动开始
         self._start()
@@ -123,6 +126,7 @@ class DiagExportDialog(QDialog):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         container = QFrame()
+        container.setObjectName("diag_container")
         container.setStyleSheet(f"""
             QFrame {{
                 background: {C_PM_BG};
@@ -152,10 +156,10 @@ class DiagExportDialog(QDialog):
         self._bar.setFixedHeight(8)
         self._bar.setStyleSheet(f"""
             QProgressBar {{
-                background: #2A2A2A; border: none; border-radius: 4px;
+                background: #2A2A2A; border: none; border-radius: 6px;
             }}
             QProgressBar::chunk {{
-                background: {C_CYBER_H}; border-radius: 4px;
+                background: {C_CYBER_H}; border-radius: 6px;
             }}
         """)
         v.addWidget(self._bar)

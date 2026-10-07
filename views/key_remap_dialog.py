@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS, segmented_row, RECESSED_BG
 from core.constants import GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX
 from core import keyboard_hook
 
@@ -104,11 +105,11 @@ class _CheckToggle(QWidget):
             self._box.setText("✓")
             self._box.setStyleSheet(
                 f"background: {self._accent}; color: #1A1A1A; "
-                f"border-radius: 4px; font-weight: bold;")
+                f"border-radius: {SMALL_RADIUS}px; font-weight: bold;")
         else:
             self._box.setText("")
             self._box.setStyleSheet(
-                "background: #2A2A2A; border: 2px solid #555; border-radius: 4px;")
+                f"background: #2A2A2A; border: 2px solid #555; border-radius: {SMALL_RADIUS}px;")
 
 
 class KeyRemapDialog(QDialog):
@@ -118,12 +119,12 @@ class KeyRemapDialog(QDialog):
     xmacros_changed = pyqtSignal(list)
     apps_changed = pyqtSignal(list)
 
-    COL1_W = 260
-    COL2_W = 320
+    COL1_W = 240
+    COL2_W = 390
     PADDING = 20
     GUTTER = 20
-    WIN_W = 1160
-    WIN_H = 860
+    WIN_W = 1280
+    WIN_H = 820
 
     CAPTURE_TIMEOUT_MS = 8000
 
@@ -151,6 +152,8 @@ class KeyRemapDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1280, 820), actions=[t("key_remap.add"), t("key_remap.delete"), t("key_remap.save")], columns=True, guidance=('① 选择或新增映射 → ② 捕获来源键 → ③ 设置目标与行为', '1 Select or add a mapping → 2 Capture its source → 3 Set the target and behavior'), scope=self._editor_form, scope_actions=[t("key_remap.delete"), t("key_remap.save")])
         self._rebuild_list()
         if self._remaps:
             self._list.setCurrentRow(0)
@@ -170,7 +173,7 @@ class KeyRemapDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#kr_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -208,12 +211,6 @@ class KeyRemapDialog(QDialog):
         title_row.addWidget(close_btn)
         root.addLayout(title_row)
 
-        tip = QLabel(t("key_remap.tip"))
-        tip.setFont(_make_font(fn, 14))
-        tip.setStyleSheet("color: #888; background: transparent;")
-        tip.setWordWrap(True)
-        root.addWidget(tip)
-        root.addSpacing(14)
 
         # ── 三列 ──
         columns = QHBoxLayout()
@@ -265,7 +262,7 @@ class KeyRemapDialog(QDialog):
             /* 选中行被 hover 时不能被上面那条 hover 规则改成白字 —— 琥珀底必须配黑字 */
             QListWidget::item:selected:hover {{ background: {C_ACCENT}; color: #1A1A1A; }}
             QScrollBar:vertical {{ background: transparent; width: 8px; border: none; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px;
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 6px;
                                            min-height: 30px; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -357,6 +354,7 @@ class KeyRemapDialog(QDialog):
             b.clicked.connect(lambda _, kk=k: self._on_mode_clicked(kk))
             mode_row.addWidget(b)
             self._mode_btns[k] = b
+        self._mode_segments = segmented_row(mode_row, self._mode_btns)
         form.addLayout(mode_row)
         self._mode_hint = QLabel(t("key_remap.mode_hold_hint"))
         self._mode_hint.setFont(_make_font(fn, 12))
@@ -407,10 +405,14 @@ class KeyRemapDialog(QDialog):
         has = 0 <= self._current_idx < len(self._remaps)
         self._editor_form.setVisible(has)
         self._editor_hint.setVisible(not has)
+        for button in getattr(self, "_ui_actions", []):
+            if button.text() in (t("key_remap.delete"), t("key_remap.save"),):
+                button.setEnabled(has)
 
     # ── 物理键捕获 ──
 
     def _update_src_btn(self):
+        self._src_btn.setProperty('ui_input_surface', True)
         if self._capturing:
             self._src_btn.setText(t("key_remap.capturing"))
             self._src_btn.setStyleSheet(f"""
@@ -477,19 +479,7 @@ class KeyRemapDialog(QDialog):
         self._update_mode_styles()
 
     def _update_mode_styles(self):
-        for k, b in self._mode_btns.items():
-            if k == self._current_mode:
-                b.setStyleSheet(f"""
-                    QPushButton {{ background: {C_ACCENT}; color: #1A1A1A;
-                                   border: none; border-radius: 6px; padding: 0 10px; }}
-                    QPushButton:hover {{ background: {C_ACCENT_H}; }}
-                """)
-            else:
-                b.setStyleSheet("""
-                    QPushButton { background: #404040; color: #AAA;
-                                  border: none; border-radius: 6px; padding: 0 10px; }
-                    QPushButton:hover { background: #505050; }
-                """)
+        self._mode_segments.set_selected(self._current_mode)
         if hasattr(self, '_mode_hint'):
             self._mode_hint.setText(t(f"key_remap.mode_{self._current_mode}_hint"))
 
@@ -522,6 +512,7 @@ class KeyRemapDialog(QDialog):
             tab_row.addWidget(b)
             self._tab_btns.append(b)
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._tab_btns)
         lay.addLayout(tab_row)
         lay.addSpacing(10)
 
@@ -544,15 +535,7 @@ class KeyRemapDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = (f"QPushButton {{ background: transparent; color: #FFF; border: none; "
-               f"border-bottom: 2px solid {C_ACCENT}; border-radius: 0; "
-               f"padding: 0 12px 4px 12px; }}")
-        off = ("QPushButton { background: transparent; color: #AAA; border: none; "
-               "border-bottom: 2px solid transparent; border-radius: 0; "
-               "padding: 0 12px 4px 12px; } "
-               "QPushButton:hover { color: #E0E0E0; }")
-        for ix, b in enumerate(self._tab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     def _scroll_area(self):
         sc = QScrollArea()
@@ -561,7 +544,7 @@ class KeyRemapDialog(QDialog):
         sc.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px;
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px;
                                           min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
@@ -680,7 +663,7 @@ class KeyRemapDialog(QDialog):
             QListWidget::item {{ background: transparent; padding: 0px; border: none; }}
             QListWidget::item:selected {{ background: transparent; }}
             QScrollBar:vertical {{ background: transparent; width: 8px; border: none; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px;
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 6px;
                                            min-height: 30px; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}

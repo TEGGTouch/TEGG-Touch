@@ -37,6 +37,8 @@ class PostUpdateDialog(QDialog):
         self.setFixedSize(480, 300)
         self._drag_pos = None
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (560, 340), actions=[t("update.open_folder"), t("update.got_it")], columns=False, guidance=None)
         self._center_on_screen()
 
     def _init_ui(self):
@@ -52,7 +54,7 @@ class PostUpdateDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#post_update_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
             QLabel {{ color: #CCC; background: transparent; }}

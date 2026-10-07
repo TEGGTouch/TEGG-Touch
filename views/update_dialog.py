@@ -83,6 +83,8 @@ class UpdateDialog(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(560, 460)
         self._init_ui(version, body)
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (640, 520), actions=[self._skip_btn, self._install_btn], columns=False, guidance=None)
         self._center_on_screen()
         self._drag_pos = None
 
@@ -99,7 +101,7 @@ class UpdateDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#update_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
             QLabel {{ color: #CCC; }}
@@ -189,10 +191,10 @@ class UpdateDialog(QDialog):
         self._progress_bar.setTextVisible(False)
         self._progress_bar.setStyleSheet(f"""
             QProgressBar {{
-                background: #1F1F1F; border: none; border-radius: 4px;
+                background: #1F1F1F; border: none; border-radius: 6px;
             }}
             QProgressBar::chunk {{
-                background: {C_CYBER}; border-radius: 4px;
+                background: {C_CYBER}; border-radius: 6px;
             }}
         """)
         self._progress_bar.setVisible(False)

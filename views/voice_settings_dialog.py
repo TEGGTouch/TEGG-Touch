@@ -14,22 +14,25 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font, get_lang
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, VOICE_ACCENT, segmented_row
 from core.constants import (
     VOICE_SAMPLE_RATE, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX,
 )
 
+
 # Reuse shared components from existing dialogs
 from views.button_editor_dialog import (
     TagInput, _FlowWidget, _get_key_categories, _get_mouse_keys, populate_gp_palette,
-    C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
-    C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
+    C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H,
+    C_CLOSE, C_CLOSE_H, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 # ── 颜色常量 ──
 C_GREEN = "#10B981"
 C_GREEN_H = "#059669"
-C_AMBER_D = "#D97706"
 
 # ── 图标字体 ──
 _ICON_FONT = None
@@ -120,13 +123,13 @@ class _CheckToggle(QWidget):
             self._box.setText(icon)
             self._box.setStyleSheet(
                 f"background: {self._accent}; color: #FFF;"
-                " border-radius: 4px;"
+                f" border-radius: {SMALL_RADIUS}px;"
             )
         else:
             self._box.setText("")
             self._box.setStyleSheet(
                 "background: #333; color: transparent;"
-                " border: 1px solid #666; border-radius: 4px;"
+                f" border: 1px solid #666; border-radius: {SMALL_RADIUS}px;"
             )
 
 
@@ -198,7 +201,7 @@ class _CommandRow(QFrame):
         """)
         r2.addWidget(self._phrase_edit)
 
-        self._keys_input = TagInput(initial_value=keys, accent_color=C_AMBER)
+        self._keys_input = TagInput(initial_value=keys, accent_color=C_GREEN, tag_text_color='#000000')
         self._keys_input.setFixedWidth(self.COL_KEYS)
         self._keys_input.setMinimumHeight(36)
         self._keys_input.focusChanged.connect(
@@ -326,6 +329,8 @@ class _ChunkSizeDialog(QDialog):
         self.setFixedWidth(440)
         _detect_icon_font()
         self._build_ui(cur)
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (520, 360), actions=[t("voice_dialog.chunk_reset"), t("voice_dialog.chunk_cancel"), t("voice_dialog.save")], columns=False, guidance=None, accent=VOICE_ACCENT)
         self._center_on_parent()
 
     def _build_ui(self, cur):
@@ -338,7 +343,7 @@ class _ChunkSizeDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#cs_container {{
                 background: {C_PM_BG};
-                border-radius: 8px; border: 1px solid #444;
+                border-radius: 6px; border: 1px solid #444;
             }}
         """)
         outer.addWidget(container)
@@ -383,17 +388,17 @@ class _ChunkSizeDialog(QDialog):
         self._slider.setValue(cur // self._STEP)
         self._slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 4px;
+                background: {RECESSED_BG}; height: 8px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
-                background: {C_GREEN}; border-radius: 4px;
+                background: {C_GREEN}; border-radius: 3px;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 4px;
+                background: {RECESSED_BG}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
-                background: #DDD; border: 1px solid #999;
-                width: 18px; height: 18px; margin: -5px 0; border-radius: 9px;
+                background: #DDD; border: none;
+                width: 16px; height: 16px; margin: -4px 0; border-radius: 8px;
             }}
             QSlider::handle:horizontal:hover {{
                 background: {C_GREEN}; border-color: {C_GREEN_H};
@@ -541,12 +546,12 @@ class VoiceSettingsDialog(QDialog):
     apps_changed = pyqtSignal(list)      # 应用池变更
 
     # 三列布局: 列表 / 编辑 / 候选按键面板
-    COL1_W = 280     # 指令列表 + 底部 mic/test/language
-    COL2_W = 320     # 当前选中指令编辑区
+    COL1_W = 240     # 指令列表 + 底部 mic/test/language
+    COL2_W = 390     # 当前选中指令编辑区
     PADDING = 20
     GUTTER = 20      # 列间距
-    WIN_W = 1200
-    WIN_H = 960
+    WIN_W = 1280
+    WIN_H = 820
     COL3_W = WIN_W - PADDING * 2 - COL1_W - COL2_W - GUTTER * 2 - 2  # = 538
 
     def __init__(self, voice_commands=None, voice_language=None, voice_mic_device=None, parent=None, xmacros=None, voice_auto_start=True, voice_chunk_size=None, apps=None, recenter_targets=None):
@@ -579,6 +584,8 @@ class VoiceSettingsDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1280, 820), actions=[t("voice_dialog.add_command"), t("voice_dialog.copy"), t("voice_dialog.delete_command"), t("voice_dialog.save")], columns=True, guidance=('① 选择指令 → ② 修改口令与行为 → ③ 测试指令 → ④ 保存', '1 Select a command → 2 Edit phrase and behavior → 3 Test → 4 Save'), scope=self._editor_form, scope_actions=[t("voice_dialog.copy"), t("voice_dialog.delete_command"), t("voice_dialog.save")], accent=VOICE_ACCENT)
         self._load_commands()
         self._center_on_screen()
 
@@ -592,7 +599,7 @@ class VoiceSettingsDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#vs_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -638,17 +645,22 @@ class VoiceSettingsDialog(QDialog):
         root.addLayout(title_row)
 
         # Tip
-        tip = QLabel(t("voice_dialog.tip"))
-        tip.setFont(_make_font(fn, 14))
-        tip.setStyleSheet("color: #888; background: transparent;")
-        tip.setWordWrap(True)
-        root.addWidget(tip)
-        root.addSpacing(16)
 
         # ── 三列布局: 指令列表 | 编辑区 | 候选按键面板 ──
         columns = QHBoxLayout()
         columns.setSpacing(0)
 
+        from views.ui_components import section_heading
+        recognition = QHBoxLayout()
+        recognition.setSpacing(24)
+        controls = QWidget()
+        controls_col = QVBoxLayout(controls)
+        controls_col.setContentsMargins(0, 0, 0, 0)
+        controls_col.addWidget(section_heading("识别设置", "Recognition settings"))
+        recognition.addWidget(controls, 1)
+        self._recognition_layout = controls_col
+        root.addLayout(recognition)
+        root.addSpacing(12)
         # Col1
         col1 = self._build_col1_list(fn)
         col1.setFixedWidth(self.COL1_W)
@@ -711,11 +723,13 @@ class VoiceSettingsDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 6px; min-height: 30px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """
+        from views.ui_components import section_heading
+        v.addWidget(section_heading("指令列表", "Commands"))
         self._cmd_list = _CommandList(_cmd_qss)
         self._cmd_list.setFont(_make_font(fn, 14))
         self._cmd_list.currentRowChanged.connect(self._on_list_row_changed)
@@ -736,17 +750,12 @@ class VoiceSettingsDialog(QDialog):
         add_btn.clicked.connect(self._on_add_command)
         v.addWidget(add_btn)
 
-        v.addSpacing(8)
-        sep = QFrame(); sep.setFixedHeight(1); sep.setStyleSheet("background: #444;")
-        v.addWidget(sep)
-        v.addSpacing(8)
-
-        # 底部固定区: 麦克风 / 测试 / 语言
-        v.addLayout(self._build_bottom_status(fn))
+        # Separate recognition setup from command editing.
+        self._recognition_layout.addLayout(self._build_bottom_status(fn))
         return wrap
 
     def _build_bottom_status(self, fn):
-        col = QVBoxLayout()
+        col = QHBoxLayout()
         col.setSpacing(8)
 
         # 麦克风状态点 + 设备下拉
@@ -786,10 +795,11 @@ class VoiceSettingsDialog(QDialog):
             QComboBox QAbstractItemView {{
                 background: #2A2A2A; color: #E0E0E0;
                 selection-background-color: {C_CYBER};
-                border: 1px solid #444; border-radius: 4px;
+                border: 1px solid #444; border-radius: 6px;
             }}
         """)
-        col.addWidget(self._mic_combo)
+        self._mic_combo.setMaximumWidth(320)
+        col.addWidget(self._mic_combo, 1)
 
         # 测试指令按钮 + 左侧「识别延迟」齿轮小按钮
         test_row = QHBoxLayout()
@@ -836,7 +846,8 @@ class VoiceSettingsDialog(QDialog):
             QPushButton:hover {{ background: #34D399; }}
         """)
         self._test_btn.clicked.connect(self._on_test_commands)
-        test_row.addWidget(self._test_btn, 1)
+        test_row.addWidget(self._test_btn)
+        self._test_btn.setMinimumWidth(100)
         col.addLayout(test_row)
 
         # 语言下拉 (识别语言)
@@ -858,6 +869,7 @@ class VoiceSettingsDialog(QDialog):
         self._lang_combo.currentIndexChanged.connect(self._on_lang_combo_changed)
         lang_row.addWidget(self._lang_combo, 1)
         col.addLayout(lang_row)
+        col.addStretch()
 
         # 枚举设备 (与原版相同逻辑)
         self._mic_devices = []
@@ -924,7 +936,7 @@ class VoiceSettingsDialog(QDialog):
         keys_lbl.setFont(_make_font(fn, 13))
         keys_lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
         kform.addWidget(keys_lbl)
-        self._keys_input = TagInput(initial_value="", accent_color=C_AMBER)
+        self._keys_input = TagInput(initial_value="", accent_color=C_GREEN, tag_text_color='#000000')
         self._keys_input.setMinimumHeight(36)
         self._keys_input.focusChanged.connect(self._on_focus_changed)
         kform.addWidget(self._keys_input)
@@ -947,6 +959,7 @@ class VoiceSettingsDialog(QDialog):
             btn.clicked.connect(lambda _, kk=k: self._on_action_clicked(kk))
             act_row.addWidget(btn)
             self._action_btns[k] = btn
+        self._action_segments = segmented_row(act_row, self._action_btns)
         kform.addLayout(act_row)
         self._update_action_btn_styles()
         form.addWidget(self._build_behavior_card(
@@ -1020,6 +1033,9 @@ class VoiceSettingsDialog(QDialog):
         has = (self._current_idx >= 0 and self._current_idx < len(self._commands))
         self._editor_form.setVisible(has)
         self._editor_hint.setVisible(not has)
+        for button in getattr(self, "_ui_actions", []):
+            if button.text() in (t("voice_dialog.delete_command"), t("voice_dialog.save"), t("voice_dialog.copy"),):
+                button.setEnabled(has)
 
     # ── (legacy 原文未删, 下面是 _build_lang_selector 旧代码, 已不再被调用) ──
 
@@ -1158,7 +1174,7 @@ class VoiceSettingsDialog(QDialog):
             QComboBox QAbstractItemView {{
                 background: #2A2A2A; color: #E0E0E0;
                 selection-background-color: {C_CYBER};
-                border: 1px solid #444; border-radius: 4px;
+                border: 1px solid #444; border-radius: 6px;
             }}
         """)
         row.addWidget(self._mic_combo, 1)
@@ -1263,7 +1279,7 @@ class VoiceSettingsDialog(QDialog):
             self._mic_lbl.setText(t("voice_dialog.mic_dep_missing"))
             self._test_btn.setEnabled(False)
         except Exception:
-            self._mic_dot.setStyleSheet("color: #F59E0B; background: transparent;")
+            self._mic_dot.setStyleSheet(f"color: {C_GREEN}; background: transparent;")
             self._mic_lbl.setText(t("voice_dialog.mic_check_failed"))
             self._test_btn.setEnabled(False)
 
@@ -1321,7 +1337,7 @@ class VoiceSettingsDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 6px; min-height: 30px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
@@ -1379,6 +1395,7 @@ class VoiceSettingsDialog(QDialog):
             b.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
             tab_row.addWidget(b)
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._tab_btns)
         panel_lay.addLayout(tab_row)
         panel_lay.addSpacing(10)
 
@@ -1406,7 +1423,7 @@ class VoiceSettingsDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -1446,10 +1463,7 @@ class VoiceSettingsDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = f"QPushButton {{ background: transparent; color: #FFF; border: none; border-bottom: 2px solid {C_GREEN}; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #FFF; }}"
-        off = f"QPushButton {{ background: transparent; color: #AAA; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #E0E0E0; }}"
-        for ix, b in enumerate(self._tab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     def _build_mouse_palette(self, fn):
         """构建鼠标操作 Tab: 分类标签 + 5 个鼠标按键 flow"""
@@ -1525,7 +1539,7 @@ class VoiceSettingsDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 6px; min-height: 30px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -1788,23 +1802,7 @@ class VoiceSettingsDialog(QDialog):
             self._commands[self._current_idx]['action'] = action
 
     def _update_action_btn_styles(self):
-        for k, btn in self._action_btns.items():
-            if k == self._current_action:
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_GREEN}; color: #1A1A1A;
-                        border: none; border-radius: 6px; padding: 0 12px;
-                    }}
-                    QPushButton:hover {{ background: {C_GREEN_H}; }}
-                """)
-            else:
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: #404040; color: #AAA;
-                        border: none; border-radius: 6px; padding: 0 12px;
-                    }}
-                    QPushButton:hover {{ background: #505050; }}
-                """)
+        self._action_segments.set_selected(self._current_action)
 
     # ── 行为卡片 (触发按键 / 触发回中) ──
 
@@ -1828,7 +1826,7 @@ class VoiceSettingsDialog(QDialog):
         hl.addWidget(tlbl)
         tag = QLabel(t('voice_dialog.mode_selected'))
         tag.setFont(_make_font(fn, 11, bold=True))
-        tag.setStyleSheet("color: #000; background: #10B981; border-radius: 9px; padding: 1px 10px;")
+        tag.setStyleSheet(f"color: #000; background: #10B981; border-radius: {SMALL_RADIUS}px; padding: 1px 10px;")
         hl.addWidget(tag)
         hl.addStretch()
         hint = QLabel(t('voice_dialog.card_click_hint'))
@@ -1859,7 +1857,7 @@ class VoiceSettingsDialog(QDialog):
             bg = '#202A24' if active else '#1E1E1E'
             c['frame'].setStyleSheet(
                 f"QFrame#behcard_{mode} {{ background: {bg}; "
-                f"border: 2px solid {border}; border-radius: 10px; }}")
+                f"border: 2px solid {border}; border-radius: 8px; }}")
         # 右栏跟随模式: 触发按键→候选Tab; 回中→回中目标列表
         if hasattr(self, '_col3_stack'):
             if self._current_mode == 'recenter':

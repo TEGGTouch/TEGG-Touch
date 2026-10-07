@@ -15,14 +15,17 @@ from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
 
 from core.i18n import t, get_font
+from views.ui_components import RECESSED_BG, segmented_row
 from core.constants import GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX
 from views.button_editor_dialog import (
     _get_key_categories, _get_mouse_keys, _FlowWidget, _make_font, _detect_icon_font,
     populate_gp_palette,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
-    C_INPUT_BG, C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL, C_DELAY,
+    C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL, C_DELAY,
     TagInput,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 # 宏步骤强调色
 C_MACRO_KEY = "#8B5CF6"     # 紫色 — 指令步骤
@@ -100,7 +103,7 @@ class _StepRow(QWidget):
         rm_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {C_CLOSE}; color: #FFF;
-                border: none; border-radius: 4px;
+                border: none; border-radius: 6px;
             }}
             QPushButton:hover {{ background: {C_CLOSE_H}; }}
         """)
@@ -136,7 +139,7 @@ class _StepRow(QWidget):
         self._action_combo.setStyleSheet(f"""
             QComboBox {{
                 background: {C_INPUT_BG}; color: #E0E0E0;
-                border: 1px solid #555; border-radius: 4px;
+                border: 1px solid #555; border-radius: 6px;
                 padding: 2px 6px;
             }}
             QComboBox:hover {{ border-color: {C_MACRO_KEY}; }}
@@ -167,14 +170,14 @@ class _StepRow(QWidget):
         self._delay_slider.setSingleStep(DELAY_STEP)
         self._delay_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 6px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 6px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
                 background: {C_MACRO_DELAY}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;
-                width: 14px; height: 14px; margin: -4px 0; border-radius: 7px;
+                width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
             }}
             QSlider::handle:horizontal:hover {{ background: {C_MACRO_DELAY}; }}
         """)
@@ -188,7 +191,7 @@ class _StepRow(QWidget):
         self._delay_entry.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: {C_MACRO_DELAY};
-                border: 1px solid #555; border-radius: 4px;
+                border: 1px solid #555; border-radius: 6px;
             }}
             QLineEdit:focus {{ border-color: {C_MACRO_DELAY}; }}
         """)
@@ -310,6 +313,8 @@ class MacroEditorDialog(QDialog):
         self.setFixedSize(self.WIN_W, self.WIN_H)
 
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1120, 820), actions=[t("macro.add_key_step"), t("macro.add_delay_step"), t("macro.save")], columns=True, guidance=('① 命名 → ② 添加指令或延迟，拖动调整顺序 → ③ 保存', '1 Name the macro → 2 Add actions or delays; drag to reorder → 3 Save'))
         self._center_on_screen()
         self._drag_pos = None
 
@@ -325,7 +330,7 @@ class MacroEditorDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#me_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #555;
             }}
         """)
@@ -428,7 +433,7 @@ class MacroEditorDialog(QDialog):
                 background: transparent; width: 6px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 3px; min-height: 20px;
+                background: #404040; border-radius: 6px; min-height: 20px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
@@ -564,6 +569,7 @@ class MacroEditorDialog(QDialog):
             self._mtab_btns.append(b)
             self._mtab_stack.addWidget(builder(fn))
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._mtab_btns)
         wlay.addLayout(tab_row)
         wlay.addWidget(self._mtab_stack, 1)
 
@@ -573,18 +579,7 @@ class MacroEditorDialog(QDialog):
 
     def _switch_macro_tab(self, idx):
         self._mtab_stack.setCurrentIndex(idx)
-        sel = f"""QPushButton {{
-            background: transparent; color: #FFF; border: none;
-            border-bottom: 2px solid {C_CYBER_H};
-            border-radius: 0; padding: 0 14px 4px 14px;
-        }}"""
-        off = f"""QPushButton {{
-            background: transparent; color: #AAA; border: none;
-            border-bottom: 2px solid transparent;
-            border-radius: 0; padding: 0 14px 4px 14px;
-        }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        for ix, b in enumerate(self._mtab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     def _macro_scroll(self):
         scroll = QScrollArea()
@@ -593,7 +588,7 @@ class MacroEditorDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)

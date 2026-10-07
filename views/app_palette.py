@@ -106,7 +106,7 @@ class AppPaletteWidget(QWidget):
         self._scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)

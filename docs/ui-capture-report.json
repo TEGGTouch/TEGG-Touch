@@ -1,0 +1,461 @@
+{
+  "screen": [
+    2048,
+    1152
+  ],
+  "available": [
+    2048,
+    1104
+  ],
+  "device_pixel_ratio": 1.25,
+  "windows": [
+    {
+      "window": "EditToolbar",
+      "image": "ui-client-EditToolbar.png",
+      "size": [
+        1070,
+        155
+      ]
+    },
+    {
+      "window": "EditToolbar",
+      "image": "ui-client-EditToolbar-gamepad.png",
+      "size": [
+        1070,
+        155
+      ]
+    },
+    {
+      "window": "RunToolbar",
+      "image": "ui-client-RunToolbar.png",
+      "size": [
+        1220,
+        60
+      ]
+    },
+    {
+      "window": "RunToolbar",
+      "image": "ui-client-RunToolbar-long-name.png",
+      "size": [
+        1220,
+        60
+      ]
+    },
+    {
+      "window": "ButtonEditorDialog",
+      "image": "ui-client-ButtonEditorDialog.png",
+      "size": [
+        1120,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "CenterBandDialog",
+      "image": "ui-client-CenterBandDialog.png",
+      "size": [
+        520,
+        520
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "GpStickEditorDialog",
+      "image": "ui-client-GpStickEditorDialog.png",
+      "size": [
+        1120,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "GpWheelEditorDialog",
+      "image": "ui-client-GpWheelEditorDialog.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "GpWheelEditorDialog",
+      "image": "ui-client-direction-advanced.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "GpWheelMouseDialog",
+      "image": "ui-client-GpWheelMouseDialog.png",
+      "size": [
+        1120,
+        760
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "KeyRemapDialog",
+      "image": "ui-client-KeyRemapDialog.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "VoiceSettingsDialog",
+      "image": "ui-client-VoiceSettingsDialog.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "MacroEditorDialog",
+      "image": "ui-client-voice-macro.png",
+      "size": [
+        1120,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "VoiceTestDialog",
+      "image": "ui-client-VoiceTestDialog.png",
+      "size": [
+        800,
+        640
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "MacroEditorDialog",
+      "image": "ui-client-MacroEditorDialog.png",
+      "size": [
+        1120,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "HotkeySettingsDialog",
+      "image": "ui-client-HotkeySettingsDialog.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "HotkeySettingsDialog",
+      "image": "ui-client-settings-0.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "HotkeySettingsDialog",
+      "image": "ui-client-settings-1.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "HotkeySettingsDialog",
+      "image": "ui-client-settings-2.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "HotkeySettingsDialog",
+      "image": "ui-client-settings-3.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "HotkeySettingsDialog",
+      "image": "ui-client-settings-4.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "HotkeySettingsDialog",
+      "image": "ui-client-settings-5.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-client-WheelStyleDialog.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-client-wheel-large.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-client-wheel-double.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-client-wheel-dual.png",
+      "size": [
+        1280,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "ProfileManagerDialog",
+      "image": "ui-client-ProfileManagerDialog.png",
+      "size": [
+        1200,
+        820
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "_ProfileCopyDialog",
+      "image": "ui-client-_ProfileCopyDialog.png",
+      "size": [
+        880,
+        760
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "_StyledInputDialog",
+      "image": "ui-client-_StyledInputDialog.png",
+      "size": [
+        480,
+        280
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "_StyledConfirmDialog",
+      "image": "ui-client-_StyledConfirmDialog.png",
+      "size": [
+        480,
+        260
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "_StyledMessageDialog",
+      "image": "ui-client-_StyledMessageDialog.png",
+      "size": [
+        480,
+        240
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "_ChunkSizeDialog",
+      "image": "ui-client-_ChunkSizeDialog.png",
+      "size": [
+        520,
+        360
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "AboutDialog",
+      "image": "ui-client-AboutDialog.png",
+      "size": [
+        680,
+        640
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "UpdateDialog",
+      "image": "ui-client-UpdateDialog.png",
+      "size": [
+        640,
+        520
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "PostUpdateDialog",
+      "image": "ui-client-PostUpdateDialog.png",
+      "size": [
+        560,
+        340
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "GamepadInstallDialog",
+      "image": "ui-client-GamepadInstallDialog.png",
+      "size": [
+        560,
+        360
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "DiagExportDialog",
+      "image": "ui-client-DiagExportDialog.png",
+      "size": [
+        520,
+        320
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "ColorPickerDialog",
+      "image": "ui-client-ColorPickerDialog.png",
+      "size": [
+        760,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "VirtualKeyboard",
+      "image": "ui-client-VirtualKeyboard.png",
+      "size": [
+        1070,
+        296
+      ]
+    },
+    {
+      "window": "CollapsedBubble",
+      "image": "ui-client-CollapsedBubble.png",
+      "size": [
+        60,
+        60
+      ]
+    },
+    {
+      "window": "ButtonEditorDialog",
+      "image": "ui-compact-ButtonEditorDialog.png",
+      "size": [
+        1120,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "GpWheelEditorDialog",
+      "image": "ui-compact-GpWheelEditorDialog.png",
+      "size": [
+        1216,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "KeyRemapDialog",
+      "image": "ui-compact-KeyRemapDialog.png",
+      "size": [
+        1216,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "VoiceSettingsDialog",
+      "image": "ui-compact-VoiceSettingsDialog.png",
+      "size": [
+        1216,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "HotkeySettingsDialog",
+      "image": "ui-compact-HotkeySettingsDialog.png",
+      "size": [
+        1216,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
+      "window": "WheelStyleDialog",
+      "image": "ui-compact-WheelStyleDialog.png",
+      "size": [
+        1216,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    }
+  ]
+}

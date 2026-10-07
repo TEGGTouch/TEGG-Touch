@@ -19,17 +19,20 @@ from PyQt6.QtCore import Qt, QPoint, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
 from core.constants import (
     STICK_ID_LEFT, STICK_ID_RIGHT, APP_DIR, APP_PREFIX,
     GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
     ACTION_COLORS,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
-    C_INPUT_BG, C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL,
+    C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL,
 )
 from views.button_editor_dialog import (
     TagInput, _FlowWidget, _ColorDot, _make_font, _detect_icon_font, _ICON_FONT,
     _get_key_categories, _get_mouse_keys, populate_gp_palette,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 
 _C_BG = C_PM_BG
@@ -114,7 +117,7 @@ class GpStickEditorDialog(QDialog):
     xmacros_changed = pyqtSignal(list)   # 统一混合宏池变更
     apps_changed = pyqtSignal(list)      # 应用池变更
 
-    LEFT_W = 440
+    LEFT_W = 480
     RIGHT_W = 560
     PADDING = 20
     WIN_W = LEFT_W + RIGHT_W + PADDING * 2 + 20  # 1040
@@ -141,6 +144,8 @@ class GpStickEditorDialog(QDialog):
 
         _detect_icon_font()
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1120, 820), actions=[t("gp_stick_editor.copy"), t("gp_stick_editor.delete"), t("gp_stick_editor.save")], columns=True, guidance=('① 配置摇杆 → ② 按需设置鼠标动作 → ③ 保存', '1 Configure the stick → 2 Add optional mouse actions → 3 Save'))
         self._center_on_screen()
         self._drag_pos = None
 
@@ -156,7 +161,7 @@ class GpStickEditorDialog(QDialog):
         container.setObjectName("gpstick_container")
         container.setStyleSheet(f"""
             QFrame#gpstick_container {{
-                background: {_C_BG}; border-radius: 4px; border: 1px solid {_C_BORDER};
+                background: {_C_BG}; border-radius: 6px; border: 1px solid {_C_BORDER};
             }}
         """)
         outer.addWidget(container)
@@ -218,7 +223,7 @@ class GpStickEditorDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -398,6 +403,7 @@ class GpStickEditorDialog(QDialog):
             b.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
             tab_row.addWidget(b)
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._tab_btns)
         wlay.addLayout(tab_row)
 
         self._tab_stack = QStackedWidget()
@@ -419,7 +425,7 @@ class GpStickEditorDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
         """)
@@ -503,7 +509,7 @@ class GpStickEditorDialog(QDialog):
             QListWidget::item:selected {{ background: transparent; }}
             QListWidget::item:hover {{ background: transparent; }}
             QScrollBar:vertical {{ background: transparent; width: 8px; border: none; }}
-            QScrollBar::handle:vertical {{ background: #404040; border-radius: 4px; min-height: 30px; }}
+            QScrollBar::handle:vertical {{ background: #404040; border-radius: 6px; min-height: 30px; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
         """)
@@ -643,18 +649,7 @@ class GpStickEditorDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = f"""QPushButton {{
-            background: transparent; color: #FFF; border: none;
-            border-bottom: 2px solid {C_CYBER_H};
-            border-radius: 0; padding: 0 14px 4px 14px;
-        }}"""
-        off = f"""QPushButton {{
-            background: transparent; color: #AAA; border: none;
-            border-bottom: 2px solid transparent;
-            border-radius: 0; padding: 0 14px 4px 14px;
-        }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        for ix, b in enumerate(self._tab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     # ── 面板点击 / 焦点 ──
 
@@ -724,6 +719,7 @@ class GpStickEditorDialog(QDialog):
         row.addWidget(self._rb_left); row.addSpacing(16)
         row.addWidget(self._rb_right); row.addSpacing(16)
         row.addWidget(self._rb_wasd); row.addStretch()
+        self._id_segments = segmented_row(row)
         col.addLayout(row)
         # 切到/离开 WASD 模式 → 切换下方字段区显隐 (boxes 在 _build_left 末尾才建好)
         self._rb_wasd.toggled.connect(self._on_mode_changed)
@@ -742,6 +738,7 @@ class GpStickEditorDialog(QDialog):
         (self._rb_square if self.data.sensitivity_curve == 'square' else self._rb_linear).setChecked(True)
         row.addWidget(self._rb_linear); row.addSpacing(16)
         row.addWidget(self._rb_square); row.addStretch()
+        self._sensitivity_segments = segmented_row(row)
         col.addLayout(row)
         return col
 
@@ -782,7 +779,7 @@ class GpStickEditorDialog(QDialog):
         tm = _DefaultMarkedSlider.TRACK_MARGIN_TOP
         slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 6px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 6px; border-radius: 3px;
                 margin: {tm}px 0 0 0;
             }}
             QSlider::sub-page:horizontal {{
@@ -790,11 +787,11 @@ class GpStickEditorDialog(QDialog):
                 margin: {tm}px 0 0 0;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: {RECESSED_BG}; border-radius: 3px;
                 margin: {tm}px 0 0 0;
             }}
             QSlider::handle:horizontal {{
-                background: #DDD; border: 1px solid #999;
+                background: #DDD; border: none;
                 width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
             }}
             QSlider::handle:horizontal:hover {{ background: {_C_BLUE}; border-color: {_C_BLUE_H}; }}
@@ -898,7 +895,7 @@ class GpStickEditorDialog(QDialog):
         rb.setStyleSheet(f"""
             QRadioButton {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
             QRadioButton::indicator {{
-                width: 16px; height: 16px; border-radius: 9px;
+                width: 16px; height: 16px; border-radius: 8px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QRadioButton::indicator:hover {{ border-color: {_C_BLUE_H}; }}
@@ -916,7 +913,7 @@ class GpStickEditorDialog(QDialog):
         chk.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
+                width: 16px; height: 16px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}

@@ -1,38 +1,40 @@
 """
 TEGG Touch 蛋挞 (PyQt6) - edit_toolbar.py
-编辑模式工具栏 — 浮动在场景底部，匹配原版 Tkinter 布局。
+编辑模式工具栏 — 可拖动的三行任务布局。
 
-原版布局:
-  Row 1: DragHandle | Profile | Add | CenterBand | Wheel | Sep | Keyboard | Run  ...  About | Settings | Close
-  Row 2:            | SimMode label+btn | Sep | Opacity label + slider + value%
+  Row 1: Profile | Opacity | Scale | Minimize | Settings | Close
+  Row 2: Simulation label | Voice label | Soft keyboard label
+  Row 3: Mode switch + contextual controls | Voice | Keyboard + Remap | Run
 """
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
-    QLabel, QFrame, QSlider, QMenu,
+    QLabel, QFrame, QSlider,
 )
-from PyQt6.QtCore import Qt, QSize, QPoint, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QFontDatabase, QAction
+from PyQt6.QtCore import Qt, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QFontDatabase
 
 from core.i18n import t, get_font
 from core.constants import (
     TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_RADIUS,
-    TOOLBAR_BOTTOM_MARGIN,
+    TOOLBAR_BOTTOM_MARGIN, APP_VERSION,
 )
 from views.toolbar_tip_widget import ToolbarTipWidget
+from views.ui_components import (
+    OUTER_RADIUS, INNER_RADIUS, SMALL_RADIUS,
+    RECESSED_BG, PANEL_BG, CONTROL_BG, AMBER_TEXT, text_on_surface,
+)
 
-# ── 颜色常量 (与原版 widgets.py 完全一致) ──
+# ── 功能色保持原配色；基础灰色按表面距离统一 ──
 C_CYBER = "#0C4A6E"
 C_CYBER_H = "#0284C7"
-C_GRAY = "#3A3A3A"
+C_GRAY = CONTROL_BG
 C_GRAY_H = "#505050"
 C_AMBER = "#F59E0B"
 C_AMBER_D = "#D97706"
 C_CLOSE = "#6E1E1E"
 C_CLOSE_H = "#8B2020"
-C_PANEL = "#2D2D2D"
-C_TOOL = "#4A4A4A"
-C_TOOL_H = "#5A5A5A"
+C_PANEL = PANEL_BG
 C_WH_ON = "#E11D48"       # 玫瑰红 (rose-600)
 C_WH_ON_H = "#F43F5E"     # 玫瑰红 hover (rose-500)
 
@@ -93,7 +95,7 @@ class _VSep(QWidget):
         p.drawLine(x, 4, x, self.height() - 4)
 
 
-# ── 图标+文字按钮 (自适应宽度, 深灰小圆角) ──
+# ── 图标+文字按钮 (自适应宽度, 深灰圆角) ──
 class _IconTextBtn(QPushButton):
     """带图标字体和文字的工具栏按钮 — 宽度自适应内容。"""
 
@@ -107,6 +109,7 @@ class _IconTextBtn(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._bg = bg
         self._bg_h = bg_hover
+        self._fg = fg
         self._apply_style()
 
         fn = get_font()
@@ -125,14 +128,14 @@ class _IconTextBtn(QPushButton):
             self._icon_lbl = None
 
         if self._icon_lbl:
-            self._icon_lbl.setStyleSheet(f"color: {fg}; background: transparent;")
+            self._icon_lbl.setStyleSheet(f"color: {text_on_surface(bg, fg)}; background: transparent;")
             self._icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             lay.addWidget(self._icon_lbl)
 
         # Text
         self._text_lbl = QLabel(text)
-        self._text_lbl.setFont(_make_font(fn, 16))
-        self._text_lbl.setStyleSheet(f"color: {fg}; background: transparent;")
+        self._text_lbl.setFont(_make_font(fn, 14))
+        self._text_lbl.setStyleSheet(f"color: {text_on_surface(bg, fg)}; background: transparent;")
         self._text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         lay.addWidget(self._text_lbl)
 
@@ -150,7 +153,7 @@ class _IconTextBtn(QPushButton):
     def _apply_style(self):
         self.setStyleSheet(f"""
             QPushButton {{
-                background: {self._bg}; border: none; border-radius: 6px;
+                background: {self._bg}; border: none; border-radius: {INNER_RADIUS}px;
             }}
             QPushButton:hover {{ background: {self._bg_h}; }}
         """)
@@ -159,6 +162,9 @@ class _IconTextBtn(QPushButton):
         self._bg = bg
         self._bg_h = bg_hover
         self._apply_style()
+        for label in (self._icon_lbl, self._text_lbl):
+            if label:
+                label.setStyleSheet(f"color: {text_on_surface(bg, self._fg)}; background: transparent;")
 
     def set_icon_text(self, icon_char, fallback=None):
         if self._icon_lbl:
@@ -166,6 +172,90 @@ class _IconTextBtn(QPushButton):
 
     def set_label(self, text):
         self._text_lbl.setText(text)
+
+
+class _ModeSwitch(QFrame):
+    """Two choices share one recessed track and one sliding selection."""
+
+    requested = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName('simulation_switch')
+        self.setFixedSize(144, 40)
+        self.setStyleSheet(f'QFrame#simulation_switch {{ background: {RECESSED_BG}; border: none; border-radius: 8px; }}')
+        self._thumb = QFrame(self)
+        self._thumb.setStyleSheet(f'background: {C_AMBER}; border: none; border-radius: 6px;')
+        self._thumb.setGeometry(4, 4, 68, 32)
+        self._thumb.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._animation = QPropertyAnimation(self._thumb, b'geometry', self)
+        self._animation.setDuration(160)
+        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.buttons = {}
+        for index, (mode, label) in enumerate((('keyboard', t('toolbar.sim_keyboard')),
+                                               ('gamepad', t('toolbar.sim_gamepad')))):
+            button = QPushButton(label, self)
+            button.setGeometry(4 + index * 68, 4, 68, 32)
+            button.setFont(_make_font(get_font(), 13))
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda _, picked=mode: self.requested.emit(picked))
+            self.buttons[mode] = button
+
+    def set_mode(self, mode):
+        target = QRect(72 if mode == 'gamepad' else 4, 4, 68, 32)
+        self._animation.stop()
+        if self.isVisible() and self._thumb.geometry() != target:
+            self._animation.setStartValue(self._thumb.geometry())
+            self._animation.setEndValue(target)
+            self._animation.start()
+        else:
+            self._thumb.setGeometry(target)
+        for key, button in self.buttons.items():
+            color = AMBER_TEXT if key == mode else '#AAAAAA'
+            button.setStyleSheet(f'QPushButton {{ background: transparent; color: {color}; border: none; border-radius: 6px; }}')
+
+
+class _CheckIndicator(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(20, 20)
+        self.checked = False
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor(C_AMBER if self.checked else '#AAAAAA'), 1.5))
+        painter.setBrush(QColor(C_AMBER) if self.checked else Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(2, 2, 16, 16, SMALL_RADIUS, SMALL_RADIUS)
+        if self.checked:
+            painter.setPen(QPen(QColor(AMBER_TEXT), 2.0, Qt.PenStyle.SolidLine,
+                                Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.drawLine(6, 10, 9, 13)
+            painter.drawLine(9, 13, 14, 7)
+
+
+class _ComponentToggle(_IconTextBtn):
+    """Singleton entry: gray button, an empty / checked indicator, original signal."""
+
+    def __init__(self, text, width, parent=None):
+        super().__init__('', '', text, C_GRAY, C_GRAY_H, width=width, parent=parent)
+        if self._icon_lbl:
+            self.layout().removeWidget(self._icon_lbl)
+            self._icon_lbl.deleteLater()
+            self._icon_lbl = None
+        self._indicator = _CheckIndicator(self)
+        self.layout().insertWidget(0, self._indicator)
+        self.setCheckable(True)
+
+    def set_colors(self, background, hover):
+        super().set_colors(C_GRAY, C_GRAY_H)
+
+    def set_icon_text(self, icon, fallback=None):
+        checked = icon == '\uE73E'
+        self.setChecked(checked)
+        self._indicator.checked = checked
+        self._indicator.update()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -215,310 +305,206 @@ class EditToolbar(QWidget):
     # ── UI 构建 ──────────────────────────────────────────────
 
     def _init_ui(self):
+        from PyQt6.QtWidgets import QStackedWidget, QSizePolicy
+        from views.ui_components import ui_text
         fn = get_font()
-
-        # 外层透明，内层容器有背景
-        outer = QHBoxLayout(self)
+        outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-
         container = QFrame()
         container.setObjectName("et_container")
-        container.setStyleSheet(f"""
-            QFrame#et_container {{
-                background: {C_PANEL};
-                border-radius: 4px;
-                border: 1px solid #444;
-            }}
-            QToolTip {{
-                background: #1A1A1A;
-                color: #E0E0E0;
-                border: 1px solid #333;
-                padding: 4px 8px;
-                font-size: 12px;
-            }}
-        """)
+        container.setStyleSheet(f"QFrame#et_container {{ background: {C_PANEL}; border: none; border-radius: {OUTER_RADIUS}px; }}")
         outer.addWidget(container)
-
         main = QVBoxLayout(container)
-        main.setContentsMargins(0, 10, 10, 10)
-        main.setSpacing(10)
-
-        # ════ Row 1 ════
-        r1 = QHBoxLayout()
-        r1.setSpacing(10)
-
-        # 拖拽把手
-        r1.addWidget(_DragHandle())
-
-        # 方案选择器 (220px, #0C4A6E)
+        main.setContentsMargins(12, 12, 12, 12)
+        main.setSpacing(12)
+        header = QHBoxLayout()
+        header.setSpacing(10)
+        grip = _DragHandle()
+        grip.setFixedWidth(24)
+        grip.setCursor(Qt.CursorShape.SizeAllCursor)
+        header.addWidget(grip)
         self._profile_btn = self._build_profile_btn(fn)
+        self._profile_btn.setFixedWidth(240)
+        self._prof_name_lbl.setMinimumWidth(0)
+        self._prof_name_lbl.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._profile_full_name = "Default"
         self._profile_btn.setToolTip(t("tooltip.profiles"))
         self._install_tip(self._profile_btn)
-        r1.addWidget(self._profile_btn)
+        header.addWidget(self._profile_btn)
 
-        # ── 键盘模式专属: +按键 / +回中带 / 中心轮盘 ──
-        self._add_kb_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_button"),
-                                        C_GRAY, C_GRAY_H)
-        self._add_kb_btn.setToolTip(t("tooltip.add_button"))
-        self._install_tip(self._add_kb_btn)
-        self._add_kb_btn.clicked.connect(self.add_button_clicked.emit)
-        r1.addWidget(self._add_kb_btn)
+        def slider_group(label, color, low, high, value, callback):
+            widget = QWidget()
+            widget.setMinimumWidth(220)
+            row = QHBoxLayout(widget)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(8)
+            text = QLabel(label)
+            text.setFont(_make_font(fn, 12))
+            text.setStyleSheet("color: #AAA; background: transparent;")
+            row.addWidget(text)
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(low, high)
+            slider.setValue(value)
+            slider.setFixedHeight(24)
+            slider.setMinimumWidth(54)
+            slider.setStyleSheet(f"QSlider::groove:horizontal {{ background: {RECESSED_BG}; height: 6px; border-radius: 3px; }} QSlider::sub-page:horizontal {{ background: {color}; border-radius: 3px; }} QSlider::add-page:horizontal {{ background: {RECESSED_BG}; border-radius: 3px; }} QSlider::handle:horizontal {{ background: #DDD; border: none; width: 16px; height: 16px; margin: -5px 0; border-radius: 8px; }}")
+            slider.valueChanged.connect(callback)
+            row.addWidget(slider, 1)
+            number = QLabel(f"{value}%")
+            number.setFixedWidth(40)
+            number.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            number.setFont(_make_font(fn, 13))
+            number.setStyleSheet(f"color: {color}; background: transparent;")
+            row.addWidget(number)
+            header.addWidget(widget, 1)
+            return slider, number
 
-        self._cb_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_center_band"),
-                                    C_GRAY, C_GRAY_H)
-        self._cb_btn.setToolTip(t("tooltip.center_band"))
-        self._install_tip(self._cb_btn)
-        self._cb_btn.clicked.connect(self.add_center_band_clicked.emit)
-        r1.addWidget(self._cb_btn)
-
-        # 中心轮盘 toggle
-        self._wheel_btn = _IconTextBtn(
-            "\uE739", "\u25a3", t("toolbar.center_wheel"),
-            C_GRAY, C_GRAY_H)
-        self._wheel_btn.setToolTip(t("tooltip.wheel"))
-        self._install_tip(self._wheel_btn)
-        self._wheel_btn.clicked.connect(self._on_wheel_toggle)
-        r1.addWidget(self._wheel_btn)
-
-        # ── 手柄模式专属: +手柄键 / +摇杆 / +扳机 (默认隐藏) ──
-        self._add_gp_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_gp_button"),
-                                        C_GRAY, C_GRAY_H)
-        self._add_gp_btn.setToolTip(t("tooltip.add_gp_button"))
-        self._install_tip(self._add_gp_btn)
-        self._add_gp_btn.clicked.connect(self.add_gp_button_clicked.emit)
-        self._add_gp_btn.setVisible(False)
-        r1.addWidget(self._add_gp_btn)
-
-        self._add_stick_btn = _IconTextBtn("\uE710", "\uff0b", t("toolbar.add_gp_stick"),
-                                           C_GRAY, C_GRAY_H)
-        self._add_stick_btn.setToolTip(t("tooltip.add_gp_stick"))
-        self._install_tip(self._add_stick_btn)
-        self._add_stick_btn.clicked.connect(self.add_gp_stick_clicked.emit)
-        self._add_stick_btn.setVisible(False)
-        r1.addWidget(self._add_stick_btn)
-
-        # 方向盘 toggle (单例, 跟中心轮盘同套路: 灰→玫红+勾选)
-        self._wheel_gp_on = False
-        self._wheel_gp_btn = _IconTextBtn(
-            "\uE739", "\u25a3", t("toolbar.toggle_gp_wheel"),
-            C_GRAY, C_GRAY_H)
-        self._wheel_gp_btn.setToolTip(t("tooltip.toggle_gp_wheel"))
-        self._install_tip(self._wheel_gp_btn)
-        self._wheel_gp_btn.clicked.connect(self._on_gp_wheel_toggle)
-        self._wheel_gp_btn.setVisible(False)
-        r1.addWidget(self._wheel_gp_btn)
-
-        # 分隔线
-        r1.addWidget(_VSep())
-
-        # 语音识别
-        voice_btn = _IconTextBtn("\uE720", "\U0001F3A4", t("toolbar.voice"),
-                                 C_GRAY, C_GRAY_H)
-        voice_btn.setToolTip(t("tooltip.voice"))
-        self._install_tip(voice_btn)
-        voice_btn.clicked.connect(self.voice_clicked.emit)
-        r1.addWidget(voice_btn)
-
-        # 分隔线
-        r1.addWidget(_VSep())
-
-        # 软键盘
-        kb_btn = _IconTextBtn("\uE765", "\u2328", t("toolbar.keyboard"),
-                              C_GRAY, C_GRAY_H)
-        kb_btn.setToolTip(t("tooltip.keyboard"))
-        self._install_tip(kb_btn)
-        kb_btn.clicked.connect(self.keyboard_clicked.emit)
-        r1.addWidget(kb_btn)
-
-        # 键盘映射 (与软键盘同组: 都在处理「物理键盘」这件事)
-        remap_btn = _IconTextBtn("", "⇄", t("toolbar.key_remap"),
-                                 C_GRAY, C_GRAY_H)
-        remap_btn.setToolTip(t("tooltip.key_remap"))
-        self._install_tip(remap_btn)
-        remap_btn.clicked.connect(self.key_remap_clicked.emit)
-        r1.addWidget(remap_btn)
-
-        # 启动按钮 (琥珀色)
-        run_btn = _IconTextBtn("\uE768", "\u25b6", t("toolbar.start"),
-                               C_AMBER_D, C_AMBER, fg="#FFF")
-        run_btn.setToolTip(t("tooltip.start"))
-        self._install_tip(run_btn)
-        run_btn.clicked.connect(self.run_clicked.emit)
-        r1.addWidget(run_btn)
-
-        # 弹簧 → 将右侧按钮推到最右
-        r1.addStretch()
-
-        # 右上角: 最小化 | 设置 | 关闭 (关于已合并到设置内)
-        r1_right = QHBoxLayout()
-        r1_right.setSpacing(6)
-        # 分隔线: 把窗口控制 (最小化/设置/关闭) 与左侧工具区分开。
-        # 贴在最小化前面而不是启动后面 —— 两者之间隔着弹簧, 线跟着最小化走才不会悬空。
-        r1_right.addWidget(_VSep())
-        minimize_btn = self._build_sq_btn(
-            "\uE921", "_", C_TOOL, C_TOOL_H, "#CCC", self.minimize_clicked)
-        minimize_btn.setToolTip(t("tooltip.minimize"))
-        self._install_tip(minimize_btn)
-        r1_right.addWidget(minimize_btn)
-        settings_btn = self._build_sq_btn(
-            "\uE713", "\u2699", C_TOOL, C_TOOL_H, "#CCC", self.settings_clicked)
-        settings_btn.setToolTip(t("tooltip.settings"))
-        self._install_tip(settings_btn)
-        r1_right.addWidget(settings_btn)
-        close_btn = self._build_sq_btn(
-            "\uE711", "\u2715", C_CLOSE, C_CLOSE_H, "#FFF", self.quit_clicked)
-        close_btn.setToolTip(t("tooltip.quit"))
-        self._install_tip(close_btn)
-        r1_right.addWidget(close_btn)
-        r1.addLayout(r1_right)
-
-        main.addLayout(r1)
-
-        # ════ Row 2 ════
-        r2 = QHBoxLayout()
-        r2.setSpacing(0)
-
-        # 左对齐空白 (对齐拖拽把手 + 间距)
-        sp = QWidget()
-        sp.setFixedWidth(38)
-        r2.addWidget(sp)
-
-        # 模拟模式标签
-        sm_lbl = QLabel(t("toolbar.sim_mode"))
-        sm_lbl.setFont(_make_font(fn, 14, bold=True))
-        sm_lbl.setStyleSheet("color: #AAA; background: transparent;")
-        r2.addWidget(sm_lbl)
-        r2.addSpacing(8)
-
-        # 模拟模式按钮 — 点击弹下拉菜单 (键盘 / 手柄)
-        self._sm_btn = QPushButton(t("toolbar.sim_keyboard") + " \u25BC")
-        self._sm_btn.setFixedHeight(30)
-        self._sm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._sm_btn.setFont(_make_font(fn, 13, bold=True))
-        self._sm_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C_CYBER}; color: #E0E0E0; border: none;
-                border-radius: 6px; padding: 0 12px;
-            }}
-            QPushButton:hover {{ background: {C_CYBER_H}; }}
-        """)
-        self._sm_btn.setToolTip(t("toolbar.sim_tooltip"))
-        self._sm_btn.clicked.connect(self._show_sim_mode_menu)
-        r2.addWidget(self._sm_btn)
-
-        r2.addSpacing(14)
-        r2.addWidget(_VSep())
-        r2.addSpacing(14)
-
-        # 透明度标签
-        op_lbl = QLabel(t("toolbar.opacity"))
-        op_lbl.setFont(_make_font(fn, 14, bold=True))
-        op_lbl.setStyleSheet("color: #AAA; background: transparent;")
-        r2.addWidget(op_lbl)
-        r2.addSpacing(12)
-
-        # 透明度滑块 (原版: track #404040, fill amber, thumb #DDD)
-        self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setFixedHeight(24)
-        self._slider.setRange(10, 90)
-        self._slider.setValue(75)
-        self._slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                background: #404040; height: 8px; border-radius: 4px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #F59E0B; border-radius: 4px;
-            }
-            QSlider::add-page:horizontal {
-                background: #404040; border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #DDD; border: 1px solid #999;
-                width: 18px; height: 18px; margin: -5px 0; border-radius: 9px;
-            }
-            QSlider::handle:horizontal:hover {
-                background: #F59E0B; border-color: #D97706;
-            }
-        """)
-        self._slider.valueChanged.connect(self._on_opacity)
-        r2.addWidget(self._slider, 1)
-
-        r2.addSpacing(8)
-
-        # 百分比数值
-        self._val_lbl = QLabel("75%")
-        self._val_lbl.setFont(_make_font(fn, 14, bold=True))
-        self._val_lbl.setStyleSheet(f"color: {C_AMBER}; background: transparent;")
-        self._val_lbl.setFixedWidth(40)
-        self._val_lbl.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        r2.addWidget(self._val_lbl)
-
-        r2.addSpacing(14)
-        r2.addWidget(_VSep())
-        r2.addSpacing(14)
-
-        # 场景缩放标签
-        scale_lbl = QLabel(t("toolbar.scale"))
-        scale_lbl.setFont(_make_font(fn, 14, bold=True))
-        scale_lbl.setStyleSheet("color: #AAA; background: transparent;")
-        r2.addWidget(scale_lbl)
-        r2.addSpacing(12)
-
-        # 场景缩放滑块 (50-200%, step 10%)
-        self._scale_slider = QSlider(Qt.Orientation.Horizontal)
-        self._scale_slider.setFixedHeight(24)
-        self._scale_slider.setRange(50, 200)
+        self._slider, self._val_lbl = slider_group(t("toolbar.opacity"), C_AMBER, 10, 90, 75, self._on_opacity)
+        self._scale_slider, self._scale_val_lbl = slider_group(t("toolbar.scale"), C_AMBER, 50, 200, 100, self._on_scale_changed)
         self._scale_slider.setSingleStep(10)
         self._scale_slider.setPageStep(10)
-        self._scale_slider.setValue(100)
-        self._scale_slider.setStyleSheet("""
-            QSlider::groove:horizontal {
-                background: #404040; height: 8px; border-radius: 4px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #10B981; border-radius: 4px;
-            }
-            QSlider::add-page:horizontal {
-                background: #404040; border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #DDD; border: 1px solid #999;
-                width: 18px; height: 18px; margin: -5px 0; border-radius: 9px;
-            }
-            QSlider::handle:horizontal:hover {
-                background: #10B981; border-color: #059669;
-            }
-        """)
-        self._scale_slider.valueChanged.connect(self._on_scale_changed)
-        r2.addWidget(self._scale_slider, 1)
+        header.addWidget(_VSep())
+        for icon, fallback, signal, tip in [
+            ("\uE921", "_", self.minimize_clicked, "tooltip.minimize"),
+            ("\uE713", "⚙", self.settings_clicked, "tooltip.settings"),
+            ("\uE711", "×", self.quit_clicked, "tooltip.quit")]:
+            button = self._build_sq_btn(icon, fallback, C_CLOSE if tip == "tooltip.quit" else C_GRAY,
+                                        C_CLOSE_H if tip == "tooltip.quit" else C_GRAY_H, "#CCC", signal)
+            button.setToolTip(t(tip))
+            self._install_tip(button)
+            header.addWidget(button)
+        main.addLayout(header)
+        line = QFrame()
+        line.setFixedHeight(1)
+        line.setStyleSheet("background: #444;")
+        main.addWidget(line)
+        groups = QHBoxLayout()
+        groups.setSpacing(8)
 
-        r2.addSpacing(8)
+        remap = _IconTextBtn("\uE8AB", "⇄", t("toolbar.key_remap"), C_GRAY, C_GRAY_H)
+        self._component_width = max(108, remap.sizeHint().width() + 8)
+        remap.setFixedWidth(self._component_width)
+        self._remap_btn = remap
 
-        # 缩放数值 (%)
-        self._scale_val_lbl = QLabel("100%")
-        self._scale_val_lbl.setFont(_make_font(fn, 14, bold=True))
-        self._scale_val_lbl.setStyleSheet("color: #10B981; background: transparent;")
-        self._scale_val_lbl.setFixedWidth(48)
-        self._scale_val_lbl.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        r2.addWidget(self._scale_val_lbl)
+        def group(title, width=None):
+            widget = QWidget()
+            if width:
+                widget.setFixedWidth(width)
+            col = QVBoxLayout(widget)
+            col.setContentsMargins(0, 0, 0, 0)
+            col.setSpacing(8)
+            text = QLabel(title)
+            text.setFixedHeight(18)
+            text.setFont(_make_font(fn, 12))
+            text.setStyleSheet("color: #AAA; background: transparent;")
+            col.addWidget(text)
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            col.addLayout(row)
+            return widget, row
 
-        main.addLayout(r2)
+        self._mode_group, mode = group(ui_text("添加模拟组件", "Add input components"), 144 + 3 * self._component_width + 24)
+        self._mode_switch = _ModeSwitch()
+        self._mode_switch.requested.connect(self._on_sim_mode_picked)
+        self._mode_buttons = self._mode_switch.buttons
+        mode.addWidget(self._mode_switch)
+        self._mode_stack = QStackedWidget()
+        self._mode_stack.setFixedHeight(40)
+        mode.addWidget(self._mode_stack, 1)
+        for specs in [
+            [("_add_kb_btn", "toolbar.add_button", self.add_button_clicked.emit, "＋"),
+             ("_cb_btn", "toolbar.add_center_band", self.add_center_band_clicked.emit, "＋"),
+             ("_wheel_btn", "toolbar.center_wheel", self._on_wheel_toggle, "▣")],
+            [("_add_gp_btn", "toolbar.add_gp_button", self.add_gp_button_clicked.emit, "＋"),
+             ("_add_stick_btn", "toolbar.add_gp_stick", self.add_gp_stick_clicked.emit, "＋"),
+             ("_wheel_gp_btn", "toolbar.toggle_gp_wheel", self._on_gp_wheel_toggle, "▣")]]:
+            page = QWidget()
+            row = QHBoxLayout(page)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(8)
+            for attr, label, callback, icon in specs:
+                if attr in ('_wheel_btn', '_wheel_gp_btn'):
+                    button = _ComponentToggle(t(label), self._component_width)
+                else:
+                    button = _IconTextBtn('\uE710', '+', t(label), C_GRAY, C_GRAY_H, width=self._component_width)
+                    if button._icon_lbl:
+                        button._icon_lbl.setFont(_make_font(_ICON_FONT or fn, 24))
+                button.clicked.connect(callback)
+                button.setToolTip(t(label))
+                self._install_tip(button)
+                button.set_colors(C_GRAY, C_GRAY_H)
+                setattr(self, attr, button)
+                row.addWidget(button)
+            self._mode_stack.addWidget(page)
+        self._wheel_gp_on = False
+        groups.addWidget(self._mode_group)
+        groups.addWidget(_VSep())
+        voice_widget, voice = group(ui_text("语音控制", "Voice control"), self._component_width)
+        voice_button = _IconTextBtn("\uE720", "♪", t("toolbar.voice"), C_GRAY, C_GRAY_H, width=self._component_width)
+        self._voice_btn = voice_button
+        voice_button.clicked.connect(self.voice_clicked.emit)
+        voice_button.setToolTip(ui_text("设置语音指令、识别设备，并测试当前指令", "Edit voice commands, recognition settings and test commands."))
+        self._install_tip(voice_button)
+        voice.addWidget(voice_button)
+        groups.addWidget(voice_widget)
+        groups.addWidget(_VSep())
+        keys_widget, keys = group(t("toolbar.keyboard"), self._component_width * 2 + 8)
+        self._keyboard_btn = _IconTextBtn("\uE765", "⌨", ui_text("打开", "Show"), C_GRAY, C_GRAY_H, width=self._component_width)
+        self._keyboard_btn.clicked.connect(self.keyboard_clicked.emit)
+        self._keyboard_btn.setToolTip(t("tooltip.keyboard"))
+        self._install_tip(self._keyboard_btn)
+        keys.addWidget(self._keyboard_btn)
+        remap.clicked.connect(self.key_remap_clicked.emit)
+        remap.setToolTip(t("tooltip.key_remap"))
+        self._install_tip(remap)
+        keys.addWidget(remap)
+        groups.addWidget(keys_widget)
+        self._launch_separator = _VSep()
+        groups.addWidget(self._launch_separator)
+        launch_widget, launch = group(f"{ui_text('蛋挞', 'TEGG Touch')} v{APP_VERSION}")
+        self._brand_label = launch_widget.layout().itemAt(0).widget()
+        self._brand_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        run = _IconTextBtn("\uE768", "▶", t("toolbar.start"), C_AMBER_D, C_AMBER, fg="#FFF")
+        run.setMinimumWidth(96)
+        self._run_btn = run
+        run.clicked.connect(self.run_clicked.emit)
+        run.setToolTip(t("tooltip.start"))
+        self._install_tip(run)
+        launch.addWidget(run)
+        groups.addWidget(launch_widget, 1)
+        main.addLayout(groups)
+        self._refresh_mode_visual()
+
+    def _refresh_mode_visual(self):
+        self._mode_switch.set_mode(self._sim_mode)
+        self._mode_stack.setCurrentIndex(1 if self._sim_mode == 'gamepad' else 0)
+
+    def set_keyboard_visible(self, visible):
+        from views.ui_components import ui_text
+        self._keyboard_btn.set_label(ui_text("隐藏", "Hide") if visible else ui_text("打开", "Show"))
+
+    def _elide_profile_name(self):
+        metrics = self._prof_name_lbl.fontMetrics()
+        self._prof_name_lbl.setText(metrics.elidedText(self._profile_full_name, Qt.TextElideMode.ElideRight, self._prof_name_lbl.width()))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_profile_full_name'):
+            self._elide_profile_name()
 
     # ── 组件构建辅助 ─────────────────────────────────────────
 
     def _build_profile_btn(self, fn):
-        """方案选择器: Icon | Name | DropdownArrow (#0C4A6E, 原版 220px)"""
+        """Compact profile selector with a document icon for both input modes."""
         btn = QPushButton()
         btn.setFixedHeight(40)
         btn.setMinimumWidth(220)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(f"""
             QPushButton {{
-                background: {C_CYBER}; border: none; border-radius: 6px;
+                background: {C_GRAY}; border: none; border-radius: {INNER_RADIUS}px;
             }}
-            QPushButton:hover {{ background: {C_CYBER_H}; }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         btn.clicked.connect(self.profile_clicked.emit)
 
@@ -528,7 +514,7 @@ class EditToolbar(QWidget):
 
         # 图标
         if _ICON_FONT:
-            ic = QLabel("\uE765")
+            ic = QLabel("\uE8A5")
             ic.setFont(_make_font(_ICON_FONT, 20))
         else:
             ic = QLabel("\U0001F4C4")
@@ -568,7 +554,7 @@ class EditToolbar(QWidget):
             btn.setFont(_make_font(get_font(), 16, bold=True))
         btn.setStyleSheet(f"""
             QPushButton {{
-                background: {bg}; color: {fg}; border: none; border-radius: 6px;
+                background: {bg}; color: {fg}; border: none; border-radius: {INNER_RADIUS}px;
             }}
             QPushButton:hover {{ background: {bg_h}; }}
         """)
@@ -655,7 +641,9 @@ class EditToolbar(QWidget):
     # ── 外部接口 ─────────────────────────────────────────────
 
     def set_profile_name(self, name: str):
-        self._prof_name_lbl.setText(name)
+        self._profile_full_name = name
+        self._profile_btn.setToolTip(name + "\n" + t("tooltip.profiles"))
+        self._elide_profile_name()
 
     def set_wheel_state(self, visible: bool):
         """同步轮盘按钮外观 — 配置加载/切换时调用"""
@@ -669,71 +657,16 @@ class EditToolbar(QWidget):
 
     # ── 模拟模式 (键盘 / 手柄) ───────────────────────────────────
 
-    def _show_sim_mode_menu(self):
-        """弹出模拟模式选择菜单 — 在按钮上方对齐左下角。"""
-        menu = QMenu(self)
-        menu.setStyleSheet(f"""
-            QMenu {{
-                background: {C_PANEL}; color: #E0E0E0;
-                border: 1px solid #555; padding: 4px;
-            }}
-            QMenu::item {{
-                padding: 6px 18px; border-radius: 4px;
-            }}
-            QMenu::item:selected {{ background: {C_CYBER_H}; color: #FFF; }}
-        """)
-        act_kb = QAction(t("toolbar.sim_keyboard"), menu)
-        act_kb.triggered.connect(lambda: self._on_sim_mode_picked('keyboard'))
-        menu.addAction(act_kb)
-        act_gp = QAction(t("toolbar.sim_gamepad"), menu)
-        act_gp.triggered.connect(lambda: self._on_sim_mode_picked('gamepad'))
-        menu.addAction(act_gp)
-        # 锚到按钮左下角弹出
-        pos = self._sm_btn.mapToGlobal(QPoint(0, self._sm_btn.height()))
-        menu.exec(pos)
-
     def _on_sim_mode_picked(self, mode: str):
-        """菜单选中 — 转发给外部决定能否切换 (手柄要先检测驱动)。"""
+        """模式选择 — 转发给外部决定能否切换 (手柄要先检测驱动)。"""
         if mode == self._sim_mode:
             return
         self.sim_mode_change_requested.emit(mode)
 
     def set_sim_mode(self, mode: str):
-        """外部确认切换后调用，更新 UI: 按钮文字 + Row1 按钮显隐。"""
-        if mode not in ('keyboard', 'gamepad'):
-            mode = 'keyboard'
-        self._sim_mode = mode
-        if mode == 'gamepad':
-            self._sm_btn.setText(t("toolbar.sim_gamepad") + " \u25BC")
-            self._add_kb_btn.setVisible(False)
-            self._cb_btn.setVisible(False)
-            self._wheel_btn.setVisible(False)
-            self._add_gp_btn.setVisible(True)
-            self._add_stick_btn.setVisible(True)
-            self._wheel_gp_btn.setVisible(True)
-        else:
-            self._sm_btn.setText(t("toolbar.sim_keyboard") + " \u25BC")
-            self._add_kb_btn.setVisible(True)
-            self._cb_btn.setVisible(True)
-            self._wheel_btn.setVisible(True)
-            self._add_gp_btn.setVisible(False)
-            self._add_stick_btn.setVisible(False)
-            self._wheel_gp_btn.setVisible(False)
-        # 强制整条布局链 invalidate，否则 hide 后的 sizeHint 仍可能含旧宽度
-        for w in (self._add_kb_btn, self._cb_btn, self._wheel_btn,
-                  self._add_gp_btn, self._add_stick_btn, self._wheel_gp_btn):
-            w.updateGeometry()
-        # 容器内层 + 外层 都要 invalidate
-        container = self.findChild(QFrame, "et_container")
-        if container is not None and container.layout() is not None:
-            container.layout().invalidate()
-            container.layout().activate()
-            container.adjustSize()
-        if self.layout() is not None:
-            self.layout().invalidate()
-            self.layout().activate()
-        self.adjustSize()
-        self._position_toolbar()
+        """Only reflect the mode confirmed by the overlay / driver check."""
+        self._sim_mode = mode if mode in ('keyboard', 'gamepad') else 'keyboard'
+        self._refresh_mode_visual()
 
     # ── Tip 事件过滤器 ───────────────────────────────────────
 

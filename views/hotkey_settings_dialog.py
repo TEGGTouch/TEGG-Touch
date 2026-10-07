@@ -20,6 +20,8 @@ import os
 import webbrowser
 
 from core.i18n import t, get_font, load_locale, get_lang
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row, text_on_surface
+from views.color_picker_dialog import ColorPickerDialog
 from core.constants import (
     DEFAULT_HOTKEYS, get_hotkey_labels, APP_VERSION, get_app_title, APP_DIR,
     DEFAULT_CURSOR_STYLES, CURSOR_SCALE_OPTIONS, CURSOR_BASE_SIZE,
@@ -27,11 +29,12 @@ from core.constants import (
 from core.config_manager import load_hotkeys, save_hotkeys
 from scene.virtual_cursor_item import render_cursor_pixmap, clear_cursor_render_cache
 
+C_INPUT_BG = RECESSED_BG
+
 # ── 颜色 ──
 C_PM_BG = "#2D2D2D"
 C_GRAY = "#3A3A3A"
 C_GRAY_H = "#505050"
-C_INPUT_BG = "#3A3A3A"
 C_CLOSE = "#6E1E1E"
 C_CLOSE_H = "#8B2020"
 C_CYBER = "#0C4A6E"
@@ -175,8 +178,8 @@ class TagInput(QWidget):
             lbl.setFont(_make_font(fn, 12, bold=True))
             lbl.setStyleSheet(f"""
                 QLabel {{
-                    background: {self._accent}; color: #FFF;
-                    padding: 2px 6px; border-radius: 4px;
+                    background: {self._accent}; color: {text_on_surface(self._accent)};
+                    padding: 2px 6px; border-radius: {SMALL_RADIUS}px;
                 }}
             """)
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -238,7 +241,7 @@ class _FlowKeys(QWidget):
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {C_TAG_BG}; color: {C_TAG_TEXT};
-                    border: none; border-radius: 6px;
+                    border: none; border-radius: {SMALL_RADIUS}px;
                     padding: 0 {self.TAG_PAD_X}px;
                 }}
                 QPushButton:hover {{ background: {C_TAG_HOVER}; }}
@@ -284,12 +287,12 @@ class HotkeySettingsDialog(QDialog):
     defaults_reset = pyqtSignal()   # 重置默认时发出，通知主窗口重置透明度和工具栏位置
     language_changed = pyqtSignal(str)
 
-    SIDEBAR_W = 130
-    CONTENT_W = 400                                # 中间内容区 (快捷键/语言页)
+    SIDEBAR_W = 168
+    CONTENT_W = 440                                # 中间内容区 (快捷键/语言页)
     LEFT_W = SIDEBAR_W + 10 + 1 + 10 + CONTENT_W   # = 551 (sidebar+spacing+divider+spacing+content)
     PADDING = 20
-    WIN_W = 1200
-    WIN_H = 960
+    WIN_W = 1280
+    WIN_H = 820
     # 右侧 wrapper = 剩余宽度 (含 divider + spacing + palette)
     RIGHT_PANEL_W = WIN_W - LEFT_W - 20 - PADDING * 2   # = 589
     RIGHT_W = RIGHT_PANEL_W - 1 - 10                    # = 578 (palette 实际宽度)
@@ -305,11 +308,39 @@ class HotkeySettingsDialog(QDialog):
             | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(self.WIN_W, self.WIN_H)
+        from views.ui_components import dialog_size
+        actual_width, actual_height = dialog_size(self, (1280, 820))
+        self.WIN_W = actual_width
+        self.RIGHT_PANEL_W = actual_width - self.LEFT_W - 70
+        self.RIGHT_W = self.RIGHT_PANEL_W - 11
+        self.WIDE_LEFT_W = actual_width - 48
+        self.WIDE_CONTENT_W = self.WIDE_LEFT_W - self.SIDEBAR_W - 21
+        self.setFixedSize(actual_width, actual_height)
 
         self._hotkeys = load_hotkeys()
         self._focus_widget = None
         self._init_ui()
+        from views.ui_components import finish_dialog, scroll_widget
+        page_actions = []
+        actions = []
+        for index in (0, 1, 5):
+            page = self._stack.widget(index)
+            buttons = [b for b in page.findChildren(QPushButton)
+                       if b.text() in (t("hotkey.save"), t("hotkey.reset"),
+                                       t("hotkey.cursor_reset_arrow"), t("hotkey.cursor_reset_ball"))]
+            actions.extend(buttons)
+            page_actions.append((page, buttons))
+        current = self._stack.currentIndex()
+        for index in range(self._stack.count()):
+            page = self._stack.widget(index)
+            self._stack.removeWidget(page)
+            self._stack.insertWidget(index, scroll_widget(page))
+        self._stack.setCurrentIndex(current)
+        finish_dialog(self, (1280, 820), actions=actions, columns=True,
+                      guidance=("选择左侧设置分类，预览与说明帮助你确认调整效果", "Choose a category; use previews and descriptions to check your adjustments."),
+                      page_actions=page_actions)
+        for binding in self._ui_action_filters:
+            binding.sync()
         self._center_on_screen()
         self._drag_pos = None
 
@@ -325,7 +356,7 @@ class HotkeySettingsDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#hs_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -547,8 +578,8 @@ class HotkeySettingsDialog(QDialog):
         # 光标(1) / 按钮配色(5) / 日志(3) / 关于(4) 页拉宽 left_wrapper 和 stack
         if hasattr(self, '_left_wrapper'):
             if idx in (1, 3, 4, 5):
-                self._stack.setFixedWidth(self.WIDE_CONTENT_W)
-                self._left_wrapper.setFixedWidth(self.WIDE_LEFT_W)
+                self._stack.setFixedWidth(self.width() - 48 - self.SIDEBAR_W - 21)
+                self._left_wrapper.setFixedWidth(self.width() - 48)
             else:
                 self._stack.setFixedWidth(self.CONTENT_W)
                 self._left_wrapper.setFixedWidth(self.LEFT_W)
@@ -717,7 +748,7 @@ class HotkeySettingsDialog(QDialog):
     def _build_cursor_column(self, fn, ct: str, label_text: str):
         col = QFrame()
         col.setStyleSheet(
-            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         cl = QVBoxLayout(col)
         cl.setContentsMargins(20, 18, 20, 18)
         cl.setSpacing(12)
@@ -777,13 +808,13 @@ class HotkeySettingsDialog(QDialog):
         scale_slider.setValue(int(round(cur_scale * 100)))
         scale_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 4px;
+                background: {RECESSED_BG}; height: 8px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
-                background: {C_CYBER_H}; border-radius: 4px;
+                background: {C_CYBER_H}; border-radius: 3px;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 4px;
+                background: {RECESSED_BG}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;
@@ -832,16 +863,17 @@ class HotkeySettingsDialog(QDialog):
         return row
 
     def _apply_color_btn_style(self, btn: QPushButton, color_hex: str):
+        btn.setProperty('ui_color_sample', True)
         btn.setText(color_hex.upper())
         # 选个对比色文字: 暗色背景白字, 亮色背景黑字
         c = QColor(color_hex)
         # luminance
         lum = 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()
-        fg = "#000" if lum > 140 else "#FFF"
+        fg = text_on_surface(color_hex, "#000" if lum > 140 else "#FFF")
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {color_hex}; color: {fg};
-                border: 1px solid #555; border-radius: 4px;
+                border: 1px solid #555; border-radius: 6px;
                 font-family: monospace; font-size: 12px;
             }}
             QPushButton:hover {{ border-color: #888; }}
@@ -849,7 +881,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_pick_color(self, ct: str, key: str, btn: QPushButton):
         initial = QColor(self._cursor_buf[ct].get(key, '#FFFFFF'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, t(f"hotkey.cursor_{key}"),
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -922,7 +954,7 @@ class HotkeySettingsDialog(QDialog):
         tag = QLabel(t("hotkey.shape_active_tag"))
         tag.setFont(_make_font(fn, 11, bold=True))
         tag.setStyleSheet(
-            f"color: #000; background: #F59E0B; border-radius: 9px; padding: 1px 10px;")
+            f"color: #000; background: #F59E0B; border-radius: {SMALL_RADIUS}px; padding: 1px 10px;")
         hl.addWidget(tag)
         hl.addStretch()
         hint = QLabel(t("hotkey.shape_click_activate"))
@@ -969,14 +1001,14 @@ class HotkeySettingsDialog(QDialog):
             bg = "#2A2620" if active else "#1E1E1E"
             g['frame'].setStyleSheet(
                 f"QFrame#shape_group_{s} {{ background: {bg}; "
-                f"border: 2px solid {border}; border-radius: 10px; }}")
+                f"border: 2px solid {border}; border-radius: 6px; }}")
 
     # ── 圆球组列 ──────────────────────────────────────────────
 
     def _build_ball_column(self, fn, ct: str, label_text: str):
         col = QFrame()
         col.setStyleSheet(
-            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         cl = QVBoxLayout(col)
         cl.setContentsMargins(20, 18, 20, 18)
         cl.setSpacing(12)
@@ -1061,9 +1093,9 @@ class HotkeySettingsDialog(QDialog):
 
     def _slider_qss(self):
         return f"""
-            QSlider::groove:horizontal {{ background: #404040; height: 8px; border-radius: 4px; }}
-            QSlider::sub-page:horizontal {{ background: {C_CYBER_H}; border-radius: 4px; }}
-            QSlider::add-page:horizontal {{ background: #404040; border-radius: 4px; }}
+            QSlider::groove:horizontal {{ background: {RECESSED_BG}; height: 8px; border-radius: 3px; }}
+            QSlider::sub-page:horizontal {{ background: {C_CYBER_H}; border-radius: 3px; }}
+            QSlider::add-page:horizontal {{ background: {RECESSED_BG}; border-radius: 3px; }}
             QSlider::handle:horizontal {{ background: #DDD; border: none;
                 width: 16px; height: 16px; margin: -4px 0; border-radius: 8px; }}
             QSlider::handle:horizontal:hover {{ background: {C_CYBER_H}; }}
@@ -1089,7 +1121,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_ball_pick_color(self, ct: str, btn: QPushButton):
         initial = QColor(self._ball_buf[ct].get('color', '#000000'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, t("hotkey.cursor_color"),
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1216,7 +1248,7 @@ class HotkeySettingsDialog(QDialog):
     def _build_bc_column(self, fn, g: str, label_text: str):
         col = QFrame()
         col.setStyleSheet(
-            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         cl = QVBoxLayout(col)
         cl.setContentsMargins(20, 18, 20, 18)
         cl.setSpacing(12)
@@ -1277,7 +1309,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_bc_pick(self, g: str, btn: QPushButton):
         initial = QColor(self._button_colors_buf[g])
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, t("hotkey.bc_base"),
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1302,7 +1334,7 @@ class HotkeySettingsDialog(QDialog):
         self._ensure_wheel_buf()
         col = QFrame()
         col.setStyleSheet(
-            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         cl = QVBoxLayout(col)
         cl.setContentsMargins(20, 18, 20, 18)
         cl.setSpacing(12)
@@ -1392,7 +1424,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_wheel_card_pick(self):
         initial = QColor(self._wheel_buf.get('color', '#3B82F6'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, t("hotkey.bc_wheel"),
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1443,7 +1475,7 @@ class HotkeySettingsDialog(QDialog):
         # 单卡片: 预览 + color
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         card.setFixedWidth(400)
         cl = QVBoxLayout(card)
         cl.setContentsMargins(24, 22, 24, 22)
@@ -1553,7 +1585,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_wheel_color_pick(self):
         initial = QColor(self._wheel_buf.get('color', '#3B82F6'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, "方向盘颜色",
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1565,7 +1597,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_wheel_trigger_pick(self, key: str, btn: QPushButton):
         initial = QColor(self._wheel_buf.get(key, '#0284C7'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, "扳机色",
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1658,6 +1690,7 @@ class HotkeySettingsDialog(QDialog):
         btn_row.addWidget(self._lang_en_btn)
 
         btn_row.addStretch()
+        self._lang_segments = segmented_row(btn_row)
         v.addLayout(btn_row)
 
         v.addSpacing(20)
@@ -1712,7 +1745,7 @@ class HotkeySettingsDialog(QDialog):
         # === 左栏: 状态卡 ===
         left = QFrame()
         left.setStyleSheet(
-            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         ll = QVBoxLayout(left)
         ll.setContentsMargins(20, 18, 20, 18)
         ll.setSpacing(10)
@@ -1769,7 +1802,7 @@ class HotkeySettingsDialog(QDialog):
         # === 右栏: 操作卡 ===
         right = QFrame()
         right.setStyleSheet(
-            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+            "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         rl = QVBoxLayout(right)
         rl.setContentsMargins(20, 18, 20, 18)
         rl.setSpacing(14)
@@ -2033,7 +2066,7 @@ class HotkeySettingsDialog(QDialog):
             qr_label.setText(t("about.qr_missing"))
             qr_label.setStyleSheet(
                 "background: #3A3A3A; color: #888; "
-                "border: 1px solid #555; border-radius: 8px; font-size: 14px;")
+                "border: 1px solid #555; border-radius: 6px; font-size: 14px;")
             qr_label.setFixedSize(qr_size, qr_size)
             qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         qr_row.addWidget(qr_label, 0, Qt.AlignmentFlag.AlignTop)
@@ -2154,7 +2187,7 @@ class HotkeySettingsDialog(QDialog):
         self._ac_delay_entry.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_INPUT_BG}; color: {accent};
-                border: 1px solid #555; border-radius: 4px;
+                border: 1px solid #555; border-radius: 6px;
             }}
             QLineEdit:focus {{ border-color: {accent}; }}
         """)
@@ -2176,13 +2209,13 @@ class HotkeySettingsDialog(QDialog):
         self._ac_delay_slider.setSingleStep(100)
         self._ac_delay_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 4px;
+                background: {RECESSED_BG}; height: 8px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
-                background: {accent}; border-radius: 4px;
+                background: {accent}; border-radius: 3px;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 4px;
+                background: {RECESSED_BG}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;
@@ -2221,7 +2254,7 @@ class HotkeySettingsDialog(QDialog):
                 background: transparent; width: 8px; border: none;
             }
             QScrollBar::handle:vertical {
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 6px; min-height: 30px;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 height: 0;
@@ -2283,36 +2316,9 @@ class HotkeySettingsDialog(QDialog):
 
     def _update_lang_buttons(self):
         is_zh = self._selected_lang.startswith("zh")
-
-        # 中文按钮: 选中时显示勾 icon
         self._zh_icon_lbl.setVisible(is_zh)
-        zh_fg = "#FFF" if is_zh else "#E0E0E0"
-        self._zh_text_lbl.setStyleSheet(f"color: {zh_fg}; background: transparent;")
-        self._zh_icon_lbl.setStyleSheet(f"color: {zh_fg}; background: transparent;")
-        self._lang_zh_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C_CYBER if is_zh else "#404040"};
-                border: none; border-radius: 6px;
-            }}
-            QPushButton:hover {{
-                background: {C_CYBER_H if is_zh else "#505050"};
-            }}
-        """)
-
-        # English 按钮: 选中时显示勾 icon
         self._en_icon_lbl.setVisible(not is_zh)
-        en_fg = "#FFF" if not is_zh else "#E0E0E0"
-        self._en_text_lbl.setStyleSheet(f"color: {en_fg}; background: transparent;")
-        self._en_icon_lbl.setStyleSheet(f"color: {en_fg}; background: transparent;")
-        self._lang_en_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C_CYBER if not is_zh else "#404040"};
-                border: none; border-radius: 6px;
-            }}
-            QPushButton:hover {{
-                background: {C_CYBER_H if not is_zh else "#505050"};
-            }}
-        """)
+        self._lang_segments.set_selected(0 if is_zh else 1)
 
     # ── 保存/重置 ──
 

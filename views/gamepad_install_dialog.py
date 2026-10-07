@@ -95,6 +95,8 @@ class GamepadInstallDialog(QDialog):
         self._status_info: dict = {}
         self._thread: _InstallThread | None = None
         self._build_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (560, 360), actions=[self._btn_secondary, self._btn_primary], columns=False, guidance=None)
         self._center_on_screen()
         # 自动检测
         self._enter_detecting()
@@ -107,6 +109,7 @@ class GamepadInstallDialog(QDialog):
         outer.setContentsMargins(0, 0, 0, 0)
 
         container = QFrame()
+        container.setObjectName("driver_container")
         container.setStyleSheet(f"""
             QFrame {{
                 background: {C_PM_BG};
@@ -143,10 +146,10 @@ class GamepadInstallDialog(QDialog):
         self._bar.setFixedHeight(8)
         self._bar.setStyleSheet(f"""
             QProgressBar {{
-                background: #2A2A2A; border: none; border-radius: 4px;
+                background: #2A2A2A; border: none; border-radius: 6px;
             }}
             QProgressBar::chunk {{
-                background: {C_CYBER_H}; border-radius: 4px;
+                background: {C_CYBER_H}; border-radius: 6px;
             }}
         """)
         self._bar.setVisible(False)

@@ -19,17 +19,19 @@ from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon, QIcon, QPixma
 from PyQt6.QtSvg import QSvgRenderer
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, PANEL_BG, AMBER_BG, AMBER_TEXT, segmented_row
 from core.constants import (
     APP_DIR,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
-    C_INPUT_BG,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 
 _C_BG = C_PM_BG
 _C_BORDER = "#444"
-_C_BLUE = "#3B82F6"
-_C_BLUE_H = "#60A5FA"
+_C_ACCENT = AMBER_BG
+_C_ACCENT_H = AMBER_BG
 _C_TEXT = "#E0E0E0"
 _C_HINT = "#888"
 _C_DEFAULT_TEXT = "#AAAAAA"
@@ -87,11 +89,11 @@ _ROT_DEFAULT_IDX = 1   # 180° 为默认
 
 
 class _DefaultMarkedSlider(QSlider):
-    """slider 上方画 ▼ 三角; 当前值 == 默认值 → 蓝, 否则灰白 (复用 gp_stick_editor 模式)"""
+    """slider 上方画 ▼ 三角; 默认值标记为琥珀，偏离默认值时为灰白。"""
     TRI_TOP = 4
     TRI_H = 8
     TRACK_MARGIN_TOP = 20
-    WIDGET_H = 34
+    WIDGET_H = 44
 
     def __init__(self, min_v, max_v, init, default_v, parent=None):
         super().__init__(Qt.Orientation.Horizontal, parent)
@@ -113,7 +115,7 @@ class _DefaultMarkedSlider(QSlider):
         usable_w = max(1, self.width() - 2 * margin)
         pct = (self._default - self.minimum()) / rng
         x = int(margin + pct * usable_w)
-        color = _C_BLUE if self.is_at_default() else _C_MARK
+        color = _C_ACCENT if self.is_at_default() else _C_MARK
         tri = QPolygon([
             QPoint(x - 5, self.TRI_TOP),
             QPoint(x + 5, self.TRI_TOP),
@@ -148,7 +150,7 @@ class _TriggerSection(QWidget):
 
         sec_lbl = QLabel(title)
         sec_lbl.setFont(_font(fn, 16, bold=True))
-        sec_lbl.setStyleSheet(f"color: {_C_BLUE_H}; background: transparent;")
+        sec_lbl.setStyleSheet(f"color: {_C_ACCENT_H}; background: transparent;")
         lay.addWidget(sec_lbl)
 
         # 控制方式 — tab 按钮 (三选一, 互斥由 Dialog 协调)
@@ -175,6 +177,7 @@ class _TriggerSection(QWidget):
             b.clicked.connect(lambda _, k=key: self._on_tab_clicked(k))
             mode_row.addWidget(b, 1)
             self._mode_btns[key] = b
+        self._mode_segments = segmented_row(mode_row, self._mode_btns)
         lay.addLayout(mode_row)
         self._refresh_tab_styles()
 
@@ -198,12 +201,12 @@ class _TriggerSection(QWidget):
         self._reverse_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
+                width: 16px; height: 16px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
-            QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+            QCheckBox::indicator:hover {{ border-color: {_C_ACCENT_H}; }}
             QCheckBox::indicator:checked {{
-                background: {_C_BLUE}; border: 2px solid {_C_BLUE};
+                background: {_C_ACCENT}; border: 2px solid {_C_ACCENT};
                 image: url({_CHECK_ICON_URL});
             }}
         """)
@@ -296,6 +299,7 @@ class _TriggerSection(QWidget):
         self._rb_marker_r.toggled.connect(self._on_marker_btn_toggled)
         btn_row.addWidget(self._rb_marker_l); btn_row.addSpacing(20)
         btn_row.addWidget(self._rb_marker_r); btn_row.addStretch()
+        self._marker_segments = segmented_row(btn_row)
         v.addLayout(btn_row)
         return page
 
@@ -309,7 +313,7 @@ class _TriggerSection(QWidget):
             QRadioButton {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
             QRadioButton:checked {{ color: {color}; font-weight: bold; }}
             QRadioButton::indicator {{
-                width: 16px; height: 16px; border-radius: 9px;
+                width: 16px; height: 16px; border-radius: 8px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QRadioButton::indicator:hover {{ border-color: {color}; }}
@@ -380,56 +384,22 @@ class _TriggerSection(QWidget):
         self._refresh_tab_styles()
 
     def _refresh_tab_styles(self):
-        """tab 三态: 选中=C_CYBER/C_CYBER_H; 空闲=C_GRAY/C_GRAY_H; 禁用=透明无填充 + 细边框 + 灰字 + tooltip
-        ☑ 图标规则:
-          - 这一侧选中 → 白勾
-          - 对面正在用同一 mode (灰勾, 提示"被对方采用了")
-          - 因其他原因禁用 (例如 marker+buttons 冲突) 但没人选这个 → 不画勾"""
         empty_icon = QIcon()
         other_mode = getattr(self, '_other_selected_mode', None)
-        for key, b in self._mode_btns.items():
-            is_selected = (key == self._current_mode)
-            is_disabled = (key in self._disabled_reasons)
-            is_other_using = (key == other_mode) and not is_selected
-            # ☑: 选中 (白) 或 对方采用 (灰); 仅"被禁但没人选"时无勾
-            if is_selected:
-                b.setIcon(_check_icon("#FFFFFF"))
-            elif is_other_using:
-                b.setIcon(_check_icon("#555555"))
+        for key, button in self._mode_btns.items():
+            selected = key == self._current_mode
+            disabled = key in self._disabled_reasons
+            if selected:
+                button.setIcon(_check_icon(AMBER_TEXT))
+            elif key == other_mode:
+                button.setIcon(_check_icon("#555555"))
             else:
-                b.setIcon(empty_icon)
-            b.setIconSize(QSize(16, 16))
-            if is_disabled:
-                b.setEnabled(False)
-                b.setCursor(Qt.CursorShape.ArrowCursor)
-                b.setToolTip(self._disabled_reasons[key])
-                # 不填充 (transparent), 用细边框维持高度/形状; QSS 用 :disabled 防被默认灰板覆盖
-                b.setStyleSheet("""
-                    QPushButton, QPushButton:disabled {
-                        background: transparent; color: #555;
-                        border: 1px solid #3A3A3A; border-radius: 6px;
-                    }
-                """)
-            else:
-                b.setEnabled(True)
-                b.setCursor(Qt.CursorShape.PointingHandCursor)
-                b.setToolTip("")
-                if is_selected:
-                    b.setStyleSheet(f"""
-                        QPushButton {{
-                            background: {C_CYBER}; color: #FFF;
-                            border: none; border-radius: 6px;
-                        }}
-                        QPushButton:hover {{ background: {C_CYBER_H}; }}
-                    """)
-                else:
-                    b.setStyleSheet(f"""
-                        QPushButton {{
-                            background: {C_GRAY}; color: #CCC;
-                            border: none; border-radius: 6px;
-                        }}
-                        QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}
-                    """)
+                button.setIcon(empty_icon)
+            button.setIconSize(QSize(16, 16))
+            button.setEnabled(not disabled)
+            button.setCursor(Qt.CursorShape.ArrowCursor if disabled else Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(self._disabled_reasons.get(key, ""))
+        self._mode_segments.set_selected(self._current_mode)
 
     def refresh_from_data(self):
         """从 self._data 重新读所有字段并刷新 UI (供「恢复默认」用)"""
@@ -510,15 +480,15 @@ def _make_radio(fn, text):
     rb.setStyleSheet(f"""
         QRadioButton {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
         QRadioButton::indicator {{
-            width: 16px; height: 16px; border-radius: 9px;
+            width: 16px; height: 16px; border-radius: 8px;
             border: 2px solid #666; background: {_C_BG};
         }}
-        QRadioButton::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+        QRadioButton::indicator:hover {{ border-color: {_C_ACCENT_H}; }}
         QRadioButton::indicator:checked {{
-            border: 2px solid {_C_BLUE}; background: {_C_BG};
+            border: 2px solid {_C_ACCENT}; background: {_C_BG};
             image: url({_RADIO_DOT_URL});
         }}
-        QRadioButton::indicator:checked:hover {{ border: 2px solid {_C_BLUE_H}; }}
+        QRadioButton::indicator:checked:hover {{ border: 2px solid {_C_ACCENT_H}; }}
     """)
     return rb
 
@@ -535,22 +505,22 @@ def _make_value_slider(fn, label_text, init, min_v, max_v, default_v, suffix):
     slider = _DefaultMarkedSlider(min_v, max_v, init, default_v)
     slider.setStyleSheet(f"""
         QSlider::groove:horizontal {{
-            background: #404040; height: 6px; border-radius: 3px;
+            background: {RECESSED_BG}; height: 6px; border-radius: 3px;
             margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
         }}
         QSlider::sub-page:horizontal {{
-            background: {_C_BLUE}; border-radius: 3px;
+            background: {_C_ACCENT}; border-radius: 3px;
             margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
         }}
         QSlider::add-page:horizontal {{
-            background: #404040; border-radius: 3px;
+            background: {RECESSED_BG}; border-radius: 3px;
             margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
         }}
         QSlider::handle:horizontal {{
-            background: #DDD; border: 1px solid #999;
+            background: #DDD; border: none;
             width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
         }}
-        QSlider::handle:horizontal:hover {{ background: {_C_BLUE}; border-color: {_C_BLUE_H}; }}
+        QSlider::handle:horizontal:hover {{ background: {_C_ACCENT}; border-color: {_C_ACCENT_H}; }}
     """)
 
     default_prefix = t("gp_stick_editor.default_prefix")
@@ -559,7 +529,7 @@ def _make_value_slider(fn, label_text, init, min_v, max_v, default_v, suffix):
         at_default = (v == default_v)
         text = f"{default_prefix} {v}{suffix}" if at_default else f"{v}{suffix}"
         value_lbl.setText(text)
-        color = _C_BLUE if at_default else _C_BLUE_H
+        color = _C_ACCENT if at_default else _C_ACCENT_H
         value_lbl.setStyleSheet(f"color: {color}; background: transparent;")
 
     _refresh(init)
@@ -577,8 +547,8 @@ class GpWheelEditorDialog(QDialog):
     WIN_W = 1280
     WIN_H = 960
     PADDING = 20
-    SIDEBAR_W = 260
-    CONTENT_W = 960
+    SIDEBAR_W = 160
+    CONTENT_W = 1000
 
     def __init__(self, item, parent=None):
         super().__init__(parent)
@@ -591,9 +561,14 @@ class GpWheelEditorDialog(QDialog):
             | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(self.WIN_W, self.WIN_H)
+        from views.ui_components import dialog_size
+        actual_width, actual_height = dialog_size(self, (1280, 820))
+        self.CONTENT_W = actual_width - 48 - self.SIDEBAR_W - 21
+        self.setFixedSize(actual_width, actual_height)
 
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1280, 820), actions=[t("gp_wheel_editor.delete"), "恢复默认", self._mouse_cfg_btn, self._save_btn], columns=True, guidance=('先选择轻松操控或复杂设置，再调整当前模式参数', 'Choose Easy or Advanced, then adjust the current mode.'))
         self._validate_mutual_exclusion()
         self._center_on_screen()
         self._drag_pos = None
@@ -607,7 +582,7 @@ class GpWheelEditorDialog(QDialog):
         container.setObjectName("gpwheel_container")
         container.setStyleSheet(f"""
             QFrame#gpwheel_container {{
-                background: {_C_BG}; border-radius: 4px; border: 1px solid {_C_BORDER};
+                background: {_C_BG}; border-radius: 6px; border: 1px solid {_C_BORDER};
             }}
         """)
         outer.addWidget(container)
@@ -663,7 +638,7 @@ class GpWheelEditorDialog(QDialog):
         scroll.setStyleSheet("""
             QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-            QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+            QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         """)
         body = QWidget(); body.setStyleSheet("background: transparent;")
@@ -676,7 +651,7 @@ class GpWheelEditorDialog(QDialog):
         # ─── Section 1 方向盘参数 ───
         sec1 = QLabel(t("gp_wheel_editor.section_wheel"))
         sec1.setFont(_font(fn, 16, bold=True))
-        sec1.setStyleSheet(f"color: {_C_BLUE_H}; background: transparent;")
+        sec1.setStyleSheet(f"color: {_C_ACCENT_H}; background: transparent;")
         sc.addWidget(sec1)
         sc.addSpacing(10)
 
@@ -691,12 +666,12 @@ class GpWheelEditorDialog(QDialog):
         self._show_zone_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 6px; }}
             QCheckBox::indicator {{
-                width: 14px; height: 14px; border-radius: 3px;
+                width: 14px; height: 14px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
-            QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+            QCheckBox::indicator:hover {{ border-color: {_C_ACCENT_H}; }}
             QCheckBox::indicator:checked {{
-                background: {_C_BLUE}; border: 2px solid {_C_BLUE};
+                background: {_C_ACCENT}; border: 2px solid {_C_ACCENT};
                 image: url({_CHECK_ICON_URL});
             }}
         """)
@@ -731,7 +706,7 @@ class GpWheelEditorDialog(QDialog):
         self._show_dz_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 6px; }}
             QCheckBox::indicator {{
-                width: 14px; height: 14px; border-radius: 3px;
+                width: 14px; height: 14px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QCheckBox::indicator:hover {{ border-color: {_MARKER_ROSE}; }}
@@ -773,22 +748,22 @@ class GpWheelEditorDialog(QDialog):
             0, len(_ROT_STOPS) - 1, cur_idx, _ROT_DEFAULT_IDX)
         self._rot_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 6px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 6px; border-radius: 3px;
                 margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
             }}
             QSlider::sub-page:horizontal {{
-                background: {_C_BLUE}; border-radius: 3px;
+                background: {_C_ACCENT}; border-radius: 3px;
                 margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: {RECESSED_BG}; border-radius: 3px;
                 margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
             }}
             QSlider::handle:horizontal {{
-                background: #DDD; border: 1px solid #999;
+                background: #DDD; border: none;
                 width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
             }}
-            QSlider::handle:horizontal:hover {{ background: {_C_BLUE}; border-color: {_C_BLUE_H}; }}
+            QSlider::handle:horizontal:hover {{ background: {_C_ACCENT}; border-color: {_C_ACCENT_H}; }}
         """)
         self._rot_slider.setSingleStep(1)
         self._rot_slider.setPageStep(1)
@@ -799,7 +774,7 @@ class GpWheelEditorDialog(QDialog):
             at_default = (idx == _ROT_DEFAULT_IDX)
             text = f"{default_prefix} {deg}°" if at_default else f"{deg}°"
             self._rot_value_lbl.setText(text)
-            color = _C_BLUE if at_default else _C_BLUE_H
+            color = _C_ACCENT if at_default else _C_ACCENT_H
             self._rot_value_lbl.setStyleSheet(f"color: {color}; background: transparent;")
         _refresh_rot(cur_idx)
         self._rot_slider.valueChanged.connect(_refresh_rot)
@@ -824,11 +799,14 @@ class GpWheelEditorDialog(QDialog):
         self._sens_group = QButtonGroup(self)
         self._rb_linear = _make_radio(fn, t("gp_wheel_editor.sens_linear"))
         self._rb_square = _make_radio(fn, t("gp_wheel_editor.sens_square"))
+        self._rb_linear.setFixedHeight(40)
+        self._rb_square.setFixedHeight(40)
         self._sens_group.addButton(self._rb_linear)
         self._sens_group.addButton(self._rb_square)
         (self._rb_square if self.data.sensitivity_curve == 'square' else self._rb_linear).setChecked(True)
         sens_row.addWidget(self._rb_linear); sens_row.addSpacing(16)
         sens_row.addWidget(self._rb_square); sens_row.addStretch()
+        self._sensitivity_segments = segmented_row(sens_row)
         sc.addLayout(sens_row)
         sc.addSpacing(SECTION_GAP)
 
@@ -862,7 +840,8 @@ class GpWheelEditorDialog(QDialog):
 
         # 把 easy widget + advanced scroll 加入 Stack
         easy_widget = self._build_easy_widget(fn)
-        self._mode_stack.addWidget(easy_widget)   # index 0 = easy
+        from views.ui_components import scroll_widget
+        self._mode_stack.addWidget(scroll_widget(easy_widget))   # index 0 = easy
         self._mode_stack.addWidget(scroll)        # index 1 = advanced
 
         # 右列 (固定宽 960): stack + 底部按钮 (按钮稍后填入 self._right_panel_vbox)
@@ -1185,7 +1164,7 @@ class GpWheelEditorDialog(QDialog):
             '<b>鼠标即方向盘</b> &nbsp; '
             '<span style="color:#888">整个屏幕都是触发区域</span><br>'
             '&bull; 鼠标 <b>横向移动</b> &rarr; '
-            f'<span style="color:{_C_BLUE_H}">A / D</span> 转向; '
+            f'<span style="color:{_C_ACCENT_H}">A / D</span> 转向; '
             '停下 &rarr; 方向盘自动回正<br>'
             '&bull; 鼠标 <b>向上移动</b> &rarr; '
             f'<span style="color:{_MARKER_COLOR_RT}">RT 油门</span> 累加; '
@@ -1252,6 +1231,7 @@ class GpWheelEditorDialog(QDialog):
             b.clicked.connect(lambda _, k=key: self._on_easy_brake_choice(k))
             brake_row.addWidget(b, 1)
             self._easy_brake_btns[key] = b
+        self._brake_segments = segmented_row(brake_row, self._easy_brake_btns)
         v.addLayout(brake_row)
         v.addSpacing(6)
         v.addWidget(_make_label(
@@ -1297,18 +1277,7 @@ class GpWheelEditorDialog(QDialog):
         self._refresh_easy_brake_btns()
 
     def _refresh_easy_brake_btns(self):
-        for k, b in self._easy_brake_btns.items():
-            selected = (k == self._easy_brake_choice)
-            if selected:
-                b.setStyleSheet(
-                    f"QPushButton {{ background: {C_CYBER}; color: #FFF;"
-                    f" border: none; border-radius: 6px; }}"
-                    f" QPushButton:hover {{ background: {C_CYBER_H}; }}")
-            else:
-                b.setStyleSheet(
-                    f"QPushButton {{ background: {C_GRAY}; color: #CCC;"
-                    f" border: none; border-radius: 6px; }}"
-                    f" QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}")
+        self._brake_segments.set_selected(self._easy_brake_choice)
 
     # ── 左侧栏: 模式 Tab + 激活 tag ──
 
@@ -1345,8 +1314,8 @@ class GpWheelEditorDialog(QDialog):
             tag.setFont(_font(fn, 10, bold=True))
             tag.setFixedHeight(18)
             tag.setStyleSheet(
-                "QLabel { background: #F59E0B; color: #000;"
-                " border-radius: 7px; padding: 0 8px; }"
+                f"QLabel {{ background: {PANEL_BG}; color: {AMBER_BG};"
+                f" border-radius: {SMALL_RADIUS}px; padding: 0 8px; }}"
             )
             tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
             tag.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -1369,7 +1338,7 @@ class GpWheelEditorDialog(QDialog):
                     f"QPushButton {{ background: {C_CYBER};"
                     f" border: none; border-radius: 6px; }}"
                     f" QPushButton:hover {{ background: {C_CYBER_H}; }}")
-                label.setStyleSheet("color: #FFF; background: transparent;")
+                label.setStyleSheet(f"color: {AMBER_TEXT}; background: transparent;")
             else:
                 btn.setStyleSheet(
                     f"QPushButton {{ background: transparent;"

@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 from core.update_manifest import (LATEST_URL, OSS_BASE, MAX_MANIFEST_BYTES,
                                   is_newer, open_update_url, parse_manifest, validate_archive)
 from scripts.release_history import fetch_history, merge_history, list_oss_history, verify_history_links, HISTORY_URL
+from scripts.check_release_config import check_release_config
 
 
 def app_version():
@@ -39,6 +40,7 @@ def make_manifest(zip_path, version, notes, released=None):
         raise ValueError("ZIP filename and APP_VERSION differ")
     if not notes.strip():
         raise ValueError("Release notes are required")
+    check_release_config(zip_path)
     data = {"schema": 1, "product": "TEGGTouch", "channel": "stable", "version": version,
             "released": released or date.today().isoformat(), "notes": notes.strip(),
             "host": {"name": zip_path.name, "url": OSS_BASE + zip_path.name,

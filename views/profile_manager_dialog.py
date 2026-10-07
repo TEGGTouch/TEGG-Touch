@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QEvent
 from PyQt6.QtGui import QFont, QColor
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
 from core.config_manager import (
     list_profiles, get_active_profile_name,
     create_profile, delete_profile, rename_profile,
@@ -36,6 +37,8 @@ C_AMBER_D = "#D97706"
 # ── 复用 assets/check.svg + radio_dot.svg (CSS url 需 forward slash) ──
 import os
 from core.constants import APP_DIR as _APP_DIR
+
+C_INPUT_BG = RECESSED_BG
 _CHECK_ICON_URL = os.path.join(_APP_DIR, "assets", "check.svg").replace("\\", "/")
 _CHECK_AMBER_URL = os.path.join(_APP_DIR, "assets", "check_amber.svg").replace("\\", "/")
 _CHECK_DARK_URL = os.path.join(_APP_DIR, "assets", "check_dark.svg").replace("\\", "/")
@@ -45,6 +48,7 @@ _RADIO_DOT_URL = os.path.join(_APP_DIR, "assets", "radio_dot_amber.svg").replace
 # ═══════════════════════════════════════════════════════════════
 #  通用暗色弹窗 (对齐原版 create_styled_dialog / create_styled_yesno_dialog)
 # ═══════════════════════════════════════════════════════════════
+
 
 class _StyledInputDialog(QDialog):
     """暗色输入弹窗: 标题 + 标签 + 输入框 + 确认按钮。"""
@@ -75,7 +79,7 @@ class _StyledInputDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#sid_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -160,6 +164,8 @@ class _StyledInputDialog(QDialog):
         layout.addLayout(btn_row)
 
         self._entry.setFocus()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (480, 280), actions=[t("dialog.confirm")], columns=False, guidance=None)
         self._center_on_screen()
 
     def _on_confirm(self):
@@ -226,7 +232,7 @@ class _StyledConfirmDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#scd_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -310,6 +316,8 @@ class _StyledConfirmDialog(QDialog):
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (480, 260), actions=[t("dialog.yes"), t("dialog.no")], columns=False, guidance=None)
         self._center_on_screen()
 
     def _center_on_screen(self):
@@ -361,7 +369,7 @@ class _StyledMessageDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#smd_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -427,6 +435,8 @@ class _StyledMessageDialog(QDialog):
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (480, 240), actions=[t("dialog.confirm")], columns=False, guidance=None)
         self._center_on_screen()
 
     def _center_on_screen(self):
@@ -465,7 +475,7 @@ class _Chip(QLabel):
         self.setStyleSheet(f"""
             QLabel {{
                 background: {color}; color: white;
-                border-radius: 3px; padding: 1px 6px;
+                border-radius: {SMALL_RADIUS}px; padding: 1px 6px;
             }}
         """)
         self.setFixedHeight(18)
@@ -695,6 +705,8 @@ class _ProfileCopyDialog(QDialog):
         self.setFixedSize(820, 760)
         self._target_kind = 'new'    # 'new' | 'existing'
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (880, 760), actions=["取消", "复制确认"], columns=False, guidance=None)
         self._center_on_screen()
         # 给两张卡片及其所有子部件装事件过滤器, 这样卡片内部的 QListWidget/QLineEdit
         # 也能触发卡片切换 (而不被它们 eat 掉 click)
@@ -735,7 +747,7 @@ class _ProfileCopyDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#pc_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -787,7 +799,7 @@ class _ProfileCopyDialog(QDialog):
         left_frame.setFixedWidth(240)
         left_frame.setObjectName("pc_card")
         left_frame.setStyleSheet(
-            "QFrame#pc_card { background: #232323; border: 1px solid #3A3A3A; border-radius: 8px; }")
+            "QFrame#pc_card { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         left = QVBoxLayout(left_frame)
         left.setContentsMargins(16, 14, 16, 14)
         left.setSpacing(8)
@@ -897,7 +909,7 @@ class _ProfileCopyDialog(QDialog):
         bg = "#262220" if selected else "#222222"
         card.setStyleSheet(
             f"QFrame#pc_target_card {{ background: {bg}; "
-            f"border: 2px solid {border}; border-radius: 8px; }}")
+            f"border: 2px solid {border}; border-radius: 6px; }}")
 
     def _build_target_card_new(self, fn) -> QFrame:
         card = self._make_clickable_card(lambda: self._select_target_card('new'))
@@ -924,7 +936,7 @@ class _ProfileCopyDialog(QDialog):
         self._new_name_edit.setStyleSheet(f"""
             QLineEdit {{
                 background: {C_GRAY}; color: white;
-                border: none; border-radius: 4px; padding: 4px 10px;
+                border: none; border-radius: 6px; padding: 4px 10px;
             }}
             QLineEdit:disabled {{ background: #2A2A2A; color: #555; }}
         """)
@@ -972,6 +984,7 @@ class _ProfileCopyDialog(QDialog):
         mode_row.addSpacing(24)
         mode_row.addWidget(self._rb_overwrite)
         mode_row.addStretch()
+        self._paste_segments = segmented_row(mode_row)
         cv.addLayout(mode_row)
         v.addWidget(self._existing_content, 1)
         return card
@@ -995,11 +1008,11 @@ class _ProfileCopyDialog(QDialog):
         sel_fg = "black" if active else "#CCC"
         self._target_list.setStyleSheet(f"""
             QListWidget {{
-                background: {C_PM_BG}; border: 1px solid #3A3A3A; border-radius: 4px;
+                background: {C_PM_BG}; border: 1px solid #3A3A3A; border-radius: 6px;
                 color: #E0E0E0; padding: 4px;
                 outline: none;
             }}
-            QListWidget::item {{ padding: 6px 8px; border-radius: 3px; }}
+            QListWidget::item {{ padding: 6px 8px; border-radius: 6px; }}
             QListWidget::item:hover {{ background: rgba(255,255,255,0.06); }}
             QListWidget::item:selected {{
                 background: {sel_bg}; color: {sel_fg};
@@ -1009,7 +1022,7 @@ class _ProfileCopyDialog(QDialog):
                 background: transparent; width: 8px; border: none; margin: 0;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 6px; min-height: 30px;
             }}
             QScrollBar::handle:vertical:hover {{ background: #555; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -1025,7 +1038,7 @@ class _ProfileCopyDialog(QDialog):
             QCheckBox {{ color: #E0E0E0; background: transparent; border: none; spacing: 8px; }}
             QCheckBox:disabled {{ color: #666; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
+                width: 16px; height: 16px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #555; background: {C_GRAY};
             }}
             QCheckBox::indicator:hover {{ border-color: {C_AMBER}; }}
@@ -1046,7 +1059,7 @@ class _ProfileCopyDialog(QDialog):
         rb.setStyleSheet(f"""
             QRadioButton {{ color: #E0E0E0; background: transparent; border: none; spacing: 8px; }}
             QRadioButton::indicator {{
-                width: 16px; height: 16px; border-radius: 9px;
+                width: 16px; height: 16px; border-radius: 8px;
                 border: 2px solid #666; background: {C_PM_BG};
             }}
             QRadioButton::indicator:hover {{ border-color: {C_AMBER}; }}
@@ -1177,6 +1190,7 @@ class _ProfileDetailPanel(QFrame):
             b.clicked.connect(lambda _, k=key: self._on_tab_clicked(k))
             tab_row.addWidget(b, 1)
             self._tab_btns[key] = b
+        self._segments = segmented_row(tab_row, self._tab_btns)
         v.addLayout(tab_row)
 
         # stacked 详情 (4 页, 每页一个 QScrollArea)
@@ -1191,7 +1205,7 @@ class _ProfileDetailPanel(QFrame):
             scroll.setStyleSheet("""
                 QScrollArea { background: transparent; border: none; }
                 QScrollBar:vertical { background: transparent; width: 8px; border: none; }
-                QScrollBar::handle:vertical { background: #404040; border-radius: 4px; min-height: 30px; }
+                QScrollBar::handle:vertical { background: #404040; border-radius: 6px; min-height: 30px; }
                 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
             """)
             body = QWidget()
@@ -1212,24 +1226,7 @@ class _ProfileDetailPanel(QFrame):
         self._refresh_tab_styles()
 
     def _refresh_tab_styles(self):
-        for key, b in self._tab_btns.items():
-            is_selected = (key == self._cur_tab)
-            if is_selected:
-                b.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_CYBER if False else "#0C4A6E"}; color: white;
-                        border: none; border-radius: 6px;
-                    }}
-                    QPushButton:hover {{ background: #0284C7; }}
-                """)
-            else:
-                b.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_GRAY}; color: #CCC;
-                        border: none; border-radius: 6px;
-                    }}
-                    QPushButton:hover {{ background: {C_GRAY_H}; color: white; }}
-                """)
+        self._segments.set_selected(self._cur_tab)
 
     def set_profile(self, name: str, cfg: dict, is_active: bool):
         """从外部刷新: 改方案名 + 重渲染 4 页 + 切回 kb tab + 更新 apply 按钮状态"""
@@ -1612,6 +1609,8 @@ class ProfileManagerDialog(QDialog):
         self.setFixedSize(960, 960)
         self._viewed_name: str = ""   # 右侧详情正在查看的方案 (跟 active 解耦)
         self._init_ui()
+        from views.ui_components import finish_dialog
+        finish_dialog(self, (1200, 820), actions=[self._ui_new_btn, self._ui_copy_btn, self._ui_import_btn, self._detail_panel._apply_btn], columns=True, guidance=('① 左侧选择方案查看 → ② 右侧确认内容 → ③ 应用此方案', '1 Select a profile to inspect → 2 Review details → 3 Apply the profile'))
         self._refresh()
         self._center_on_screen()
         self._drag_pos = None
@@ -1631,7 +1630,7 @@ class ProfileManagerDialog(QDialog):
         container.setStyleSheet(f"""
             QFrame#pm_container {{
                 background: {C_PM_BG};
-                border-radius: 4px;
+                border-radius: 6px;
                 border: 1px solid #444;
             }}
         """)
@@ -1678,7 +1677,7 @@ class ProfileManagerDialog(QDialog):
         left.setContentsMargins(0, 0, 0, 0)
         left.setSpacing(10)
         left_wrap = QFrame()
-        left_wrap.setFixedWidth(380)
+        left_wrap.setFixedWidth(340)
         left_wrap.setLayout(left)
         columns.addWidget(left_wrap)
 
@@ -1722,7 +1721,7 @@ class ProfileManagerDialog(QDialog):
                 padding-left: 10px;
             }}
             QScrollBar::handle:vertical {{
-                background: #404040; border-radius: 4px; min-height: 30px;
+                background: #404040; border-radius: 6px; min-height: 30px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 height: 0;
@@ -1751,16 +1750,19 @@ class ProfileManagerDialog(QDialog):
         new_btn = self._build_bottom_btn("\uE710", "\uff0b", t("profile.new"))
         new_btn.setStyleSheet(btn_style)
         new_btn.clicked.connect(self._on_new)
+        self._ui_new_btn = new_btn
         btn_row.addWidget(new_btn, 1)
 
         copy_btn = self._build_bottom_btn("\uE8C8", "\u2398", t("profile.copy"))
         copy_btn.setStyleSheet(btn_style)
         copy_btn.clicked.connect(self._on_copy)
+        self._ui_copy_btn = copy_btn
         btn_row.addWidget(copy_btn, 1)
 
         import_btn = self._build_bottom_btn("\uE898", "\u2193", t("profile.import_btn"))
         import_btn.setStyleSheet(btn_style)
         import_btn.clicked.connect(self._on_import)
+        self._ui_import_btn = import_btn
         btn_row.addWidget(import_btn, 1)
 
         left.addLayout(btn_row)
