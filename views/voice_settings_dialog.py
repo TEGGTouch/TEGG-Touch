@@ -14,18 +14,21 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font, get_lang
-from views.ui_components import SMALL_RADIUS, RECESSED_BG
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
 from core.constants import (
     VOICE_SAMPLE_RATE, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX,
 )
+
 
 # Reuse shared components from existing dialogs
 from views.button_editor_dialog import (
     TagInput, _FlowWidget, _get_key_categories, _get_mouse_keys, populate_gp_palette,
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
-    C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
+    C_CLOSE, C_CLOSE_H, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 # ── 颜色常量 ──
 C_GREEN = "#10B981"
@@ -957,6 +960,7 @@ class VoiceSettingsDialog(QDialog):
             btn.clicked.connect(lambda _, kk=k: self._on_action_clicked(kk))
             act_row.addWidget(btn)
             self._action_btns[k] = btn
+        self._action_segments = segmented_row(act_row, self._action_btns)
         kform.addLayout(act_row)
         self._update_action_btn_styles()
         form.addWidget(self._build_behavior_card(
@@ -1392,6 +1396,7 @@ class VoiceSettingsDialog(QDialog):
             b.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
             tab_row.addWidget(b)
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._tab_btns)
         panel_lay.addLayout(tab_row)
         panel_lay.addSpacing(10)
 
@@ -1459,10 +1464,7 @@ class VoiceSettingsDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = f"QPushButton {{ background: transparent; color: #FFF; border: none; border-bottom: 2px solid {C_GREEN}; border-radius: 6px; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #FFF; }}"
-        off = f"QPushButton {{ background: transparent; color: #AAA; border: none; border-bottom: 2px solid transparent; border-radius: 6px; padding: 0 14px 4px 14px; }} QPushButton:hover {{ color: #E0E0E0; }}"
-        for ix, b in enumerate(self._tab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     def _build_mouse_palette(self, fn):
         """构建鼠标操作 Tab: 分类标签 + 5 个鼠标按键 flow"""
@@ -1801,23 +1803,7 @@ class VoiceSettingsDialog(QDialog):
             self._commands[self._current_idx]['action'] = action
 
     def _update_action_btn_styles(self):
-        for k, btn in self._action_btns.items():
-            if k == self._current_action:
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_GREEN}; color: #1A1A1A;
-                        border: none; border-radius: 6px; padding: 0 12px;
-                    }}
-                    QPushButton:hover {{ background: {C_GREEN_H}; }}
-                """)
-            else:
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background: #404040; color: #AAA;
-                        border: none; border-radius: 6px; padding: 0 12px;
-                    }}
-                    QPushButton:hover {{ background: #505050; }}
-                """)
+        self._action_segments.set_selected(self._current_action)
 
     # ── 行为卡片 (触发按键 / 触发回中) ──
 

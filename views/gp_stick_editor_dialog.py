@@ -19,18 +19,20 @@ from PyQt6.QtCore import Qt, QPoint, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, RECESSED_BG
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
 from core.constants import (
     STICK_ID_LEFT, STICK_ID_RIGHT, APP_DIR, APP_PREFIX,
     GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
     ACTION_COLORS,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
-    C_INPUT_BG, C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL,
+    C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL,
 )
 from views.button_editor_dialog import (
     TagInput, _FlowWidget, _ColorDot, _make_font, _detect_icon_font, _ICON_FONT,
     _get_key_categories, _get_mouse_keys, populate_gp_palette,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 
 _C_BG = C_PM_BG
@@ -401,6 +403,7 @@ class GpStickEditorDialog(QDialog):
             b.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
             tab_row.addWidget(b)
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._tab_btns)
         wlay.addLayout(tab_row)
 
         self._tab_stack = QStackedWidget()
@@ -646,18 +649,7 @@ class GpStickEditorDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = f"""QPushButton {{
-            background: transparent; color: #FFF; border: none;
-            border-bottom: 2px solid {C_CYBER_H};
-            border-radius: 6px; padding: 0 14px 4px 14px;
-        }}"""
-        off = f"""QPushButton {{
-            background: transparent; color: #AAA; border: none;
-            border-bottom: 2px solid transparent;
-            border-radius: 6px; padding: 0 14px 4px 14px;
-        }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        for ix, b in enumerate(self._tab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     # ── 面板点击 / 焦点 ──
 
@@ -727,6 +719,7 @@ class GpStickEditorDialog(QDialog):
         row.addWidget(self._rb_left); row.addSpacing(16)
         row.addWidget(self._rb_right); row.addSpacing(16)
         row.addWidget(self._rb_wasd); row.addStretch()
+        self._id_segments = segmented_row(row)
         col.addLayout(row)
         # 切到/离开 WASD 模式 → 切换下方字段区显隐 (boxes 在 _build_left 末尾才建好)
         self._rb_wasd.toggled.connect(self._on_mode_changed)
@@ -745,6 +738,7 @@ class GpStickEditorDialog(QDialog):
         (self._rb_square if self.data.sensitivity_curve == 'square' else self._rb_linear).setChecked(True)
         row.addWidget(self._rb_linear); row.addSpacing(16)
         row.addWidget(self._rb_square); row.addStretch()
+        self._sensitivity_segments = segmented_row(row)
         col.addLayout(row)
         return col
 

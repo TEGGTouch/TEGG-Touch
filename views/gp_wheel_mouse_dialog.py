@@ -18,6 +18,7 @@ from PyQt6.QtCore import Qt, QPoint, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from core.i18n import t, get_font
+from views.ui_components import RECESSED_BG, segmented_row
 from core.constants import (
     APP_DIR, APP_PREFIX, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
     ACTION_COLORS,
@@ -28,6 +29,8 @@ from views.button_editor_dialog import (
     TagInput, _FlowWidget, _ColorDot, _make_font, _detect_icon_font, _ICON_FONT,
     _get_key_categories, _get_mouse_keys, populate_gp_palette,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 
 _C_BG = C_PM_BG
@@ -284,6 +287,7 @@ class GpWheelMouseDialog(QDialog):
             b.clicked.connect(lambda _, ix=i: self._switch_tab(ix))
             tab_row.addWidget(b)
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._tab_btns)
         wlay.addLayout(tab_row)
 
         self._tab_stack = QStackedWidget()
@@ -523,18 +527,7 @@ class GpWheelMouseDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = f"""QPushButton {{
-            background: transparent; color: #FFF; border: none;
-            border-bottom: 2px solid {C_CYBER_H};
-            border-radius: 6px; padding: 0 14px 4px 14px;
-        }}"""
-        off = f"""QPushButton {{
-            background: transparent; color: #AAA; border: none;
-            border-bottom: 2px solid transparent;
-            border-radius: 6px; padding: 0 14px 4px 14px;
-        }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        for ix, b in enumerate(self._tab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     # ── 面板点击 / 焦点 ──
 

@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QEvent
 from PyQt6.QtGui import QFont, QColor
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
 from core.config_manager import (
     list_profiles, get_active_profile_name,
     create_profile, delete_profile, rename_profile,
@@ -37,6 +37,8 @@ C_AMBER_D = "#D97706"
 # ── 复用 assets/check.svg + radio_dot.svg (CSS url 需 forward slash) ──
 import os
 from core.constants import APP_DIR as _APP_DIR
+
+C_INPUT_BG = RECESSED_BG
 _CHECK_ICON_URL = os.path.join(_APP_DIR, "assets", "check.svg").replace("\\", "/")
 _CHECK_AMBER_URL = os.path.join(_APP_DIR, "assets", "check_amber.svg").replace("\\", "/")
 _CHECK_DARK_URL = os.path.join(_APP_DIR, "assets", "check_dark.svg").replace("\\", "/")
@@ -46,6 +48,7 @@ _RADIO_DOT_URL = os.path.join(_APP_DIR, "assets", "radio_dot_amber.svg").replace
 # ═══════════════════════════════════════════════════════════════
 #  通用暗色弹窗 (对齐原版 create_styled_dialog / create_styled_yesno_dialog)
 # ═══════════════════════════════════════════════════════════════
+
 
 class _StyledInputDialog(QDialog):
     """暗色输入弹窗: 标题 + 标签 + 输入框 + 确认按钮。"""
@@ -981,6 +984,7 @@ class _ProfileCopyDialog(QDialog):
         mode_row.addSpacing(24)
         mode_row.addWidget(self._rb_overwrite)
         mode_row.addStretch()
+        self._paste_segments = segmented_row(mode_row)
         cv.addLayout(mode_row)
         v.addWidget(self._existing_content, 1)
         return card
@@ -1186,6 +1190,7 @@ class _ProfileDetailPanel(QFrame):
             b.clicked.connect(lambda _, k=key: self._on_tab_clicked(k))
             tab_row.addWidget(b, 1)
             self._tab_btns[key] = b
+        self._segments = segmented_row(tab_row, self._tab_btns)
         v.addLayout(tab_row)
 
         # stacked 详情 (4 页, 每页一个 QScrollArea)
@@ -1221,24 +1226,7 @@ class _ProfileDetailPanel(QFrame):
         self._refresh_tab_styles()
 
     def _refresh_tab_styles(self):
-        for key, b in self._tab_btns.items():
-            is_selected = (key == self._cur_tab)
-            if is_selected:
-                b.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_CYBER if False else "#0C4A6E"}; color: white;
-                        border: none; border-radius: 6px;
-                    }}
-                    QPushButton:hover {{ background: #0284C7; }}
-                """)
-            else:
-                b.setStyleSheet(f"""
-                    QPushButton {{
-                        background: {C_GRAY}; color: #CCC;
-                        border: none; border-radius: 6px;
-                    }}
-                    QPushButton:hover {{ background: {C_GRAY_H}; color: white; }}
-                """)
+        self._segments.set_selected(self._cur_tab)
 
     def set_profile(self, name: str, cfg: dict, is_active: bool):
         """从外部刷新: 改方案名 + 重渲染 4 页 + 切回 kb tab + 更新 apply 按钮状态"""

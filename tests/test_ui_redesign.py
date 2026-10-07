@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QApplication, QScrollArea
 from core.i18n import load_locale, t
 from models.button_model import ButtonData
 from models.wheel_model import WheelSectorData
+from models.gamepad_model import GamepadWheelData
 from views.button_editor_dialog import ButtonEditorDialog
 from views.edit_toolbar import EditToolbar, _DragHandle
 from views.hotkey_settings_dialog import HotkeySettingsDialog
@@ -58,8 +59,9 @@ class RedesignTests(unittest.TestCase):
         self.assertEqual(toolbar._sim_mode, 'keyboard')
         self.assertEqual(toolbar._mode_stack.currentIndex(), 0)
         self.assertEqual(toolbar._mode_switch._thumb.geometry(), thumb)
+        animation_finished = QSignalSpy(toolbar._mode_switch._animation.finished)
         toolbar.set_sim_mode('gamepad')
-        QTest.qWait(180)
+        self.assertTrue(animation_finished.wait(1000))
         self.assertEqual(toolbar._mode_stack.currentIndex(), 1)
         self.assertEqual(toolbar._mode_switch._thumb.x(), 72)
         self.assertEqual((toolbar.pos(), toolbar.size(), toolbar._mode_group.size()), initial)
@@ -213,6 +215,75 @@ class RedesignTests(unittest.TestCase):
         self.action(dialog, t('key_remap.save')).click()
         result = dialog.get_result()['key_remaps'][0]
         self.assertEqual(result, {'src': 'q', 'dst': 'e+r', 'mode': 'toggle', 'enabled': True})
+
+    def test_candidate_segments_keep_pages_and_insert_into_the_focused_field(self):
+        dialog = self.show(ButtonEditorDialog(self.item()))
+        for index, button in dialog._segments.buttons.items():
+            button.click()
+            app.processEvents()
+            self.assertEqual(dialog._tab_stack.currentIndex(), index)
+        dialog._fields['lclick'].focusChanged.emit(dialog._fields['lclick'])
+        dialog._segments.buttons[0].click()
+        dialog._on_key_clicked('e')
+        self.assertEqual(dialog._fields['lclick'].get_value(), 'e')
+        dialog._hover_segments.buttons['toggle'].click()
+        self.assertEqual(dialog._hover_mode, 'toggle')
+        self.assertEqual(dialog._hover_stack.currentIndex(), 1)
+
+    def test_profile_segments_keep_the_original_content_page_selection(self):
+        from views.profile_manager_dialog import ProfileManagerDialog
+        dialog = self.show(ProfileManagerDialog())
+        panel = dialog._detail_panel
+        for index, (key, button) in enumerate(panel._tab_btns.items()):
+            button.click()
+            app.processEvents()
+            self.assertEqual(panel._cur_tab, key)
+            self.assertEqual(panel._stack.currentIndex(), index)
+        self.assertTrue(dialog._ui_footer.isAncestorOf(dialog._ui_guidance))
+        self.assertFalse(dialog._ui_body.isAncestorOf(dialog._ui_guidance))
+
+    def test_direction_segments_keep_disabled_modes_and_native_radio_exclusion(self):
+        from views.gp_wheel_editor_dialog import GpWheelEditorDialog
+        dialog = self.show(GpWheelEditorDialog(self.item(GamepadWheelData())))
+        dialog._select_mode_tab(1)
+        section = dialog._lt_section
+        section.set_disabled_modes({'buttons'}, '被另一个扳机采用')
+        disabled = section._mode_btns['buttons']
+        before = section.current_mode()
+        disabled.click()
+        self.assertEqual(section.current_mode(), before)
+        self.assertFalse(disabled.isEnabled())
+        self.assertEqual(disabled.toolTip(), '被另一个扳机采用')
+        dialog._rb_square.setFocus()
+        QTest.keyClick(dialog._rb_square, Qt.Key.Key_Space)
+        self.assertTrue(dialog._rb_square.isChecked())
+        dialog._rb_square.click()
+        self.assertTrue(dialog._rb_square.isChecked())
+        self.assertFalse(dialog._rb_linear.isChecked())
+        dialog._rb_linear.click()
+        self.assertTrue(dialog._rb_linear.isChecked())
+        self.assertFalse(dialog._rb_square.isChecked())
+        QTest.mouseClick(dialog._rb_square, Qt.MouseButton.LeftButton,
+                         pos=dialog._rb_square.rect().center())
+        self.assertTrue(dialog._rb_square.isChecked())
+        self.assertFalse(dialog._rb_linear.isChecked())
+
+    def test_color_samples_and_dynamically_added_macro_steps_keep_real_values(self):
+        from views.macro_editor_dialog import MacroEditorDialog
+        from PyQt6.QtWidgets import QPushButton
+        settings = self.show(HotkeySettingsDialog())
+        sample = QPushButton(settings)
+        settings._apply_color_btn_style(sample, '#0284C7')
+        app.processEvents()
+        self.assertEqual(sample.text(), '#0284C7')
+        self.assertIn('background: #0284C7', sample.styleSheet())
+        macro = self.show(MacroEditorDialog({'name': '示范', 'steps': []}, mode='mix'))
+        self.action(macro, t('macro.add_key_step')).click()
+        app.processEvents()
+        self.assertEqual(len(macro._step_rows), 1)
+        row = macro._step_rows[0]
+        row._key_input.add_tag('space')
+        self.assertEqual(row.get_step_data()['key'], 'space')
 
     def test_settings_pages_show_only_their_existing_footer_actions(self):
         dialog = self.show(HotkeySettingsDialog())

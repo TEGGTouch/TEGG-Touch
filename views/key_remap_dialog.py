@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS
+from views.ui_components import SMALL_RADIUS, segmented_row, RECESSED_BG
 from core.constants import GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX
 from core import keyboard_hook
 
@@ -354,6 +354,7 @@ class KeyRemapDialog(QDialog):
             b.clicked.connect(lambda _, kk=k: self._on_mode_clicked(kk))
             mode_row.addWidget(b)
             self._mode_btns[k] = b
+        self._mode_segments = segmented_row(mode_row, self._mode_btns)
         form.addLayout(mode_row)
         self._mode_hint = QLabel(t("key_remap.mode_hold_hint"))
         self._mode_hint.setFont(_make_font(fn, 12))
@@ -411,6 +412,7 @@ class KeyRemapDialog(QDialog):
     # ── 物理键捕获 ──
 
     def _update_src_btn(self):
+        self._src_btn.setProperty('ui_input_surface', True)
         if self._capturing:
             self._src_btn.setText(t("key_remap.capturing"))
             self._src_btn.setStyleSheet(f"""
@@ -477,19 +479,7 @@ class KeyRemapDialog(QDialog):
         self._update_mode_styles()
 
     def _update_mode_styles(self):
-        for k, b in self._mode_btns.items():
-            if k == self._current_mode:
-                b.setStyleSheet(f"""
-                    QPushButton {{ background: {C_ACCENT}; color: #1A1A1A;
-                                   border: none; border-radius: 6px; padding: 0 10px; }}
-                    QPushButton:hover {{ background: {C_ACCENT_H}; }}
-                """)
-            else:
-                b.setStyleSheet("""
-                    QPushButton { background: #404040; color: #AAA;
-                                  border: none; border-radius: 6px; padding: 0 10px; }
-                    QPushButton:hover { background: #505050; }
-                """)
+        self._mode_segments.set_selected(self._current_mode)
         if hasattr(self, '_mode_hint'):
             self._mode_hint.setText(t(f"key_remap.mode_{self._current_mode}_hint"))
 
@@ -522,6 +512,7 @@ class KeyRemapDialog(QDialog):
             tab_row.addWidget(b)
             self._tab_btns.append(b)
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._tab_btns)
         lay.addLayout(tab_row)
         lay.addSpacing(10)
 
@@ -544,15 +535,7 @@ class KeyRemapDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel = (f"QPushButton {{ background: transparent; color: #FFF; border: none; "
-               f"border-bottom: 2px solid {C_ACCENT}; border-radius: 6px; "
-               f"padding: 0 12px 4px 12px; }}")
-        off = ("QPushButton { background: transparent; color: #AAA; border: none; "
-               "border-bottom: 2px solid transparent; border-radius: 6px; "
-               "padding: 0 12px 4px 12px; } "
-               "QPushButton:hover { color: #E0E0E0; }")
-        for ix, b in enumerate(self._tab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     def _scroll_area(self):
         sc = QScrollArea()

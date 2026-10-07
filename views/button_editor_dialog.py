@@ -19,14 +19,17 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, RECESSED_BG
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
 from core.constants import (
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
-    C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
+    C_CLOSE, C_CLOSE_H, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL, C_DELAY, ACTION_COLORS,
     BTN_TYPE_GP_BUTTON, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX,
 )
 from models.button_model import ButtonData
+
+C_INPUT_BG = RECESSED_BG
+
 
 logger = logging.getLogger(__name__)
 
@@ -585,6 +588,7 @@ class ButtonEditorDialog(QDialog):
         self._mode_toggle_btn.setFont(_make_font(fn, 14, bold=True))
         self._mode_toggle_btn.clicked.connect(lambda: self._set_hover_mode('toggle'))
         sw_row.addWidget(self._mode_toggle_btn, 1)
+        self._hover_segments = segmented_row(sw_row, {"trigger": self._mode_trigger_btn, "toggle": self._mode_toggle_btn})
         block.addLayout(sw_row)
 
         block.addSpacing(10)
@@ -664,25 +668,7 @@ class ButtonEditorDialog(QDialog):
         self._hover_desc_lbl.setText(
             t("editor.hover_trigger_desc") if mode == 'trigger'
             else t("editor.hover_toggle_desc"))
-        # 高亮按钮
-        sel_bg, sel_fg = C_CYBER, "#FFF"
-        unsel_bg, unsel_fg = C_GRAY, "#CCC"
-        for btn, btn_mode in (
-                (self._mode_trigger_btn, 'trigger'),
-                (self._mode_toggle_btn, 'toggle')):
-            selected = (btn_mode == mode)
-            bg = sel_bg if selected else unsel_bg
-            fg = sel_fg if selected else unsel_fg
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: {bg}; color: {fg};
-                    border: none; border-radius: 6px;
-                }}
-                QPushButton:hover {{
-                    background: {C_CYBER_H if selected else C_GRAY_H};
-                    color: #FFF;
-                }}
-            """)
+        self._hover_segments.set_selected(mode)
 
     # ── 表单行构建 ────────────────────────────────────────────
 
@@ -1122,6 +1108,7 @@ class ButtonEditorDialog(QDialog):
             tab_row.addWidget(btn)
 
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row)
         panel_lay.addLayout(tab_row)
         panel_lay.addSpacing(10)
 
@@ -1142,20 +1129,7 @@ class ButtonEditorDialog(QDialog):
 
     def _switch_tab(self, idx):
         self._tab_stack.setCurrentIndex(idx)
-        sel_style = f"""QPushButton {{
-            background: transparent; color: #FFF;
-            border: none; border-bottom: 2px solid {C_CYBER_H};
-            border-radius: 6px; padding: 0 14px 4px 14px;
-        }} QPushButton:hover {{ color: #FFF; }}"""
-        off_style = f"""QPushButton {{
-            background: transparent; color: #AAA;
-            border: none; border-bottom: 2px solid transparent;
-            border-radius: 6px; padding: 0 14px 4px 14px;
-        }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        for ix, btn in enumerate((self._tab_keys_btn, self._tab_gp_btn,
-                                  self._tab_mouse_btn, self._tab_macros_btn,
-                                  self._tab_app_btn)):
-            btn.setStyleSheet(sel_style if idx == ix else off_style)
+        self._segments.set_selected(idx)
 
     def _build_gp_palette(self, fn):
         """手柄按钮 Tab: 驱动就绪→按钮网格; 未就绪→安装引导。"""

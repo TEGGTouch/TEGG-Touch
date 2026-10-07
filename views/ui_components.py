@@ -1,10 +1,13 @@
 """Shared presentation for the desktop editor; existing widgets keep their callbacks."""
 
-from PyQt6.QtCore import QEvent, QObject, Qt
-from PyQt6.QtGui import QFont
+import re
+
+from PyQt6.QtCore import QEvent, QObject, Qt, QPropertyAnimation, QEasingCurve
+from PyQt6.QtGui import QFont, QPainter, QColor
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-    QSizePolicy, QVBoxLayout, QWidget,
+    QSizePolicy, QVBoxLayout, QWidget, QRadioButton, QAbstractScrollArea,
+    QLineEdit, QComboBox, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox,
 )
 
 from core.i18n import get_font, get_lang
@@ -18,6 +21,228 @@ SMALL_RADIUS = 3
 RECESSED_BG = '#202020'
 PANEL_BG = '#2D2D2D'
 CONTROL_BG = '#3A3A3A'
+AMBER_BG = '#F59E0B'
+AMBER_HOVER = '#D97706'
+SCROLL_GAP = 12
+
+
+class SegmentedControl(QFrame):
+    """A shared recessed track; adopt existing buttons without changing their clicks."""
+
+    def __init__(self, buttons, parent=None):
+        super().__init__(parent)
+        self.buttons = dict(buttons) if isinstance(buttons, dict) else dict(enumerate(buttons))
+        self._selected = None
+        self.setObjectName('ui_segments')
+        self.setStyleSheet(f'QFrame#ui_segments {{ background: {RECESSED_BG}; border: none; border-radius: {CARD_RADIUS}px; }}')
+        self._thumb = QFrame(self)
+        self._thumb.setStyleSheet(f'background: {AMBER_BG}; border: none; border-radius: {INNER_RADIUS}px;')
+        self._thumb.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._thumb.hide()
+        self._animation = QPropertyAnimation(self._thumb, b'geometry', self)
+        self._animation.setDuration(160)
+        self._animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(4, 4, 4, 4)
+        row.setSpacing(0)
+        height = max((button.minimumHeight() for button in self.buttons.values()), default=32)
+        height = max(24, height)
+        self.setFixedHeight(height + 8)
+        for key, button in self.buttons.items():
+            button.setFixedHeight(height)
+            button.setMinimumWidth(0)
+            button.setMaximumWidth(16777215)
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            button.installEventFilter(self)
+            row.addWidget(button, 1)
+            if isinstance(button, QRadioButton):
+                button.toggled.connect(lambda checked, picked=key: self.set_selected(picked) if checked else None)
+                if button.isChecked():
+                    self._selected = key
+        self._style_buttons()
+
+    def _style_buttons(self):
+        for key, button in self.buttons.items():
+            color = RECESSED_BG if key == self._selected else '#AAAAAA'
+            button.setStyleSheet(f'''
+                QPushButton, QRadioButton {{ background: transparent; color: {color}; border: none;
+                    border-radius: {INNER_RADIUS}px; padding: 0 4px; }}
+                QPushButton:hover, QRadioButton:hover {{ color: {RECESSED_BG if key == self._selected else '#FFFFFF'}; }}
+                QPushButton:disabled, QRadioButton:disabled {{ color: #666666; background: transparent; }}
+                QRadioButton::indicator {{ width: 0; height: 0; }}
+            ''')
+            for label in button.findChildren(QLabel):
+                label.setStyleSheet(f'color: {color}; background: transparent;')
+
+    def set_selected(self, key):
+        if key not in self.buttons:
+            return
+        changed = self._selected != key
+        self._selected = key
+        self._style_buttons()
+        self._place_thumb(animate=changed)
+
+    def clear_selection(self):
+        self._selected = None
+        self._animation.stop()
+        self._thumb.hide()
+        self._style_buttons()
+
+    def _place_thumb(self, animate=False):
+        if self._selected not in self.buttons:
+            return
+        button = self.buttons[self._selected]
+        target = button.geometry()
+        self._animation.stop()
+        if animate and self.isVisible() and self._thumb.isVisible():
+            self._animation.setStartValue(self._thumb.geometry())
+            self._animation.setEndValue(target)
+            self._animation.start()
+        else:
+            self._thumb.setGeometry(target)
+        self._thumb.setVisible(button.isEnabled())
+        self._thumb.lower()
+
+    def eventFilter(self, obj, event):
+        if isinstance(obj, QRadioButton):
+            if event.type() == QEvent.Type.Paint:
+                painter = QPainter(obj)
+                painter.setFont(obj.font())
+                selected = self.buttons.get(self._selected) is obj
+                painter.setPen(QColor('#666' if not obj.isEnabled() else RECESSED_BG if selected else '#AAA'))
+                painter.drawText(obj.rect(), Qt.AlignmentFlag.AlignCenter, obj.text())
+                return True
+            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+                obj.setDown(True)
+                return True
+            if event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
+                pressed = obj.isDown()
+                obj.setDown(False)
+                if pressed and obj.rect().contains(event.position().toPoint()):
+                    obj.click()
+                return True
+        if event.type() in (QEvent.Type.Resize, QEvent.Type.Move, QEvent.Type.EnabledChange):
+            self._place_thumb()
+        return False
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._fit_buttons()
+        self._place_thumb()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._fit_buttons()
+        self._place_thumb()
+
+    def _fit_buttons(self):
+        available = max(0, self.width() - 8)
+        required = [button.fontMetrics().horizontalAdvance(button.text()) + 16 +
+                    (button.iconSize().width() + 4 if not button.icon().isNull() else 0)
+                    for button in self.buttons.values()]
+        equal = available // max(1, len(required))
+        extra = max(0, available - sum(required)) // max(1, len(required))
+        for index, needed in enumerate(required):
+            self.layout().setStretch(index, 1 if max(required, default=0) <= equal else needed + extra)
+
+
+def segmented_row(row, buttons=None):
+    """Replace a horizontal button row with one track, preserving each button object."""
+    adopted = []
+    while row.count():
+        item = row.takeAt(0)
+        if isinstance(item.widget(), (QPushButton, QRadioButton)):
+            adopted.append(item.widget())
+    control = SegmentedControl(buttons if buttons is not None else adopted)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(0)
+    row.addWidget(control)
+    return control
+
+
+_SCROLL_STYLE = f'''
+    QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0; border: none; }}
+    QScrollBar::handle:vertical {{ background: #626262; min-height: 28px; border-radius: 4px; }}
+    QScrollBar::handle:vertical:hover {{ background: #888888; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+    QScrollBar:horizontal {{ background: transparent; height: 8px; margin: 0; border: none; }}
+    QScrollBar::handle:horizontal {{ background: #626262; min-width: 28px; border-radius: 4px; }}
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+    QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: transparent; }}
+'''
+
+
+class _DialogPresentation(QObject):
+    """Keep dynamic styles consistent with the shell without altering widget behavior."""
+
+    def __init__(self, dialog):
+        super().__init__(dialog)
+        self._styling = False
+        dialog.installEventFilter(self)
+        for widget in dialog.findChildren(QWidget):
+            self.watch(widget)
+
+    def watch(self, widget):
+        if not isinstance(widget, QWidget) or widget.property('ui_presentation_watched'):
+            return
+        widget.setProperty('ui_presentation_watched', True)
+        widget.installEventFilter(self)
+        self.apply(widget)
+
+    def apply(self, widget):
+        if self._styling:
+            return
+        self._styling = True
+        try:
+            if isinstance(widget, QAbstractScrollArea):
+                if isinstance(widget, QScrollArea) and widget.widget() and widget.widget().layout():
+                    layout = widget.widget().layout()
+                    margins = layout.contentsMargins()
+                    if margins.right():
+                        layout.setContentsMargins(margins.left(), margins.top(), 0, margins.bottom())
+                if widget.viewportMargins().right() != SCROLL_GAP:
+                    widget.setViewportMargins(0, 0, SCROLL_GAP, 0)
+                for bar in (widget.verticalScrollBar(), widget.horizontalScrollBar()):
+                    if bar.styleSheet() != _SCROLL_STYLE:
+                        bar.setStyleSheet(_SCROLL_STYLE)
+            style = widget.styleSheet()
+            updated = style
+            if isinstance(widget, QPushButton) and not widget.property('ui_color_sample'):
+                # Recolor blue button surfaces, leaving action fields, previews and values alone.
+                pattern = r'(QPushButton[^{}]*\{)([^{}]*)(\})'
+                def amber_block(match):
+                    body = match[2]
+                    replaced = re.sub(r'(background(?:-color)?\s*:\s*)#(?:0C4A6E|0284C7|1976D2|2196F3|0078D7)\b',
+                                      lambda color: color[1] + (AMBER_HOVER if ':hover' in match[1] else AMBER_BG), body,
+                                      flags=re.IGNORECASE)
+                    if replaced != body:
+                        replaced = re.sub(r'(?<![-\w])(color\s*:\s*)(?:#FFF(?:FFF)?|white)\b',
+                                          r'\1#202020', replaced, flags=re.IGNORECASE)
+                    return match[1] + replaced + match[3]
+                updated = re.sub(pattern, amber_block, style)
+                if widget.property('ui_primary') and '/* ui_primary */' not in updated:
+                    updated += f'\nQPushButton {{ background: {AMBER_BG}; color: {RECESSED_BG}; }} QPushButton:hover {{ background: {AMBER_HOVER}; color: {RECESSED_BG}; }} QPushButton:disabled {{ background: {CONTROL_BG}; color: #888; }}\n/* ui_primary */'
+            if isinstance(widget, (QLineEdit, QComboBox, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox)):
+                selector = type(widget).__name__
+                if '/* ui_input */' not in updated:
+                    updated += f'\n{selector}, {selector}:disabled {{ background: {RECESSED_BG}; }}\n/* ui_input */'
+            if widget.property('ui_input_surface') and '/* ui_input_surface */' not in updated:
+                updated += f'\nQPushButton {{ background: {RECESSED_BG}; }}\n/* ui_input_surface */'
+            if updated != style:
+                widget.setStyleSheet(updated)
+        finally:
+            self._styling = False
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.ChildPolished:
+            self.watch(event.child())
+        if event.type() == QEvent.Type.DynamicPropertyChange and bytes(event.propertyName()) in (
+                b'ui_primary', b'ui_input_surface', b'ui_color_sample'):
+            self.apply(obj)
+        if event.type() in (QEvent.Type.StyleChange, QEvent.Type.Show, QEvent.Type.Resize):
+            self.apply(obj)
+        return False
 
 
 def ui_text(chinese, english):
@@ -179,8 +404,6 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
     body_layout = QVBoxLayout(body)
     body_layout.setContentsMargins(24, 16, 24, 16)
     body_layout.setSpacing(8)
-    if guidance:
-        body_layout.addWidget(guide_label(*guidance))
     expanding_layout = next((item.layout() for item in reversed(items) if item.layout()), None)
     for item in items:
         if item.layout():
@@ -220,7 +443,17 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
     footer_layout = QHBoxLayout(footer)
     footer_layout.setContentsMargins(24, 16, 24, 16)
     footer_layout.setSpacing(10)
-    footer_layout.addStretch()
+    dialog._ui_guidance = None
+    if guidance:
+        hint = guide_label(*guidance)
+        hint.setStyleSheet('color: #CCCCCC; background: transparent; font-size: 15px;')
+        hint.setMinimumWidth(0)
+        hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        hint.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        footer_layout.addWidget(hint, 1)
+        dialog._ui_guidance = hint
+    else:
+        footer_layout.addStretch()
     for button in action_buttons:
         button.setFixedHeight(40)
         button.setMinimumWidth(max(96, button.fontMetrics().horizontalAdvance(button.text()) + 32))
@@ -257,6 +490,18 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
         binding = _ActionVisibility(page, buttons)
         dialog._ui_action_filters.append(binding)
         binding.sync()
+
+    # Confirmation uses the brand accent; secondary, delete and cancel stay distinct.
+    from core.i18n import t
+    confirmation_labels = {'保存', '确定', '确认', '复制确认', '应用此方案'}
+    confirmation_labels.update(t(key) for key in (
+        'dialog.confirm', 'dialog.yes', 'editor.save', 'macro.save', 'voice_dialog.save',
+        'key_remap.save', 'wheel_style.save', 'gp_stick_editor.save', 'gp_wheel_editor.save',
+    ))
+    for button in action_buttons:
+        if button.text() in confirmation_labels or button is getattr(dialog, '_save_btn', None):
+            button.setProperty('ui_primary', True)
+    dialog._ui_presentation = _DialogPresentation(dialog)
 
     return close
 

@@ -15,15 +15,17 @@ from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
 
 from core.i18n import t, get_font
-from views.ui_components import RECESSED_BG
+from views.ui_components import RECESSED_BG, segmented_row
 from core.constants import GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX
 from views.button_editor_dialog import (
     _get_key_categories, _get_mouse_keys, _FlowWidget, _make_font, _detect_icon_font,
     populate_gp_palette,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
-    C_INPUT_BG, C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL, C_DELAY,
+    C_TAG_BG, C_TAG_HOVER, C_TAG_TEXT, C_CAT_LABEL, C_DELAY,
     TagInput,
 )
+
+C_INPUT_BG = RECESSED_BG
 
 # 宏步骤强调色
 C_MACRO_KEY = "#8B5CF6"     # 紫色 — 指令步骤
@@ -567,6 +569,7 @@ class MacroEditorDialog(QDialog):
             self._mtab_btns.append(b)
             self._mtab_stack.addWidget(builder(fn))
         tab_row.addStretch()
+        self._segments = segmented_row(tab_row, self._mtab_btns)
         wlay.addLayout(tab_row)
         wlay.addWidget(self._mtab_stack, 1)
 
@@ -576,18 +579,7 @@ class MacroEditorDialog(QDialog):
 
     def _switch_macro_tab(self, idx):
         self._mtab_stack.setCurrentIndex(idx)
-        sel = f"""QPushButton {{
-            background: transparent; color: #FFF; border: none;
-            border-bottom: 2px solid {C_CYBER_H};
-            border-radius: 6px; padding: 0 14px 4px 14px;
-        }}"""
-        off = f"""QPushButton {{
-            background: transparent; color: #AAA; border: none;
-            border-bottom: 2px solid transparent;
-            border-radius: 6px; padding: 0 14px 4px 14px;
-        }} QPushButton:hover {{ color: #E0E0E0; }}"""
-        for ix, b in enumerate(self._mtab_btns):
-            b.setStyleSheet(sel if idx == ix else off)
+        self._segments.set_selected(idx)
 
     def _macro_scroll(self):
         scroll = QScrollArea()

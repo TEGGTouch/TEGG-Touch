@@ -14,7 +14,7 @@ from PyQt6.QtGui import (
 )
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS
+from views.ui_components import SMALL_RADIUS, segmented_row
 from core.constants import (
     WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
     WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE,
@@ -976,6 +976,7 @@ class WheelStyleDialog(QDialog):
 
         rows = [RING_MODES[:3], RING_MODES[3:]]   # 上: whole/half_h/half_v, 下: quad/octa
         btns = {}
+        tracks = []
         for row_modes in rows:
             row = QHBoxLayout()
             row.setSpacing(4)
@@ -990,30 +991,20 @@ class WheelStyleDialog(QDialog):
                 row.addWidget(btn)
                 btns[mode] = btn
             row.addStretch()
+            tracks.append(segmented_row(row, {mode: btns[mode] for mode in row_modes}))
             col.addLayout(row)
+        for btn in btns.values():
+            btn._ring_tracks = tracks
         self._apply_mode_btns_style(btns, current_mode, enabled=True)
         return btns, wrap
 
     def _apply_mode_btns_style(self, btns: dict, current: str, enabled: bool):
-        # 选中色: 玫红 (Tailwind pink-600 / pink-500 悬浮)
-        SEL_BG, SEL_BG_H = "#DB2777", "#EC4899"
-        for mode, btn in btns.items():
-            selected = (mode == current)
-            if not enabled:
-                bg, fg = "#222", "#555"
-                bg_h = bg
-            else:
-                bg = SEL_BG if selected else "#333"
-                fg = "#FFF" if selected else "#CCC"
-                bg_h = SEL_BG_H if selected else "#444"
-            btn.setEnabled(enabled)
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: {bg}; color: {fg};
-                    border: none; border-radius: 6px; padding: 0 8px;
-                }}
-                QPushButton:hover {{ background: {bg_h}; color: #FFF; }}
-            """)
+        for button in btns.values():
+            button.setEnabled(enabled)
+        for track in next(iter(btns.values()))._ring_tracks:
+            track.set_selected(current)
+            if current not in track.buttons:
+                track.clear_selection()
 
     def _on_center_mode_clicked(self, mode: str):
         self._center_ring_mode = mode

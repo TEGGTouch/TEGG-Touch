@@ -16,7 +16,8 @@ sys.path.insert(0, str(ROOT))
 
 from PyQt6.QtCore import QPoint
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QScrollArea
+from PyQt6.QtWidgets import QApplication, QScrollArea, QAbstractScrollArea
+from views.ui_components import SCROLL_GAP
 from core.i18n import load_locale
 from core.config_manager import init_profiles, list_profiles
 from models.button_model import ButtonData
@@ -103,6 +104,13 @@ def main():
             # Original state gates may hide actions; visible actions share one baseline.
             ys = {button.mapTo(window, QPoint()).y() for button in window._ui_actions if button.isVisible()}
             assert len(ys) <= 1, (name, ys)
+            if window._ui_guidance:
+                hint = window._ui_guidance
+                assert window._ui_footer.isAncestorOf(hint)
+                assert hint.heightForWidth(hint.width()) <= hint.height(), (name, 'footer guidance')
+            for area in window.findChildren(QAbstractScrollArea):
+                if area.isVisible():
+                    assert area.viewportMargins().right() == SCROLL_GAP, (name, 'scrollbar gap')
         report.append(entry)
 
     with patch.object(VoiceTestDialog, '_start_test'), \

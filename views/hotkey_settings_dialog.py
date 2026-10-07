@@ -20,7 +20,7 @@ import os
 import webbrowser
 
 from core.i18n import t, get_font, load_locale, get_lang
-from views.ui_components import SMALL_RADIUS, RECESSED_BG
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
 from core.constants import (
     DEFAULT_HOTKEYS, get_hotkey_labels, APP_VERSION, get_app_title, APP_DIR,
     DEFAULT_CURSOR_STYLES, CURSOR_SCALE_OPTIONS, CURSOR_BASE_SIZE,
@@ -28,11 +28,12 @@ from core.constants import (
 from core.config_manager import load_hotkeys, save_hotkeys
 from scene.virtual_cursor_item import render_cursor_pixmap, clear_cursor_render_cache
 
+C_INPUT_BG = RECESSED_BG
+
 # ── 颜色 ──
 C_PM_BG = "#2D2D2D"
 C_GRAY = "#3A3A3A"
 C_GRAY_H = "#505050"
-C_INPUT_BG = "#3A3A3A"
 C_CLOSE = "#6E1E1E"
 C_CLOSE_H = "#8B2020"
 C_CYBER = "#0C4A6E"
@@ -861,6 +862,7 @@ class HotkeySettingsDialog(QDialog):
         return row
 
     def _apply_color_btn_style(self, btn: QPushButton, color_hex: str):
+        btn.setProperty('ui_color_sample', True)
         btn.setText(color_hex.upper())
         # 选个对比色文字: 暗色背景白字, 亮色背景黑字
         c = QColor(color_hex)
@@ -1687,6 +1689,7 @@ class HotkeySettingsDialog(QDialog):
         btn_row.addWidget(self._lang_en_btn)
 
         btn_row.addStretch()
+        self._lang_segments = segmented_row(btn_row)
         v.addLayout(btn_row)
 
         v.addSpacing(20)
@@ -2312,36 +2315,9 @@ class HotkeySettingsDialog(QDialog):
 
     def _update_lang_buttons(self):
         is_zh = self._selected_lang.startswith("zh")
-
-        # 中文按钮: 选中时显示勾 icon
         self._zh_icon_lbl.setVisible(is_zh)
-        zh_fg = "#FFF" if is_zh else "#E0E0E0"
-        self._zh_text_lbl.setStyleSheet(f"color: {zh_fg}; background: transparent;")
-        self._zh_icon_lbl.setStyleSheet(f"color: {zh_fg}; background: transparent;")
-        self._lang_zh_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C_CYBER if is_zh else "#404040"};
-                border: none; border-radius: 6px;
-            }}
-            QPushButton:hover {{
-                background: {C_CYBER_H if is_zh else "#505050"};
-            }}
-        """)
-
-        # English 按钮: 选中时显示勾 icon
         self._en_icon_lbl.setVisible(not is_zh)
-        en_fg = "#FFF" if not is_zh else "#E0E0E0"
-        self._en_text_lbl.setStyleSheet(f"color: {en_fg}; background: transparent;")
-        self._en_icon_lbl.setStyleSheet(f"color: {en_fg}; background: transparent;")
-        self._lang_en_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C_CYBER if not is_zh else "#404040"};
-                border: none; border-radius: 6px;
-            }}
-            QPushButton:hover {{
-                background: {C_CYBER_H if not is_zh else "#505050"};
-            }}
-        """)
+        self._lang_segments.set_selected(0 if is_zh else 1)
 
     # ── 保存/重置 ──
 

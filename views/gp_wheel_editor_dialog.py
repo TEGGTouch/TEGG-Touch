@@ -19,12 +19,13 @@ from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon, QIcon, QPixma
 from PyQt6.QtSvg import QSvgRenderer
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, RECESSED_BG
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
 from core.constants import (
     APP_DIR,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
-    C_INPUT_BG,
-)
+    )
+
+C_INPUT_BG = RECESSED_BG
 
 
 _C_BG = C_PM_BG
@@ -176,6 +177,7 @@ class _TriggerSection(QWidget):
             b.clicked.connect(lambda _, k=key: self._on_tab_clicked(k))
             mode_row.addWidget(b, 1)
             self._mode_btns[key] = b
+        self._mode_segments = segmented_row(mode_row, self._mode_btns)
         lay.addLayout(mode_row)
         self._refresh_tab_styles()
 
@@ -297,6 +299,7 @@ class _TriggerSection(QWidget):
         self._rb_marker_r.toggled.connect(self._on_marker_btn_toggled)
         btn_row.addWidget(self._rb_marker_l); btn_row.addSpacing(20)
         btn_row.addWidget(self._rb_marker_r); btn_row.addStretch()
+        self._marker_segments = segmented_row(btn_row)
         v.addLayout(btn_row)
         return page
 
@@ -381,56 +384,22 @@ class _TriggerSection(QWidget):
         self._refresh_tab_styles()
 
     def _refresh_tab_styles(self):
-        """tab 三态: 选中=C_CYBER/C_CYBER_H; 空闲=C_GRAY/C_GRAY_H; 禁用=透明无填充 + 细边框 + 灰字 + tooltip
-        ☑ 图标规则:
-          - 这一侧选中 → 白勾
-          - 对面正在用同一 mode (灰勾, 提示"被对方采用了")
-          - 因其他原因禁用 (例如 marker+buttons 冲突) 但没人选这个 → 不画勾"""
         empty_icon = QIcon()
         other_mode = getattr(self, '_other_selected_mode', None)
-        for key, b in self._mode_btns.items():
-            is_selected = (key == self._current_mode)
-            is_disabled = (key in self._disabled_reasons)
-            is_other_using = (key == other_mode) and not is_selected
-            # ☑: 选中 (白) 或 对方采用 (灰); 仅"被禁但没人选"时无勾
-            if is_selected:
-                b.setIcon(_check_icon("#FFFFFF"))
-            elif is_other_using:
-                b.setIcon(_check_icon("#555555"))
+        for key, button in self._mode_btns.items():
+            selected = key == self._current_mode
+            disabled = key in self._disabled_reasons
+            if selected:
+                button.setIcon(_check_icon("#202020"))
+            elif key == other_mode:
+                button.setIcon(_check_icon("#555555"))
             else:
-                b.setIcon(empty_icon)
-            b.setIconSize(QSize(16, 16))
-            if is_disabled:
-                b.setEnabled(False)
-                b.setCursor(Qt.CursorShape.ArrowCursor)
-                b.setToolTip(self._disabled_reasons[key])
-                # 不填充 (transparent), 用细边框维持高度/形状; QSS 用 :disabled 防被默认灰板覆盖
-                b.setStyleSheet("""
-                    QPushButton, QPushButton:disabled {
-                        background: transparent; color: #555;
-                        border: 1px solid #3A3A3A; border-radius: 8px;
-                    }
-                """)
-            else:
-                b.setEnabled(True)
-                b.setCursor(Qt.CursorShape.PointingHandCursor)
-                b.setToolTip("")
-                if is_selected:
-                    b.setStyleSheet(f"""
-                        QPushButton {{
-                            background: {C_CYBER}; color: #FFF;
-                            border: none; border-radius: 6px;
-                        }}
-                        QPushButton:hover {{ background: {C_CYBER_H}; }}
-                    """)
-                else:
-                    b.setStyleSheet(f"""
-                        QPushButton {{
-                            background: {C_GRAY}; color: #CCC;
-                            border: none; border-radius: 6px;
-                        }}
-                        QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}
-                    """)
+                button.setIcon(empty_icon)
+            button.setIconSize(QSize(16, 16))
+            button.setEnabled(not disabled)
+            button.setCursor(Qt.CursorShape.ArrowCursor if disabled else Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(self._disabled_reasons.get(key, ""))
+        self._mode_segments.set_selected(self._current_mode)
 
     def refresh_from_data(self):
         """从 self._data 重新读所有字段并刷新 UI (供「恢复默认」用)"""
@@ -835,6 +804,7 @@ class GpWheelEditorDialog(QDialog):
         (self._rb_square if self.data.sensitivity_curve == 'square' else self._rb_linear).setChecked(True)
         sens_row.addWidget(self._rb_linear); sens_row.addSpacing(16)
         sens_row.addWidget(self._rb_square); sens_row.addStretch()
+        self._sensitivity_segments = segmented_row(sens_row)
         sc.addLayout(sens_row)
         sc.addSpacing(SECTION_GAP)
 
@@ -1259,6 +1229,7 @@ class GpWheelEditorDialog(QDialog):
             b.clicked.connect(lambda _, k=key: self._on_easy_brake_choice(k))
             brake_row.addWidget(b, 1)
             self._easy_brake_btns[key] = b
+        self._brake_segments = segmented_row(brake_row, self._easy_brake_btns)
         v.addLayout(brake_row)
         v.addSpacing(6)
         v.addWidget(_make_label(
@@ -1304,18 +1275,7 @@ class GpWheelEditorDialog(QDialog):
         self._refresh_easy_brake_btns()
 
     def _refresh_easy_brake_btns(self):
-        for k, b in self._easy_brake_btns.items():
-            selected = (k == self._easy_brake_choice)
-            if selected:
-                b.setStyleSheet(
-                    f"QPushButton {{ background: {C_CYBER}; color: #FFF;"
-                    f" border: none; border-radius: 6px; }}"
-                    f" QPushButton:hover {{ background: {C_CYBER_H}; }}")
-            else:
-                b.setStyleSheet(
-                    f"QPushButton {{ background: {C_GRAY}; color: #CCC;"
-                    f" border: none; border-radius: 6px; }}"
-                    f" QPushButton:hover {{ background: {C_GRAY_H}; color: #FFF; }}")
+        self._brake_segments.set_selected(self._easy_brake_choice)
 
     # ── 左侧栏: 模式 Tab + 激活 tag ──
 
@@ -1376,7 +1336,7 @@ class GpWheelEditorDialog(QDialog):
                     f"QPushButton {{ background: {C_CYBER};"
                     f" border: none; border-radius: 6px; }}"
                     f" QPushButton:hover {{ background: {C_CYBER_H}; }}")
-                label.setStyleSheet("color: #FFF; background: transparent;")
+                label.setStyleSheet("color: #202020; background: transparent;")
             else:
                 btn.setStyleSheet(
                     f"QPushButton {{ background: transparent;"
