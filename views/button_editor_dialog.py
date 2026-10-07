@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS, RECESSED_BG
 from core.constants import (
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_INPUT_BG, C_TAG_BG, C_TAG_HOVER,
@@ -149,7 +150,7 @@ class TagInput(QWidget):
             lbl.setStyleSheet(f"""
                 QLabel {{
                     background: {self._accent}; color: {self._tag_text};
-                    padding: 2px 6px; border-radius: 6px;
+                    padding: 2px 6px; border-radius: {SMALL_RADIUS}px;
                 }}
             """)
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -772,13 +773,13 @@ class ButtonEditorDialog(QDialog):
         slider.setPageStep(step)
         slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 8px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
                 background: {C_DELAY}; border-radius: 3px;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: {RECESSED_BG}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;
@@ -1517,7 +1518,7 @@ class _FlowWidget(QWidget):
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {C_TAG_BG}; color: {C_TAG_TEXT};
-                    border: none; border-radius: 6px;
+                    border: none; border-radius: {SMALL_RADIUS}px;
                     padding: 0 {self.TAG_PAD_X}px;
                 }}
                 QPushButton:hover {{ background: {C_TAG_HOVER}; }}

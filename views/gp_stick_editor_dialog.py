@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, QPoint, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS, RECESSED_BG
 from core.constants import (
     STICK_ID_LEFT, STICK_ID_RIGHT, APP_DIR, APP_PREFIX,
     GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
@@ -784,7 +785,7 @@ class GpStickEditorDialog(QDialog):
         tm = _DefaultMarkedSlider.TRACK_MARGIN_TOP
         slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 6px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 6px; border-radius: 3px;
                 margin: {tm}px 0 0 0;
             }}
             QSlider::sub-page:horizontal {{
@@ -792,7 +793,7 @@ class GpStickEditorDialog(QDialog):
                 margin: {tm}px 0 0 0;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: {RECESSED_BG}; border-radius: 3px;
                 margin: {tm}px 0 0 0;
             }}
             QSlider::handle:horizontal {{
@@ -918,7 +919,7 @@ class GpStickEditorDialog(QDialog):
         chk.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
+                width: 16px; height: 16px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}

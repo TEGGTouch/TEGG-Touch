@@ -19,6 +19,7 @@ from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon, QIcon, QPixma
 from PyQt6.QtSvg import QSvgRenderer
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS, RECESSED_BG
 from core.constants import (
     APP_DIR,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
@@ -198,7 +199,7 @@ class _TriggerSection(QWidget):
         self._reverse_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
+                width: 16px; height: 16px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
@@ -535,7 +536,7 @@ def _make_value_slider(fn, label_text, init, min_v, max_v, default_v, suffix):
     slider = _DefaultMarkedSlider(min_v, max_v, init, default_v)
     slider.setStyleSheet(f"""
         QSlider::groove:horizontal {{
-            background: #404040; height: 6px; border-radius: 3px;
+            background: {RECESSED_BG}; height: 6px; border-radius: 3px;
             margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
         }}
         QSlider::sub-page:horizontal {{
@@ -543,7 +544,7 @@ def _make_value_slider(fn, label_text, init, min_v, max_v, default_v, suffix):
             margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
         }}
         QSlider::add-page:horizontal {{
-            background: #404040; border-radius: 3px;
+            background: {RECESSED_BG}; border-radius: 3px;
             margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
         }}
         QSlider::handle:horizontal {{
@@ -696,7 +697,7 @@ class GpWheelEditorDialog(QDialog):
         self._show_zone_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 6px; }}
             QCheckBox::indicator {{
-                width: 14px; height: 14px; border-radius: 3px;
+                width: 14px; height: 14px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
@@ -736,7 +737,7 @@ class GpWheelEditorDialog(QDialog):
         self._show_dz_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 6px; }}
             QCheckBox::indicator {{
-                width: 14px; height: 14px; border-radius: 3px;
+                width: 14px; height: 14px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
             QCheckBox::indicator:hover {{ border-color: {_MARKER_ROSE}; }}
@@ -778,7 +779,7 @@ class GpWheelEditorDialog(QDialog):
             0, len(_ROT_STOPS) - 1, cur_idx, _ROT_DEFAULT_IDX)
         self._rot_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 6px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 6px; border-radius: 3px;
                 margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
             }}
             QSlider::sub-page:horizontal {{
@@ -786,7 +787,7 @@ class GpWheelEditorDialog(QDialog):
                 margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: {RECESSED_BG}; border-radius: 3px;
                 margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
             }}
             QSlider::handle:horizontal {{
@@ -1352,7 +1353,7 @@ class GpWheelEditorDialog(QDialog):
             tag.setFixedHeight(18)
             tag.setStyleSheet(
                 "QLabel { background: #F59E0B; color: #000;"
-                " border-radius: 6px; padding: 0 8px; }"
+                f" border-radius: {SMALL_RADIUS}px; padding: 0 8px; }}"
             )
             tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
             tag.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)

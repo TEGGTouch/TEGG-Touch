@@ -14,6 +14,7 @@ from PyQt6.QtGui import (
 )
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS
 from core.constants import (
     WHEEL_INNER_RADIUS, WHEEL_OUTER_RADIUS,
     WHEEL_INNER_RADIUS_LARGE, WHEEL_OUTER_RADIUS_LARGE,
@@ -129,13 +130,13 @@ class _CheckToggle(QWidget):
             self._box.setText(icon)
             self._box.setStyleSheet(
                 f"background: {C_ACCENT}; color: #FFF;"
-                " border-radius: 6px;"
+                f" border-radius: {SMALL_RADIUS}px;"
             )
         else:
             self._box.setText("")
             self._box.setStyleSheet(
                 "background: #333; color: transparent;"
-                " border: 1px solid #666; border-radius: 6px;"
+                f" border: 1px solid #666; border-radius: {SMALL_RADIUS}px;"
             )
 
 

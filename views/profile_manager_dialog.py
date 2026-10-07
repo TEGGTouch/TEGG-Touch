@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QEvent
 from PyQt6.QtGui import QFont, QColor
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS
 from core.config_manager import (
     list_profiles, get_active_profile_name,
     create_profile, delete_profile, rename_profile,
@@ -471,7 +472,7 @@ class _Chip(QLabel):
         self.setStyleSheet(f"""
             QLabel {{
                 background: {color}; color: white;
-                border-radius: 6px; padding: 1px 6px;
+                border-radius: {SMALL_RADIUS}px; padding: 1px 6px;
             }}
         """)
         self.setFixedHeight(18)
@@ -1033,7 +1034,7 @@ class _ProfileCopyDialog(QDialog):
             QCheckBox {{ color: #E0E0E0; background: transparent; border: none; spacing: 8px; }}
             QCheckBox:disabled {{ color: #666; }}
             QCheckBox::indicator {{
-                width: 16px; height: 16px; border-radius: 3px;
+                width: 16px; height: 16px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #555; background: {C_GRAY};
             }}
             QCheckBox::indicator:hover {{ border-color: {C_AMBER}; }}

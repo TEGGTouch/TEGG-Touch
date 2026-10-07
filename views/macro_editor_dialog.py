@@ -15,6 +15,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QDrag
 
 from core.i18n import t, get_font
+from views.ui_components import RECESSED_BG
 from core.constants import GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX
 from views.button_editor_dialog import (
     _get_key_categories, _get_mouse_keys, _FlowWidget, _make_font, _detect_icon_font,
@@ -167,7 +168,7 @@ class _StepRow(QWidget):
         self._delay_slider.setSingleStep(DELAY_STEP)
         self._delay_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 6px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 6px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
                 background: {C_MACRO_DELAY}; border-radius: 3px;

@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 
 from core.i18n import t, get_font
+from views.ui_components import SMALL_RADIUS
 from core.constants import GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX
 from core import keyboard_hook
 
@@ -104,11 +105,11 @@ class _CheckToggle(QWidget):
             self._box.setText("✓")
             self._box.setStyleSheet(
                 f"background: {self._accent}; color: #1A1A1A; "
-                f"border-radius: 6px; font-weight: bold;")
+                f"border-radius: {SMALL_RADIUS}px; font-weight: bold;")
         else:
             self._box.setText("")
             self._box.setStyleSheet(
-                "background: #2A2A2A; border: 2px solid #555; border-radius: 6px;")
+                f"background: #2A2A2A; border: 2px solid #555; border-radius: {SMALL_RADIUS}px;")
 
 
 class KeyRemapDialog(QDialog):

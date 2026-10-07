@@ -17,23 +17,24 @@ from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QFontDatabase
 from core.i18n import t, get_font
 from core.constants import (
     TOOLBAR_WIDTH, TOOLBAR_HEIGHT, TOOLBAR_RADIUS,
-    TOOLBAR_BOTTOM_MARGIN,
+    TOOLBAR_BOTTOM_MARGIN, APP_VERSION,
 )
 from views.toolbar_tip_widget import ToolbarTipWidget
-from views.ui_components import OUTER_RADIUS, INNER_RADIUS
+from views.ui_components import (
+    OUTER_RADIUS, INNER_RADIUS, SMALL_RADIUS,
+    RECESSED_BG, PANEL_BG, CONTROL_BG,
+)
 
-# ── 颜色常量 (与原版 widgets.py 完全一致) ──
+# ── 功能色保持原配色；基础灰色按表面距离统一 ──
 C_CYBER = "#0C4A6E"
 C_CYBER_H = "#0284C7"
-C_GRAY = "#3A3A3A"
+C_GRAY = CONTROL_BG
 C_GRAY_H = "#505050"
 C_AMBER = "#F59E0B"
 C_AMBER_D = "#D97706"
 C_CLOSE = "#6E1E1E"
 C_CLOSE_H = "#8B2020"
-C_PANEL = "#2D2D2D"
-C_TOOL = "#4A4A4A"
-C_TOOL_H = "#5A5A5A"
+C_PANEL = PANEL_BG
 C_WH_ON = "#E11D48"       # 玫瑰红 (rose-600)
 C_WH_ON_H = "#F43F5E"     # 玫瑰红 hover (rose-500)
 
@@ -178,7 +179,7 @@ class _ModeSwitch(QFrame):
         super().__init__(parent)
         self.setObjectName('simulation_switch')
         self.setFixedSize(144, 40)
-        self.setStyleSheet('QFrame#simulation_switch { background: #202020; border: none; border-radius: 8px; }')
+        self.setStyleSheet(f'QFrame#simulation_switch {{ background: {RECESSED_BG}; border: none; border-radius: 8px; }}')
         self._thumb = QFrame(self)
         self._thumb.setStyleSheet(f'background: {C_AMBER}; border: none; border-radius: 6px;')
         self._thumb.setGeometry(4, 4, 68, 32)
@@ -222,7 +223,7 @@ class _CheckIndicator(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(QColor(C_AMBER if self.checked else '#AAAAAA'), 1.5))
         painter.setBrush(QColor(C_AMBER) if self.checked else Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(2, 2, 16, 16, 3, 3)
+        painter.drawRoundedRect(2, 2, 16, 16, SMALL_RADIUS, SMALL_RADIUS)
         if self.checked:
             painter.setPen(QPen(QColor('#202020'), 2.0, Qt.PenStyle.SolidLine,
                                 Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
@@ -307,7 +308,7 @@ class EditToolbar(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         container = QFrame()
         container.setObjectName("et_container")
-        container.setStyleSheet(f"QFrame#et_container {{ background: #2D2D2D; border: none; border-radius: {OUTER_RADIUS}px; }}")
+        container.setStyleSheet(f"QFrame#et_container {{ background: {C_PANEL}; border: none; border-radius: {OUTER_RADIUS}px; }}")
         outer.addWidget(container)
         main = QVBoxLayout(container)
         main.setContentsMargins(16, 12, 16, 14)
@@ -342,7 +343,7 @@ class EditToolbar(QWidget):
             slider.setValue(value)
             slider.setFixedHeight(24)
             slider.setMinimumWidth(54)
-            slider.setStyleSheet(f"QSlider::groove:horizontal {{ background: #505050; height: 6px; border-radius: 3px; }} QSlider::sub-page:horizontal {{ background: {color}; border-radius: 3px; }} QSlider::handle:horizontal {{ background: #DDD; border: none; width: 16px; height: 16px; margin: -5px 0; border-radius: 8px; }}")
+            slider.setStyleSheet(f"QSlider::groove:horizontal {{ background: {RECESSED_BG}; height: 6px; border-radius: 3px; }} QSlider::sub-page:horizontal {{ background: {color}; border-radius: 3px; }} QSlider::add-page:horizontal {{ background: {RECESSED_BG}; border-radius: 3px; }} QSlider::handle:horizontal {{ background: #DDD; border: none; width: 16px; height: 16px; margin: -5px 0; border-radius: 8px; }}")
             slider.valueChanged.connect(callback)
             row.addWidget(slider, 1)
             number = QLabel(f"{value}%")
@@ -363,8 +364,8 @@ class EditToolbar(QWidget):
             ("\uE921", "_", self.minimize_clicked, "tooltip.minimize"),
             ("\uE713", "⚙", self.settings_clicked, "tooltip.settings"),
             ("\uE711", "×", self.quit_clicked, "tooltip.quit")]:
-            button = self._build_sq_btn(icon, fallback, C_CLOSE if tip == "tooltip.quit" else C_TOOL,
-                                        C_CLOSE_H if tip == "tooltip.quit" else C_TOOL_H, "#CCC", signal)
+            button = self._build_sq_btn(icon, fallback, C_CLOSE if tip == "tooltip.quit" else C_GRAY,
+                                        C_CLOSE_H if tip == "tooltip.quit" else C_GRAY_H, "#CCC", signal)
             button.setToolTip(t(tip))
             self._install_tip(button)
             header.addWidget(button)
@@ -456,7 +457,9 @@ class EditToolbar(QWidget):
         groups.addWidget(keys_widget)
         self._launch_separator = _VSep()
         groups.addWidget(self._launch_separator)
-        launch_widget, launch = group("")
+        launch_widget, launch = group(f"{ui_text('蛋挞', 'TEGG Touch')} v{APP_VERSION}")
+        self._brand_label = launch_widget.layout().itemAt(0).widget()
+        self._brand_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         run = _IconTextBtn("\uE768", "▶", t("toolbar.start"), C_AMBER_D, C_AMBER, fg="#FFF")
         run.setMinimumWidth(96)
         self._run_btn = run

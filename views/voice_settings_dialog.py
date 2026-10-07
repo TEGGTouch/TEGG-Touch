@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font, get_lang
+from views.ui_components import SMALL_RADIUS, RECESSED_BG
 from core.constants import (
     VOICE_SAMPLE_RATE, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX,
 )
@@ -120,13 +121,13 @@ class _CheckToggle(QWidget):
             self._box.setText(icon)
             self._box.setStyleSheet(
                 f"background: {self._accent}; color: #FFF;"
-                " border-radius: 6px;"
+                f" border-radius: {SMALL_RADIUS}px;"
             )
         else:
             self._box.setText("")
             self._box.setStyleSheet(
                 "background: #333; color: transparent;"
-                " border: 1px solid #666; border-radius: 6px;"
+                f" border: 1px solid #666; border-radius: {SMALL_RADIUS}px;"
             )
 
 
@@ -385,13 +386,13 @@ class _ChunkSizeDialog(QDialog):
         self._slider.setValue(cur // self._STEP)
         self._slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 8px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
                 background: {C_GREEN}; border-radius: 3px;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: {RECESSED_BG}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;
@@ -1840,7 +1841,7 @@ class VoiceSettingsDialog(QDialog):
         hl.addWidget(tlbl)
         tag = QLabel(t('voice_dialog.mode_selected'))
         tag.setFont(_make_font(fn, 11, bold=True))
-        tag.setStyleSheet("color: #000; background: #10B981; border-radius: 6px; padding: 1px 10px;")
+        tag.setStyleSheet(f"color: #000; background: #10B981; border-radius: {SMALL_RADIUS}px; padding: 1px 10px;")
         hl.addWidget(tag)
         hl.addStretch()
         hint = QLabel(t('voice_dialog.card_click_hint'))

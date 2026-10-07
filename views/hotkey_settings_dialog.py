@@ -20,6 +20,7 @@ import os
 import webbrowser
 
 from core.i18n import t, get_font, load_locale, get_lang
+from views.ui_components import SMALL_RADIUS, RECESSED_BG
 from core.constants import (
     DEFAULT_HOTKEYS, get_hotkey_labels, APP_VERSION, get_app_title, APP_DIR,
     DEFAULT_CURSOR_STYLES, CURSOR_SCALE_OPTIONS, CURSOR_BASE_SIZE,
@@ -176,7 +177,7 @@ class TagInput(QWidget):
             lbl.setStyleSheet(f"""
                 QLabel {{
                     background: {self._accent}; color: #FFF;
-                    padding: 2px 6px; border-radius: 6px;
+                    padding: 2px 6px; border-radius: {SMALL_RADIUS}px;
                 }}
             """)
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -238,7 +239,7 @@ class _FlowKeys(QWidget):
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {C_TAG_BG}; color: {C_TAG_TEXT};
-                    border: none; border-radius: 6px;
+                    border: none; border-radius: {SMALL_RADIUS}px;
                     padding: 0 {self.TAG_PAD_X}px;
                 }}
                 QPushButton:hover {{ background: {C_TAG_HOVER}; }}
@@ -805,13 +806,13 @@ class HotkeySettingsDialog(QDialog):
         scale_slider.setValue(int(round(cur_scale * 100)))
         scale_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 8px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
                 background: {C_CYBER_H}; border-radius: 3px;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: {RECESSED_BG}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;
@@ -950,7 +951,7 @@ class HotkeySettingsDialog(QDialog):
         tag = QLabel(t("hotkey.shape_active_tag"))
         tag.setFont(_make_font(fn, 11, bold=True))
         tag.setStyleSheet(
-            f"color: #000; background: #F59E0B; border-radius: 6px; padding: 1px 10px;")
+            f"color: #000; background: #F59E0B; border-radius: {SMALL_RADIUS}px; padding: 1px 10px;")
         hl.addWidget(tag)
         hl.addStretch()
         hint = QLabel(t("hotkey.shape_click_activate"))
@@ -1089,9 +1090,9 @@ class HotkeySettingsDialog(QDialog):
 
     def _slider_qss(self):
         return f"""
-            QSlider::groove:horizontal {{ background: #404040; height: 8px; border-radius: 3px; }}
+            QSlider::groove:horizontal {{ background: {RECESSED_BG}; height: 8px; border-radius: 3px; }}
             QSlider::sub-page:horizontal {{ background: {C_CYBER_H}; border-radius: 3px; }}
-            QSlider::add-page:horizontal {{ background: #404040; border-radius: 3px; }}
+            QSlider::add-page:horizontal {{ background: {RECESSED_BG}; border-radius: 3px; }}
             QSlider::handle:horizontal {{ background: #DDD; border: none;
                 width: 16px; height: 16px; margin: -4px 0; border-radius: 8px; }}
             QSlider::handle:horizontal:hover {{ background: {C_CYBER_H}; }}
@@ -2204,13 +2205,13 @@ class HotkeySettingsDialog(QDialog):
         self._ac_delay_slider.setSingleStep(100)
         self._ac_delay_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                background: #404040; height: 8px; border-radius: 3px;
+                background: {RECESSED_BG}; height: 8px; border-radius: 3px;
             }}
             QSlider::sub-page:horizontal {{
                 background: {accent}; border-radius: 3px;
             }}
             QSlider::add-page:horizontal {{
-                background: #404040; border-radius: 3px;
+                background: {RECESSED_BG}; border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
                 background: #DDD; border: none;

@@ -12,6 +12,12 @@ from core.i18n import get_font, get_lang
 OUTER_RADIUS = 12
 INNER_RADIUS = 6
 CARD_RADIUS = 8
+SMALL_RADIUS = 3
+
+# Surface depth: recessed wells < panels < raised controls.
+RECESSED_BG = '#202020'
+PANEL_BG = '#2D2D2D'
+CONTROL_BG = '#3A3A3A'
 
 
 def ui_text(chinese, english):
@@ -103,7 +109,7 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
     dialog._shadow_installed = True  # This shell owns its border and screen budget.
     dialog._ui_shell = True
     container.setStyleSheet(container.styleSheet() + f'''
-        QFrame#{container.objectName()} {{ background: #2D2D2D; border: 1px solid #555; border-radius: {OUTER_RADIUS}px; }}
+        QFrame#{container.objectName()} {{ background: {PANEL_BG}; border: 1px solid #555; border-radius: {OUTER_RADIUS}px; }}
         QScrollBar:vertical {{ background: #2D2D2D; width: 8px; margin: 0; }}
         QScrollBar::handle:vertical {{ background: #626262; min-height: 28px; border-radius: 4px; }}
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
@@ -144,7 +150,7 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
     header = QFrame(container)
     header.setObjectName('ui_titlebar')
     header.setFixedHeight(64)
-    header.setStyleSheet(f'QFrame#ui_titlebar {{ background: #2D2D2D; border: none; border-bottom: 1px solid #444; border-top-left-radius: {OUTER_RADIUS}px; border-top-right-radius: {OUTER_RADIUS}px; }}')
+    header.setStyleSheet(f'QFrame#ui_titlebar {{ background: {PANEL_BG}; border: none; border-bottom: 1px solid #444; border-top-left-radius: {OUTER_RADIUS}px; border-top-right-radius: {OUTER_RADIUS}px; }}')
     header_layout = QHBoxLayout(header)
     header_layout.setContentsMargins(24, 0, 24, 0)
     marker = QLabel('▏', header)
@@ -159,12 +165,12 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
     if close:
         close.setFixedSize(40, 40)
         close.setToolTip(ui_text('关闭', 'Close'))
-        close.setStyleSheet('QPushButton { background: #3A3A3A; color: #CCC; border: none; border-radius: 6px; } QPushButton:hover { background: #6E1E1E; color: white; }')
+        close.setStyleSheet(f'QPushButton {{ background: {CONTROL_BG}; color: #CCC; border: none; border-radius: {INNER_RADIUS}px; }} QPushButton:hover {{ background: #6E1E1E; color: white; }}')
     else:
         close = QPushButton('×', header)
         close.setFixedSize(40, 40)
         close.clicked.connect(dialog.close)
-        close.setStyleSheet('QPushButton { background: #3A3A3A; color: #CCC; border: none; border-radius: 6px; } QPushButton:hover { background: #6E1E1E; }')
+        close.setStyleSheet(f'QPushButton {{ background: {CONTROL_BG}; color: #CCC; border: none; border-radius: {INNER_RADIUS}px; }} QPushButton:hover {{ background: #6E1E1E; }}')
         header_layout.addWidget(close)
     root.addWidget(header)
 
@@ -210,7 +216,7 @@ def finish_dialog(dialog, size, actions=(), guidance=None, columns=False,
     footer = QFrame(container)
     footer.setObjectName('ui_actionbar')
     footer.setFixedHeight(72)
-    footer.setStyleSheet(f'QFrame#ui_actionbar {{ background: #2D2D2D; border: none; border-top: 1px solid #444; border-bottom-left-radius: {OUTER_RADIUS}px; border-bottom-right-radius: {OUTER_RADIUS}px; }}')
+    footer.setStyleSheet(f'QFrame#ui_actionbar {{ background: {PANEL_BG}; border: none; border-top: 1px solid #444; border-bottom-left-radius: {OUTER_RADIUS}px; border-bottom-right-radius: {OUTER_RADIUS}px; }}')
     footer_layout = QHBoxLayout(footer)
     footer_layout.setContentsMargins(24, 16, 24, 16)
     footer_layout.setSpacing(10)
