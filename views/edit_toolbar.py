@@ -315,7 +315,7 @@ class EditToolbar(QWidget):
         container.setStyleSheet(f"QFrame#et_container {{ background: {C_PANEL}; border: none; border-radius: {OUTER_RADIUS}px; }}")
         outer.addWidget(container)
         main = QVBoxLayout(container)
-        main.setContentsMargins(16, 12, 16, 14)
+        main.setContentsMargins(12, 12, 12, 12)
         main.setSpacing(12)
         header = QHBoxLayout()
         header.setSpacing(10)
