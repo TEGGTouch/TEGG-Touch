@@ -19,7 +19,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row, text_on_surface
 from core.constants import (
     C_PM_BG, C_GRAY, C_GRAY_H, C_AMBER, C_CYBER, C_CYBER_H,
     C_CLOSE, C_CLOSE_H, C_TAG_BG, C_TAG_HOVER,
@@ -114,8 +114,7 @@ class TagInput(QWidget):
         super().__init__(parent)
         self.tags: list[str] = []
         self._accent = accent_color
-        # 标签文字色 — 默认白字 (沿用各弹窗现状); 琥珀等浅底色可传深色提高对比
-        self._tag_text = tag_text_color
+        self._tag_text = text_on_surface(accent_color, tag_text_color)
         self._focused = False
 
         self.setFixedHeight(42)

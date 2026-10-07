@@ -20,7 +20,8 @@ import os
 import webbrowser
 
 from core.i18n import t, get_font, load_locale, get_lang
-from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row, text_on_surface
+from views.color_picker_dialog import ColorPickerDialog
 from core.constants import (
     DEFAULT_HOTKEYS, get_hotkey_labels, APP_VERSION, get_app_title, APP_DIR,
     DEFAULT_CURSOR_STYLES, CURSOR_SCALE_OPTIONS, CURSOR_BASE_SIZE,
@@ -177,7 +178,7 @@ class TagInput(QWidget):
             lbl.setFont(_make_font(fn, 12, bold=True))
             lbl.setStyleSheet(f"""
                 QLabel {{
-                    background: {self._accent}; color: #FFF;
+                    background: {self._accent}; color: {text_on_surface(self._accent)};
                     padding: 2px 6px; border-radius: {SMALL_RADIUS}px;
                 }}
             """)
@@ -868,7 +869,7 @@ class HotkeySettingsDialog(QDialog):
         c = QColor(color_hex)
         # luminance
         lum = 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue()
-        fg = "#000" if lum > 140 else "#FFF"
+        fg = text_on_surface(color_hex, "#000" if lum > 140 else "#FFF")
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {color_hex}; color: {fg};
@@ -880,7 +881,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_pick_color(self, ct: str, key: str, btn: QPushButton):
         initial = QColor(self._cursor_buf[ct].get(key, '#FFFFFF'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, t(f"hotkey.cursor_{key}"),
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1120,7 +1121,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_ball_pick_color(self, ct: str, btn: QPushButton):
         initial = QColor(self._ball_buf[ct].get('color', '#000000'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, t("hotkey.cursor_color"),
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1308,7 +1309,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_bc_pick(self, g: str, btn: QPushButton):
         initial = QColor(self._button_colors_buf[g])
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, t("hotkey.bc_base"),
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1423,7 +1424,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_wheel_card_pick(self):
         initial = QColor(self._wheel_buf.get('color', '#3B82F6'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, t("hotkey.bc_wheel"),
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1584,7 +1585,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_wheel_color_pick(self):
         initial = QColor(self._wheel_buf.get('color', '#3B82F6'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, "方向盘颜色",
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():
@@ -1596,7 +1597,7 @@ class HotkeySettingsDialog(QDialog):
 
     def _on_wheel_trigger_pick(self, key: str, btn: QPushButton):
         initial = QColor(self._wheel_buf.get(key, '#0284C7'))
-        color = QColorDialog.getColor(
+        color = ColorPickerDialog.getColor(
             initial, self, "扳机色",
             QColorDialog.ColorDialogOption.DontUseNativeDialog)
         if not color.isValid():

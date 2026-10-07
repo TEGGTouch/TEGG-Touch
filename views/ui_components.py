@@ -23,7 +23,12 @@ PANEL_BG = '#2D2D2D'
 CONTROL_BG = '#3A3A3A'
 AMBER_BG = '#F59E0B'
 AMBER_HOVER = '#D97706'
+AMBER_TEXT = '#000000'
 SCROLL_GAP = 12
+
+
+def text_on_surface(background, normal='#FFFFFF'):
+    return AMBER_TEXT if background.upper() in ('#F59E0B', '#D97706', '#B45309') else normal
 
 
 class SegmentedControl(QFrame):
@@ -63,11 +68,11 @@ class SegmentedControl(QFrame):
 
     def _style_buttons(self):
         for key, button in self.buttons.items():
-            color = RECESSED_BG if key == self._selected else '#AAAAAA'
+            color = AMBER_TEXT if key == self._selected else '#AAAAAA'
             button.setStyleSheet(f'''
                 QPushButton, QRadioButton {{ background: transparent; color: {color}; border: none;
                     border-radius: {INNER_RADIUS}px; padding: 0 4px; }}
-                QPushButton:hover, QRadioButton:hover {{ color: {RECESSED_BG if key == self._selected else '#FFFFFF'}; }}
+                QPushButton:hover, QRadioButton:hover {{ color: {AMBER_TEXT if key == self._selected else '#FFFFFF'}; }}
                 QPushButton:disabled, QRadioButton:disabled {{ color: #666666; background: transparent; }}
                 QRadioButton::indicator {{ width: 0; height: 0; }}
             ''')
@@ -109,7 +114,7 @@ class SegmentedControl(QFrame):
                 painter = QPainter(obj)
                 painter.setFont(obj.font())
                 selected = self.buttons.get(self._selected) is obj
-                painter.setPen(QColor('#666' if not obj.isEnabled() else RECESSED_BG if selected else '#AAA'))
+                painter.setPen(QColor('#666' if not obj.isEnabled() else AMBER_TEXT if selected else '#AAA'))
                 painter.drawText(obj.rect(), Qt.AlignmentFlag.AlignCenter, obj.text())
                 return True
             if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
@@ -218,11 +223,20 @@ class _DialogPresentation(QObject):
                                       flags=re.IGNORECASE)
                     if replaced != body:
                         replaced = re.sub(r'(?<![-\w])(color\s*:\s*)(?:#FFF(?:FFF)?|white)\b',
-                                          r'\1#202020', replaced, flags=re.IGNORECASE)
+                                          r'\1#000000', replaced, flags=re.IGNORECASE)
                     return match[1] + replaced + match[3]
                 updated = re.sub(pattern, amber_block, style)
                 if widget.property('ui_primary') and '/* ui_primary */' not in updated:
-                    updated += f'\nQPushButton {{ background: {AMBER_BG}; color: {RECESSED_BG}; }} QPushButton:hover {{ background: {AMBER_HOVER}; color: {RECESSED_BG}; }} QPushButton:disabled {{ background: {CONTROL_BG}; color: #888; }}\n/* ui_primary */'
+                    updated += f'\nQPushButton {{ background: {AMBER_BG}; color: {AMBER_TEXT}; }} QPushButton:hover {{ background: {AMBER_HOVER}; color: {AMBER_TEXT}; }} QPushButton:disabled {{ background: {CONTROL_BG}; color: #888; }}\n/* ui_primary */'
+            if not widget.property('ui_color_sample'):
+                def black_on_amber(match):
+                    if not re.search(r'(?<![-\w])background(?:-color)?\s*:\s*#(?:F59E0B|D97706|B45309)\b', match[2], re.I):
+                        return match[0]
+                    body = re.sub(r'(?<![-\w])color\s*:[^;]+;', f'color: {AMBER_TEXT};', match[2], flags=re.I)
+                    if body == match[2] and not re.search(r'(?<![-\w])color\s*:', body, re.I):
+                        body += f' color: {AMBER_TEXT}; '
+                    return match[1] + body + match[3]
+                updated = re.sub(r'([^{}]+\{)([^{}]*)(\})', black_on_amber, updated)
             if isinstance(widget, (QLineEdit, QComboBox, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox)):
                 selector = type(widget).__name__
                 if '/* ui_input */' not in updated:

@@ -8,7 +8,7 @@
 </style>
 <header>
  <h1>蛋挞 · UI 分支实机效果</h1>
- <p>feature/ui-inputegg · 琥珀确认 · 深灰输入与切换槽 · 引导固定在底栏左侧 · 胶囊滚动条与内容间隔 12 px · 外框 12 / 内控件 6 / Tag 与 Checkbox 3 px 圆角。</p>
+ <p>feature/ui-inputegg · 琥珀底黑字 · 深灰输入与切换槽 · 引导固定在底栏左侧 · 胶囊滚动条与内容间隔 12 px · 外框 12 / 内控件 6 / Tag 与 Checkbox 3 px 圆角。</p>
  <p>先看运行中的工具栏和按钮编辑器，再看各功能窗口。点击图片可打开原尺寸截图。</p>
  <nav><a href="#running">运行画面</a><a href="#editors">编辑弹窗</a><a href="#settings">设置</a><a href="#auxiliary">子弹窗与状态窗口</a><a href="#compact">压缩工作区</a><a href="ui-redesign-plan.md">改造记录</a><a href="ui-color-inventory.md">配色清单</a></nav>
 </header>
@@ -18,6 +18,7 @@
   <p>通过原 main.main() 启动。窗口使用 UI 分支的本地默认方案，原目录中的方案和配置保持独立。</p>
   <article><h3>编辑工具栏 · 方案 / 透明度 / 缩放 / 窗口操作；添加模拟组件 / 语音控制 / 软键盘 / 启动</h3><a href="ui-running-toolbar.png"><img src="ui-running-toolbar.png" alt="运行中的三行编辑工具栏"></a></article>
   <article><h3>当前方案的“全配置示范” · 原按钮编辑入口</h3><a href="ui-running-editor.png"><img src="ui-running-editor.png" alt="运行中的按钮编辑器，标题底栏固定，字段和候选分别滚动"></a></article>
+  <article><h3>配色面板 · 确认 / 取消移到固定底栏</h3><a href="ui-running-color.png"><img src="ui-running-color.png" alt="运行中的配色面板，灰色取消与琥珀底黑字确定按钮"></a></article>
   <div class="grid">
    <article><h3>键盘模式 · 1070×157</h3><a href="ui-client-EditToolbar.png"><img src="ui-client-EditToolbar.png" alt="键盘模拟模式"></a></article>
    <article><h3>手柄模式 · 同宽，入口随模式变化</h3><a href="ui-client-EditToolbar-gamepad.png"><img src="ui-client-EditToolbar-gamepad.png" alt="手柄模拟模式"></a></article>
@@ -45,7 +46,7 @@ const groups={
   ['CenterBandDialog','回中带 · 目标选择'],
   ['ProfileManagerDialog','方案管理 · 查看与应用仍是两个操作']],
  'settings-grid':[['settings-0','快捷键'],['settings-1','光标配色'],['settings-5','按钮配色与方向盘预览'],['settings-2','语言'],['settings-3','日志与诊断'],['settings-4','关于蛋挞']],
- 'auxiliary-grid':[['VoiceTestDialog','语音测试 · 波形 / 结果 / 固定状态栏'],['_ChunkSizeDialog','语音识别延迟'],['_ProfileCopyDialog','方案复制'],['_StyledInputDialog','方案命名'],['_StyledConfirmDialog','方案删除确认'],['_StyledMessageDialog','消息提示'],['GamepadInstallDialog','手柄驱动状态'],['DiagExportDialog','诊断打包状态'],['UpdateDialog','更新提示'],['PostUpdateDialog','更新完成'],['AboutDialog','独立关于窗口']],
+ 'auxiliary-grid':[['ColorPickerDialog','配色 · 原 Qt 取色组件与标准底栏按钮'],['VoiceTestDialog','语音测试 · 波形 / 结果 / 固定状态栏'],['_ChunkSizeDialog','语音识别延迟'],['_ProfileCopyDialog','方案复制'],['_StyledInputDialog','方案命名'],['_StyledConfirmDialog','方案删除确认'],['_StyledMessageDialog','消息提示'],['GamepadInstallDialog','手柄驱动状态'],['DiagExportDialog','诊断打包状态'],['UpdateDialog','更新提示'],['PostUpdateDialog','更新完成'],['AboutDialog','独立关于窗口']],
  'compact-grid':[['ButtonEditorDialog','按钮编辑 · 1120×620'],['VoiceSettingsDialog','语音 · 1216×620'],['KeyRemapDialog','映射 · 1216×620'],['HotkeySettingsDialog','设置 · 1216×620'],['GpWheelEditorDialog','方向盘 · 1216×620']]
 };
 for(const [id,entries] of Object.entries(groups)){

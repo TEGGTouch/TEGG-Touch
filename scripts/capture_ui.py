@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from PyQt6.QtCore import QPoint
+from PyQt6.QtGui import QColor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QScrollArea, QAbstractScrollArea
 from views.ui_components import SCROLL_GAP
@@ -25,6 +26,7 @@ from models.gamepad_model import GamepadStickData, GamepadWheelData
 from views.about_dialog import AboutDialog
 from views.button_editor_dialog import ButtonEditorDialog
 from views.center_band_dialog import CenterBandDialog
+from views.color_picker_dialog import ColorPickerDialog
 from views.diag_export_dialog import DiagExportDialog
 from views.edit_toolbar import EditToolbar
 from views.gamepad_install_dialog import GamepadInstallDialog
@@ -89,6 +91,7 @@ def main():
         lambda: PostUpdateDialog(str(ROOT)),
         lambda: GamepadInstallDialog(),
         lambda: DiagExportDialog(),
+        lambda: ColorPickerDialog(QColor('#F59E0B'), title='选择颜色'),
     ]
     output = ROOT / 'docs'
     report = []

@@ -4,16 +4,17 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from PyQt6.QtCore import QEvent, QPoint, QPointF, QRect, Qt
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QRect, Qt, QTimer
+from PyQt6.QtGui import QMouseEvent, QColor
 from PyQt6.QtTest import QSignalSpy, QTest
-from PyQt6.QtWidgets import QApplication, QScrollArea
+from PyQt6.QtWidgets import QApplication, QScrollArea, QColorDialog, QStyle, QStyleOptionSlider
 
 from core.i18n import load_locale, t
 from models.button_model import ButtonData
 from models.wheel_model import WheelSectorData
 from models.gamepad_model import GamepadWheelData
 from views.button_editor_dialog import ButtonEditorDialog
+from views.color_picker_dialog import ColorPickerDialog
 from views.edit_toolbar import EditToolbar, _DragHandle
 from views.hotkey_settings_dialog import HotkeySettingsDialog
 from views.key_remap_dialog import KeyRemapDialog
@@ -284,6 +285,66 @@ class RedesignTests(unittest.TestCase):
         row = macro._step_rows[0]
         row._key_input.add_tag('space')
         self.assertEqual(row.get_step_data()['key'], 'space')
+
+    def test_color_picker_footer_confirm_returns_selected_color_and_alpha(self):
+        chosen = QColor(16, 185, 129, 128)
+
+        def confirm():
+            picker = next(w for w in app.topLevelWidgets()
+                          if isinstance(w, ColorPickerDialog) and w.isVisible())
+            picker.setCurrentColor(chosen)
+            picker._ok_button.click()
+
+        QTimer.singleShot(0, confirm)
+        result = ColorPickerDialog.getColor(QColor('#F59E0B'),
+                 options=QColorDialog.ColorDialogOption.ShowAlphaChannel)
+        self.assertEqual(result.rgba(), chosen.rgba())
+
+    def test_color_picker_native_layout_does_not_shrink_or_crop_the_shared_shell(self):
+        picker = self.show(ColorPickerDialog(QColor('#F59E0B'), title='选择颜色'))
+        self.assertEqual((picker.width(), picker.height()), (760, 620))
+        header, footer = picker._ui_header.geometry(), picker._ui_footer.geometry()
+        for scroll in picker.findChildren(QScrollArea):
+            self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
+            scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+        app.processEvents()
+        self.assertEqual(picker._ui_header.geometry(), header)
+        self.assertEqual(picker._ui_footer.geometry(), footer)
+        for button in picker._ui_actions:
+            self.assertTrue(picker._ui_footer.isAncestorOf(button))
+
+    def test_color_picker_cancel_close_and_escape_discard_preview_color(self):
+        for action in ('cancel', 'close', 'escape'):
+            with self.subTest(action=action):
+                def cancel():
+                    picker = next(w for w in app.topLevelWidgets()
+                                  if isinstance(w, ColorPickerDialog) and w.isVisible())
+                    picker.setCurrentColor(QColor('#10B981'))
+                    if action == 'cancel':
+                        picker._cancel_button.click()
+                    elif action == 'close':
+                        picker._ui_header.findChild(type(picker._ok_button)).click()
+                    else:
+                        QTest.keyClick(picker, Qt.Key.Key_Escape)
+
+                QTimer.singleShot(0, cancel)
+                self.assertFalse(ColorPickerDialog.getColor(QColor('#F59E0B')).isValid())
+
+    def test_direction_slider_handles_fit_inside_controls_at_all_positions(self):
+        from views.gp_wheel_editor_dialog import GpWheelEditorDialog, _DefaultMarkedSlider
+        dialog = self.show(GpWheelEditorDialog(self.item(GamepadWheelData())))
+        for mode in (0, 1):
+            dialog._select_mode_tab(mode)
+            app.processEvents()
+            for slider in dialog.findChildren(_DefaultMarkedSlider):
+                for value in (slider.minimum(), slider._default, slider.maximum()):
+                    slider.setValue(value)
+                    option = QStyleOptionSlider()
+                    slider.initStyleOption(option)
+                    handle = slider.style().subControlRect(QStyle.ComplexControl.CC_Slider,
+                             option, QStyle.SubControl.SC_SliderHandle, slider)
+                    self.assertTrue(slider.rect().contains(handle), (mode, value, handle))
+                    self.assertGreaterEqual(slider.height() - 1 - handle.bottom(), 2)
 
     def test_settings_pages_show_only_their_existing_footer_actions(self):
         dialog = self.show(HotkeySettingsDialog())

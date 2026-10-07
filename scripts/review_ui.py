@@ -1,6 +1,6 @@
 """Start the actual client and open an existing button editor for UI review.
 
-Run: python scripts/review_ui.py
+Run: python scripts/review_ui.py [--color]
 Uses main.main(), the current branch's normal profile and existing editor route.
 Captures only application widgets, never the desktop behind the overlay.
 """
@@ -34,6 +34,33 @@ def open_review():
         editor.raise_()
         editor.activateWindow()
         QTimer.singleShot(500, lambda: editor.grab().save(str(ROOT / 'docs' / 'ui-running-editor.png')))
+    if '--color' in sys.argv:
+        QTimer.singleShot(800, lambda: open_color_review(window, editor))
+
+
+def open_color_review(window, editor):
+    if editor:
+        editor.close()
+    window._open_hotkey_settings()
+    settings = window._dlg_hotkey
+    settings._select_page(1)
+    settings.raise_()
+    settings.activateWindow()
+
+    def capture_picker():
+        from views.color_picker_dialog import ColorPickerDialog
+        picker = next((w for w in QApplication.instance().topLevelWidgets()
+                       if isinstance(w, ColorPickerDialog) and w.isVisible()), None)
+        if picker:
+            picker.grab().save(str(ROOT / 'docs' / 'ui-running-color.png'))
+
+    def open_picker():
+        cursor_type, buttons = next(iter(settings._cursor_color_btns.items()))
+        key, button = next(iter(buttons.items()))
+        QTimer.singleShot(400, capture_picker)
+        settings._on_pick_color(cursor_type, key, button)
+
+    QTimer.singleShot(300, open_picker)
 
 
 if __name__ == '__main__':

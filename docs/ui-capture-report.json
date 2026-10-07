@@ -324,6 +324,16 @@
       "footer": 72
     },
     {
+      "window": "ColorPickerDialog",
+      "image": "ui-client-ColorPickerDialog.png",
+      "size": [
+        760,
+        620
+      ],
+      "header": 64,
+      "footer": 72
+    },
+    {
       "window": "ButtonEditorDialog",
       "image": "ui-compact-ButtonEditorDialog.png",
       "size": [

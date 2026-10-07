@@ -19,19 +19,19 @@ from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon, QIcon, QPixma
 from PyQt6.QtSvg import QSvgRenderer
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, PANEL_BG, AMBER_BG, AMBER_TEXT, segmented_row
 from core.constants import (
     APP_DIR,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
-    )
+)
 
 C_INPUT_BG = RECESSED_BG
 
 
 _C_BG = C_PM_BG
 _C_BORDER = "#444"
-_C_BLUE = "#3B82F6"
-_C_BLUE_H = "#60A5FA"
+_C_ACCENT = AMBER_BG
+_C_ACCENT_H = AMBER_BG
 _C_TEXT = "#E0E0E0"
 _C_HINT = "#888"
 _C_DEFAULT_TEXT = "#AAAAAA"
@@ -89,11 +89,11 @@ _ROT_DEFAULT_IDX = 1   # 180° 为默认
 
 
 class _DefaultMarkedSlider(QSlider):
-    """slider 上方画 ▼ 三角; 当前值 == 默认值 → 蓝, 否则灰白 (复用 gp_stick_editor 模式)"""
+    """slider 上方画 ▼ 三角; 默认值标记为琥珀，偏离默认值时为灰白。"""
     TRI_TOP = 4
     TRI_H = 8
     TRACK_MARGIN_TOP = 20
-    WIDGET_H = 34
+    WIDGET_H = 44
 
     def __init__(self, min_v, max_v, init, default_v, parent=None):
         super().__init__(Qt.Orientation.Horizontal, parent)
@@ -115,7 +115,7 @@ class _DefaultMarkedSlider(QSlider):
         usable_w = max(1, self.width() - 2 * margin)
         pct = (self._default - self.minimum()) / rng
         x = int(margin + pct * usable_w)
-        color = _C_BLUE if self.is_at_default() else _C_MARK
+        color = _C_ACCENT if self.is_at_default() else _C_MARK
         tri = QPolygon([
             QPoint(x - 5, self.TRI_TOP),
             QPoint(x + 5, self.TRI_TOP),
@@ -150,7 +150,7 @@ class _TriggerSection(QWidget):
 
         sec_lbl = QLabel(title)
         sec_lbl.setFont(_font(fn, 16, bold=True))
-        sec_lbl.setStyleSheet(f"color: {_C_BLUE_H}; background: transparent;")
+        sec_lbl.setStyleSheet(f"color: {_C_ACCENT_H}; background: transparent;")
         lay.addWidget(sec_lbl)
 
         # 控制方式 — tab 按钮 (三选一, 互斥由 Dialog 协调)
@@ -204,9 +204,9 @@ class _TriggerSection(QWidget):
                 width: 16px; height: 16px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
-            QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+            QCheckBox::indicator:hover {{ border-color: {_C_ACCENT_H}; }}
             QCheckBox::indicator:checked {{
-                background: {_C_BLUE}; border: 2px solid {_C_BLUE};
+                background: {_C_ACCENT}; border: 2px solid {_C_ACCENT};
                 image: url({_CHECK_ICON_URL});
             }}
         """)
@@ -390,7 +390,7 @@ class _TriggerSection(QWidget):
             selected = key == self._current_mode
             disabled = key in self._disabled_reasons
             if selected:
-                button.setIcon(_check_icon("#202020"))
+                button.setIcon(_check_icon(AMBER_TEXT))
             elif key == other_mode:
                 button.setIcon(_check_icon("#555555"))
             else:
@@ -483,12 +483,12 @@ def _make_radio(fn, text):
             width: 16px; height: 16px; border-radius: 8px;
             border: 2px solid #666; background: {_C_BG};
         }}
-        QRadioButton::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+        QRadioButton::indicator:hover {{ border-color: {_C_ACCENT_H}; }}
         QRadioButton::indicator:checked {{
-            border: 2px solid {_C_BLUE}; background: {_C_BG};
+            border: 2px solid {_C_ACCENT}; background: {_C_BG};
             image: url({_RADIO_DOT_URL});
         }}
-        QRadioButton::indicator:checked:hover {{ border: 2px solid {_C_BLUE_H}; }}
+        QRadioButton::indicator:checked:hover {{ border: 2px solid {_C_ACCENT_H}; }}
     """)
     return rb
 
@@ -509,7 +509,7 @@ def _make_value_slider(fn, label_text, init, min_v, max_v, default_v, suffix):
             margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
         }}
         QSlider::sub-page:horizontal {{
-            background: {_C_BLUE}; border-radius: 3px;
+            background: {_C_ACCENT}; border-radius: 3px;
             margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
         }}
         QSlider::add-page:horizontal {{
@@ -520,7 +520,7 @@ def _make_value_slider(fn, label_text, init, min_v, max_v, default_v, suffix):
             background: #DDD; border: none;
             width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
         }}
-        QSlider::handle:horizontal:hover {{ background: {_C_BLUE}; border-color: {_C_BLUE_H}; }}
+        QSlider::handle:horizontal:hover {{ background: {_C_ACCENT}; border-color: {_C_ACCENT_H}; }}
     """)
 
     default_prefix = t("gp_stick_editor.default_prefix")
@@ -529,7 +529,7 @@ def _make_value_slider(fn, label_text, init, min_v, max_v, default_v, suffix):
         at_default = (v == default_v)
         text = f"{default_prefix} {v}{suffix}" if at_default else f"{v}{suffix}"
         value_lbl.setText(text)
-        color = _C_BLUE if at_default else _C_BLUE_H
+        color = _C_ACCENT if at_default else _C_ACCENT_H
         value_lbl.setStyleSheet(f"color: {color}; background: transparent;")
 
     _refresh(init)
@@ -651,7 +651,7 @@ class GpWheelEditorDialog(QDialog):
         # ─── Section 1 方向盘参数 ───
         sec1 = QLabel(t("gp_wheel_editor.section_wheel"))
         sec1.setFont(_font(fn, 16, bold=True))
-        sec1.setStyleSheet(f"color: {_C_BLUE_H}; background: transparent;")
+        sec1.setStyleSheet(f"color: {_C_ACCENT_H}; background: transparent;")
         sc.addWidget(sec1)
         sc.addSpacing(10)
 
@@ -669,9 +669,9 @@ class GpWheelEditorDialog(QDialog):
                 width: 14px; height: 14px; border-radius: {SMALL_RADIUS}px;
                 border: 2px solid #666; background: {_C_BG};
             }}
-            QCheckBox::indicator:hover {{ border-color: {_C_BLUE_H}; }}
+            QCheckBox::indicator:hover {{ border-color: {_C_ACCENT_H}; }}
             QCheckBox::indicator:checked {{
-                background: {_C_BLUE}; border: 2px solid {_C_BLUE};
+                background: {_C_ACCENT}; border: 2px solid {_C_ACCENT};
                 image: url({_CHECK_ICON_URL});
             }}
         """)
@@ -752,7 +752,7 @@ class GpWheelEditorDialog(QDialog):
                 margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
             }}
             QSlider::sub-page:horizontal {{
-                background: {_C_BLUE}; border-radius: 3px;
+                background: {_C_ACCENT}; border-radius: 3px;
                 margin: {_DefaultMarkedSlider.TRACK_MARGIN_TOP}px 0 0 0;
             }}
             QSlider::add-page:horizontal {{
@@ -763,7 +763,7 @@ class GpWheelEditorDialog(QDialog):
                 background: #DDD; border: none;
                 width: 16px; height: 16px; margin: -5px 0; border-radius: 8px;
             }}
-            QSlider::handle:horizontal:hover {{ background: {_C_BLUE}; border-color: {_C_BLUE_H}; }}
+            QSlider::handle:horizontal:hover {{ background: {_C_ACCENT}; border-color: {_C_ACCENT_H}; }}
         """)
         self._rot_slider.setSingleStep(1)
         self._rot_slider.setPageStep(1)
@@ -774,7 +774,7 @@ class GpWheelEditorDialog(QDialog):
             at_default = (idx == _ROT_DEFAULT_IDX)
             text = f"{default_prefix} {deg}°" if at_default else f"{deg}°"
             self._rot_value_lbl.setText(text)
-            color = _C_BLUE if at_default else _C_BLUE_H
+            color = _C_ACCENT if at_default else _C_ACCENT_H
             self._rot_value_lbl.setStyleSheet(f"color: {color}; background: transparent;")
         _refresh_rot(cur_idx)
         self._rot_slider.valueChanged.connect(_refresh_rot)
@@ -799,6 +799,8 @@ class GpWheelEditorDialog(QDialog):
         self._sens_group = QButtonGroup(self)
         self._rb_linear = _make_radio(fn, t("gp_wheel_editor.sens_linear"))
         self._rb_square = _make_radio(fn, t("gp_wheel_editor.sens_square"))
+        self._rb_linear.setFixedHeight(40)
+        self._rb_square.setFixedHeight(40)
         self._sens_group.addButton(self._rb_linear)
         self._sens_group.addButton(self._rb_square)
         (self._rb_square if self.data.sensitivity_curve == 'square' else self._rb_linear).setChecked(True)
@@ -1162,7 +1164,7 @@ class GpWheelEditorDialog(QDialog):
             '<b>鼠标即方向盘</b> &nbsp; '
             '<span style="color:#888">整个屏幕都是触发区域</span><br>'
             '&bull; 鼠标 <b>横向移动</b> &rarr; '
-            f'<span style="color:{_C_BLUE_H}">A / D</span> 转向; '
+            f'<span style="color:{_C_ACCENT_H}">A / D</span> 转向; '
             '停下 &rarr; 方向盘自动回正<br>'
             '&bull; 鼠标 <b>向上移动</b> &rarr; '
             f'<span style="color:{_MARKER_COLOR_RT}">RT 油门</span> 累加; '
@@ -1312,7 +1314,7 @@ class GpWheelEditorDialog(QDialog):
             tag.setFont(_font(fn, 10, bold=True))
             tag.setFixedHeight(18)
             tag.setStyleSheet(
-                "QLabel { background: #F59E0B; color: #000;"
+                f"QLabel {{ background: {PANEL_BG}; color: {AMBER_BG};"
                 f" border-radius: {SMALL_RADIUS}px; padding: 0 8px; }}"
             )
             tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1336,7 +1338,7 @@ class GpWheelEditorDialog(QDialog):
                     f"QPushButton {{ background: {C_CYBER};"
                     f" border: none; border-radius: 6px; }}"
                     f" QPushButton:hover {{ background: {C_CYBER_H}; }}")
-                label.setStyleSheet("color: #202020; background: transparent;")
+                label.setStyleSheet(f"color: {AMBER_TEXT}; background: transparent;")
             else:
                 btn.setStyleSheet(
                     f"QPushButton {{ background: transparent;"

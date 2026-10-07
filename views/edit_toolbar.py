@@ -22,7 +22,7 @@ from core.constants import (
 from views.toolbar_tip_widget import ToolbarTipWidget
 from views.ui_components import (
     OUTER_RADIUS, INNER_RADIUS, SMALL_RADIUS,
-    RECESSED_BG, PANEL_BG, CONTROL_BG,
+    RECESSED_BG, PANEL_BG, CONTROL_BG, AMBER_TEXT, text_on_surface,
 )
 
 # ── 功能色保持原配色；基础灰色按表面距离统一 ──
@@ -109,6 +109,7 @@ class _IconTextBtn(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._bg = bg
         self._bg_h = bg_hover
+        self._fg = fg
         self._apply_style()
 
         fn = get_font()
@@ -127,14 +128,14 @@ class _IconTextBtn(QPushButton):
             self._icon_lbl = None
 
         if self._icon_lbl:
-            self._icon_lbl.setStyleSheet(f"color: {fg}; background: transparent;")
+            self._icon_lbl.setStyleSheet(f"color: {text_on_surface(bg, fg)}; background: transparent;")
             self._icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             lay.addWidget(self._icon_lbl)
 
         # Text
         self._text_lbl = QLabel(text)
         self._text_lbl.setFont(_make_font(fn, 14))
-        self._text_lbl.setStyleSheet(f"color: {fg}; background: transparent;")
+        self._text_lbl.setStyleSheet(f"color: {text_on_surface(bg, fg)}; background: transparent;")
         self._text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         lay.addWidget(self._text_lbl)
 
@@ -161,6 +162,9 @@ class _IconTextBtn(QPushButton):
         self._bg = bg
         self._bg_h = bg_hover
         self._apply_style()
+        for label in (self._icon_lbl, self._text_lbl):
+            if label:
+                label.setStyleSheet(f"color: {text_on_surface(bg, self._fg)}; background: transparent;")
 
     def set_icon_text(self, icon_char, fallback=None):
         if self._icon_lbl:
@@ -207,7 +211,7 @@ class _ModeSwitch(QFrame):
         else:
             self._thumb.setGeometry(target)
         for key, button in self.buttons.items():
-            color = '#202020' if key == mode else '#AAAAAA'
+            color = AMBER_TEXT if key == mode else '#AAAAAA'
             button.setStyleSheet(f'QPushButton {{ background: transparent; color: {color}; border: none; border-radius: 6px; }}')
 
 
@@ -225,7 +229,7 @@ class _CheckIndicator(QWidget):
         painter.setBrush(QColor(C_AMBER) if self.checked else Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(2, 2, 16, 16, SMALL_RADIUS, SMALL_RADIUS)
         if self.checked:
-            painter.setPen(QPen(QColor('#202020'), 2.0, Qt.PenStyle.SolidLine,
+            painter.setPen(QPen(QColor(AMBER_TEXT), 2.0, Qt.PenStyle.SolidLine,
                                 Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
             painter.drawLine(6, 10, 9, 13)
             painter.drawLine(9, 13, 14, 7)
