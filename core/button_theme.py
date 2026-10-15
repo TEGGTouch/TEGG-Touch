@@ -2,7 +2,7 @@
 TEGG Touch 蛋挞 (PyQt6) - button_theme.py
 按钮配色「单一色源」运行时主题。
 
-三组配色 (per-profile 可调): keyboard(按键+中心轮盘) / gamepad(手柄+摇杆) / center_band(回中带)。
+四组配色 (per-profile 可调): keyboard(按键+中心轮盘) / gamepad(手柄+摇杆) / center_band(回中带) / profile_switch(快捷切换)。
 用户每组只调「一个基色」(= 描边/边框色), 填充/字色/摇杆小球按基色派生成系列。
 默认值像素级等于历史硬编码色; 仅当用户改了基色才走 HSL 派生。
 
@@ -11,13 +11,14 @@ TEGG Touch 蛋挞 (PyQt6) - button_theme.py
 
 from PyQt6.QtGui import QColor
 
-GROUPS = ('keyboard', 'gamepad', 'center_band')
+GROUPS = ('keyboard', 'gamepad', 'center_band', 'profile_switch')
 
 # 每组「基色」默认值 (= 边框/描边色, 用户取色器调的就是它)
 DEFAULT_BUTTON_COLORS = {
     'keyboard':    '#555555',
     'gamepad':     '#3B82F6',
     'center_band': '#176F2C',
+    'profile_switch': '#A78BFA',
 }
 
 # 显式默认族 (保证默认像素级一致, 与各 item 历史硬编码完全相同)
@@ -26,6 +27,7 @@ _DEFAULT_FAMILY = {
     'gamepad':     {'fill': '#1A1E2E', 'border': '#3B82F6', 'text': '#93C5FD',
                     'ball': '#0284C7'},
     'center_band': {'fill': '#0A2E12', 'border': '#176F2C', 'text': '#4ADE80'},
+    'profile_switch': {'fill': '#4C1D95', 'border': '#A78BFA', 'text': '#FFFFFF'},
 }
 
 

@@ -47,11 +47,34 @@ class ButtonData:
     hover_toggle_release_delay: int = 0    # 关闭时触发延迟 (第二次 hover 到松开)
     hover_toggle_repeat_interval: int = 0  # 触发间隔(ms), 同上, 用于开关模式
 
+    # 快捷切换按钮: 每种输入独立保存 fixed/cycle 和有序方案列表。
+    switch_id: str = ""
+    profile_actions: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.btn_type == 'profile_switch':
+            from core.profile_switch import normalize_actions, TRIGGER_FIELDS
+            from uuid import uuid4
+            self.switch_id = self.switch_id or uuid4().hex
+            self.profile_actions = normalize_actions(self.profile_actions)
+            self.hover_mode = 'trigger'
+            self.hover_release_delay = self.hover_repeat_interval = 0
+            # 复用现有点击/滚轮/侧键检测。标记只路由动作，不发送键盘输入。
+            for key in TRIGGER_FIELDS:
+                setattr(self, key, f'profile-switch:{key}' if key in self.profile_actions else '')
+
     def to_dict(self) -> dict:
         """序列化为 JSON dict（与旧格式完全兼容）"""
         d = asdict(self)
         # 字段名映射：btn_type → type（与旧格式兼容）
         d['type'] = d.pop('btn_type')
+        if self.btn_type != 'profile_switch':
+            d.pop('switch_id')
+            d.pop('profile_actions')
+        else:
+            from core.profile_switch import TRIGGER_FIELDS
+            for key in TRIGGER_FIELDS:
+                d[key] = ''
         return d
 
     @classmethod

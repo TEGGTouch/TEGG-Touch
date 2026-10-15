@@ -174,6 +174,7 @@ class TouchButtonItem(QGraphicsObject):
         self._hover_sm = HoverStateMachine(
             _hd, _rd, mode=getattr(data, 'hover_mode', 'trigger'),
             repeat_interval_ms=_ri)
+        self._hover_sm.setParent(self)
         self._hover_sm.activated.connect(self._on_hover_activated)
         self._hover_sm.deactivated.connect(self._on_hover_deactivated)
         self._hover_sm.repeat.connect(self._on_hover_repeat)
@@ -206,8 +207,15 @@ class TouchButtonItem(QGraphicsObject):
 
         is_band = self.data.btn_type == BTN_TYPE_CENTER_BAND
         is_gp = self.data.btn_type == BTN_TYPE_GP_BUTTON
+        is_switch = self.data.btn_type == 'profile_switch'
 
-        if is_band:
+        if is_switch:
+            active = self._visual_state != 'normal'
+            fam = button_theme.family('profile_switch')
+            fill = QColor('#7C3AED' if active else fam['fill'])
+            border = QColor('#DDD6FE' if active else fam['border'])
+            text_color = QColor('#FFFFFF' if active else fam['text'])
+        elif is_band:
             # 回中带：用户可调配色 (默认深绿)
             fam = button_theme.center_band()
             fill = QColor(fam['fill'])
@@ -247,7 +255,7 @@ class TouchButtonItem(QGraphicsObject):
             charge_rect = rect.adjusted(2, 2, -2, -2)
             charge_rect.setWidth(charge_rect.width() * self._charge_progress)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor("#0284C7"))
+            painter.setBrush(QColor('#7C3AED' if is_switch else '#0284C7'))
             charge_path = self._build_btn_path(charge_rect, charge_r,
                                                 sharp_br=(self._mode == 'edit'))
             painter.drawPath(charge_path)
@@ -302,7 +310,10 @@ class TouchButtonItem(QGraphicsObject):
                              Qt.AlignmentFlag.AlignCenter, bottom_text)
             return
 
-        if is_band:
+        if is_switch:
+            display_text = '⇄\n' + _format_btn_name(self.data.name)
+            painter.setFont(_make_px_font(font_px))
+        elif is_band:
             display_text = t("canvas.center_band_label")
             painter.setFont(_make_px_font(font_px))
         elif self._visual_state != 'normal':
@@ -407,6 +418,9 @@ class TouchButtonItem(QGraphicsObject):
 
     def mousePressEvent(self, event):
         if self._mode == 'run':
+            if self.data.btn_type == 'profile_switch':
+                event.accept()  # The polling controller is the single click source.
+                return
             btn = event.button()
             if btn == Qt.MouseButton.LeftButton and self.data.lclick:
                 self.actionTriggered.emit(self.data, self.data.lclick, 'p')
@@ -423,6 +437,9 @@ class TouchButtonItem(QGraphicsObject):
 
     def mouseReleaseEvent(self, event):
         if self._mode == 'run':
+            if self.data.btn_type == 'profile_switch':
+                event.accept()
+                return
             key_map = {
                 Qt.MouseButton.LeftButton: ('lclick', self.data.lclick),
                 Qt.MouseButton.RightButton: ('rclick', self.data.rclick),
@@ -478,8 +495,9 @@ class TouchButtonItem(QGraphicsObject):
             self.actionTriggered.emit(self.data, key, 'c')
             state = 'active_wheelup' if direction == 'up' else 'active_wheeldown'
             self.set_visual_state(state)
+            from PyQt6 import sip
             QTimer.singleShot(150, lambda: self.set_visual_state(
-                'hover' if self._hover_sm.is_active else 'normal'))
+                'hover' if self._hover_sm.is_active else 'normal') if not sip.isdeleted(self) else None)
 
     # ── 状态机回调 ──
 

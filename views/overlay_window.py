@@ -113,6 +113,7 @@ class OverlayWindow(QGraphicsView):
         self._run_controller.request_toggle_voice.connect(self._toggle_voice)
         self._run_controller.request_toggle_collapse.connect(self._toggle_collapse_run_toolbar)
         self._run_controller.request_toggle_cursor.connect(self._toggle_cursor_visibility)
+        self._run_controller.request_profile_switch.connect(self._on_quick_profile_switch)
 
         # ── 工具栏 (parent=self ensures Z-order above overlay) ──
         self._edit_toolbar = EditToolbar(parent=self)
@@ -121,6 +122,7 @@ class OverlayWindow(QGraphicsView):
 
         # 连接编辑工具栏信号
         self._edit_toolbar.add_button_clicked.connect(self._on_add_button)
+        self._edit_toolbar.add_profile_switch_clicked.connect(self._on_add_profile_switch)
         self._edit_toolbar.add_center_band_clicked.connect(self._on_add_center_band)
         self._edit_toolbar.voice_clicked.connect(self._open_voice_settings)
         self._edit_toolbar.keyboard_clicked.connect(self._toggle_soft_keyboard)
@@ -760,7 +762,7 @@ class OverlayWindow(QGraphicsView):
             sh = legacy if legacy in ('arrow', 'ball') else DEFAULT_CURSOR_SHAPE
             cfg['cursor_shape'] = sh
         self._cursor_shape = sh
-        # button_colors (按钮配色三组基色) — profile→全局→None(默认)
+        # button_colors (各组按钮基色) — profile→全局→None(默认)
         bc = cfg.get('button_colors')
         if not isinstance(bc, dict):
             legacy = (hotkeys or {}).get('button_colors')
@@ -849,6 +851,12 @@ class OverlayWindow(QGraphicsView):
             item.setOpacity(self._current_opacity)
             self._wire_single_item(item)
 
+    def _on_add_profile_switch(self):
+        item = self._scene.add_profile_switch()
+        item.setOpacity(self._current_opacity)
+        self._wire_single_item(item)
+        self._scene.save_config()
+
     def _on_toggle_wheel(self):
         """切换轮盘显示"""
         visible = self._scene.toggle_wheel()
@@ -919,6 +927,18 @@ class OverlayWindow(QGraphicsView):
             item._editor_dialog = dialog
             dialog.destroyed.connect(
                 lambda _=None, _it=item: setattr(_it, '_editor_dialog', None))
+
+        if getattr(item.data, 'btn_type', '') == 'profile_switch':
+            from core.config_manager import list_profiles
+            from views.profile_switch_dialog import ProfileSwitchDialog
+            dialog = ProfileSwitchDialog(item, self, profiles=list_profiles())
+            dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            dialog.saved.connect(self._on_button_saved)
+            dialog.deleted.connect(self._on_button_deleted)
+            dialog.copied.connect(self._on_button_copied)
+            _register(dialog)
+            dialog.show()
+            return
 
         if hasattr(item.data, 'btn_type') and item.data.btn_type == BTN_TYPE_CENTER_BAND:
             targets = self._scene.list_recenter_targets()
@@ -1038,37 +1058,54 @@ class OverlayWindow(QGraphicsView):
         self._dlg_profile = dialog
         dialog.show()
 
-    def _on_profile_switched(self, name):
+    def _on_profile_switched(self, name, config=None, save_current=True):
         """方案切换"""
         # 保存当前方案
-        self._scene.save_config()
+        if save_current:
+            self._scene.save_config()
         # Bug 1 fix: 更新索引文件中的活跃方案名（必须在保存旧方案之后、加载新方案之前）
         set_active_profile(name)
         # 清空场景中的按钮
         for item in list(self._scene.button_items):
+            if hasattr(item, '_hover_sm'):
+                item._hover_sm.reset()
             self._scene.removeItem(item)
+            item.deleteLater()
         self._scene.button_items.clear()
         # 清空轮盘
         for item in list(self._scene.wheel_items):
+            item._hover_sm.reset()
             self._scene.removeItem(item)
+            item.deleteLater()
         self._scene.wheel_items.clear()
         for item in list(self._scene.outer_wheel_items):
+            item._hover_sm.reset()
             self._scene.removeItem(item)
+            item.deleteLater()
         self._scene.outer_wheel_items.clear()
         if self._scene.ring_item:
+            self._scene.ring_item._hover_sm.reset()
             self._scene.removeItem(self._scene.ring_item)
+            self._scene.ring_item.deleteLater()
             self._scene.ring_item = None
         if self._scene.inner_ring_item:
+            self._scene.inner_ring_item._hover_sm.reset()
             self._scene.removeItem(self._scene.inner_ring_item)
+            self._scene.inner_ring_item.deleteLater()
             self._scene.inner_ring_item = None
         for it in list(self._scene.center_ring_sector_items):
+            it._hover_sm.reset()
             self._scene.removeItem(it)
+            it.deleteLater()
         self._scene.center_ring_sector_items.clear()
         for it in list(self._scene.inner_ring_sector_items):
+            it._hover_sm.reset()
             self._scene.removeItem(it)
+            it.deleteLater()
         self._scene.inner_ring_sector_items.clear()
         # 加载新方案
-        config = load_profile(name)
+        if config is None:
+            config = load_profile(name)
         self._profile_name = name
         saved_grid = config.get('grid_size', DEFAULT_GRID_SIZE)
         if not isinstance(saved_grid, (int, float)):
@@ -1104,6 +1141,60 @@ class OverlayWindow(QGraphicsView):
         self._edit_toolbar.set_sim_mode(self._sim_mode)
         self._resolve_appearance_from_profile(_hk)
         self._apply_appearance_to_items()
+        self._scene.set_mode(self._current_mode)
+
+    def _on_quick_profile_switch(self, data, field):
+        """Switch the running layout after the input frame has finished."""
+        if self._current_mode != 'run':
+            return
+        from copy import deepcopy
+        from core.config_manager import list_profiles, _profile_path
+        from core.profile_switch import select_destination
+        import json
+        target = select_destination(data.profile_actions.get(field),
+                                    self._profile_name, list_profiles())
+        if target is None:
+            self._toast.show_toast(t('profile_switch.missing'))
+            return
+        if target == self._profile_name:
+            return
+        # Validate before releasing inputs or removing the current scene.
+        try:
+            with open(_profile_path(target), encoding='utf-8') as source:
+                raw = json.load(source)
+            if not isinstance(raw, dict) or not isinstance(raw.get('buttons', []), list):
+                raise ValueError('Invalid profile')
+            target_config = load_profile(target)
+            self._scene.save_config()
+        except (OSError, ValueError, TypeError):
+            logger.exception('Cannot prepare profile switch to %s', target)
+            self._toast.show_toast(t('profile_switch.missing'))
+            return
+        old_name = self._profile_name
+        old_config = deepcopy(self._scene.get_config())
+        buttons_hidden = self._buttons_hidden
+        self._run_controller.begin_profile_switch()
+        success = False
+        try:
+            self._on_profile_switched(target, target_config, save_current=False)
+            success = True
+        except Exception:
+            logger.exception('Profile switch to %s failed; restoring %s', target, old_name)
+            self._on_profile_switched(old_name, old_config, save_current=False)
+        finally:
+            self._buttons_hidden = False
+            if buttons_hidden:
+                self._toggle_buttons_visibility()
+            cfg = self._scene.get_config()
+            # Keep the current running controls; refresh commands for the destination.
+            voice_config = dict(cfg, voice_enabled=bool(self._voice_active and cfg.get('voice_commands')))
+            self._run_controller.finish_profile_switch(voice_config)
+            self._voice_active = bool(self._run_controller._voice_engine)
+            self._run_toolbar.update_voice_state(self._voice_active)
+            self._run_toolbar.update_buttons_visibility(self._buttons_hidden)
+            self._set_drawn_cursor(False if self._buttons_hidden else self._cursor_visible)
+        self._toast.show_toast(t('profile_switch.switched', name=self._profile_name)
+                              if success else t('profile_switch.failed'))
 
     def _open_voice_settings(self):
         """打开语音指令设置弹窗"""

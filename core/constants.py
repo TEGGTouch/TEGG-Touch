@@ -113,6 +113,7 @@ COLOR_TOOLBAR_TRANSPARENT = "#010002"  # 工具栏窗口镂空用
 # === 按钮类型 ===
 BTN_TYPE_NORMAL = "normal"
 BTN_TYPE_CENTER_BAND = "center_band"
+BTN_TYPE_PROFILE_SWITCH = "profile_switch"
 BTN_TYPE_WHEEL_SECTOR = "wheel_sector"
 BTN_TYPE_WHEEL_RING = "wheel_center_ring"
 BTN_TYPE_WHEEL_INNER_RING = "wheel_inner_ring"

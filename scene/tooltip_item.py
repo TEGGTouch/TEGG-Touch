@@ -43,6 +43,14 @@ def build_edit_tooltip(data) -> str:
     if getattr(data, 'btn_type', None) == 'center_band':
         return t("btn_tooltip.center_band_tip")
 
+    if getattr(data, 'btn_type', None) == 'profile_switch':
+        lines = [data.name, t('profile_switch.shared_hint')]
+        for key, action in data.profile_actions.items():
+            mode = t('profile_switch.' + action['mode'])
+            lines.append(f"{t('btn_tooltip.' + key)}: {mode} {' → '.join(action['profiles'])}")
+        lines.append(t('profile_switch.hover_hint'))
+        return '\n'.join(lines)
+
     # 普通按钮和轮盘项: 显示全部字段（不论是否为空）
     lines = [f"{t('btn_tooltip.name')}: {data.name}"]
     for field, key in [

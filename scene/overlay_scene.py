@@ -420,6 +420,8 @@ class OverlayScene(QGraphicsScene):
 
         self._config = config
         buttons = config.get('buttons', [])
+        from core.profile_switch import load_switch_buttons
+        buttons = [b for b in buttons if b.get('type') != 'profile_switch'] + load_switch_buttons()
         offset_x = self.sceneRect().width() / 2
         offset_y = self.sceneRect().height() / 2
 
@@ -742,8 +744,15 @@ class OverlayScene(QGraphicsScene):
 
         # 从按钮 Item 收集最新数据（原始像素坐标）
         new_buttons = []
+        shared_switches = []
         for item in self.button_items:
-            new_buttons.append(item.data.to_dict())
+            if getattr(item.data, 'btn_type', '') == 'profile_switch':
+                shared_switches.append(item.data.to_dict())
+            else:
+                new_buttons.append(item.data.to_dict())
+
+        from core.profile_switch import save_switch_buttons
+        save_switch_buttons(shared_switches)
 
         self._config['buttons'] = new_buttons
         # 清除旧的 coord_format 标记（如果残留）
@@ -838,6 +847,12 @@ class OverlayScene(QGraphicsScene):
         item = self.add_button(data, _toast=False)
         self.toast_requested.emit(t("toast.center_band_created"))
         return item
+
+    def add_profile_switch(self):
+        from models.button_model import ButtonData
+        return self.add_button(ButtonData(name=t('profile_switch.name'),
+                                         btn_type='profile_switch',
+                                         w=self.grid_size, h=self.grid_size))
 
     def add_gp_button(self):
         """新增手柄键按钮 — 视觉同普通按钮但配色蓝紫调, 编辑器面板显示手柄按键"""
@@ -967,6 +982,9 @@ class OverlayScene(QGraphicsScene):
             return item
 
         new_data = ButtonData.from_dict(src_dict)
+        if new_data.btn_type == 'profile_switch':
+            from uuid import uuid4
+            new_data.switch_id = uuid4().hex
         pos = self._find_empty_slot(new_data.w, new_data.h,
                                      start_x=new_data.x, start_y=new_data.y)
         if pos:

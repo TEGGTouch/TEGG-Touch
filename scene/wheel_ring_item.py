@@ -84,6 +84,7 @@ class WheelRingItem(QGraphicsObject):
         self._hover_sm = HoverStateMachine(
             _hd, _rd, mode=getattr(data, 'hover_mode', 'trigger'),
             repeat_interval_ms=_ri)
+        self._hover_sm.setParent(self)
         self._hover_sm.activated.connect(self._on_hover_activated)
         self._hover_sm.deactivated.connect(self._on_hover_deactivated)
         self._hover_sm.repeat.connect(self._on_hover_repeat)
@@ -266,8 +267,9 @@ class WheelRingItem(QGraphicsObject):
             self.actionTriggered.emit(self.data, key, 'c')
             state = 'active_wheelup' if direction == 'up' else 'active_wheeldown'
             self.set_visual_state(state)
+            from PyQt6 import sip
             QTimer.singleShot(150, lambda: self.set_visual_state(
-                'hover' if self._hover_sm.is_active else 'normal'))
+                'hover' if self._hover_sm.is_active else 'normal') if not sip.isdeleted(self) else None)
 
     # ── 状态机回调 ──
 

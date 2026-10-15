@@ -499,6 +499,27 @@ class RedesignTests(unittest.TestCase):
                 if scroll.isVisible():
                     self.assertEqual(scroll.horizontalScrollBar().maximum(), 0, (page, scroll.size()))
 
+    def test_wheel_color_preview_fills_its_frame_without_hidden_release_area(self):
+        with patch('views.hotkey_settings_dialog.load_hotkeys', return_value={}):
+            dialog = self.show(HotkeySettingsDialog())
+        dialog._select_page(5)
+        app.processEvents()
+        images = []
+        for ratio in (1.0, 3.0):
+            data = GamepadWheelData(release_threshold_ratio=ratio)
+            with patch('models.gamepad_model.GamepadWheelData', return_value=data):
+                images.append(dialog._render_wheel_card_preview().toImage())
+            self.assertEqual(data.release_threshold_ratio, ratio)
+        self.assertEqual(images[0], images[1])
+        image = images[0]
+        pixels = [(x, y) for y in range(image.height()) for x in range(image.width())
+                  if image.pixelColor(x, y).alpha() > 20]
+        self.assertTrue(pixels)
+        xs, ys = zip(*pixels)
+        preview = dialog._wheel_card_preview
+        self.assertGreater(max(xs) - min(xs) + 1, preview.width() * .90)
+        self.assertGreater(max(ys) - min(ys) + 1, preview.height() * .90)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -8,7 +8,7 @@ TEGG Touch 蛋挞 (PyQt6) - hotkey_settings_dialog.py
 """
 
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout,
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLineEdit, QLabel, QSlider, QPushButton, QWidget,
     QScrollArea, QFrame, QApplication, QStackedWidget,
     QComboBox, QColorDialog,
@@ -1190,10 +1190,10 @@ class HotkeySettingsDialog(QDialog):
 
     def _ensure_button_colors_buf(self):
         if not hasattr(self, '_button_colors_buf'):
-            from core.button_theme import DEFAULT_BUTTON_COLORS
+            from core.button_theme import DEFAULT_BUTTON_COLORS, GROUPS
             existing = (load_hotkeys() or {}).get('button_colors') or {}
             self._button_colors_buf = {}
-            for g in ('keyboard', 'gamepad', 'center_band'):
+            for g in GROUPS:
                 base = existing.get(g) or DEFAULT_BUTTON_COLORS[g]
                 self._button_colors_buf[g] = base.upper()
 
@@ -1210,22 +1210,24 @@ class HotkeySettingsDialog(QDialog):
         tip.setStyleSheet("color: #888; background: transparent;")
         tip.setWordWrap(True)
         v.addWidget(tip)
-        v.addSpacing(20)
+        v.addSpacing(8)
 
-        # 第一行: 三组按钮配色
-        cols = QHBoxLayout()
-        cols.setSpacing(24)
+        # 三列两行：第一行三组配色；第二行快捷切换，方向盘跨两格。
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(8)
+        for column in range(3):
+            grid.setColumnStretch(column, 1)
+        grid.setRowStretch(0, 1)
+        grid.setRowStretch(1, 1)
         self._bc_widgets = {}
-        for g, label in (('keyboard', t("hotkey.bc_keyboard")),
-                         ('gamepad', t("hotkey.bc_gamepad")),
-                         ('center_band', t("hotkey.bc_center_band"))):
-            cols.addWidget(self._build_bc_column(fn, g, label), 1)
-        v.addLayout(cols)
-        v.addSpacing(16)
-
-        # 第二行: 方向盘 (整行通栏, 预览画出方向盘 + 左右扳机)
-        v.addWidget(self._build_wheel_card(fn))
-        v.addStretch()
+        for column, (g, label) in enumerate((('keyboard', t("hotkey.bc_keyboard")),
+                                            ('gamepad', t("hotkey.bc_gamepad")),
+                                            ('center_band', t("hotkey.bc_center_band")))):
+            grid.addWidget(self._build_bc_column(fn, g, label), 0, column)
+        grid.addWidget(self._build_bc_column(fn, 'profile_switch', t("hotkey.bc_profile_switch")), 1, 0)
+        grid.addWidget(self._build_wheel_card(fn), 1, 1, 1, 2)
+        v.addLayout(grid, 1)
 
         bottom = QHBoxLayout()
         bottom.addStretch()
@@ -1250,12 +1252,13 @@ class HotkeySettingsDialog(QDialog):
         col.setStyleSheet(
             "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         cl = QVBoxLayout(col)
-        cl.setContentsMargins(20, 18, 20, 18)
-        cl.setSpacing(12)
+        cl.setContentsMargins(8, 8, 8, 8)
+        cl.setSpacing(8)
 
         title = QLabel(label_text)
         title.setFont(_make_font(fn, 15, bold=True))
         title.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        title.setFixedHeight(24)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(title)
 
@@ -1264,25 +1267,19 @@ class HotkeySettingsDialog(QDialog):
         preview.setFixedSize(160, 90)
         preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         preview.setFont(_make_font(fn, 22, bold=True))
-        cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+        body = QVBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.addStretch()
+        body.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+        body.addStretch()
+        cl.addLayout(body, 1)
 
-        # 基色行
+        # 底部单行：左侧重置，右侧基色与取色按钮。
         row = QHBoxLayout()
-        lbl = QLabel(t("hotkey.bc_base"))
-        lbl.setFont(_make_font(fn, 14))
-        lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
-        row.addWidget(lbl)
-        row.addStretch()
-        btn = QPushButton()
-        btn.setFixedSize(96, 28)
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._apply_color_btn_style(btn, self._button_colors_buf[g])
-        btn.clicked.connect(lambda _, gg=g, b=btn: self._on_bc_pick(gg, b))
-        row.addWidget(btn)
-        cl.addLayout(row)
-
-        # 重置该组
+        row.setSpacing(6)
         reset = QPushButton(t("hotkey.bc_reset"))
+        reset.setFont(_make_font(fn, 13))
+        reset.setFixedWidth(max(96, reset.fontMetrics().horizontalAdvance(reset.text()) + 36))
         reset.setFixedHeight(32)
         reset.setCursor(Qt.CursorShape.PointingHandCursor)
         reset.setFont(_make_font(fn, 13))
@@ -1292,7 +1289,19 @@ class HotkeySettingsDialog(QDialog):
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         reset.clicked.connect(lambda _, gg=g: self._on_bc_reset(gg))
-        cl.addWidget(reset)
+        row.addWidget(reset)
+        row.addStretch()
+        lbl = QLabel(t("hotkey.bc_base"))
+        lbl.setFont(_make_font(fn, 14))
+        lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        row.addWidget(lbl)
+        btn = QPushButton()
+        btn.setFixedSize(96, 32)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_color_btn_style(btn, self._button_colors_buf[g])
+        btn.clicked.connect(lambda _, gg=g, b=btn: self._on_bc_pick(gg, b))
+        row.addWidget(btn)
+        cl.addLayout(row)
 
         self._bc_widgets[g] = {'preview': preview, 'btn': btn}
         self._refresh_bc_preview(g)
@@ -1336,39 +1345,34 @@ class HotkeySettingsDialog(QDialog):
         col.setStyleSheet(
             "QFrame { background: #232323; border: 1px solid #3A3A3A; border-radius: 6px; }")
         cl = QVBoxLayout(col)
-        cl.setContentsMargins(20, 18, 20, 18)
-        cl.setSpacing(12)
+        cl.setContentsMargins(8, 8, 8, 8)
+        cl.setSpacing(8)
 
         title = QLabel(t("hotkey.bc_wheel"))
         title.setFont(_make_font(fn, 15, bold=True))
         title.setStyleSheet("color: #FFF; background: transparent; border: none;")
+        title.setFixedHeight(24)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cl.addWidget(title)
 
         preview = QLabel()
-        preview.setFixedHeight(320)   # 通栏: 宽度自适应, 高度决定方向盘大小
+        preview.setFixedSize(300, 200)
         preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         preview.setStyleSheet(
             "background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 6px;")
-        cl.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+        body = QVBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.addStretch()
+        body.addWidget(preview, 0, Qt.AlignmentFlag.AlignHCenter)
+        body.addStretch()
+        cl.addLayout(body, 1)
         self._wheel_card_preview = preview
 
         row = QHBoxLayout()
-        lbl = QLabel(t("hotkey.bc_base"))
-        lbl.setFont(_make_font(fn, 14))
-        lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
-        row.addWidget(lbl)
-        row.addStretch()
-        btn = QPushButton()
-        btn.setFixedSize(96, 28)
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._apply_color_btn_style(btn, self._wheel_buf.get('color', '#3B82F6'))
-        btn.clicked.connect(self._on_wheel_card_pick)
-        row.addWidget(btn)
-        self._wheel_card_btn = btn
-        cl.addLayout(row)
-
+        row.setSpacing(6)
         reset = QPushButton(t("hotkey.bc_reset"))
+        reset.setFont(_make_font(fn, 13))
+        reset.setFixedWidth(max(96, reset.fontMetrics().horizontalAdvance(reset.text()) + 36))
         reset.setFixedHeight(32)
         reset.setCursor(Qt.CursorShape.PointingHandCursor)
         reset.setFont(_make_font(fn, 13))
@@ -1378,7 +1382,20 @@ class HotkeySettingsDialog(QDialog):
             QPushButton:hover {{ background: {C_GRAY_H}; }}
         """)
         reset.clicked.connect(self._on_wheel_card_reset)
-        cl.addWidget(reset)
+        row.addWidget(reset)
+        row.addStretch()
+        lbl = QLabel(t("hotkey.bc_base"))
+        lbl.setFont(_make_font(fn, 14))
+        lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
+        row.addWidget(lbl)
+        btn = QPushButton()
+        btn.setFixedSize(96, 32)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_color_btn_style(btn, self._wheel_buf.get('color', '#3B82F6'))
+        btn.clicked.connect(self._on_wheel_card_pick)
+        row.addWidget(btn)
+        self._wheel_card_btn = btn
+        cl.addLayout(row)
 
         self._refresh_wheel_card_preview()
         return col
@@ -1401,7 +1418,10 @@ class HotkeySettingsDialog(QDialog):
         item.set_preview_color(color)
         sc = QGraphicsScene()
         sc.addItem(item)
-        rect = item.boundingRect()
+        # boundingRect 包含运行时释放阈值范围，即使该区域未绘制也会占缩放空间。
+        # 配色预览只取方向盘及 LT/RT 的可见范围，保留描边所需的少量余量。
+        bar_w = item._bar_width()
+        rect = QRectF(-bar_w + 4, 4, data.w + 2 * bar_w - 8, data.h - 8)
         W = max(1, int(rect.width())); H = max(1, int(rect.height()))
         pm = QPixmap(W, H)
         pm.fill(Qt.GlobalColor.transparent)
@@ -1411,11 +1431,12 @@ class HotkeySettingsDialog(QDialog):
         sc.render(p, QRectF(0, 0, W, H), rect)
         p.end()
         sc.removeItem(item)
-        # 按预览高度缩放 (宽度通栏自适应, 高度固定 → 大小稳定)
+        # 按预览内框等比缩放，完整保留方向盘和两侧扳机。
         prev = getattr(self, '_wheel_card_preview', None)
-        target_h = (prev.height() - 12) if prev else 300
-        if target_h > 8 and pm.height() > 0:
-            pm = pm.scaledToHeight(target_h, Qt.TransformationMode.SmoothTransformation)
+        if prev and prev.width() > 12 and prev.height() > 12:
+            pm = pm.scaled(prev.width() - 12, prev.height() - 12,
+                           Qt.AspectRatioMode.KeepAspectRatio,
+                           Qt.TransformationMode.SmoothTransformation)
         return pm
 
     def _refresh_wheel_card_preview(self):
@@ -2343,7 +2364,7 @@ class HotkeySettingsDialog(QDialog):
             data['wheel_style'] = self._wheel_buf
             from scene.gp_wheel_item import clear_wheel_render_cache
             clear_wheel_render_cache()
-        # 按钮配色 (三组基色)
+        # 按钮配色 (各组基色)
         if hasattr(self, '_button_colors_buf'):
             data['button_colors'] = self._button_colors_buf
 

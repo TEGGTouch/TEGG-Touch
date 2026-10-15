@@ -419,7 +419,7 @@ def load_config_from_file(filepath: str) -> dict:
         'cursor_styles': None,
         'ball_styles': None,
         'cursor_shape': None,   # None=回退全局; 'arrow'|'ball'
-        'button_colors': None,  # {keyboard/gamepad/center_band: 基色}; None=默认
+        'button_colors': None,  # {keyboard/gamepad/center_band/profile_switch: 基色}; None=默认
     }
     if not os.path.exists(filepath):
         return result

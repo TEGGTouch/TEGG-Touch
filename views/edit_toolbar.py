@@ -2,7 +2,7 @@
 TEGG Touch 蛋挞 (PyQt6) - edit_toolbar.py
 编辑模式工具栏 — 可拖动的三行任务布局。
 
-  Row 1: Profile | Opacity | Scale | Minimize | Settings | Close
+  Row 1: Profile | Quick switch | Opacity | Scale | Minimize | Settings | Close
   Row 2: Simulation label | Voice label | Soft keyboard label
   Row 3: Mode switch + contextual controls | Voice | Keyboard + Remap | Run
 """
@@ -264,6 +264,7 @@ class EditToolbar(QWidget):
 
     # 信号
     add_button_clicked = pyqtSignal()
+    add_profile_switch_clicked = pyqtSignal()
     add_center_band_clicked = pyqtSignal()
     voice_clicked = pyqtSignal()
     keyboard_clicked = pyqtSignal()
@@ -332,16 +333,29 @@ class EditToolbar(QWidget):
         self._install_tip(self._profile_btn)
         header.addWidget(self._profile_btn)
 
+        self._switch_btn = _IconTextBtn('\uE710', '+', t('profile_switch.entry'), C_GRAY, C_GRAY_H)
+        if self._switch_btn._icon_lbl:
+            self._switch_btn._icon_lbl.setFont(_make_font(_ICON_FONT or fn, 24))
+        self._switch_btn.clicked.connect(self.add_profile_switch_clicked.emit)
+        self._switch_btn.setToolTip(t('profile_switch.entry_tip'))
+        self._install_tip(self._switch_btn)
+        header.addWidget(self._switch_btn)
+
         def slider_group(label, color, low, high, value, callback):
             widget = QWidget()
-            widget.setMinimumWidth(220)
-            row = QHBoxLayout(widget)
+            widget.setMinimumWidth(125)
+            column = QVBoxLayout(widget)
+            column.setContentsMargins(0, 0, 0, 0)
+            column.setSpacing(0)
+            row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(8)
+            column.addLayout(row)
             text = QLabel(label)
             text.setFont(_make_font(fn, 12))
             text.setStyleSheet("color: #AAA; background: transparent;")
             row.addWidget(text)
+            row.addStretch()
             slider = QSlider(Qt.Orientation.Horizontal)
             slider.setRange(low, high)
             slider.setValue(value)
@@ -349,7 +363,7 @@ class EditToolbar(QWidget):
             slider.setMinimumWidth(54)
             slider.setStyleSheet(f"QSlider::groove:horizontal {{ background: {RECESSED_BG}; height: 6px; border-radius: 3px; }} QSlider::sub-page:horizontal {{ background: {color}; border-radius: 3px; }} QSlider::add-page:horizontal {{ background: {RECESSED_BG}; border-radius: 3px; }} QSlider::handle:horizontal {{ background: #DDD; border: none; width: 16px; height: 16px; margin: -5px 0; border-radius: 8px; }}")
             slider.valueChanged.connect(callback)
-            row.addWidget(slider, 1)
+            column.addWidget(slider)
             number = QLabel(f"{value}%")
             number.setFixedWidth(40)
             number.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -383,6 +397,7 @@ class EditToolbar(QWidget):
 
         remap = _IconTextBtn("\uE8AB", "⇄", t("toolbar.key_remap"), C_GRAY, C_GRAY_H)
         self._component_width = max(108, remap.sizeHint().width() + 8)
+        self._switch_btn.setFixedWidth(self._component_width)
         remap.setFixedWidth(self._component_width)
         self._remap_btn = remap
 

@@ -128,6 +128,7 @@ class RunController(QObject):
     request_toggle_collapse = pyqtSignal()  # F10: 折叠/展开运行工具栏
     request_toggle_cursor = pyqtSignal()    # F3: 切换自绘光标显隐
     key_remap_state_changed = pyqtSignal(bool)  # 键盘映射总开关状态
+    request_profile_switch = pyqtSignal(object, str)
 
     def __init__(self, scene, window, cursor_input=None):
         super().__init__()
@@ -137,6 +138,12 @@ class RunController(QObject):
         self._owns_cursor_input = cursor_input is None
         self._pointer_ui_active = False
         self._active = False
+        self._profile_transition = False
+        self._profile_request_pending = False
+        self._switch_hover_guard = None
+        self._profile_epoch = 0
+        self._macro_lock = threading.RLock()
+        self._synthetic_mouse_held = set()
 
         # 硬件按键状态缓存 (用于侧键检测)
         self._prev_xb1 = False
@@ -335,6 +342,11 @@ class RunController(QObject):
     def stop(self):
         """退出运行模式"""
         self._active = False
+        with self._macro_lock:
+            self._profile_epoch += 1
+        self._profile_transition = False
+        self._profile_request_pending = False
+        self._switch_hover_guard = None
         self._timer.stop()
         if self._owns_cursor_input:
             self.cursor_input.stop()
@@ -368,6 +380,9 @@ class RunController(QObject):
                 item._hover_sm.reset()
         # 兜底释放所有残留按键，防止卡键
         release_all_keys()
+        for button in tuple(self._synthetic_mouse_held):
+            mouse_release(button)
+        self._synthetic_mouse_held.clear()
         # 手柄: 释放当前 active 摇杆/方向盘 + 引擎全部归零
         if self._active_gp_stick is not None:
             self._release_active_stick()
@@ -422,7 +437,10 @@ class RunController(QObject):
         for attr in ('_holding_lclick', '_holding_rclick', '_holding_mclick'):
             held = getattr(self, attr)
             if held:
-                self._smart_trigger(held[1], 'r')
+                if getattr(getattr(held[0], 'data', None), 'btn_type', '') == 'profile_switch':
+                    self.on_action_triggered(held[0].data, held[1], 'r')
+                else:
+                    self._smart_trigger(held[1], 'r')
             setattr(self, attr, None)
         self._active_key_count = 0
         self._ac_start_time = None
@@ -446,7 +464,7 @@ class RunController(QObject):
 
     def _tick(self):
         """轮询循环 — 快捷键 + hover/click + 侧键 + 滚轮 + 自动回中"""
-        if not self._active:
+        if not self._active or self._profile_transition or self._profile_request_pending:
             return
 
         hk = self._hotkeys
@@ -502,6 +520,18 @@ class RunController(QObject):
 
         # 只关注有 data 属性的交互 item（按钮/扇区/圆环）
         active_item = item if (item and hasattr(item, 'data') and item.isVisible()) else None
+        hover_enabled = not (active_item is not None and
+                             getattr(active_item.data, 'btn_type', '') == 'profile_switch' and
+                             not active_item.data.profile_actions.get('hover', {}).get('profiles'))
+        switch_hover_blocked = False
+        if self._switch_hover_guard is not None:
+            point = QPoint(abs_x, abs_y)
+            over_switch = (active_item is not None and
+                           getattr(active_item.data, 'btn_type', '') == 'profile_switch')
+            if self._switch_hover_guard.contains(point):
+                switch_hover_blocked = over_switch
+            else:
+                self._switch_hover_guard = None
 
         # ── 方向盘 / 摇杆: 不走 hover_sm + click 逻辑 (各自有状态机), 但仍发 cursor_on_ui ──
         from scene.gp_stick_item import GpStickItem
@@ -560,7 +590,7 @@ class RunController(QObject):
 
             # 进入新 item
             if active_item is not None:
-                if hasattr(active_item, '_hover_sm'):
+                if hasattr(active_item, '_hover_sm') and hover_enabled and not switch_hover_blocked:
                     active_item._hover_sm.enter()
                     # 原版行为: 充能期间保持 normal（充能条在 normal 背景上可见）
                     # 只有 delay=0 直接激活时才立刻设 hover
@@ -568,13 +598,14 @@ class RunController(QObject):
                         if hasattr(active_item, 'set_visual_state'):
                             active_item.set_visual_state('hover')
                     # CHARGING 状态: 不设 hover，保持 normal，充能条可见
-                else:
+                elif not hasattr(active_item, '_hover_sm') and hover_enabled:
                     # 无状态机的 item，直接设 hover
                     if hasattr(active_item, 'set_visual_state'):
                         active_item.set_visual_state('hover')
 
             self._poll_hover_item = active_item
-        elif active_item is not None and hasattr(active_item, '_hover_sm'):
+        elif (active_item is not None and hasattr(active_item, '_hover_sm') and
+              hover_enabled and not switch_hover_blocked):
             # 光标停在同一个 item 上: 每帧校验状态机没被别的路径打回空档 (自愈)
             self._rearm_stale_hover(active_item)
 
@@ -831,7 +862,10 @@ class RunController(QObject):
             key_val = getattr(item.data, btn_name, '')
             if key_val:
                 self._holding_xbuttons[btn_name] = (item, key_val, False)
-                trigger(key_val, action)
+                if getattr(item.data, 'btn_type', '') == 'profile_switch':
+                    self.on_action_triggered(item.data, key_val, action)
+                else:
+                    trigger(key_val, action)
                 item.set_visual_state(f'active_{btn_name}')
 
     def _release_xbutton(self, btn_name):
@@ -839,7 +873,10 @@ class RunController(QObject):
         if held is None:
             return
         item, key, smart = held
-        (self._smart_trigger if smart else trigger)(key, 'r')
+        if getattr(getattr(item, 'data', None), 'btn_type', '') == 'profile_switch':
+            self.on_action_triggered(item.data, key, 'r')
+        else:
+            (self._smart_trigger if smart else trigger)(key, 'r')
         if item is not None and _is_alive(item) and hasattr(item, 'set_visual_state'):
             active = hasattr(item, '_hover_sm') and item._hover_sm.is_active
             item.set_visual_state('hover' if active else 'normal')
@@ -862,6 +899,9 @@ class RunController(QObject):
 
     def on_hover_activated(self, data):
         """按钮 hover 激活 → 按下按键"""
+        if getattr(data, 'btn_type', '') == 'profile_switch':
+            self._queue_profile_switch(data, 'hover')
+            return
         self._active_key_count += 1
         self._ac_start_time = None
         key = (data.hover_toggle
@@ -872,6 +912,8 @@ class RunController(QObject):
 
     def on_hover_deactivated(self, data):
         """按钮 hover 释放 → 释放按键"""
+        if getattr(data, 'btn_type', '') == 'profile_switch':
+            return
         self._active_key_count = max(0, self._active_key_count - 1)
         key = (data.hover_toggle
                if getattr(data, 'hover_mode', 'trigger') == 'toggle'
@@ -885,6 +927,8 @@ class RunController(QObject):
         键已在 on_hover_activated 时按下并计入 _active_key_count, 这里只是重复发
         down 让"看重复 keydown 流"的目标程序识别为长按, 不改计数、不发 up。
         """
+        if getattr(data, 'btn_type', '') == 'profile_switch':
+            return
         key = (data.hover_toggle
                if getattr(data, 'hover_mode', 'trigger') == 'toggle'
                else data.hover)
@@ -893,6 +937,11 @@ class RunController(QObject):
 
     def on_action_triggered(self, data, key_str, action):
         """按钮点击/滚轮 → 触发按键"""
+        if getattr(data, 'btn_type', '') == 'profile_switch':
+            if action in ('p', 'c', 'click'):
+                field = key_str.removeprefix('profile-switch:')
+                self._queue_profile_switch(data, field)
+            return
         if action == 'p':
             self._active_key_count += 1
             self._ac_start_time = None
@@ -900,8 +949,61 @@ class RunController(QObject):
             self._active_key_count = max(0, self._active_key_count - 1)
         self._smart_trigger(key_str, action)
 
-    def _gp_delayed_release(self, label: str):
+    def _queue_profile_switch(self, data, field):
+        if (not self._active or self._profile_transition or self._profile_request_pending
+                or field not in data.profile_actions):
+            return
+        self._profile_request_pending = True
+        for item in self._scene.button_items:
+            if item.data is data:
+                bounds = self._window.mapFromScene(item.sceneBoundingRect()).boundingRect()
+                self._switch_hover_guard = QRect(self._window.mapToGlobal(bounds.topLeft()), bounds.size())
+                break
+        epoch = self._profile_epoch
+
+        def dispatch():
+            self._profile_request_pending = False
+            if self._active and epoch == self._profile_epoch:
+                self.request_profile_switch.emit(data, field)
+        # Finish the current hover/click frame before rebuilding scene items.
+        QTimer.singleShot(0, dispatch)
+
+    def begin_profile_switch(self):
+        """Release old inputs while keeping the running timer and cursor source alive."""
+        self._profile_transition = True
+        with self._macro_lock:
+            self._profile_epoch += 1
+            self._stop_voice()
+            keyboard_hook.uninstall_hook()
+            keyboard_hook.poll_events()
+            self._reset_pointer_actions()
+            release_all_keys()
+            for button in tuple(self._synthetic_mouse_held):
+                mouse_release(button)
+            self._synthetic_mouse_held.clear()
+            gp = GamepadEngine.get() if self._gp_enabled else None
+            if gp is not None:
+                gp.release_all()
+            poll_wheel_events()
+        self.auto_center_progress.emit(-1, 0, 0)
+
+    def finish_profile_switch(self, voice_config=None):
+        """Apply destination input configuration without entering edit mode."""
+        try:
+            self._gp_enabled = self._profile_uses_gamepad()
+            if self._gp_enabled:
+                GamepadEngine.get()
+            else:
+                GamepadEngine.shutdown_singleton()
+            self._start_key_remap()
+            self._start_voice(voice_config)
+        finally:
+            self._profile_transition = False
+
+    def _gp_delayed_release(self, label: str, epoch=None):
         """vgamepad 状态机延迟释放 — 给 'click' 动作用, 确保 press 帧能被驱动看到"""
+        if epoch is not None and epoch != self._profile_epoch:
+            return
         gp = GamepadEngine.get() if self._gp_enabled else None
         if gp is not None:
             gp.release_button(label)
@@ -960,11 +1062,19 @@ class RunController(QObject):
         for mb in mouse_buttons:
             if action == 'p':
                 mouse_press(mb)
+                self._synthetic_mouse_held.add(mb)
             elif action == 'r':
                 mouse_release(mb)
+                self._synthetic_mouse_held.discard(mb)
             elif action == 'click':
                 mouse_press(mb)
-                QTimer.singleShot(40, lambda b=mb: mouse_release(b))
+                self._synthetic_mouse_held.add(mb)
+                epoch = self._profile_epoch
+                def release_mouse(button=mb, source_epoch=epoch):
+                    if source_epoch == self._profile_epoch:
+                        mouse_release(button)
+                        self._synthetic_mouse_held.discard(button)
+                QTimer.singleShot(40, release_mouse)
 
         # 鼠标滚轮: 仅在 press/click 时触发一次 (release 忽略)
         if mouse_wheels and action in ('p', 'click'):
@@ -987,7 +1097,7 @@ class RunController(QObject):
                         gp.press_button(label)
                         gp.flush()      # 让 press 立即可见
                         QTimer.singleShot(
-                            50, lambda l=label: self._gp_delayed_release(l))
+                            50, lambda l=label, e=self._profile_epoch: self._gp_delayed_release(l, e))
                 if action != 'click':
                     gp.flush()
             else:
@@ -1900,11 +2010,25 @@ class RunController(QObject):
         name = macro_data.get('name', '?')
         if not steps:
             return
+        epoch = self._profile_epoch
+
+        def send_step(keys, action):
+            with self._macro_lock:
+                if not self._active or self._profile_transition or epoch != self._profile_epoch:
+                    return False
+                if action == 'click':
+                    self._smart_trigger(keys, 'p')
+                    self._smart_trigger(keys, 'r')
+                elif action == 'press':
+                    self._smart_trigger(keys, 'p')
+                elif action == 'release':
+                    self._smart_trigger(keys, 'r')
+                return True
 
         def _run():
             for r in range(repeat):
                 for step in steps:
-                    if not self._active:
+                    if not self._active or epoch != self._profile_epoch:
                         return
                     step_type = step.get('type', 'key')
 
@@ -1921,13 +2045,8 @@ class RunController(QObject):
                         keys = step.get('key', '') or step.get('keys', '')
                         act = step.get('action', 'click')
                         if keys:
-                            if act == 'click':
-                                self._smart_trigger(keys, 'p')
-                                self._smart_trigger(keys, 'r')
-                            elif act == 'press':
-                                self._smart_trigger(keys, 'p')
-                            elif act == 'release':
-                                self._smart_trigger(keys, 'r')
+                            if not send_step(keys, act):
+                                return
                         # 旧格式可能有内嵌 delay
                         delay = step.get('delay', 0)
                         if delay > 0:
@@ -1939,13 +2058,8 @@ class RunController(QObject):
                         act = step.get('action', 'click')
                         delay = step.get('delay', 50)
                         if keys:
-                            if act == 'click':
-                                self._smart_trigger(keys, 'p')
-                                self._smart_trigger(keys, 'r')
-                            elif act == 'press':
-                                self._smart_trigger(keys, 'p')
-                            elif act == 'release':
-                                self._smart_trigger(keys, 'r')
+                            if not send_step(keys, act):
+                                return
                         if delay > 0:
                             _time.sleep(delay / 1000.0)
 
@@ -1975,7 +2089,9 @@ class RunController(QObject):
             # 孤儿线程 + 麦克风流 + 虚拟盘符 (反复重启语音会累积泄漏)
             self._stop_voice()
             self._voice_engine = VoiceEngine(self)
-            self._voice_engine.command_recognized.connect(self._on_voice_command)
+            epoch = self._profile_epoch
+            self._voice_engine.command_recognized.connect(
+                lambda *args: self._on_voice_command(*args) if epoch == self._profile_epoch else None)
             self._voice_engine.error_occurred.connect(
                 lambda e: logger.warning(f"语音引擎错误: {e}"))
             self._voice_engine.start(commands, language, mic_device=mic_device, chunk_size=chunk_size)
@@ -1994,7 +2110,7 @@ class RunController(QObject):
 
     def _on_voice_command(self, phrase: str, keys: str, action: str, latency_ms: int = 0):
         """语音指令识别回调 → 触发按键 (支持宏)"""
-        if not self._active or not keys:
+        if not self._active or self._profile_transition or not keys:
             return
         if action == 'click':
             # 统一 click 语义: 键盘=按下+短延迟+释放, 手柄=press+flush+延迟release,
