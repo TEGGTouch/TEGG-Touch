@@ -60,6 +60,10 @@ def load_locale(lang="en"):
         logger.error(f"Failed to load locale {lang}: {e}")
         _strings = {}
 
+    # 手柄按键显示 label 跟随语言 (存储 key 不变)
+    from core.constants import apply_gp_labels
+    apply_gp_labels(lang)
+
 
 def t(msg_id, **kwargs):
     """翻译函数。

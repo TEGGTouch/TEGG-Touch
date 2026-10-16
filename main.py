@@ -90,6 +90,22 @@ def _check_for_updates(parent):
     parent._update_checker = checker
 
 
+
+def _restart_process():
+    """按当前运行方式重新启动: 打包版启动 exe, 源码版用同一解释器运行 main.py。"""
+    import subprocess
+    if getattr(sys, 'frozen', False):
+        args = [sys.executable] + sys.argv[1:]
+    else:
+        args = [sys.executable, os.path.abspath(sys.argv[0])] + sys.argv[1:]
+    env = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1')  # 新进程不继承打包运行时状态
+    try:
+        subprocess.Popen(args, cwd=_APP_DIR, env=env, close_fds=True)
+        logger.info("Restarting: %s", args)
+    except Exception as e:
+        logger.error(f"重启失败: {e}")
+
+
 def main():
     try:
         # Disable Qt6 high-DPI scaling to get 1:1 physical pixel mapping,
@@ -128,7 +144,10 @@ def main():
         # 启动 3 秒后检查更新（避免阻塞启动流程）
         QTimer.singleShot(3000, lambda: _check_for_updates(window))
 
-        sys.exit(app.exec())
+        code = app.exec()
+        if app.property('restart_requested'):
+            _restart_process()
+        sys.exit(code)
     except Exception as e:
         logger.critical(f"Unhandled exception: {e}", exc_info=True)
         print(t("app.error_msg", error=str(e)))

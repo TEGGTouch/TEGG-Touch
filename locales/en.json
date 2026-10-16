@@ -1,9 +1,9 @@
 {
   "profile_switch": {
-      "entry": "Profile switch",
+      "entry": "Quick Switch",
       "entry_tip": "Add a button to switch profiles while running",
-      "name": "Quick switch",
-      "title": "Quick switch settings",
+      "name": "Quick Switch",
+      "title": "Quick Switch Settings",
       "shared_hint": "Shared across profiles. This button stays after switching.",
       "hover_hint": "Hover fires once. Leave and re-enter to fire again.",
       "fixed": "Fixed profile",
@@ -153,6 +153,9 @@
     "key_remap": "Remap physical keyboard keys (per profile)"
   },
   "hotkey": {
+    "restart_title": "Restart Required",
+    "restart_msg": "Language changed to English. Restart TEGG Touch to apply it. Click OK to restart now.",
+    "svg_missing": "(SVG missing)",
     "title": "Settings",
     "menu_hotkeys": "Hotkeys",
     "menu_cursor": "Cursor Style",
@@ -216,7 +219,7 @@
     "bc_keyboard": "Keys / Center Wheel",
     "bc_gamepad": "Gamepad / Stick",
     "bc_center_band": "Center Band",
-    "bc_profile_switch": "Quick switch",
+    "bc_profile_switch": "Quick Switch",
     "bc_base": "Base color",
     "bc_reset": "Reset group",
     "bc_wheel": "Steering Wheel",
@@ -394,7 +397,7 @@
     "center_band": "Center Band",
     "center_ring": "Center Ring",
     "inner_ring": "Middle Ring",
-    "gp_button": "GP Button"
+    "gp_button": "GP Btn"
   },
   "gp_wheel_editor": {
     "title": "Steering Wheel Editor",
@@ -629,5 +632,76 @@
     "disabled": "off",
     "delete": "Delete",
     "save": "Save"
+  },
+  "stick_tooltip": {
+    "wasd_mode": "WASD Mode",
+    "left_stick": "Left Stick",
+    "right_stick": "Right Stick",
+    "dead_zone": "Dead zone: {value}%",
+    "up": "Up",
+    "left": "Left",
+    "down": "Down",
+    "right": "Right",
+    "sensitivity": "Sensitivity: {curve}",
+    "square": "Square",
+    "linear": "Linear",
+    "eight_way": "8-way lock",
+    "wheel_up": "Wheel↑",
+    "wheel_down": "Wheel↓",
+    "mouse_actions": "Mouse actions:",
+    "edit_hint": "Double-click to edit"
+  },
+  "wheel_tooltip": {
+    "mode_marker": "Marker Click",
+    "title": "Steering Wheel",
+    "release": "Release threshold: {value}% half-width",
+    "dead_zone": "Center dead zone: {value}%",
+    "rotation": "Visual rotation: ±{value}°",
+    "mode_scroll": "Scroll",
+    "mode_vertical": "Vertical",
+    "mode_buttons": "L/R Buttons",
+    "edit_hint": "Double-click to edit | Drag to move | Resize from bottom-right"
+  },
+  "run_bubble": {
+    "tip": "Left-click · Show/hide toolbar\nRight-click · Show/hide buttons (F7)\nMiddle-click · Stop running\nDrag · Move",
+    "fallback": "TEGG"
+  },
+  "gp_install_msg": {
+    "windows_only": "Windows only",
+    "uac_cancelled": "UAC elevation was cancelled by the user",
+    "shell_failed": "ShellExecuteEx failed, GetLastError={err}",
+    "no_handle": "ShellExecuteEx returned no process handle",
+    "wait_timeout": "Timed out waiting for the installer (wait_result={result})",
+    "lib_missing": "vgamepad library not installed: {error}",
+    "lib_import": "vgamepad import error: {error}",
+    "pad_failed": "Failed to create VX360Gamepad: {error}",
+    "pip_wheel": "Installing via pip (wheel preferred)…",
+    "pip_sdist": "Wheel unavailable, installing from source…",
+    "pip_exit": "pip exit code {code}: {detail}",
+    "verify_pad": "Verifying virtual gamepad…",
+    "sdist_reboot": " (installed from source; setup.py may have installed the driver, restart the PC to load it)",
+    "pip_timeout": "pip install timed out",
+    "pip_error": "pip install error: {error}",
+    "no_bundled": "Bundled installer not found",
+    "uac_prompt": "Click \"Yes\" in the UAC prompt, then follow the installer…",
+    "installer_exit": "Installer exit code {code}; {detail}",
+    "verify_driver": "Verifying driver…",
+    "winget_prompt": "Downloading via winget; click \"Yes\" if UAC asks…",
+    "winget_exit": "winget exit code {code}: {detail}",
+    "wait_service": "Waiting for the service to start…",
+    "winget_missing": "winget unavailable (older Windows)",
+    "online_timeout": "Online install timed out",
+    "online_error": "Online install error: {error}",
+    "unexpected": "Unexpected error: {error}"
+  },
+  "update_msg": {
+    "size_mismatch": "Update size does not match the manifest",
+    "cancelled": "Download cancelled",
+    "size_exceeded": "Update is larger than the manifest says",
+    "incomplete": "Update download is incomplete",
+    "sha_failed": "SHA-256 check failed",
+    "unknown": "Unknown error: {error}",
+    "source_run": "Cannot update in place when running from source; run the packaged TEGG Touch",
+    "launch_failed": "Failed to start the updater: {error}"
   }
 }

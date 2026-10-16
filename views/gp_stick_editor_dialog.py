@@ -807,6 +807,10 @@ class GpStickEditorDialog(QDialog):
 
         return col
 
+    # 标签列按最宽的字段名放宽 (英文更长), 各行输入框保持对齐
+    _FIELD_LABEL_KEYS = ('lclick', 'rclick', 'mclick', 'xbutton1', 'xbutton2', 'wheelup', 'wheeldown',
+                         'wasd_up', 'wasd_left', 'wasd_down', 'wasd_right')
+
     def _build_action_field_row(self, fn, field_name, label_text):
         """鼠标动作字段行: 色点 + 标签(60px) + TagInput (跟 button editor _build_field_row 同模式)"""
         row = QHBoxLayout()
@@ -817,7 +821,8 @@ class GpStickEditorDialog(QDialog):
         lbl = QLabel(label_text)
         lbl.setFont(_font(fn, 14))
         lbl.setStyleSheet("color: #CCC; background: transparent;")
-        lbl.setFixedWidth(60)
+        lbl.setFixedWidth(max(60, max(lbl.fontMetrics().horizontalAdvance(t('gp_stick_editor.' + key))
+                                      for key in self._FIELD_LABEL_KEYS) + 2))
         row.addWidget(lbl)
         row.addSpacing(10)
         ti = TagInput(getattr(self.data, field_name, '') or '', accent_color=accent)

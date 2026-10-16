@@ -147,8 +147,9 @@ class _ProfileCandidate(QPushButton):
 
     def _elide(self):
         label = ('✓  ' if self._selected else '') + self.profile_name
+        # Escape '&' so profile names are not shown as mnemonic shortcuts.
         self.setText(self.fontMetrics().elidedText(label, Qt.TextElideMode.ElideRight,
-                                                  max(0, self.width() - 26)))
+                                                  max(0, self.width() - 26)).replace('&', '&&'))
 
     def resizeEvent(self, event):
         self._elide()
@@ -242,6 +243,7 @@ class ProfileSwitchDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         name_row = QHBoxLayout()
+        name_row.setSpacing(8)
         name_row.addWidget(QLabel(t('editor.name')))
         self._name = QLineEdit(self._item.data.name)
         self._name.setFixedHeight(38)
@@ -257,6 +259,7 @@ class ProfileSwitchDialog(QDialog):
         layout.addWidget(self._build_mapping('hover'))
         layout.addSpacing(4)
         delay_row = QHBoxLayout()
+        delay_row.setSpacing(8)
         self._delay_label = QLabel(t('profile_switch.delay_short'))
         delay_row.addWidget(self._delay_label)
         self._delay_value = QLabel()

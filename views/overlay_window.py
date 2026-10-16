@@ -1284,6 +1284,7 @@ class OverlayWindow(QGraphicsView):
         dialog.settings_saved.connect(self._on_settings_saved)
         dialog.defaults_reset.connect(self._on_defaults_reset)
         dialog.language_changed.connect(self._on_language_changed)
+        dialog.restart_requested.connect(self._restart_app)
         self._dlg_hotkey = dialog
         dialog.show()
 
@@ -1346,6 +1347,12 @@ class OverlayWindow(QGraphicsView):
         # 重建工具栏（语言变更影响所有文字）
         # 简单方式：关闭重新打开
         logger.info(f"Language changed to {lang}")
+
+    def _restart_app(self):
+        """走正常关闭流程 (保存配置 / 释放输入), 进程退出后由 main 重新启动"""
+        logger.info("Restart requested")
+        QApplication.instance().setProperty('restart_requested', True)
+        self.close()
 
     # ── 最小化 / 恢复 ──
 

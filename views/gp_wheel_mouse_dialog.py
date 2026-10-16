@@ -18,7 +18,7 @@ from PyQt6.QtCore import Qt, QPoint, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from core.i18n import t, get_font
-from views.ui_components import RECESSED_BG, segmented_row
+from views.ui_components import RECESSED_BG, segmented_row, ui_text
 from core.constants import (
     APP_DIR, APP_PREFIX, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX,
     ACTION_COLORS,
@@ -55,19 +55,23 @@ def _compute_occupied(data) -> dict:
     """根据 LT/RT 的 mode + marker_button 算出哪些鼠标动作字段会被占用 (不生效)。
     返回 {field_name: reason_str}, 没占的不在 dict 里"""
     occupied: dict = {}
-    for prefix, side_name in (('lt', '左扳机'), ('rt', '右扳机')):
+    for prefix, side_name in (('lt', ui_text('左扳机', 'LT')),
+                              ('rt', ui_text('右扳机', 'RT'))):
         mode = getattr(data, f'{prefix}_mode', '')
         if mode == 'buttons':
             # buttons 模式占左右键
             for f in ('lclick', 'rclick'):
-                occupied.setdefault(f, f"{side_name}「左右键」模式占用")
+                occupied.setdefault(f, ui_text(f"{side_name}「左右键」模式占用",
+                                               f"used by {side_name} 'L/R Buttons' mode"))
         elif mode == 'marker':
             btn = getattr(data, f'{prefix}_marker_button', 'L')
             f = 'lclick' if btn == 'L' else 'rclick'
-            occupied.setdefault(f, f"{side_name}「浮标点击」用了{('左' if btn == 'L' else '右')}键")
+            occupied.setdefault(f, ui_text(f"{side_name}「浮标点击」用了{('左' if btn == 'L' else '右')}键",
+                                           f"{side_name} 'Marker Click' uses {'L-Click' if btn == 'L' else 'R-Click'}"))
         elif mode == 'scroll':
             for f in ('wheelup', 'wheeldown'):
-                occupied.setdefault(f, f"{side_name}「滚轮」模式占用")
+                occupied.setdefault(f, ui_text(f"{side_name}「滚轮」模式占用",
+                                               f"used by {side_name} 'Scroll' mode"))
         # vertical 不占任何鼠标键
     return occupied
 
@@ -108,7 +112,7 @@ class GpWheelMouseDialog(QDialog):
         _detect_icon_font()
         self._init_ui()
         from views.ui_components import finish_dialog
-        finish_dialog(self, (1120, 760), actions=["取消", "保存"], columns=True, guidance=None)
+        finish_dialog(self, (1120, 760), actions=[self._cancel_text, self._save_text], columns=True, guidance=None)
         self._center_on_screen()
         self._drag_pos = None
 
@@ -134,7 +138,7 @@ class GpWheelMouseDialog(QDialog):
 
         # 标题 + 关闭
         title_row = QHBoxLayout()
-        title = QLabel("方向盘 — 其他鼠标按键配置")
+        title = QLabel(ui_text("方向盘 — 其他鼠标按键配置", "Steering Wheel — Other Mouse Buttons"))
         title.setFont(_font(fn, 18, bold=True))
         title.setStyleSheet("color: white; background: transparent;")
         title_row.addWidget(title)
@@ -156,11 +160,15 @@ class GpWheelMouseDialog(QDialog):
         root.addLayout(title_row)
 
         # 提示
-        tip = QLabel(
+        tip = QLabel(ui_text(
             f'<div style="line-height:170%">'
             f'方向盘 active (鼠标在方块内) 时, 配置的鼠标按键 → 触发对应映射。'
             f'<br>优先级低于 LT/RT: 若扳机模式占用某键, 此处的配置会显示<b style="color:{_C_WARN}">「不生效」</b>。'
-            f'</div>')
+            f'</div>',
+            f'<div style="line-height:170%">'
+            f'While the wheel is active (cursor inside its box), the mouse buttons set here → trigger their mappings.'
+            f'<br>Lower priority than LT/RT: if a trigger mode uses a button, its setting here shows <b style="color:{_C_WARN}">"Inactive"</b>.'
+            f'</div>'))
         tip.setTextFormat(Qt.TextFormat.RichText)
         tip.setFont(_font(fn, 13))
         tip.setStyleSheet(f"color: {_C_HINT}; background: transparent;")
@@ -210,13 +218,13 @@ class GpWheelMouseDialog(QDialog):
         v.setSpacing(0)
 
         action_fields = [
-            ('lclick',     '左键'),
-            ('rclick',     '右键'),
-            ('mclick',     '中键'),
-            ('xbutton1',   '侧键 X1'),
-            ('xbutton2',   '侧键 X2'),
-            ('wheelup',    '滚轮 ↑'),
-            ('wheeldown',  '滚轮 ↓'),
+            ('lclick',     ui_text('左键', 'L-Click')),
+            ('rclick',     ui_text('右键', 'R-Click')),
+            ('mclick',     ui_text('中键', 'M-Click')),
+            ('xbutton1',   ui_text('侧键 X1', 'Side X1')),
+            ('xbutton2',   ui_text('侧键 X2', 'Side X2')),
+            ('wheelup',    ui_text('滚轮 ↑', 'Scroll ↑')),
+            ('wheeldown',  ui_text('滚轮 ↓', 'Scroll ↓')),
         ]
         for i, (field, label) in enumerate(action_fields):
             if i > 0:
@@ -252,7 +260,8 @@ class GpWheelMouseDialog(QDialog):
         col.addLayout(row)
         # 占用提示 (右对齐)
         if field_name in self._occupied:
-            warn = QLabel(f"⚠ 不生效: {self._occupied[field_name]}")
+            warn = QLabel(ui_text(f"⚠ 不生效: {self._occupied[field_name]}",
+                                  f"⚠ Inactive: {self._occupied[field_name]}"))
             warn.setFont(_font(fn, 11))
             warn.setStyleSheet(f"color: {_C_WARN}; background: transparent;")
             warn.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -562,7 +571,8 @@ class GpWheelMouseDialog(QDialog):
     def _build_bottom_buttons(self, fn):
         r = QHBoxLayout()
         r.addStretch()
-        cancel_btn = QPushButton("取消")
+        self._cancel_text = ui_text("取消", "Cancel")   # finish_dialog 按此文本定位
+        cancel_btn = QPushButton(self._cancel_text)
         cancel_btn.setFixedHeight(40)
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cancel_btn.setFont(_font(fn, 16))
@@ -573,7 +583,8 @@ class GpWheelMouseDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         r.addWidget(cancel_btn)
         r.addSpacing(10)
-        save_btn = QPushButton("保存")
+        self._save_text = ui_text("保存", "Save")
+        save_btn = QPushButton(self._save_text)
         save_btn.setFixedHeight(40)
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         save_btn.setFont(_font(fn, 16, bold=True))

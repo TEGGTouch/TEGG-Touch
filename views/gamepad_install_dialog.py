@@ -58,7 +58,7 @@ class _InstallThread(QThread):
                 ok, err = False, f"unknown method: {self._method}"
         except Exception as e:
             logger.exception("install thread crashed")
-            self.failed.emit(f"未预期异常: {e}")
+            self.failed.emit(t("gp_install_msg.unexpected", error=e))
             return
 
         if ok:

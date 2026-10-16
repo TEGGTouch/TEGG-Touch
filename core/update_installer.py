@@ -16,6 +16,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import QApplication
 
 from core.constants import APP_VERSION
+from core.i18n import t
 from core.update_manifest import ReleaseInfo, open_update_url, validate_archive
 
 logger = logging.getLogger(__name__)
@@ -228,28 +229,28 @@ def download_release(release: ReleaseInfo, dest: str, on_progress=None, cancelle
         with open_update_url(release.url, timeout=_DOWNLOAD_TIMEOUT) as response:
             length = response.headers.get("Content-Length")
             if length is not None and int(length) != release.size:
-                raise UpdateError("更新包大小与清单不符")
+                raise UpdateError(t("update_msg.size_mismatch"))
             with open(part, "wb") as output:
                 while True:
                     if cancelled and cancelled():
-                        raise UpdateError("已取消下载")
+                        raise UpdateError(t("update_msg.cancelled"))
                     chunk = response.read(_DOWNLOAD_CHUNK)
                     if not chunk:
                         break
                     downloaded += len(chunk)
                     if downloaded > release.size:
-                        raise UpdateError("更新包大小超过清单记录")
+                        raise UpdateError(t("update_msg.size_exceeded"))
                     output.write(chunk)
                     digest.update(chunk)
                     if on_progress:
                         on_progress(downloaded, release.size)
         if downloaded != release.size:
-            raise UpdateError("更新包下载不完整")
+            raise UpdateError(t("update_msg.incomplete"))
         if digest.hexdigest() != release.sha256.lower():
-            raise UpdateError("SHA-256 校验失败")
+            raise UpdateError(t("update_msg.sha_failed"))
         validate_archive(part)
         if cancelled and cancelled():
-            raise UpdateError("已取消下载")
+            raise UpdateError(t("update_msg.cancelled"))
         os.replace(part, dest)
         return dest
     except Exception as e:
@@ -301,7 +302,7 @@ class UpdateInstaller(QThread):
             self.failed.emit(str(e))
         except Exception as e:
             logger.exception("UpdateInstaller crashed")
-            self.failed.emit(f"未知错误: {e}")
+            self.failed.emit(t("update_msg.unknown", error=e))
         finally:
             if tmp_dir:
                 try:
@@ -332,7 +333,7 @@ def apply_update(zip_path: str) -> None:
     """写 updater.ps1 → 启动 powershell → 退出主程序.
     调用此函数后 app 会立即 quit, 后续控制权交给 ps1."""
     if not getattr(sys, "frozen", False):
-        raise UpdateError("源码运行环境不能就地更新，请运行打包后的蛋挞")
+        raise UpdateError(t("update_msg.source_run"))
     install_dir, exe_path = _get_install_dir_and_exe()
     tmp_dir = os.path.dirname(os.path.abspath(zip_path))
     ps1_path = os.path.join(tmp_dir, "updater.ps1")

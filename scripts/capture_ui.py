@@ -1,6 +1,7 @@
 """Capture real Qt editor windows for the UI review, without running input engines.
 
-Run from the repository: python scripts/capture_ui.py
+Run from the repository: python scripts/capture_ui.py [zh-CN|en]
+English captures are saved as docs/ui-client-en-*.png next to the Chinese ones.
 The hardware/recognition/diagnostic workers are stopped for this visual inventory.
 Sample fields remain in memory; no settings or editor changes are saved.
 """
@@ -41,6 +42,7 @@ from views.profile_manager_dialog import (
     ProfileManagerDialog, _ProfileCopyDialog, _StyledConfirmDialog,
     _StyledInputDialog, _StyledMessageDialog,
 )
+from views.profile_switch_dialog import ProfileSwitchDialog
 from views.run_toolbar import RunToolbar, CollapsedBubble
 from views.update_dialog import UpdateDialog
 from views.voice_settings_dialog import VoiceSettingsDialog, _ChunkSizeDialog
@@ -54,7 +56,9 @@ def item(data):
 
 
 def main():
-    load_locale('zh-CN')
+    lang = sys.argv[1] if len(sys.argv) > 1 else 'zh-CN'
+    load_locale(lang)
+    prefix = 'ui-client-' if lang.startswith('zh') else 'ui-client-en-'
     app = QApplication(sys.argv)
     profile_name, _ = init_profiles()
     targets = [{'key': 'stick:L', 'label': '左摇杆'}]
@@ -95,6 +99,8 @@ def main():
         lambda: ColorPickerDialog(QColor('#F59E0B'), title='选择颜色'),
         lambda: VirtualKeyboard(),
         lambda: CollapsedBubble(),
+        lambda: ProfileSwitchDialog(item(ButtonData(name='方案切换', btn_type='profile_switch', profile_actions={
+            'hover': {'mode': 'cycle', 'profiles': list_profiles()[:2]}})), profiles=list_profiles()),
     ]
     output = ROOT / 'docs'
     report = []
@@ -128,34 +134,34 @@ def main():
             if isinstance(window, GamepadInstallDialog):
                 window._status_info = {'installed_version': '1.22'}
                 window._enter_ready_ok()
-            capture(window, 'ui-client-' + name)
+            capture(window, prefix + name)
             if isinstance(window, EditToolbar):
                 window.set_sim_mode('gamepad')
                 QTest.qWait(180)
-                capture(window, 'ui-client-EditToolbar-gamepad')
+                capture(window, prefix + 'EditToolbar-gamepad')
             if isinstance(window, RunToolbar):
                 window.set_profile_name('探索、建造与竞速 · 常用游戏方案 · 手柄')
-                capture(window, 'ui-client-RunToolbar-long-name')
+                capture(window, prefix + 'RunToolbar-long-name')
             if isinstance(window, VoiceSettingsDialog):
                 nested = MacroEditorDialog({'name': '语音交互', 'steps': [
                     {'type': 'key', 'key': 'e', 'action': 'click'},
                     {'type': 'delay', 'ms': 200},
                 ]}, parent=window, mode='mix')
-                capture(nested, 'ui-client-voice-macro')
+                capture(nested, prefix + 'voice-macro')
                 nested.close()
                 nested.deleteLater()
                 app.processEvents()
             if isinstance(window, HotkeySettingsDialog):
                 for index in range(window._stack.count()):
                     window._select_page(index)
-                    capture(window, 'ui-client-settings-' + str(index))
+                    capture(window, prefix + 'settings-' + str(index))
             if isinstance(window, GpWheelEditorDialog):
                 window._select_mode_tab(1)
-                capture(window, 'ui-client-direction-advanced')
+                capture(window, prefix + 'direction-advanced')
             if isinstance(window, WheelStyleDialog):
                 for wheel_type in ('large', 'double', 'dual'):
                     window._select_type(wheel_type)
-                    capture(window, 'ui-client-wheel-' + wheel_type)
+                    capture(window, prefix + 'wheel-' + wheel_type)
             window.close()
             window.deleteLater()
             app.processEvents()
@@ -167,7 +173,7 @@ def main():
                 window = factories[index]()
                 if isinstance(window, WheelStyleDialog):
                     window._select_type('dual')
-                capture(window, 'ui-compact-' + type(window).__name__)
+                capture(window, prefix.replace('client', 'compact') + type(window).__name__)
                 for sc in window.findChildren(QScrollArea):
                     if sc.isVisible():
                         assert sc.horizontalScrollBar().maximum() == 0, type(window).__name__
@@ -178,7 +184,7 @@ def main():
     result = {'screen': [screen.size().width(), screen.size().height()],
               'available': [screen.availableGeometry().width(), screen.availableGeometry().height()],
               'device_pixel_ratio': screen.devicePixelRatio(), 'windows': report}
-    (output / 'ui-capture-report.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+    (output / ('ui-capture-report.json' if lang.startswith('zh') else 'ui-capture-report-en.json')).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
     print('Captured', len(report), 'actual Qt views. Screen:', result['screen'])
 
 

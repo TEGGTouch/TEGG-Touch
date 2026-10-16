@@ -433,12 +433,7 @@ class CollapsedBubble(QWidget):
         self.setFixedSize(self.SIZE, self.SIZE)
         # hover 提示文字 (多行, 列出三键 + 拖动); 用自定义浮窗显示 (原生 tooltip
         # 在 WA_ShowWithoutActivating 的 overlay 窗口上弹不出来)
-        self._tip_text = (
-            "左键 · 工具栏显隐\n"
-            "右键 · 按键显隐 (F7)\n"
-            "中键 · 停止运行\n"
-            "拖动 · 移动位置"
-        )
+        self._tip_text = t("run_bubble.tip")
         self._tip = ToolbarTipWidget()
 
         outer = QHBoxLayout(self)
@@ -476,7 +471,7 @@ class CollapsedBubble(QWidget):
         if not _pm.isNull():
             lbl.setPixmap(_pm)
         else:
-            lbl.setText("蛋挞")
+            lbl.setText(t("run_bubble.fallback"))
             lbl.setFont(_make_font(get_font(), 14, bold=True))
             lbl.setStyleSheet("color: #E0E0E0; background: transparent;")
         inner.addWidget(lbl)

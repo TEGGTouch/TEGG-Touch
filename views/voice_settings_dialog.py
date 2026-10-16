@@ -847,7 +847,8 @@ class VoiceSettingsDialog(QDialog):
         """)
         self._test_btn.clicked.connect(self._on_test_commands)
         test_row.addWidget(self._test_btn)
-        self._test_btn.setMinimumWidth(100)
+        # 至少 100, 英文较长时按文字放宽
+        self._test_btn.setMinimumWidth(max(100, self._test_btn.fontMetrics().horizontalAdvance(self._test_btn.text()) + 24))
         col.addLayout(test_row)
 
         # 语言下拉 (识别语言)

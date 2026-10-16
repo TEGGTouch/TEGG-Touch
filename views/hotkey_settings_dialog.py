@@ -132,6 +132,16 @@ class _ColorDot(QWidget):
         p.drawEllipse(6, 17, 8, 8)
 
 
+# ── 可让位的标签 (窄屏时隐藏文字, 不撑宽卡片) ──
+class _YieldingLabel(QLabel):
+    def minimumSizeHint(self):
+        return QSize(0, super().minimumSizeHint().height())
+
+    def paintEvent(self, event):
+        if self.fontMetrics().horizontalAdvance(self.text()) <= self.contentsRect().width():
+            super().paintEvent(event)
+
+
 # ── Tag 输入控件 ──
 class TagInput(QWidget):
     """Tag 输入控件: 显示彩色标签，点击面板添加，BackSpace 删除。"""
@@ -286,6 +296,7 @@ class HotkeySettingsDialog(QDialog):
     settings_saved = pyqtSignal()
     defaults_reset = pyqtSignal()   # 重置默认时发出，通知主窗口重置透明度和工具栏位置
     language_changed = pyqtSignal(str)
+    restart_requested = pyqtSignal()
 
     SIDEBAR_W = 168
     CONTENT_W = 440                                # 中间内容区 (快捷键/语言页)
@@ -911,7 +922,7 @@ class HotkeySettingsDialog(QDialog):
             if pm and not pm.isNull():
                 preview.setPixmap(pm)
             else:
-                preview.setText("(SVG 缺失)")
+                preview.setText(t("hotkey.svg_missing"))
                 preview.setStyleSheet(
                     "background: #1A1A1A; color: #888; "
                     "border: 1px solid #2A2A2A; border-radius: 6px;")
@@ -1291,7 +1302,7 @@ class HotkeySettingsDialog(QDialog):
         reset.clicked.connect(lambda _, gg=g: self._on_bc_reset(gg))
         row.addWidget(reset)
         row.addStretch()
-        lbl = QLabel(t("hotkey.bc_base"))
+        lbl = _YieldingLabel(t("hotkey.bc_base"))
         lbl.setFont(_make_font(fn, 14))
         lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
         row.addWidget(lbl)
@@ -1384,7 +1395,7 @@ class HotkeySettingsDialog(QDialog):
         reset.clicked.connect(self._on_wheel_card_reset)
         row.addWidget(reset)
         row.addStretch()
-        lbl = QLabel(t("hotkey.bc_base"))
+        lbl = _YieldingLabel(t("hotkey.bc_base"))
         lbl.setFont(_make_font(fn, 14))
         lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
         row.addWidget(lbl)
@@ -2155,7 +2166,9 @@ class HotkeySettingsDialog(QDialog):
         lbl = QLabel(labels.get(field, field))
         lbl.setFont(_make_font(fn, 16))
         lbl.setStyleSheet("color: #CCC; background: transparent;")
-        lbl.setFixedWidth(110)
+        # 按最宽的热键名放宽 (英文更长), 各行输入框保持对齐
+        lbl.setFixedWidth(max(110, max(lbl.fontMetrics().horizontalAdvance(text)
+                                       for text in labels.values()) + 2))
         r1.addWidget(lbl)
 
         r1.addSpacing(10)
@@ -2334,6 +2347,10 @@ class HotkeySettingsDialog(QDialog):
         save_hotkeys(current)
         load_locale(lang)
         self.language_changed.emit(lang)
+        # 界面文字只在启动时加载, 询问是否立即重启 (提示用新选的语言)
+        from views.profile_manager_dialog import _StyledConfirmDialog
+        if _StyledConfirmDialog(t("hotkey.restart_title"), t("hotkey.restart_msg"), self).exec():
+            self.restart_requested.emit()
 
     def _update_lang_buttons(self):
         is_zh = self._selected_lang.startswith("zh")

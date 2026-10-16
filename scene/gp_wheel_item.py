@@ -22,7 +22,7 @@ from core.constants import (
     COLOR_GP_BTN_BG, COLOR_GP_BTN_BORDER, COLOR_GP_BTN_TEXT,
     DEFAULT_WHEEL_STYLE, ACTION_COLORS,
 )
-from core.i18n import get_font
+from core.i18n import get_font, t
 from models.gamepad_model import GamepadWheelData
 
 
@@ -389,8 +389,8 @@ class GpWheelItem(QGraphicsObject):
             painter.setFont(f)
             painter.setPen(c_text)
             painter.drawText(
-                QRectF(0, 4, w, 16),
-                Qt.AlignmentFlag.AlignCenter, self.data.name)
+                QRectF(0, 4, w, 16), Qt.AlignmentFlag.AlignCenter,
+                painter.fontMetrics().elidedText(self.data.name, Qt.TextElideMode.ElideRight, int(w) - 8))
 
     def _paint_trigger_bar(self, painter: QPainter, rect: QRectF,
                            value: float, label: str,
@@ -585,12 +585,14 @@ class GpWheelItem(QGraphicsObject):
                                    self.data.w - _RESIZE_INSET)
 
     def _build_tooltip(self) -> str:
-        mode_label = {'scroll': '滚轮', 'vertical': '垂直位移', 'buttons': '左右键'}
-        lines = ["方向盘"]
-        lines.append(f"释放阈值: {int(self.data.release_threshold_ratio * 100)}% 半宽")
-        lines.append(f"中心死区: {int(getattr(self.data, 'dead_zone', 0.10) * 100)}%")
-        lines.append(f"灵敏度: {'平方' if self.data.sensitivity_curve == 'square' else '线性'}")
-        lines.append(f"视觉旋转: ±{int(getattr(self.data, 'max_rotation_deg', 180))}°")
+        mode_label = {'marker': t("wheel_tooltip.mode_marker"), 'scroll': t("wheel_tooltip.mode_scroll"),
+                      'vertical': t("wheel_tooltip.mode_vertical"), 'buttons': t("wheel_tooltip.mode_buttons")}
+        lines = [t("wheel_tooltip.title")]
+        lines.append(t("wheel_tooltip.release", value=int(self.data.release_threshold_ratio * 100)))
+        lines.append(t("wheel_tooltip.dead_zone", value=int(getattr(self.data, 'dead_zone', 0.10) * 100)))
+        curve = t("stick_tooltip.square" if self.data.sensitivity_curve == 'square' else "stick_tooltip.linear")
+        lines.append(t("stick_tooltip.sensitivity", curve=curve))
+        lines.append(t("wheel_tooltip.rotation", value=int(getattr(self.data, 'max_rotation_deg', 180))))
         lines.append("")
         lt_m = mode_label.get(self.data.lt_mode, self.data.lt_mode)
         rt_m = mode_label.get(self.data.rt_mode, self.data.rt_mode)
@@ -602,7 +604,7 @@ class GpWheelItem(QGraphicsObject):
         lines.append(f"LT: {lt_m}")
         lines.append(f"RT: {rt_m}")
         lines.append("")
-        lines.append("双击编辑｜可拖动｜右下角缩放")
+        lines.append(t("wheel_tooltip.edit_hint"))
         return "\n".join(lines)
 
     # ── Hover (编辑模式 scene tooltip) ──

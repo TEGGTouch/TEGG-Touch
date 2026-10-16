@@ -84,6 +84,10 @@ def _format_btn_name(name):
     if len(name) > limit * 2:
         return name[:limit * 2 - 1] + "…"
     if len(name) > limit:
+        # 英文名优先在空格处换行，避免把单词拆开
+        cut = name.rfind(' ', 0, limit + 1)
+        if cut > 0 and len(name) - cut - 1 <= limit:
+            return name[:cut] + "\n" + name[cut + 1:]
         return name[:limit] + "\n" + name[limit:]
     return name
 
@@ -281,9 +285,9 @@ class TouchButtonItem(QGraphicsObject):
                     # 长 label (例如 '左肩 LB') 不截断, 让 Qt elide; 超 8 字符再截
                     bottom_text = s if len(s) <= 8 else s[:7] + '…'
                 else:
-                    bottom_text = _format_btn_name(self.data.name) if self.data.name else ''
+                    bottom_text = self.data.name or ''
             else:
-                bottom_text = _format_btn_name(self.data.name) if self.data.name else ''
+                bottom_text = self.data.name or ''
 
             # icon 用 Segoe 字体, 文字用常规字体, 两者都是 font_px
             icon_font_name = _get_icon_font_name()
@@ -306,6 +310,9 @@ class TouchButtonItem(QGraphicsObject):
             painter.drawText(QRectF(rect.x(), y0, rect.width(), icon_h),
                              Qt.AlignmentFlag.AlignCenter, icon_char)
             painter.setFont(name_font)
+            # 图标下只有一行, 过长 (如英文名) 按宽度省略
+            bottom_text = QFontMetrics(name_font).elidedText(
+                bottom_text, Qt.TextElideMode.ElideRight, int(rect.width()) - 4)
             painter.drawText(QRectF(rect.x(), y0 + icon_h, rect.width(), name_h),
                              Qt.AlignmentFlag.AlignCenter, bottom_text)
             return

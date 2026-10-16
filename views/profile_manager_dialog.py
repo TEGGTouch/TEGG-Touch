@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize, QEvent
 from PyQt6.QtGui import QFont, QColor
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, segmented_row, ui_text
 from core.config_manager import (
     list_profiles, get_active_profile_name,
     create_profile, delete_profile, rename_profile,
@@ -546,13 +546,22 @@ def _summarize_button_actions(btn: dict) -> list:
     return [(lbl, v) for lbl, v in pairs if v]
 
 
+def _chip_text(label: str) -> str:
+    """动作 chip 显示文本 (label 本身是 _ACTION_COLORS 的 key, 不改)"""
+    if label == '↑滚':
+        return ui_text('↑滚', '↑W')
+    if label == '↓滚':
+        return ui_text('↓滚', '↓W')
+    return label
+
+
 def _make_button_row(name: str, actions: list) -> QWidget:
     """按钮一行: 名称 + 动作 chips (chip 显示动作类型, tooltip 显示值)"""
     row = QFrame()
     h = QHBoxLayout(row)
     h.setContentsMargins(12, 4, 8, 4)
     h.setSpacing(8)
-    n = QLabel(name or "(未命名)")
+    n = QLabel(name or ui_text("(未命名)", "(unnamed)"))
     n.setFont(_make_font(get_font(), 13))
     n.setStyleSheet("color: #E0E0E0; background: transparent;")
     n.setMinimumWidth(120)
@@ -560,8 +569,9 @@ def _make_button_row(name: str, actions: list) -> QWidget:
     chip_box = QHBoxLayout()
     chip_box.setSpacing(4)
     for label, value in actions:
-        chip = _Chip(label, _ACTION_COLORS.get(label, '#666'))
-        chip.setToolTip(f"{label} → {value}")
+        chip_label = _chip_text(label)
+        chip = _Chip(chip_label, _ACTION_COLORS.get(label, '#666'))
+        chip.setToolTip(f"{chip_label} → {value}")
         chip_box.addWidget(chip)
     chip_box.addStretch()
     h.addLayout(chip_box, 1)
@@ -578,11 +588,15 @@ _CAT_VOICE = 'voice'
 _CAT_GLOBAL = 'global'
 _ALL_CATEGORIES = (_CAT_KB, _CAT_GP, _CAT_VOICE, _CAT_GLOBAL)
 _CAT_LABELS = {
-    _CAT_KB: '键盘按键',
-    _CAT_GP: '手柄按钮',
-    _CAT_VOICE: '语音指令',
-    _CAT_GLOBAL: '全局参数',
+    _CAT_KB: ('键盘按键', 'Keyboard Keys'),
+    _CAT_GP: ('手柄按钮', 'Gamepad Buttons'),
+    _CAT_VOICE: ('语音指令', 'Voice Commands'),
+    _CAT_GLOBAL: ('全局参数', 'Global Settings'),
 }
+
+
+def _cat_label(cat: str) -> str:
+    return ui_text(*_CAT_LABELS[cat])
 
 # 字段归属表
 _KB_BUTTON_TYPES = {'normal', 'center_band', None}
@@ -706,7 +720,7 @@ class _ProfileCopyDialog(QDialog):
         self._target_kind = 'new'    # 'new' | 'existing'
         self._init_ui()
         from views.ui_components import finish_dialog
-        finish_dialog(self, (880, 760), actions=["取消", "复制确认"], columns=False, guidance=None)
+        finish_dialog(self, (880, 760), actions=[self._cancel_text, self._ok_text], columns=False, guidance=None)
         self._center_on_screen()
         # 给两张卡片及其所有子部件装事件过滤器, 这样卡片内部的 QListWidget/QLineEdit
         # 也能触发卡片切换 (而不被它们 eat 掉 click)
@@ -759,7 +773,7 @@ class _ProfileCopyDialog(QDialog):
 
         # 标题
         hdr = QHBoxLayout()
-        title = QLabel("复制方案")
+        title = QLabel(ui_text("复制方案", "Copy Profile"))
         title.setFont(_make_font(fn, 18, bold=True))
         title.setStyleSheet("color: white; background: transparent;")
         hdr.addWidget(title)
@@ -785,7 +799,8 @@ class _ProfileCopyDialog(QDialog):
         root.addLayout(hdr)
 
         # 源
-        src_lbl = QLabel(f"源方案: 「{self._src_name}」")
+        src_lbl = QLabel(ui_text(f"源方案: 「{self._src_name}」",
+                                 f"Source profile: '{self._src_name}'"))
         src_lbl.setFont(_make_font(fn, 14))
         src_lbl.setStyleSheet("color: #888; background: transparent;")
         root.addWidget(src_lbl)
@@ -803,13 +818,13 @@ class _ProfileCopyDialog(QDialog):
         left = QVBoxLayout(left_frame)
         left.setContentsMargins(16, 14, 16, 14)
         left.setSpacing(8)
-        left_title = QLabel("复制内容")
+        left_title = QLabel(ui_text("复制内容", "Content to Copy"))
         left_title.setFont(_make_font(fn, 14, bold=True))
         left_title.setStyleSheet(f"color: {C_AMBER}; background: transparent; border: none;")
         left.addWidget(left_title)
         left.addSpacing(4)
 
-        self._cb_all = self._make_checkbox(fn, "全部 (一键全选)")
+        self._cb_all = self._make_checkbox(fn, ui_text("全部 (一键全选)", "Select All"))
         self._cb_all.setChecked(True)
         self._cb_all.stateChanged.connect(self._on_all_toggled)
         left.addWidget(self._cb_all)
@@ -819,19 +834,23 @@ class _ProfileCopyDialog(QDialog):
 
         self._cb_cats = {}
         for cat in _ALL_CATEGORIES:
-            cb = self._make_checkbox(fn, _CAT_LABELS[cat])
+            cb = self._make_checkbox(fn, _cat_label(cat))
             cb.setChecked(True)
             cb.stateChanged.connect(self._on_cat_toggled)
             self._cb_cats[cat] = cb
             left.addWidget(cb)
         left.addStretch()
         # 底对齐的提示 (用 1/2/3/4 序号代替 ⓘ)
-        hint = QLabel(
+        hint = QLabel(ui_text(
             "1. 全局参数总是覆盖\n\n"
             "2. 追加按钮按源坐标贴入, 可能与已有按钮重叠, 需要时手动拖开\n\n"
             "3. 追加模式下中心轮盘跳过, 不动目标\n\n"
-            "4. 追加宏同名时自动加后缀 _2/_3 等"
-        )
+            "4. 追加宏同名时自动加后缀 _2/_3 等",
+            "1. Global settings always overwrite\n\n"
+            "2. Appended buttons keep source positions and may overlap; drag apart if needed\n\n"
+            "3. Append skips the center wheel; the target's wheel is kept\n\n"
+            "4. Duplicate macro names get suffix _2/_3 etc."
+        ))
         hint.setFont(_make_font(fn, 14))
         hint.setStyleSheet("color: #999; background: transparent; border: none;")
         hint.setWordWrap(True)
@@ -844,7 +863,7 @@ class _ProfileCopyDialog(QDialog):
         right_wrap.setSpacing(12)
 
         # 粘贴目标标题
-        target_title = QLabel("粘贴目标 (点卡片切换)")
+        target_title = QLabel(ui_text("粘贴目标 (点卡片切换)", "Paste Target (click a card to switch)"))
         target_title.setFont(_make_font(fn, 14, bold=True))
         target_title.setStyleSheet(f"color: {C_AMBER}; background: transparent;")
         right_wrap.addWidget(target_title)
@@ -865,7 +884,9 @@ class _ProfileCopyDialog(QDialog):
         # 底部按钮
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        cancel_btn = QPushButton("取消")
+        self._cancel_text = ui_text("取消", "Cancel")
+        self._ok_text = ui_text("复制确认", "Copy")
+        cancel_btn = QPushButton(self._cancel_text)
         cancel_btn.setFixedSize(140, 44)
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cancel_btn.setFont(_make_font(fn, 16))
@@ -879,7 +900,7 @@ class _ProfileCopyDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
         btn_row.addSpacing(10)
-        ok_btn = QPushButton("复制确认")
+        ok_btn = QPushButton(self._ok_text)
         ok_btn.setFixedSize(160, 44)
         ok_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         ok_btn.setFont(_make_font(fn, 16, bold=True))
@@ -916,7 +937,7 @@ class _ProfileCopyDialog(QDialog):
         v = QVBoxLayout(card)
         v.setContentsMargins(20, 16, 20, 16)
         v.setSpacing(10)
-        title = QLabel("新建方案")
+        title = QLabel(ui_text("新建方案", "New Profile"))
         title.setFont(_make_font(fn, 15, bold=True))
         title.setStyleSheet(f"color: {C_AMBER}; background: transparent; border: none;")
         v.addWidget(title)
@@ -926,7 +947,7 @@ class _ProfileCopyDialog(QDialog):
         cv = QHBoxLayout(self._new_content)
         cv.setContentsMargins(0, 0, 0, 0)
         cv.setSpacing(8)
-        name_lbl = QLabel("名称:")
+        name_lbl = QLabel(ui_text("名称:", "Name:"))
         name_lbl.setFont(_make_font(fn, 13))
         name_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
         cv.addWidget(name_lbl)
@@ -949,7 +970,7 @@ class _ProfileCopyDialog(QDialog):
         v = QVBoxLayout(card)
         v.setContentsMargins(20, 16, 20, 16)
         v.setSpacing(10)
-        title = QLabel("粘贴到已有方案")
+        title = QLabel(ui_text("粘贴到已有方案", "Paste into Existing Profile"))
         title.setFont(_make_font(fn, 15, bold=True))
         title.setStyleSheet(f"color: {C_AMBER}; background: transparent; border: none;")
         v.addWidget(title)
@@ -969,14 +990,14 @@ class _ProfileCopyDialog(QDialog):
             self._target_list.setCurrentRow(0)
         cv.addWidget(self._target_list, 1)   # 撑满卡片剩余空间
         # 粘贴方式 radio
-        mode_lbl = QLabel("粘贴方式:")
+        mode_lbl = QLabel(ui_text("粘贴方式:", "Paste mode:"))
         mode_lbl.setFont(_make_font(fn, 13))
         mode_lbl.setStyleSheet("color: #CCC; background: transparent; border: none;")
         cv.addWidget(mode_lbl)
         mode_row = QHBoxLayout()
         self._mode_group = QButtonGroup(self)
-        self._rb_append = self._make_radio(fn, "追加")
-        self._rb_overwrite = self._make_radio(fn, "覆盖")
+        self._rb_append = self._make_radio(fn, ui_text("追加", "Append"))
+        self._rb_overwrite = self._make_radio(fn, ui_text("覆盖", "Overwrite"))
         self._rb_overwrite.setChecked(True)
         self._mode_group.addButton(self._rb_append)
         self._mode_group.addButton(self._rb_overwrite)
@@ -1091,18 +1112,21 @@ class _ProfileCopyDialog(QDialog):
     def _on_confirm(self):
         cats = {cat for cat, cb in self._cb_cats.items() if cb.isChecked()}
         if not cats:
-            _StyledMessageDialog("无效", "请至少选择一个类别复制", self).exec()
+            _StyledMessageDialog(ui_text("无效", "Invalid"),
+                                 ui_text("请至少选择一个类别复制", "Select at least one category to copy"), self).exec()
             return
         if self._target_kind == 'new':
             target_name = self._new_name_edit.text().strip()
             if not target_name:
-                _StyledMessageDialog("无效", "请填写新方案名称", self).exec()
+                _StyledMessageDialog(ui_text("无效", "Invalid"),
+                                     ui_text("请填写新方案名称", "Enter a name for the new profile"), self).exec()
                 return
             mode = 'overwrite'    # 新建对模板覆盖
         else:
             cur_item = self._target_list.currentItem()
             if not cur_item:
-                _StyledMessageDialog("无效", "请选一个目标方案", self).exec()
+                _StyledMessageDialog(ui_text("无效", "Invalid"),
+                                     ui_text("请选一个目标方案", "Select a target profile"), self).exec()
                 return
             target_name = cur_item.text()
             mode = 'append' if self._rb_append.isChecked() else 'overwrite'
@@ -1159,7 +1183,7 @@ class _ProfileDetailPanel(QFrame):
         self._name_lbl.setFont(_make_font(fn, 18, bold=True))
         self._name_lbl.setStyleSheet("color: white; background: transparent;")
         hdr.addWidget(self._name_lbl, 1)
-        self._apply_btn = QPushButton(t("profile.apply_btn") if False else "应用此方案")
+        self._apply_btn = QPushButton(ui_text("应用此方案", "Apply Profile"))
         self._apply_btn.setFixedHeight(36)
         self._apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._apply_btn.setFont(_make_font(fn, 13, bold=True))
@@ -1181,9 +1205,8 @@ class _ProfileDetailPanel(QFrame):
         self._tab_btns: dict = {}
         self._tab_count_lbls: dict = {}
         self._cur_tab = 'kb'
-        for key, label in (('kb', '键盘按键'), ('gp', '手柄按钮'),
-                           ('voice', '语音指令'), ('global', '全局参数')):
-            b = QPushButton(label)
+        for key in (_CAT_KB, _CAT_GP, _CAT_VOICE, _CAT_GLOBAL):
+            b = QPushButton(_cat_label(key))
             b.setFixedHeight(36)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setFont(_make_font(fn, 13, bold=True))
@@ -1235,7 +1258,8 @@ class _ProfileDetailPanel(QFrame):
         self._cur_is_active = is_active
         self._name_lbl.setText(name or "—")
         self._apply_btn.setEnabled(bool(name) and not is_active)
-        self._apply_btn.setText("当前已是激活方案" if is_active else "应用此方案")
+        self._apply_btn.setText(ui_text("当前已是激活方案", "Already Active") if is_active
+                                else ui_text("应用此方案", "Apply Profile"))
         # 重渲染所有页
         self._render_kb_page()
         self._render_gp_page()
@@ -1277,17 +1301,18 @@ class _ProfileDetailPanel(QFrame):
             actions = _summarize_button_actions(b)
             if actions or b.get('type') == 'center_band':
                 kb_btns_with_actions.append((b, actions))
-        lay.addWidget(_make_section_header("普通按钮", len(kb_btns_with_actions)))
+        lay.addWidget(_make_section_header(ui_text("普通按钮", "Standard Buttons"), len(kb_btns_with_actions)))
         if kb_btns_with_actions:
             for b, actions in kb_btns_with_actions[:30]:
                 lay.addWidget(_make_button_row(b.get('name', ''), actions))
             if len(kb_btns_with_actions) > 30:
-                more = QLabel(f"  ...还有 {len(kb_btns_with_actions) - 30} 个")
+                more = QLabel(ui_text(f"  ...还有 {len(kb_btns_with_actions) - 30} 个",
+                                      f"  ...{len(kb_btns_with_actions) - 30} more"))
                 more.setStyleSheet("color: #888; background: transparent;")
                 more.setFont(_make_font(get_font(), 12))
                 lay.addWidget(more)
         else:
-            empty = QLabel("  (无)")
+            empty = QLabel(ui_text("  (无)", "  (none)"))
             empty.setStyleSheet("color: #666; background: transparent;")
             lay.addWidget(empty)
         # 2. 中心轮盘
@@ -1295,24 +1320,27 @@ class _ProfileDetailPanel(QFrame):
             sectors = cfg.get('wheel_sectors', []) or []
             sectors_with = [s for s in sectors if _summarize_button_actions(s)]
             lay.addSpacing(8)
-            lay.addWidget(_make_section_header("中心轮盘", len(sectors_with)))
-            lay.addWidget(_make_kv_label("模式", cfg.get('wheel_mode') or "默认"))
-            lay.addWidget(_make_kv_label("放大", "是" if cfg.get('wheel_enlarged') else "否"))
-            lay.addWidget(_make_kv_label("偏移", str(cfg.get('wheel_offset', 0))))
+            lay.addWidget(_make_section_header(ui_text("中心轮盘", "Center Wheel"), len(sectors_with)))
+            lay.addWidget(_make_kv_label(ui_text("模式", "Mode"),
+                                         cfg.get('wheel_mode') or ui_text("默认", "Default")))
+            lay.addWidget(_make_kv_label(ui_text("放大", "Enlarged"),
+                                         ui_text("是", "Yes") if cfg.get('wheel_enlarged') else ui_text("否", "No")))
+            lay.addWidget(_make_kv_label(ui_text("偏移", "Offset"), str(cfg.get('wheel_offset', 0))))
             for s in sectors_with[:8]:
                 actions = _summarize_button_actions(s)
-                lay.addWidget(_make_button_row(s.get('name', '扇区'), actions))
+                lay.addWidget(_make_button_row(s.get('name', ui_text('扇区', 'Sector')), actions))
         # 3. kb 宏
         macros = cfg.get('macros', []) or []
         if macros:
             lay.addSpacing(8)
-            lay.addWidget(_make_section_header("键盘宏", len(macros)))
+            lay.addWidget(_make_section_header(ui_text("键盘宏", "Keyboard Macros"), len(macros)))
             for m in macros[:10]:
-                name = m.get('name', '(未命名)')
+                name = m.get('name', ui_text('(未命名)', '(unnamed)'))
                 steps = len(m.get('steps', []))
-                lay.addWidget(_make_kv_label(name, f"{steps} 步"))
+                lay.addWidget(_make_kv_label(name, ui_text(f"{steps} 步", f"{steps} steps")))
             if len(macros) > 10:
-                more = QLabel(f"  ...还有 {len(macros) - 10} 个宏")
+                more = QLabel(ui_text(f"  ...还有 {len(macros) - 10} 个宏",
+                                      f"  ...{len(macros) - 10} more macros"))
                 more.setStyleSheet("color: #888; background: transparent;")
                 lay.addWidget(more)
         lay.addStretch()
@@ -1330,37 +1358,45 @@ class _ProfileDetailPanel(QFrame):
             actions = _summarize_button_actions(b)
             if actions:
                 gp_btns_with.append((b, actions))
-        lay.addWidget(_make_section_header("手柄键", len(gp_btns_with)))
+        lay.addWidget(_make_section_header(ui_text("手柄键", "Gamepad Buttons"), len(gp_btns_with)))
         if gp_btns_with:
             for b, actions in gp_btns_with[:30]:
                 lay.addWidget(_make_button_row(b.get('name', ''), actions))
         else:
-            empty = QLabel("  (无)")
+            empty = QLabel(ui_text("  (无)", "  (none)"))
             empty.setStyleSheet("color: #666; background: transparent;")
             lay.addWidget(empty)
         # 摇杆
         if gp_sticks:
             lay.addSpacing(8)
-            lay.addWidget(_make_section_header("摇杆", len(gp_sticks)))
+            lay.addWidget(_make_section_header(ui_text("摇杆", "Sticks"), len(gp_sticks)))
             for s in gp_sticks:
-                sid = "左摇杆 (L)" if s.get('stick_id') == 'L' else "右摇杆 (R)"
-                summary = (f"死区 {int((s.get('dead_zone', 0.1)) * 100)}% / "
-                           f"{'平方' if s.get('sensitivity_curve') == 'square' else '线性'}")
+                sid = (ui_text("左摇杆 (L)", "Left Stick (L)") if s.get('stick_id') == 'L'
+                       else ui_text("右摇杆 (R)", "Right Stick (R)"))
+                curve = (ui_text('平方', 'Square') if s.get('sensitivity_curve') == 'square'
+                         else ui_text('线性', 'Linear'))
+                dz = int((s.get('dead_zone', 0.1)) * 100)
+                summary = ui_text(f"死区 {dz}% / {curve}", f"Dead zone {dz}% / {curve}")
                 if s.get('eight_way'):
-                    summary += " / 八方向"
+                    summary += ui_text(" / 八方向", " / 8-way")
                 lay.addWidget(_make_kv_label(sid, summary))
         # 方向盘
         if gp_wheels:
             lay.addSpacing(8)
-            lay.addWidget(_make_section_header("方向盘", len(gp_wheels)))
+            lay.addWidget(_make_section_header(ui_text("方向盘", "Steering Wheel"), len(gp_wheels)))
             for w in gp_wheels:
-                mode_label = {'scroll': '滚轮', 'vertical': '垂直位移', 'buttons': '左右键'}
+                mode_label = {'scroll': ui_text('滚轮', 'Scroll'),
+                              'vertical': ui_text('垂直位移', 'Vertical'),
+                              'buttons': ui_text('左右键', 'L/R Buttons')}
                 lay.addWidget(_make_kv_label(
-                    "释放阈值", f"{int(w.get('release_threshold_ratio', 1.5) * 100)}%"))
+                    ui_text("释放阈值", "Release Threshold"),
+                    f"{int(w.get('release_threshold_ratio', 1.5) * 100)}%"))
                 lay.addWidget(_make_kv_label(
-                    "视觉旋转", f"±{int(w.get('max_rotation_deg', 180))}°"))
+                    ui_text("视觉旋转", "Visual Rotation"), f"±{int(w.get('max_rotation_deg', 180))}°"))
                 lay.addWidget(_make_kv_label(
-                    "灵敏度", '平方' if w.get('sensitivity_curve') == 'square' else '线性'))
+                    ui_text("灵敏度", "Sensitivity"),
+                    ui_text('平方', 'Square') if w.get('sensitivity_curve') == 'square'
+                    else ui_text('线性', 'Linear')))
                 lt = mode_label.get(w.get('lt_mode', ''), w.get('lt_mode', ''))
                 rt = mode_label.get(w.get('rt_mode', ''), w.get('rt_mode', ''))
                 lay.addWidget(_make_kv_label("LT", lt))
@@ -1369,25 +1405,28 @@ class _ProfileDetailPanel(QFrame):
         gp_macros = cfg.get('gp_macros', []) or []
         if gp_macros:
             lay.addSpacing(8)
-            lay.addWidget(_make_section_header("手柄宏", len(gp_macros)))
+            lay.addWidget(_make_section_header(ui_text("手柄宏", "Gamepad Macros"), len(gp_macros)))
             for m in gp_macros[:10]:
-                name = m.get('name', '(未命名)')
+                name = m.get('name', ui_text('(未命名)', '(unnamed)'))
                 steps = len(m.get('steps', []))
-                lay.addWidget(_make_kv_label(name, f"{steps} 步"))
+                lay.addWidget(_make_kv_label(name, ui_text(f"{steps} 步", f"{steps} steps")))
         lay.addStretch()
 
     def _render_voice_page(self):
         lay = self._page_layout('voice')
         cfg = self._cur_cfg
         cmds = cfg.get('voice_commands', []) or []
-        lay.addWidget(_make_section_header("配置", -1))
-        lay.addWidget(_make_kv_label("启用", "开" if cfg.get('voice_enabled') else "关"))
-        lay.addWidget(_make_kv_label("语言", cfg.get('voice_language') or "zh-CN"))
+        lay.addWidget(_make_section_header(ui_text("配置", "Settings"), -1))
+        lay.addWidget(_make_kv_label(ui_text("启用", "Enabled"),
+                                     ui_text("开", "On") if cfg.get('voice_enabled') else ui_text("关", "Off")))
+        lay.addWidget(_make_kv_label(ui_text("语言", "Language"), cfg.get('voice_language') or "zh-CN"))
         lay.addWidget(_make_kv_label(
-            "自动启动", "是" if cfg.get('voice_auto_start', True) else "否"))
-        lay.addWidget(_make_kv_label("麦克风", cfg.get('voice_mic_device') or "默认"))
+            ui_text("自动启动", "Auto Start"),
+            ui_text("是", "Yes") if cfg.get('voice_auto_start', True) else ui_text("否", "No")))
+        lay.addWidget(_make_kv_label(ui_text("麦克风", "Microphone"),
+                                     cfg.get('voice_mic_device') or ui_text("默认", "Default")))
         lay.addSpacing(8)
-        lay.addWidget(_make_section_header("语音指令", len(cmds)))
+        lay.addWidget(_make_section_header(ui_text("语音指令", "Voice Commands"), len(cmds)))
         if cmds:
             for c in cmds[:50]:
                 phrase = c.get('phrase', '')
@@ -1395,11 +1434,11 @@ class _ProfileDetailPanel(QFrame):
                 act = c.get('action', 'click')
                 lay.addWidget(_make_kv_label(f'"{phrase}"', f"→ {keys}  [{act}]"))
             if len(cmds) > 50:
-                more = QLabel(f"  ...还有 {len(cmds) - 50} 条")
+                more = QLabel(ui_text(f"  ...还有 {len(cmds) - 50} 条", f"  ...{len(cmds) - 50} more"))
                 more.setStyleSheet("color: #888; background: transparent;")
                 lay.addWidget(more)
         else:
-            empty = QLabel("  (未配置)")
+            empty = QLabel(ui_text("  (未配置)", "  (not configured)"))
             empty.setStyleSheet("color: #666; background: transparent;")
             lay.addWidget(empty)
         lay.addStretch()
@@ -1407,55 +1446,60 @@ class _ProfileDetailPanel(QFrame):
     def _render_global_page(self):
         lay = self._page_layout('global')
         cfg = self._cur_cfg
-        lay.addWidget(_make_section_header("窗口", -1))
+        lay.addWidget(_make_section_header(ui_text("窗口", "Window"), -1))
         geo = cfg.get('geometry', '')
         if geo:
             try:
                 wh = geo.split('+')[0]
-                lay.addWidget(_make_kv_label("分辨率", wh))
+                lay.addWidget(_make_kv_label(ui_text("分辨率", "Resolution"), wh))
             except Exception:
                 lay.addWidget(_make_kv_label("Geometry", geo))
         lay.addWidget(_make_kv_label(
-            "透明度", f"{int((cfg.get('transparency', 0.5)) * 100)}%"))
-        ct_map = {'pt_on': '开启', 'pt_off': '关闭', 'pt_block': '开启（旧模式已移除）'}
+            ui_text("透明度", "Opacity"), f"{int((cfg.get('transparency', 0.5)) * 100)}%"))
+        ct_map = {'pt_on': ui_text('开启', 'On'), 'pt_off': ui_text('关闭', 'Off'),
+                  'pt_block': ui_text('开启（旧模式已移除）', 'On (legacy mode removed)')}
         lay.addWidget(_make_kv_label(
-            "穿透模式", ct_map.get(cfg.get('click_through', ''), str(cfg.get('click_through', '')))))
-        lay.addWidget(_make_kv_label("网格", f"{cfg.get('grid_size') or '默认'}px"))
+            ui_text("穿透模式", "Pass-Through"), ct_map.get(cfg.get('click_through', ''), str(cfg.get('click_through', '')))))
+        lay.addWidget(_make_kv_label(ui_text("网格", "Grid"),
+                                     f"{cfg.get('grid_size') or ui_text('默认', 'Default')}px"))
         sc = cfg.get('scene_scale', 1.0)
         try:
             sc_pct = int(round(float(sc) * 100))
         except (TypeError, ValueError):
             sc_pct = 100
-        lay.addWidget(_make_kv_label("缩放", f"{sc_pct}%"))
+        lay.addWidget(_make_kv_label(ui_text("缩放", "Scale"), f"{sc_pct}%"))
         lay.addSpacing(8)
-        lay.addWidget(_make_section_header("模拟", -1))
+        lay.addWidget(_make_section_header(ui_text("模拟", "Simulation"), -1))
         sm = cfg.get('sim_mode')
-        sm_label = '手柄' if sm == 'gamepad' else ('键盘' if sm == 'keyboard' else '未设置 (按全局默认)')
-        lay.addWidget(_make_kv_label("模式", sm_label))
+        sm_label = (ui_text('手柄', 'Gamepad') if sm == 'gamepad' else
+                    (ui_text('键盘', 'Keyboard') if sm == 'keyboard'
+                     else ui_text('未设置 (按全局默认)', 'Not set (global default)')))
+        lay.addWidget(_make_kv_label(ui_text("模式", "Mode"), sm_label))
         # 运行工具栏位置
         rtx = cfg.get('run_toolbar_x')
         rty = cfg.get('run_toolbar_y')
         if rtx is not None and rty is not None:
             lay.addSpacing(8)
-            lay.addWidget(_make_section_header("布局记忆", -1))
-            lay.addWidget(_make_kv_label("运行工具栏", f"({rtx}, {rty})"))
+            lay.addWidget(_make_section_header(ui_text("布局记忆", "Saved Layout"), -1))
+            lay.addWidget(_make_kv_label(ui_text("运行工具栏", "Run Toolbar"), f"({rtx}, {rty})"))
         # 外观 (wheel_style + cursor_styles)
         ws = cfg.get('wheel_style')
         cs = cfg.get('cursor_styles')
         if ws or cs:
             lay.addSpacing(8)
-            lay.addWidget(_make_section_header("外观", -1))
+            lay.addWidget(_make_section_header(ui_text("外观", "Appearance"), -1))
             if isinstance(ws, dict):
                 color = ws.get('color', '?')
-                lay.addWidget(_make_kv_label("方向盘描边", color, value_color=color))
+                lay.addWidget(_make_kv_label(ui_text("方向盘描边", "Wheel Outline"), color, value_color=color))
             if isinstance(cs, dict):
-                for ct, label in (('cursor', '光标-默认'),
-                                  ('cursor_off', '光标-关闭')):
+                for ct, label in (('cursor', ui_text('光标-默认', 'Cursor - Default')),
+                                  ('cursor_off', ui_text('光标-关闭', 'Cursor - Off'))):
                     sty = cs.get(ct, {}) or {}
                     fill = sty.get('fill', '?')
                     scale = sty.get('scale', 1.0)
                     lay.addWidget(_make_kv_label(
-                        label, f"底色 {fill} / {int(round(float(scale) * 100))}%",
+                        label, ui_text(f"底色 {fill} / {int(round(float(scale) * 100))}%",
+                                       f"Fill {fill} / {int(round(float(scale) * 100))}%"),
                         value_color=fill if fill.startswith('#') else "#E0E0E0"))
         lay.addStretch()
 

@@ -671,6 +671,10 @@ class ButtonEditorDialog(QDialog):
 
     # ── 表单行构建 ────────────────────────────────────────────
 
+    # 标签列按最宽的字段名放宽 (英文更长), 各行输入框保持对齐
+    _FIELD_LABEL_KEYS = ('name', 'hover', 'hover_toggle_label', 'lclick', 'rclick', 'mclick',
+                         'xbutton1', 'xbutton2', 'wheelup', 'wheeldown')
+
     def _build_field_row(self, fn, field_name, label_text, value, is_tag=True, show_dot=True):
         """构建一行: 色点 + 标签 + 输入框"""
         row = QHBoxLayout()
@@ -687,7 +691,8 @@ class ButtonEditorDialog(QDialog):
         lbl = QLabel(label_text)
         lbl.setFont(_make_font(fn, 16))
         lbl.setStyleSheet("color: #CCC; background: transparent;")
-        lbl.setFixedWidth(80)
+        lbl.setFixedWidth(max(80, max(lbl.fontMetrics().horizontalAdvance(t('editor.' + key))
+                                      for key in self._FIELD_LABEL_KEYS) + 2))
         row.addWidget(lbl)
 
         row.addSpacing(10)

@@ -157,6 +157,25 @@ GP_BUTTONS = [
 GP_KEY_TO_LABEL = dict(GP_BUTTONS)         # 存储 key → 显示 label (按钮上活跃态显示用)
 GP_LABEL_TO_KEY = {l: k for k, l in GP_BUTTONS}  # label → 存储 key (编辑器点击时反查)
 
+# 英文界面只换显示 label, 存储 key 不变; 由 i18n.load_locale 调用
+_GP_LABELS_ZH = dict(GP_BUTTONS)
+_GP_LABELS_EN = {"LB": "LB", "RB": "RB", "LT": "LT", "RT": "RT",
+                 "Start": "Start", "Back": "Back", "L3": "L3", "R3": "R3"}
+
+
+def apply_gp_labels(lang):
+    """按界面语言就地更新手柄显示 label (各模块持有的是同一对象)。"""
+    labels = dict(_GP_LABELS_ZH)
+    if not lang.startswith("zh"):
+        labels.update(_GP_LABELS_EN)
+    GP_BUTTONS[:] = [(k, labels[k]) for k, _ in GP_BUTTONS]
+    GP_KEY_TO_LABEL.clear()
+    GP_KEY_TO_LABEL.update(labels)
+    # 两种语言的 label 都能反查, 避免切换前生成的面板失效
+    GP_LABEL_TO_KEY.clear()
+    GP_LABEL_TO_KEY.update({l: k for k, l in _GP_LABELS_ZH.items()})
+    GP_LABEL_TO_KEY.update({l: k for k, l in labels.items()})
+
 GP_KEY_PREFIX = "gp:"   # 按键映射字段值的前缀, 区分于 mouse: / macro:
 APP_PREFIX = "app:"     # 启动本地应用的前缀: app:<应用名> (解析自 apps 池)
 

@@ -24,6 +24,8 @@ import subprocess
 import sys
 import webbrowser
 
+from core.i18n import t
+
 log = logging.getLogger(__name__)
 
 
@@ -64,7 +66,7 @@ def _run_elevated_wait(path: str, args: str, timeout_ms: int = 180000) -> tuple[
     成功的返回码与子进程相同。
     """
     if sys.platform != 'win32':
-        return -1, "仅 Windows 支持"
+        return -1, t("gp_install_msg.windows_only")
     sei = _SHELLEXECUTEINFOW()
     sei.cbSize = ctypes.sizeof(sei)
     sei.fMask = _SEE_MASK_NOCLOSEPROCESS | _SEE_MASK_NOASYNC
@@ -78,10 +80,10 @@ def _run_elevated_wait(path: str, args: str, timeout_ms: int = 180000) -> tuple[
     if not shell32.ShellExecuteExW(ctypes.byref(sei)):
         err = ctypes.windll.kernel32.GetLastError()
         if err == _ERROR_CANCELLED:
-            return -1, "用户取消了 UAC 提权请求"
-        return -1, f"ShellExecuteEx 失败, GetLastError={err}"
+            return -1, t("gp_install_msg.uac_cancelled")
+        return -1, t("gp_install_msg.shell_failed", err=err)
     if not sei.hProcess:
-        return -1, "ShellExecuteEx 未返回进程句柄"
+        return -1, t("gp_install_msg.no_handle")
     k32 = ctypes.windll.kernel32
     k32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
     k32.WaitForSingleObject.restype = ctypes.c_ulong
@@ -91,7 +93,7 @@ def _run_elevated_wait(path: str, args: str, timeout_ms: int = 180000) -> tuple[
     wait_result = k32.WaitForSingleObject(sei.hProcess, timeout_ms)
     if wait_result != 0:  # WAIT_OBJECT_0 = 0
         k32.CloseHandle(sei.hProcess)
-        return -1, f"等待安装器超时 (wait_result={wait_result})"
+        return -1, t("gp_install_msg.wait_timeout", result=wait_result)
     exit_code = ctypes.c_ulong()
     k32.GetExitCodeProcess(sei.hProcess, ctypes.byref(exit_code))
     k32.CloseHandle(sei.hProcess)
@@ -221,16 +223,16 @@ def _vgamepad_smoke_test() -> tuple[bool, str]:
     try:
         import vgamepad as vg  # type: ignore
     except ImportError as e:
-        return False, f"vgamepad 库未安装: {e}"
+        return False, t("gp_install_msg.lib_missing", error=e)
     except Exception as e:
-        return False, f"vgamepad 导入异常: {e}"
+        return False, t("gp_install_msg.lib_import", error=e)
     try:
         pad = vg.VX360Gamepad()
         pad.update()
         del pad
         return True, ""
     except Exception as e:
-        return False, f"VX360Gamepad 创建失败: {e}"
+        return False, t("gp_install_msg.pad_failed", error=e)
 
 
 def _cmp_version(a: str, b: str) -> int:
@@ -344,7 +346,7 @@ def install_vgamepad_lib(progress_cb=None) -> tuple[bool, str]:
     wheel 缺失时回退到普通 sdist 安装。
     """
     if progress_cb:
-        progress_cb("正在通过 pip 安装 (优先 wheel)…", 10)
+        progress_cb(t("gp_install_msg.pip_wheel"), 10)
     try:
         # 第一次尝试: wheel-only - 不会执行 setup.py 的 post-install
         proc = subprocess.run(
@@ -360,27 +362,27 @@ def install_vgamepad_lib(progress_cb=None) -> tuple[bool, str]:
                 f"{proc.stderr[-200:]}"
             )
             if progress_cb:
-                progress_cb("wheel 不可用,回退源码安装…", 40)
+                progress_cb(t("gp_install_msg.pip_sdist"), 40)
             proc = subprocess.run(
                 [sys.executable, '-m', 'pip', 'install', '--upgrade', 'vgamepad'],
                 capture_output=True, text=True, timeout=180,
             )
             used_sdist = True
             if proc.returncode != 0:
-                return False, f"pip 退出码 {proc.returncode}: {proc.stderr[-200:]}"
+                return False, t("gp_install_msg.pip_exit", code=proc.returncode, detail=proc.stderr[-200:])
 
         if progress_cb:
-            progress_cb("验证虚拟手柄创建…", 90)
+            progress_cb(t("gp_install_msg.verify_pad"), 90)
         ok, err = _vgamepad_smoke_test()
         if ok:
             return True, ""
         # 装完了但 smoke 失败 — 提示需重启
-        hint = " (走了 sdist,setup.py 可能触发了驱动安装,需重启电脑加载驱动)" if used_sdist else ""
+        hint = t("gp_install_msg.sdist_reboot") if used_sdist else ""
         return False, f"NEEDS_REBOOT::{err}{hint}"
     except subprocess.TimeoutExpired:
-        return False, "pip 安装超时"
+        return False, t("gp_install_msg.pip_timeout")
     except Exception as e:
-        return False, f"pip 安装异常: {e}"
+        return False, t("gp_install_msg.pip_error", error=e)
 
 
 # ─── 安装 ────────────────────────────────────────────────────────────────
@@ -396,10 +398,10 @@ def install_offline(progress_cb=None) -> tuple[bool, str]:
     成功 = 返回码 0 或 3010,且 smoke test 通过 (或 NEEDS_REBOOT)。
     """
     if not has_bundled_installer():
-        return False, "内置安装包不存在"
+        return False, t("gp_install_msg.no_bundled")
     path = _bundled_installer_path()
     if progress_cb:
-        progress_cb("UAC 弹窗请点「是」,然后在安装向导里按提示完成…", 10)
+        progress_cb(t("gp_install_msg.uac_prompt"), 10)
     log.info(f"开始离线安装 (交互模式): {path}")
 
     # 直接走交互模式 — ViGEm v1.22 的 bootstrapper 实测拒绝 -passive/-quiet
@@ -409,10 +411,10 @@ def install_offline(progress_cb=None) -> tuple[bool, str]:
     if rc not in (0, 3010):
         if "取消" in ex_err or "CANCELLED" in ex_err.upper():
             return False, ex_err
-        return False, f"安装器退出码 {rc}; {ex_err}"
+        return False, t("gp_install_msg.installer_exit", code=rc, detail=ex_err)
 
     if progress_cb:
-        progress_cb("验证驱动…", 90)
+        progress_cb(t("gp_install_msg.verify_driver"), 90)
     try:
         subprocess.run(['sc', 'start', 'ViGEmBus'],
                        capture_output=True, timeout=10)
@@ -427,7 +429,7 @@ def install_offline(progress_cb=None) -> tuple[bool, str]:
 def install_online(progress_cb=None) -> tuple[bool, str]:
     """winget 在线安装作为离线 fallback。winget 装机器范围的包也需要管理员。"""
     if progress_cb:
-        progress_cb("通过 winget 下载,UAC 弹出时点「是」…", 10)
+        progress_cb(t("gp_install_msg.winget_prompt"), 10)
     try:
         # 用普通 subprocess 调 winget — 包内部的 msiexec 才需要 UAC,
         # 但 winget 自带提权处理,失败时 stdout 会有清晰提示
@@ -439,9 +441,9 @@ def install_online(progress_cb=None) -> tuple[bool, str]:
         log.info(f"winget install returncode={proc.returncode}")
         if proc.returncode != 0:
             tail = (proc.stdout + proc.stderr)[-300:]
-            return False, f"winget 退出码 {proc.returncode}: {tail}"
+            return False, t("gp_install_msg.winget_exit", code=proc.returncode, detail=tail)
         if progress_cb:
-            progress_cb("等待服务启动…", 80)
+            progress_cb(t("gp_install_msg.wait_service"), 80)
         try:
             subprocess.run(['sc', 'start', 'ViGEmBus'],
                            capture_output=True, timeout=10)
@@ -452,11 +454,11 @@ def install_online(progress_cb=None) -> tuple[bool, str]:
             return True, ""
         return False, f"NEEDS_REBOOT::{err}"
     except FileNotFoundError:
-        return False, "winget 不可用 (老版本 Windows)"
+        return False, t("gp_install_msg.winget_missing")
     except subprocess.TimeoutExpired:
-        return False, "在线安装超时"
+        return False, t("gp_install_msg.online_timeout")
     except Exception as e:
-        return False, f"在线安装异常: {e}"
+        return False, t("gp_install_msg.online_error", error=e)
 
 
 def open_manual_install_page() -> None:

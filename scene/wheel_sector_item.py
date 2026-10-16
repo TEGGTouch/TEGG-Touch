@@ -226,9 +226,14 @@ class WheelSectorItem(QGraphicsObject):
             self._text_font_cache = QFont(font_name, 10, QFont.Weight.Bold)
         painter.setFont(self._text_font_cache)
         painter.setPen(QColor(button_theme.keyboard()['text']))
-        text_rect = QRectF(tx - 24, ty - 12, 48, 24)
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter,
-                         self.data.name[:4])
+        # 中文名沿用前 4 字; 英文名按宽度省略, 避免把单词截成半截
+        name = self.data.name
+        if name.isascii():
+            name = painter.fontMetrics().elidedText(name, Qt.TextElideMode.ElideRight, 64)
+        else:
+            name = name[:4]
+        text_rect = QRectF(tx - 32, ty - 12, 64, 24)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, name)
 
     # ── 充能进度属性 ──
 

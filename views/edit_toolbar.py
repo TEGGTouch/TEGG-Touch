@@ -245,7 +245,13 @@ class _ComponentToggle(_IconTextBtn):
             self._icon_lbl.deleteLater()
             self._icon_lbl = None
         self._indicator = _CheckIndicator(self)
-        self.layout().insertWidget(0, self._indicator)
+        # 与图标标签一样参与分配余宽, 文字位置与其他组件按钮一致
+        slot = QWidget(self)
+        slot.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        slot_lay = QHBoxLayout(slot)
+        slot_lay.setContentsMargins(0, 0, 0, 0)
+        slot_lay.addWidget(self._indicator, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.layout().insertWidget(0, slot)
         self.setCheckable(True)
 
     def set_colors(self, background, hover):
@@ -397,7 +403,7 @@ class EditToolbar(QWidget):
 
         remap = _IconTextBtn("\uE8AB", "⇄", t("toolbar.key_remap"), C_GRAY, C_GRAY_H)
         self._component_width = max(108, remap.sizeHint().width() + 8)
-        self._switch_btn.setFixedWidth(self._component_width)
+        self._switch_btn.setFixedWidth(max(self._component_width, self._switch_btn.sizeHint().width()))
         remap.setFixedWidth(self._component_width)
         self._remap_btn = remap
 

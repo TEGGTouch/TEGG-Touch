@@ -19,7 +19,7 @@ from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPolygon, QIcon, QPixma
 from PyQt6.QtSvg import QSvgRenderer
 
 from core.i18n import t, get_font
-from views.ui_components import SMALL_RADIUS, RECESSED_BG, PANEL_BG, AMBER_BG, AMBER_TEXT, segmented_row
+from views.ui_components import SMALL_RADIUS, RECESSED_BG, PANEL_BG, AMBER_BG, AMBER_TEXT, segmented_row, ui_text
 from core.constants import (
     APP_DIR,
     C_PM_BG, C_GRAY, C_GRAY_H, C_CYBER, C_CYBER_H, C_CLOSE, C_CLOSE_H,
@@ -160,7 +160,7 @@ class _TriggerSection(QWidget):
         self._mode_btns: dict = {}
         self._disabled_reasons: dict = {}
         mode_info = [
-            ('marker', '浮标点击'),                        # 默认模式, 放最左
+            ('marker', ui_text('浮标点击', 'Marker Click')),  # 默认模式, 放最左
             ('scroll', t("gp_wheel_editor.mode_scroll")),
             ('vertical', t("gp_wheel_editor.mode_vertical")),
             ('buttons', t("gp_wheel_editor.mode_buttons")),
@@ -196,7 +196,7 @@ class _TriggerSection(QWidget):
         # ── 逆向 checkbox (作用于当前 mode, 说明文本跟 mode 联动) ──
         from PyQt6.QtWidgets import QCheckBox
         lay.addSpacing(6)
-        self._reverse_cb = QCheckBox("逆向")
+        self._reverse_cb = QCheckBox(ui_text("逆向", "Reverse"))
         self._reverse_cb.setFont(_font(fn, 14, bold=True))
         self._reverse_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 8px; }}
@@ -234,10 +234,11 @@ class _TriggerSection(QWidget):
         v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
         v.addWidget(_make_label(
             fn,
-            "上下移动鼠标改变扳机值; 位移单位是方向盘高度的百分比 (跟着方向盘缩放, 不会被像素绑死)。",
+            ui_text("上下移动鼠标改变扳机值; 位移单位是方向盘高度的百分比 (跟着方向盘缩放, 不会被像素绑死)。",
+                    "Move the mouse up/down to change the trigger value; travel is a percentage of the wheel height (scales with the wheel, not tied to pixels)."),
             _C_HINT, 12))
         head, slider, value_lbl = _make_value_slider(
-            fn, "0→100% 所需位移",
+            fn, ui_text("0→100% 所需位移", "Travel for 0→100%"),
             init=int(round(getattr(self._data, f'{self._prefix}_vertical_pct') * 100)),
             min_v=10, max_v=80, default_v=50, suffix='%',
         )
@@ -270,14 +271,16 @@ class _TriggerSection(QWidget):
     def _build_marker_params(self, fn):
         page = QWidget(); v = QVBoxLayout(page)
         v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
-        marker_color = "玫瑰红" if self._prefix == 'lt' else "琥珀黄"
+        marker_color = (ui_text("玫瑰红", "rose") if self._prefix == 'lt'
+                        else ui_text("琥珀黄", "amber"))
         v.addWidget(_make_label(
             fn,
-            f"鼠标上下移动 {marker_color} 浮标 (不直接改扳机值), 按下下方所选鼠标键 → 扳机值锁定到浮标当前位置。位移单位是方向盘高度的百分比。",
+            ui_text(f"鼠标上下移动 {marker_color} 浮标 (不直接改扳机值), 按下下方所选鼠标键 → 扳机值锁定到浮标当前位置。位移单位是方向盘高度的百分比。",
+                    f"Mouse up/down moves the {marker_color} marker (trigger unchanged); press the mouse button below → trigger locks to the marker. Travel is a % of wheel height."),
             _C_HINT, 12))
         # 同 vertical 的 pct slider
         head, slider, _ = _make_value_slider(
-            fn, "0→100% 所需位移",
+            fn, ui_text("0→100% 所需位移", "Travel for 0→100%"),
             init=int(round(getattr(self._data, f'{self._prefix}_marker_pct', 0.5) * 100)),
             min_v=10, max_v=80, default_v=50, suffix='%',
         )
@@ -285,11 +288,11 @@ class _TriggerSection(QWidget):
         v.addLayout(head); v.addWidget(slider)
         # click 键 radio (L / R) — 选中态用 marker 色 (LT 玫红 / RT 琥珀黄)
         v.addSpacing(4)
-        v.addWidget(_make_field_label(fn, "锁定按键"))
+        v.addWidget(_make_field_label(fn, ui_text("锁定按键", "Lock Button")))
         btn_row = QHBoxLayout()
         self._marker_btn_group = QButtonGroup(self)
-        self._rb_marker_l = self._make_marker_radio(fn, "左键")
-        self._rb_marker_r = self._make_marker_radio(fn, "右键")
+        self._rb_marker_l = self._make_marker_radio(fn, ui_text("左键", "L-Click"))
+        self._rb_marker_r = self._make_marker_radio(fn, ui_text("右键", "R-Click"))
         self._marker_btn_group.addButton(self._rb_marker_l)
         self._marker_btn_group.addButton(self._rb_marker_r)
         cur_btn = getattr(self._data, f'{self._prefix}_marker_button', 'L')
@@ -360,13 +363,17 @@ class _TriggerSection(QWidget):
 
     def _reverse_hint_text(self, mode: str) -> str:
         if mode == 'scroll':
-            return "勾选后: 向上滚动 → 扳机值减少, 向下滚动 → 扳机值增加"
+            return ui_text("勾选后: 向上滚动 → 扳机值减少, 向下滚动 → 扳机值增加",
+                           "When checked: scroll up → trigger decreases, scroll down → trigger increases")
         if mode == 'vertical':
-            return "勾选后: 鼠标向上移 → 扳机值减少, 向下移 → 扳机值增加"
+            return ui_text("勾选后: 鼠标向上移 → 扳机值减少, 向下移 → 扳机值增加",
+                           "When checked: mouse up → trigger decreases, mouse down → trigger increases")
         if mode == 'buttons':
-            return "勾选后: 左键 → 扳机值减少, 右键 → 扳机值增加"
+            return ui_text("勾选后: 左键 → 扳机值减少, 右键 → 扳机值增加",
+                           "When checked: L-Click → trigger decreases, R-Click → trigger increases")
         if mode == 'marker':
-            return "勾选后: 鼠标向上移 → 浮标向下走, 向下移 → 浮标向上走"
+            return ui_text("勾选后: 鼠标向上移 → 浮标向下走, 向下移 → 浮标向上走",
+                           "When checked: mouse up → marker moves down, mouse down → marker moves up")
         return ""
 
     def current_mode(self) -> str:
@@ -568,7 +575,7 @@ class GpWheelEditorDialog(QDialog):
 
         self._init_ui()
         from views.ui_components import finish_dialog
-        finish_dialog(self, (1280, 820), actions=[t("gp_wheel_editor.delete"), "恢复默认", self._mouse_cfg_btn, self._save_btn], columns=True, guidance=('先选择轻松操控或复杂设置，再调整当前模式参数', 'Choose Easy or Advanced, then adjust the current mode.'))
+        finish_dialog(self, (1280, 820), actions=[t("gp_wheel_editor.delete"), self._reset_text, self._mouse_cfg_btn, self._save_btn], columns=True, guidance=('先选择轻松操控或复杂设置，再调整当前模式参数', 'Choose Easy or Advanced, then adjust the current mode.'))
         self._validate_mutual_exclusion()
         self._center_on_screen()
         self._drag_pos = None
@@ -661,7 +668,7 @@ class GpWheelEditorDialog(QDialog):
             init=int(self.data.release_threshold_ratio * 100),
             min_v=110, max_v=500, default_v=_DEFAULT_RELEASE_PCT, suffix='%',
         )
-        self._show_zone_cb = QCheckBox("显示鼠标有效区域")
+        self._show_zone_cb = QCheckBox(ui_text("显示鼠标有效区域", "Show Active Zone"))
         self._show_zone_cb.setFont(_font(fn, 12))
         self._show_zone_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 6px; }}
@@ -697,11 +704,11 @@ class GpWheelEditorDialog(QDialog):
         dz_col = QVBoxLayout()
         dz_col.setSpacing(0)
         head_dz, self._dead_zone_slider, _ = _make_value_slider(
-            fn, "中心死区",
+            fn, ui_text("中心死区", "Center Dead Zone"),
             init=int(round(getattr(self.data, 'dead_zone', 0.10) * 100)),
             min_v=0, max_v=30, default_v=10, suffix='%',
         )
-        self._show_dz_cb = QCheckBox("显示死区")
+        self._show_dz_cb = QCheckBox(ui_text("显示死区", "Show Dead Zone"))
         self._show_dz_cb.setFont(_font(fn, 12))
         self._show_dz_cb.setStyleSheet(f"""
             QCheckBox {{ color: {_C_TEXT}; background: transparent; spacing: 6px; }}
@@ -724,7 +731,8 @@ class GpWheelEditorDialog(QDialog):
         dz_col.addWidget(self._dead_zone_slider)
         dz_col.addSpacing(6)
         dz_hint = _make_label(
-            fn, "鼠标在方向盘中心 ±死区% 范围内, 不输出转向 — 减少小幅抖动误触发",
+            fn, ui_text("鼠标在方向盘中心 ±死区% 范围内, 不输出转向 — 减少小幅抖动误触发",
+                        "No steering output within ±dead zone% of the wheel center — reduces jitter misfires"),
             _C_HINT, 12)
         dz_col.addWidget(dz_hint)
         dz_col.addStretch()
@@ -738,7 +746,7 @@ class GpWheelEditorDialog(QDialog):
                       key=lambda i: abs(_ROT_STOPS[i] - cur_rot_deg))
 
         head_rot = QHBoxLayout()
-        head_rot.addWidget(_make_field_label(fn, "视觉旋转角度 (单边)"))
+        head_rot.addWidget(_make_field_label(fn, ui_text("视觉旋转角度 (单边)", "Visual Rotation (One Side)")))
         head_rot.addStretch()
         self._rot_value_lbl = QLabel()
         self._rot_value_lbl.setFont(_font(fn, 14, bold=True))
@@ -783,7 +791,8 @@ class GpWheelEditorDialog(QDialog):
         rot_col.addWidget(self._rot_slider)
         rot_col.addSpacing(6)
         rot_hint = _make_label(
-            fn, "真车 90~180° 紧凑赛车手感; 360~540° 接近真车; 720° 模拟器整圈感",
+            fn, ui_text("真车 90~180° 紧凑赛车手感; 360~540° 接近真车; 720° 模拟器整圈感",
+                        "90~180°: tight racing feel; 360~540°: close to a real car; 720°: full-turn simulator feel"),
             _C_HINT, 12)
         rot_col.addWidget(rot_hint)
         rot_col.addStretch()
@@ -871,7 +880,8 @@ class GpWheelEditorDialog(QDialog):
         del_btn.clicked.connect(self._on_delete)
         btn_row.addWidget(del_btn, 1)
 
-        reset_btn = QPushButton("恢复默认")
+        self._reset_text = ui_text("恢复默认", "Reset Default")   # finish_dialog 按此文本定位
+        reset_btn = QPushButton(self._reset_text)
         reset_btn.setFixedHeight(40); reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         reset_btn.setFont(_font(fn, 16))
         reset_btn.setStyleSheet(f"""
@@ -882,7 +892,7 @@ class GpWheelEditorDialog(QDialog):
         btn_row.addWidget(reset_btn, 1)
 
         # 其他鼠标按键配置 (琥珀色, 在「保存」左边)
-        self._mouse_cfg_btn = QPushButton("其他鼠标按键配置")
+        self._mouse_cfg_btn = QPushButton(ui_text("其他鼠标按键配置", "Other Mouse Buttons"))
         self._mouse_cfg_btn.setFixedHeight(40)
         self._mouse_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._mouse_cfg_btn.setFont(_font(fn, 15, bold=True))
@@ -931,7 +941,7 @@ class GpWheelEditorDialog(QDialog):
             'scroll':   t("gp_wheel_editor.mode_scroll"),
             'vertical': t("gp_wheel_editor.mode_vertical"),
             'buttons':  t("gp_wheel_editor.mode_buttons"),
-            'marker':   '浮标点击',
+            'marker':   ui_text('浮标点击', 'Marker Click'),
         }
         rt_label = name_map.get(rt_mode, rt_mode)
         lt_label = name_map.get(lt_mode, lt_mode)
@@ -954,10 +964,12 @@ class GpWheelEditorDialog(QDialog):
             rt_disabled.add('marker')
 
         self._lt_section.set_disabled_modes(
-            lt_disabled, f"右扳机已使用「{rt_label}」, 跟当前模式互斥",
+            lt_disabled, ui_text(f"右扳机已使用「{rt_label}」, 跟当前模式互斥",
+                                 f"Right trigger already uses '{rt_label}', which conflicts with this mode"),
             other_selected=rt_mode)
         self._rt_section.set_disabled_modes(
-            rt_disabled, f"左扳机已使用「{lt_label}」, 跟当前模式互斥",
+            rt_disabled, ui_text(f"左扳机已使用「{lt_label}」, 跟当前模式互斥",
+                                 f"Left trigger already uses '{lt_label}', which conflicts with this mode"),
             other_selected=lt_mode)
 
         # marker + marker 启动时双方相同按键 → 把 RT 翻反 (启动加载老数据兜底; UI 联动走信号路径)
@@ -1159,7 +1171,7 @@ class GpWheelEditorDialog(QDialog):
         v.setSpacing(0)
 
         # 说明
-        tip_html = (
+        tip_html = ui_text(
             '<div style="line-height:180%">'
             '<b>鼠标即方向盘</b> &nbsp; '
             '<span style="color:#888">整个屏幕都是触发区域</span><br>'
@@ -1172,6 +1184,19 @@ class GpWheelEditorDialog(QDialog):
             '&bull; 鼠标 <b>指定键按下</b> &rarr; '
             f'<span style="color:{_MARKER_COLOR_LT}">S 刹车</span> '
             '(键盘, 默认左键, 可在下方改右/中/侧 1/侧 2)'
+            '</div>',
+            '<div style="line-height:180%">'
+            '<b>Mouse = steering wheel</b> &nbsp; '
+            '<span style="color:#888">The whole screen is the trigger area</span><br>'
+            '&bull; Mouse <b>moves sideways</b> &rarr; '
+            f'<span style="color:{_C_ACCENT_H}">A / D</span> steer; '
+            'stop &rarr; the wheel re-centers automatically<br>'
+            '&bull; Mouse <b>moves up</b> &rarr; '
+            f'<span style="color:{_MARKER_COLOR_RT}">RT throttle</span> builds up; '
+            '<b>down</b> &rarr; RT decreases<br>'
+            '&bull; <b>Chosen mouse button pressed</b> &rarr; '
+            f'<span style="color:{_MARKER_COLOR_LT}">S brake</span> '
+            '(keyboard; L-Click by default, change to R / M / Side 1 / Side 2 below)'
             '</div>'
         )
         tip = QLabel(tip_html)
@@ -1184,7 +1209,7 @@ class GpWheelEditorDialog(QDialog):
 
         # 转向触发阈值 (增量死区, px) — 平滑后鼠标移动量超过此值才触发 A/D
         head_th, self._easy_th_slider, _ = _make_value_slider(
-            fn, "转向触发阈值",
+            fn, ui_text("转向触发阈值", "Steering Threshold"),
             init=int(round(getattr(self.data, 'easy_steer_threshold', 1.0))),
             min_v=1, max_v=5, default_v=1, suffix='px',
         )
@@ -1192,8 +1217,10 @@ class GpWheelEditorDialog(QDialog):
         v.addWidget(self._easy_th_slider)
         v.addSpacing(6)
         v.addWidget(_make_label(
-            fn, "鼠标移动量超过此像素才触发 A/D — 相当于「增量死区」: "
-            "越大越抗抖、越迟钝, 越小越灵敏、越易被手抖触发",
+            fn, ui_text("鼠标移动量超过此像素才触发 A/D — 相当于「增量死区」: "
+                        "越大越抗抖、越迟钝, 越小越灵敏、越易被手抖触发",
+                        "A/D fires only when mouse movement exceeds this many pixels — an 'incremental dead zone': "
+                        "higher = steadier but slower, lower = more responsive but jitter-prone"),
             _C_HINT, 12))
         v.addSpacing(20)
 
@@ -1201,19 +1228,20 @@ class GpWheelEditorDialog(QDialog):
         cur_sens = int(round(self.data.easy_throttle_sensitivity * 1000))
         cur_sens = max(1, min(20, cur_sens))
         head_sens, self._easy_sens_slider, _ = _make_value_slider(
-            fn, "RT 油门灵敏度",
+            fn, ui_text("RT 油门灵敏度", "RT Throttle Sensitivity"),
             init=cur_sens, min_v=1, max_v=20, default_v=5, suffix='\u2030/px',
         )
         v.addLayout(head_sens)
         v.addWidget(self._easy_sens_slider)
         v.addSpacing(6)
         v.addWidget(_make_label(
-            fn, "鼠标向上 1px → RT 累加 N\u2030 (千分之); 数值越大油门越敏感",
+            fn, ui_text("鼠标向上 1px → RT 累加 N\u2030 (千分之); 数值越大油门越敏感",
+                        "Mouse up 1px → RT adds N‰ (per mille); higher = more sensitive throttle"),
             _C_HINT, 12))
         v.addSpacing(20)
 
         # 刹车键选择 (5 个鼠标键按钮组)
-        v.addWidget(_make_field_label(fn, "刹车 (S 键) 由哪个鼠标键触发"))
+        v.addWidget(_make_field_label(fn, ui_text("刹车 (S 键) 由哪个鼠标键触发", "Brake (S Key) Mouse Button")))
         v.addSpacing(8)
         brake_row = QHBoxLayout()
         brake_row.setSpacing(8)
@@ -1222,8 +1250,9 @@ class GpWheelEditorDialog(QDialog):
         if cur_brake not in ('L', 'R', 'M', 'X1', 'X2'):
             cur_brake = 'L'
         self._easy_brake_choice = cur_brake
-        for key, label in [('L', '左键'), ('R', '右键'), ('M', '中键'),
-                            ('X1', '侧键 1'), ('X2', '侧键 2')]:
+        for key, label in [('L', ui_text('左键', 'L-Click')), ('R', ui_text('右键', 'R-Click')),
+                           ('M', ui_text('中键', 'M-Click')),
+                           ('X1', ui_text('侧键 1', 'Side 1')), ('X2', ui_text('侧键 2', 'Side 2'))]:
             b = QPushButton(label)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setFont(_font(fn, 13, bold=True))
@@ -1235,14 +1264,15 @@ class GpWheelEditorDialog(QDialog):
         v.addLayout(brake_row)
         v.addSpacing(6)
         v.addWidget(_make_label(
-            fn, "按下选中的鼠标键 = 持续按住 S 键 (刹车); 松开就释放",
+            fn, ui_text("按下选中的鼠标键 = 持续按住 S 键 (刹车); 松开就释放",
+                        "Pressing the selected mouse button = holding S (brake); release to let go"),
             _C_HINT, 12))
         self._refresh_easy_brake_btns()
         v.addSpacing(20)
 
         # 触发延迟 (ms)
         head_td, self._easy_trig_slider, _ = _make_value_slider(
-            fn, "触发延迟",
+            fn, ui_text("触发延迟", "Trigger Delay"),
             init=int(getattr(self.data, 'easy_trigger_delay', 0)),
             min_v=0, max_v=500, default_v=0, suffix='ms',
         )
@@ -1250,13 +1280,14 @@ class GpWheelEditorDialog(QDialog):
         v.addWidget(self._easy_trig_slider)
         v.addSpacing(6)
         v.addWidget(_make_label(
-            fn, "转向触发的缓冲: 0=立即按 A/D; 越大方向盘从中心发散填满越慢",
+            fn, ui_text("转向触发的缓冲: 0=立即按 A/D; 越大方向盘从中心发散填满越慢",
+                        "Steering buffer: 0 = press A/D immediately; higher = the wheel fills out from center more slowly"),
             _C_HINT, 12))
         v.addSpacing(20)
 
         # 释放延迟 (ms)
         head_rd, self._easy_rel_slider, _ = _make_value_slider(
-            fn, "释放延迟",
+            fn, ui_text("释放延迟", "Release Delay"),
             init=int(getattr(self.data, 'easy_release_delay', 500)),
             min_v=0, max_v=1500, default_v=500, suffix='ms',
         )
@@ -1264,7 +1295,8 @@ class GpWheelEditorDialog(QDialog):
         v.addWidget(self._easy_rel_slider)
         v.addSpacing(6)
         v.addWidget(_make_label(
-            fn, "松手后 A/D 维持多久再回中 (填充倒退); 越大左右越平滑",
+            fn, ui_text("松手后 A/D 维持多久再回中 (填充倒退); 越大左右越平滑",
+                        "How long A/D holds after you stop before re-centering (fill rewinds); higher = smoother steering"),
             _C_HINT, 12))
 
         v.addStretch()
@@ -1310,7 +1342,7 @@ class GpWheelEditorDialog(QDialog):
             inner.addWidget(label)
             inner.addStretch()
 
-            tag = QLabel("激活")
+            tag = QLabel(ui_text("激活", "On"))
             tag.setFont(_font(fn, 10, bold=True))
             tag.setFixedHeight(18)
             tag.setStyleSheet(

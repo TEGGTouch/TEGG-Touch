@@ -153,6 +153,9 @@
     "key_remap": "配置物理键盘按键的重新映射（每个方案独立）"
   },
   "hotkey": {
+    "restart_title": "需要重启",
+    "restart_msg": "语言已切换为中文，重启蛋挞后生效。点击「确定」立即重启。",
+    "svg_missing": "(SVG 缺失)",
     "title": "设置",
     "menu_hotkeys": "快捷键",
     "menu_cursor": "光标配色",
@@ -629,5 +632,76 @@
     "disabled": "已停用",
     "delete": "删除",
     "save": "保存"
+  },
+  "stick_tooltip": {
+    "wasd_mode": "WASD模式",
+    "left_stick": "左摇杆",
+    "right_stick": "右摇杆",
+    "dead_zone": "死区: {value}%",
+    "up": "上",
+    "left": "左",
+    "down": "下",
+    "right": "右",
+    "sensitivity": "灵敏度: {curve}",
+    "square": "平方",
+    "linear": "线性",
+    "eight_way": "八方向锁定",
+    "wheel_up": "滚轮↑",
+    "wheel_down": "滚轮↓",
+    "mouse_actions": "鼠标动作:",
+    "edit_hint": "双击编辑"
+  },
+  "wheel_tooltip": {
+    "mode_marker": "浮标点击",
+    "title": "方向盘",
+    "release": "释放阈值: {value}% 半宽",
+    "dead_zone": "中心死区: {value}%",
+    "rotation": "视觉旋转: ±{value}°",
+    "mode_scroll": "滚轮",
+    "mode_vertical": "垂直位移",
+    "mode_buttons": "左右键",
+    "edit_hint": "双击编辑｜可拖动｜右下角缩放"
+  },
+  "run_bubble": {
+    "tip": "左键 · 工具栏显隐\n右键 · 按键显隐 (F7)\n中键 · 停止运行\n拖动 · 移动位置",
+    "fallback": "蛋挞"
+  },
+  "gp_install_msg": {
+    "windows_only": "仅 Windows 支持",
+    "uac_cancelled": "用户取消了 UAC 提权请求",
+    "shell_failed": "ShellExecuteEx 失败, GetLastError={err}",
+    "no_handle": "ShellExecuteEx 未返回进程句柄",
+    "wait_timeout": "等待安装器超时 (wait_result={result})",
+    "lib_missing": "vgamepad 库未安装: {error}",
+    "lib_import": "vgamepad 导入异常: {error}",
+    "pad_failed": "VX360Gamepad 创建失败: {error}",
+    "pip_wheel": "正在通过 pip 安装 (优先 wheel)…",
+    "pip_sdist": "wheel 不可用,回退源码安装…",
+    "pip_exit": "pip 退出码 {code}: {detail}",
+    "verify_pad": "验证虚拟手柄创建…",
+    "sdist_reboot": " (走了 sdist,setup.py 可能触发了驱动安装,需重启电脑加载驱动)",
+    "pip_timeout": "pip 安装超时",
+    "pip_error": "pip 安装异常: {error}",
+    "no_bundled": "内置安装包不存在",
+    "uac_prompt": "UAC 弹窗请点「是」,然后在安装向导里按提示完成…",
+    "installer_exit": "安装器退出码 {code}; {detail}",
+    "verify_driver": "验证驱动…",
+    "winget_prompt": "通过 winget 下载,UAC 弹出时点「是」…",
+    "winget_exit": "winget 退出码 {code}: {detail}",
+    "wait_service": "等待服务启动…",
+    "winget_missing": "winget 不可用 (老版本 Windows)",
+    "online_timeout": "在线安装超时",
+    "online_error": "在线安装异常: {error}",
+    "unexpected": "未预期异常: {error}"
+  },
+  "update_msg": {
+    "size_mismatch": "更新包大小与清单不符",
+    "cancelled": "已取消下载",
+    "size_exceeded": "更新包大小超过清单记录",
+    "incomplete": "更新包下载不完整",
+    "sha_failed": "SHA-256 校验失败",
+    "unknown": "未知错误: {error}",
+    "source_run": "源码运行环境不能就地更新，请运行打包后的蛋挞",
+    "launch_failed": "启动升级器失败: {error}"
   }
 }

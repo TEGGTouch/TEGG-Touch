@@ -53,7 +53,7 @@ def start_update_flow(parent, release: ReleaseInfo) -> "UpdateDialog":
             try:
                 apply_update(zip_path)
             except Exception as e:
-                dlg.on_failed(f"启动升级器失败: {e}")
+                dlg.on_failed(t("update_msg.launch_failed", error=e))
 
         installer.finished_ok.connect(_on_finished_ok)
         installer.failed.connect(dlg.on_failed)

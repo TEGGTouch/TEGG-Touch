@@ -59,7 +59,7 @@ class CenterBandItem(QGraphicsObject):
 
         painter.setPen(QColor(COLOR_CENTER_BAND))
         painter.setFont(QFont(get_font(), 10, QFont.Weight.Bold))
-        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter,
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
                          t("canvas.center_band_label"))
 
     def set_mode(self, mode: str):

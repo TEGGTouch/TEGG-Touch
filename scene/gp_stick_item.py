@@ -55,7 +55,7 @@ def _gp_display(key: str) -> str:
     if key.startswith('gpmacro:'):
         return key[len('gpmacro:'):]
     return key
-from core.i18n import get_font
+from core.i18n import get_font, t
 from models.gamepad_model import GamepadStickData
 from scene.tooltip_item import build_edit_tooltip
 
@@ -397,35 +397,37 @@ class GpStickItem(QGraphicsObject):
 
     def _build_tooltip(self) -> str:
         is_wasd = getattr(self.data, 'mode', 'analog') == 'wasd'
-        sid = "WASD模式" if is_wasd else ("左摇杆" if self.data.stick_id == STICK_ID_LEFT else "右摇杆")
+        sid = t("stick_tooltip.wasd_mode") if is_wasd else t(
+            "stick_tooltip.left_stick" if self.data.stick_id == STICK_ID_LEFT else "stick_tooltip.right_stick")
         lines = [sid]
         if self.data.name:
             lines[0] = f"{sid}  {self.data.name}"
-        lines.append(f"死区: {int(self.data.dead_zone * 100)}%")
+        lines.append(t("stick_tooltip.dead_zone", value=int(self.data.dead_zone * 100)))
         if is_wasd:
-            for label, f in (("上", 'wasd_up'), ("左", 'wasd_left'),
-                             ("下", 'wasd_down'), ("右", 'wasd_right')):
+            for label, f in ((t("stick_tooltip.up"), 'wasd_up'), (t("stick_tooltip.left"), 'wasd_left'),
+                             (t("stick_tooltip.down"), 'wasd_down'), (t("stick_tooltip.right"), 'wasd_right')):
                 v = getattr(self.data, f, '')
                 if v:
                     lines.append(f"  {label}: {v}")
         else:
-            lines.append(f"灵敏度: {'平方' if self.data.sensitivity_curve == 'square' else '线性'}")
+            curve = t("stick_tooltip.square" if self.data.sensitivity_curve == 'square' else "stick_tooltip.linear")
+            lines.append(t("stick_tooltip.sensitivity", curve=curve))
             if self.data.eight_way:
-                lines.append("八方向锁定")
+                lines.append(t("stick_tooltip.eight_way"))
         # 鼠标动作映射 (只列非空)
         action_lines = []
         for f, label in (('lclick', 'LMB'), ('rclick', 'RMB'), ('mclick', 'MMB'),
                          ('xbutton1', 'X1'), ('xbutton2', 'X2'),
-                         ('wheelup', '滚轮↑'), ('wheeldown', '滚轮↓')):
+                         ('wheelup', t("stick_tooltip.wheel_up")), ('wheeldown', t("stick_tooltip.wheel_down"))):
             v = getattr(self.data, f, '')
             if v:
                 action_lines.append(f"  {label}: {v}")
         if action_lines:
             lines.append("")
-            lines.append("鼠标动作:")
+            lines.append(t("stick_tooltip.mouse_actions"))
             lines.extend(action_lines)
         lines.append("")
-        lines.append("双击编辑")
+        lines.append(t("stick_tooltip.edit_hint"))
         return "\n".join(lines)
 
     # ── Hover (编辑模式 scene tooltip) ──
