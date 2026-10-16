@@ -9,6 +9,7 @@ from core.update_manifest import OSS_BASE, open_update_url
 
 HISTORY_URL = OSS_BASE + 'releases.json'
 MAX_HISTORY_BYTES = 1024 * 1024
+MAX_NOTES_CHARS = 20000
 VERSION = r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
 
 
@@ -27,6 +28,12 @@ def validate_history(data):
         if (item.get('url') != OSS_BASE + 'TEGGTouch_v' + item['version'] + '.zip'
                 or type(item.get('size')) is not int or not 0 < item['size'] < 2**31):
             raise ValueError('Invalid historical download')
+        # Optional release notes (plain Markdown text, rendered as text by the website) and date.
+        if 'notes' in item and (not isinstance(item['notes'], str) or len(item['notes']) > MAX_NOTES_CHARS):
+            raise ValueError('Invalid historical release notes')
+        if 'released' in item and (not isinstance(item['released'], str)
+                                   or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', item['released'])):
+            raise ValueError('Invalid historical release date')
     return data
 
 
@@ -51,7 +58,7 @@ def merge_history(existing, items):
         old = entries.get(item['version'])
         if old and (old['url'] != item['url'] or old['size'] != item['size']):
             raise ValueError('Historical versions cannot be replaced')
-        entries[item['version']] = item
+        entries[item['version']] = dict(old or {}, **item)  # keep notes not supplied again
     return validate_history({'schema': 1, 'product': 'TEGGTouch', 'releases': sorted(
         entries.values(), key=lambda entry: tuple(map(int, entry['version'].split('.'))), reverse=True)})
 
@@ -79,6 +86,21 @@ def list_oss_history():
             raise ValueError('Invalid OSS listing continuation')
         seen_tokens.add(token)
     return merge_history({'schema': 1, 'product': 'TEGGTouch', 'releases': []}, entries)
+
+
+def import_notes(existing, notes):
+    """Attach notes/dates ({version: {'notes', 'released'}}) to versions already in history."""
+    validate_history(existing)
+    entries = {entry['version']: entry for entry in existing['releases']}
+    unknown = sorted(set(notes) - set(entries))
+    if unknown:
+        raise ValueError('Notes for versions not in history: ' + ', '.join(unknown))
+    items = []
+    for version, extra in notes.items():
+        item = dict(entries[version])
+        item.update({key: extra[key] for key in ('notes', 'released') if key in extra})
+        items.append(item)
+    return merge_history(existing, items)
 
 
 def verify_history_links(data):

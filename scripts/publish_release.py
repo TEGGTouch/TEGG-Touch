@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.update_manifest import (LATEST_URL, OSS_BASE, MAX_MANIFEST_BYTES,
                                   is_newer, open_update_url, parse_manifest, validate_archive)
-from scripts.release_history import fetch_history, merge_history, list_oss_history, verify_history_links, HISTORY_URL
+from scripts.release_history import (fetch_history, merge_history, list_oss_history, verify_history_links,
+                                     import_notes, HISTORY_URL)
 from scripts.check_release_config import check_release_config
 
 
@@ -139,7 +140,8 @@ def publish(zip_path, data):
     # Recheck immediately before promotion; do not publish concurrently.
     check_promotion(data, current_manifest())
     history = merge_history(fetch_history(), [
-        {'version': release.version, 'url': release.url, 'size': release.size}])
+        {'version': release.version, 'url': release.url, 'size': release.size,
+         'notes': data['notes'], 'released': data['released']}])
     publish_history(history)  # verified ZIP -> history -> latest, never advertise missing files
     with tempfile.TemporaryDirectory(prefix="teggtouch-publish-") as directory:
         manifest = Path(directory) / "latest.json"
@@ -156,7 +158,15 @@ def main():
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--publish", action="store_true", help="Upload, append history and promote stable")
     actions.add_argument("--sync-history", action="store_true", help="Index existing public OSS ZIPs; does not change latest.json")
+    actions.add_argument("--import-notes", type=Path, metavar="JSON",
+                         help="Attach {version: {notes, released}} to existing history; does not change latest.json")
     args = parser.parse_args()
+    if args.import_notes:
+        data = import_notes(fetch_history(), json.loads(args.import_notes.read_text(encoding="utf-8-sig")))
+        publish_history(data)
+        print('Published notes for {} historical releases: {}'.format(
+            sum('notes' in entry for entry in data['releases']), HISTORY_URL))
+        return
     if args.sync_history:
         data = sync_history()
         print('Published {} historical releases: {}'.format(len(data['releases']), HISTORY_URL))

@@ -71,6 +71,36 @@ class HistoryTests(unittest.TestCase):
             publisher.publish(Path('TEGGTouch_v0.5.2.zip'), manifest())
         upload.assert_not_called()
 
+    def test_notes_are_validated_and_kept_when_merging_without_notes(self):
+        noted = dict(entry('0.5.2'), notes='修复：光标\n\nFixed cursor', released='2026-10-06')
+        result = history.merge_history(index([noted]), [entry('0.5.2')])
+        self.assertEqual(result['releases'][0]['notes'], noted['notes'])
+        self.assertEqual(result['releases'][0]['released'], '2026-10-06')
+        for bad in ({'notes': 5}, {'notes': 'x' * (history.MAX_NOTES_CHARS + 1)}, {'released': '10/06/2026'}):
+            with self.assertRaises(ValueError):
+                history.validate_history(index([dict(entry('0.5.2'), **bad)]))
+
+    def test_import_notes_only_adds_text_to_existing_versions(self):
+        existing = index([entry('0.5.3'), entry('0.5.2')])
+        result = history.import_notes(existing, {'0.5.2': {'notes': 'Notes', 'released': '2026-10-06'}})
+        self.assertEqual(result['releases'][1], dict(entry('0.5.2'), notes='Notes', released='2026-10-06'))
+        self.assertNotIn('notes', result['releases'][0])
+        with self.assertRaises(ValueError):
+            history.import_notes(existing, {'0.5.9': {'notes': 'Unknown'}})
+
+    def test_publish_records_notes_and_date_in_history(self):
+        from tests.test_oss_update import manifest
+        from pathlib import Path
+        data = manifest()
+        with patch.object(publisher, 'current_manifest', side_effect=[None, None, data]), \
+             patch.object(publisher, 'verify_remote', return_value=True), \
+             patch.object(publisher, 'fetch_history', return_value=index()), \
+             patch.object(publisher, 'publish_history') as publish, \
+             patch.object(publisher, 'upload'):
+            publisher.publish(Path('TEGGTouch_v0.5.2.zip'), data)
+        recorded = publish.call_args.args[0]['releases'][0]
+        self.assertEqual((recorded['notes'], recorded['released']), (data['notes'], data['released']))
+
 
 if __name__ == '__main__':
     unittest.main()
