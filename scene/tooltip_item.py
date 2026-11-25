@@ -51,6 +51,14 @@ def build_edit_tooltip(data) -> str:
         lines.append(t('profile_switch.hover_hint'))
         return '\n'.join(lines)
 
+    if getattr(data, 'btn_type', None) == 'moba':
+        return '\n'.join([
+            f"{t('moba.tooltip_title')}: {data.name}",
+            f"{t('moba.tooltip_key')}: {data.hover}",
+            f"{t('btn_tooltip.trigger_delay')}: {data.hover_delay}ms",
+            t('moba.tooltip_hint'),
+        ])
+
     # 普通按钮和轮盘项: 显示全部字段（不论是否为空）
     lines = [f"{t('btn_tooltip.name')}: {data.name}"]
     for field, key in [

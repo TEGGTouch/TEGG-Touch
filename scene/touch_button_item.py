@@ -212,8 +212,15 @@ class TouchButtonItem(QGraphicsObject):
         is_band = self.data.btn_type == BTN_TYPE_CENTER_BAND
         is_gp = self.data.btn_type == BTN_TYPE_GP_BUTTON
         is_switch = self.data.btn_type == 'profile_switch'
+        is_moba = self.data.btn_type == 'moba'
 
-        if is_switch:
+        if is_moba and self._visual_state == 'normal':
+            # MOBA 施法按钮 normal: 独立配色组; 充能/锁定仍走 STATE_COLORS 的 hover 蓝
+            fam = button_theme.family('moba')
+            fill = QColor(fam['fill'])
+            border = QColor(fam['border'])
+            text_color = QColor(fam['text'])
+        elif is_switch:
             active = self._visual_state != 'normal'
             fam = button_theme.family('profile_switch')
             fill = QColor('#7C3AED' if active else fam['fill'])
@@ -320,6 +327,25 @@ class TouchButtonItem(QGraphicsObject):
         if is_switch:
             display_text = '⇄\n' + _format_btn_name(self.data.name)
             painter.setFont(_make_px_font(font_px))
+        elif is_moba and self._visual_state == 'normal':
+            # 靶心 ◎ (放大) + 名称, 整体居中堆叠; 两者都用该组文字色, 随基色派生
+            # ◎ 在界面字体里字形很小, 放大到 2 倍字号并按实际字形边界排版
+            icon_font = _make_px_font(font_px * 2)
+            name_font = _make_px_font(font_px)
+            text = _format_btn_name(self.data.name)
+            glyph = QFontMetrics(icon_font).tightBoundingRect('◎')
+            text_h = QFontMetrics(name_font).height() * (text.count('\n') + 1)
+            # 不加额外间距: 名称行高自带字形上方留白, 视觉间距与手柄键一致
+            gap = 0
+            y0 = rect.y() + (rect.height() - glyph.height() - gap - text_h) / 2
+            painter.setPen(text_color)
+            painter.setFont(icon_font)
+            painter.drawText(QPointF(rect.center().x() - glyph.width() / 2 - glyph.x(),
+                                     y0 - glyph.y()), '◎')
+            painter.setFont(name_font)
+            painter.drawText(QRectF(rect.x(), y0 + glyph.height() + gap, rect.width(), text_h),
+                             Qt.AlignmentFlag.AlignCenter, text)
+            return
         elif is_band:
             display_text = t("canvas.center_band_label")
             painter.setFont(_make_px_font(font_px))

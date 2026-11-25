@@ -48,6 +48,8 @@ class ResizeHandleItem(QGraphicsItem):
             color = button_theme.gamepad()['border']
         elif btn_type == BTN_TYPE_GP_WHEEL:
             color = button_theme.wheel()['border']
+        elif btn_type == 'moba':
+            color = button_theme.family('moba')['border']
         else:
             color = button_theme.keyboard()['border']
         painter.fillPath(path, QColor(color))

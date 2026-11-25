@@ -114,6 +114,12 @@ COLOR_TOOLBAR_TRANSPARENT = "#010002"  # 工具栏窗口镂空用
 BTN_TYPE_NORMAL = "normal"
 BTN_TYPE_CENTER_BAND = "center_band"
 BTN_TYPE_PROFILE_SWITCH = "profile_switch"
+# MOBA 施法按钮: 悬停点按施法键 → 锁定其他按钮 → 左键释放 / 右键取消 (游戏普通施法)
+BTN_TYPE_MOBA = "moba"
+MOBA_TIMEOUT_DEFAULT = 5000    # ms, 锁定超时自动解除
+MOBA_TIMEOUT_MIN = 1000
+MOBA_TIMEOUT_MAX = 30000
+MOBA_DIM_DEFAULT = 20          # 锁定时其他按钮亮度 (%), 0 = 完全隐藏
 BTN_TYPE_WHEEL_SECTOR = "wheel_sector"
 BTN_TYPE_WHEEL_RING = "wheel_center_ring"
 BTN_TYPE_WHEEL_INNER_RING = "wheel_inner_ring"

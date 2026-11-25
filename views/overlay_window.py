@@ -56,6 +56,7 @@ class OverlayWindow(QGraphicsView):
         self._buttons_hidden = False
         self._profile_name = ''
         self._current_opacity = DEFAULT_TRANSPARENCY
+        self._moba_lock_item = None   # MOBA 施法锁定中的按钮 (驱动变暗 + 蓝框)
         self._scene_scale = DEFAULT_SCENE_SCALE
 
         # 弹窗单例引用 — 防止重复打开
@@ -114,6 +115,7 @@ class OverlayWindow(QGraphicsView):
         self._run_controller.request_toggle_collapse.connect(self._toggle_collapse_run_toolbar)
         self._run_controller.request_toggle_cursor.connect(self._toggle_cursor_visibility)
         self._run_controller.request_profile_switch.connect(self._on_quick_profile_switch)
+        self._run_controller.moba_lock_changed.connect(self._on_moba_lock_changed)
 
         # ── 工具栏 (parent=self ensures Z-order above overlay) ──
         self._edit_toolbar = EditToolbar(parent=self)
@@ -886,6 +888,43 @@ class OverlayWindow(QGraphicsView):
         # 持久化到 config（下次 save_config 时写入文件）
         if self._scene.get_config():
             self._scene.get_config()['transparency'] = value
+
+    def _iter_interactive_items(self):
+        """按钮 + 轮盘全部可交互 item (不含虚拟光标/进度条)"""
+        scene = self._scene
+        yield from scene.button_items
+        yield from scene.wheel_items
+        yield from scene.outer_wheel_items
+        if scene.ring_item:
+            yield scene.ring_item
+        if scene.inner_ring_item:
+            yield scene.inner_ring_item
+        yield from scene.center_ring_sector_items
+        yield from scene.inner_ring_sector_items
+
+    def _on_moba_lock_changed(self, item):
+        """MOBA 施法锁定: 其他按钮按该按钮设定的亮度变暗 + 屏幕边缘蓝框; 解除时恢复。"""
+        self._moba_lock_item = item
+        if item is None:
+            self._apply_item_opacity(self._current_opacity)
+        else:
+            dim = max(0, min(100, getattr(item.data, 'moba_dim', 20))) / 100.0
+            for other in self._iter_interactive_items():
+                other.setOpacity(self._current_opacity if other is item
+                                 else self._current_opacity * dim)
+        self.viewport().update()
+
+    def drawForeground(self, painter, rect):
+        super().drawForeground(painter, rect)
+        if self._moba_lock_item is None:
+            return
+        from PyQt6.QtGui import QPen, QColor
+        painter.save()
+        painter.resetTransform()
+        painter.setPen(QPen(QColor('#0284C7'), 4))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(self.viewport().rect().adjusted(2, 2, -3, -3))
+        painter.restore()
 
     def _apply_item_opacity(self, value):
         """对按钮和轮盘设置透明度，虚拟光标和进度条保持完全不透明"""

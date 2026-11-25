@@ -25,6 +25,7 @@ from core.constants import (
     C_CLOSE, C_CLOSE_H, C_TAG_BG, C_TAG_HOVER,
     C_TAG_TEXT, C_CAT_LABEL, C_DELAY, ACTION_COLORS,
     BTN_TYPE_GP_BUTTON, GP_BUTTONS, GP_LABEL_TO_KEY, GP_KEY_PREFIX, APP_PREFIX,
+    BTN_TYPE_NORMAL, BTN_TYPE_MOBA, MOBA_TIMEOUT_MIN, MOBA_TIMEOUT_MAX,
 )
 from models.button_model import ButtonData
 
@@ -191,6 +192,10 @@ class TagInput(QWidget):
 
     def get_value(self) -> str:
         return "+".join(self.tags)
+
+    def set_value(self, value: str):
+        self.tags = [p.strip() for p in (value or '').split('+') if p.strip()]
+        self._build_tags()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -369,6 +374,10 @@ class ButtonEditorDialog(QDialog):
         # 候选键位已统一: 所有按钮类型都给 [常规按键/鼠标/手柄按钮/宏] 全套, 不再按类型隔离
         self._is_gp = (not self._is_wheel
                        and getattr(self.data, 'btn_type', '') == BTN_TYPE_GP_BUTTON)
+        # MOBA 专用: 仅键盘普通按钮可转换; 转换只在保存时生效
+        self._can_moba = (not self._is_wheel and getattr(self.data, 'btn_type', '')
+                          in (BTN_TYPE_NORMAL, BTN_TYPE_MOBA))
+        self._moba_mode = getattr(self.data, 'btn_type', '') == BTN_TYPE_MOBA
         # 统一混合宏池 (xmacros) — UI 渲染/CRUD 引用; 兼容旧 macros/gp_macros (已在加载时迁入)
         self._macros = list(xmacros) if xmacros else []
         # 应用池 (apps) — [{name, path}]
@@ -384,7 +393,14 @@ class ButtonEditorDialog(QDialog):
 
         self._init_ui()
         from views.ui_components import finish_dialog
-        finish_dialog(self, (1120, 820), actions=[t("editor.copy"), t("editor.delete"), t("editor.save")], columns=True, guidance=('① 点击左侧字段 → ② 在右侧添加动作（Backspace 删除）→ ③ 保存', '1 Select a field → 2 Add actions on the right (Backspace removes) → 3 Save'))
+        finish_dialog(self, (1120, 820), actions=[self._moba_btn, t("editor.copy"), t("editor.delete"), t("editor.save")], columns=True, guidance=('① 点击左侧字段 → ② 在右侧添加动作（Backspace 删除）→ ③ 保存', '1 Select a field → 2 Add actions on the right (Backspace removes) → 3 Save'))
+        # 转换按钮两种文字宽度不同, 取较宽者避免切换后被截断
+        fm = self._moba_btn.fontMetrics()
+        self._moba_btn.setMinimumWidth(max([96] + [fm.horizontalAdvance(t(k)) + 32
+                                                   for k in ('moba.convert', 'moba.revert')]))
+        guidance = getattr(self, '_ui_guidance', None)
+        self._regular_guidance = guidance.text() if guidance is not None else ''
+        self._apply_moba_mode(self._moba_mode)
         self._center_on_screen()
         self._drag_pos = None
 
@@ -482,17 +498,27 @@ class ButtonEditorDialog(QDialog):
         sc_lay.addWidget(sep1)
         sc_lay.addSpacing(16)
 
-        sc_lay.addWidget(section_heading("02  悬停行为", "02  Hover behavior"))
+        # 常规设置 (悬停 + 鼠标) 与 MOBA 设置两套内容, 由底部转换按钮切换显示
+        self._regular_box = QWidget()
+        reg_lay = QVBoxLayout(self._regular_box)
+        reg_lay.setContentsMargins(0, 0, 0, 0)
+        reg_lay.setSpacing(0)
+        sc_lay.addWidget(self._regular_box)
+        self._moba_box = self._build_moba_block(fn)
+        sc_lay.addWidget(self._moba_box)
+        self._moba_box.hide()
+
+        reg_lay.addWidget(section_heading("02  悬停行为", "02  Hover behavior"))
         # 悬停区块 (切换器 + 说明 + 字段 Stack)
-        sc_lay.addLayout(self._build_hover_block(fn))
+        reg_lay.addLayout(self._build_hover_block(fn))
 
         # 分割线: 悬停 / 鼠标键位
-        sc_lay.addSpacing(20)
+        reg_lay.addSpacing(20)
         sep2 = QFrame(); sep2.setFixedHeight(1); sep2.setStyleSheet("background: #444;")
-        sc_lay.addWidget(sep2)
-        sc_lay.addSpacing(20)
+        reg_lay.addWidget(sep2)
+        reg_lay.addSpacing(20)
 
-        sc_lay.addWidget(section_heading("03  鼠标按键", "03  Mouse buttons"))
+        reg_lay.addWidget(section_heading("03  鼠标按键", "03  Mouse buttons"))
         # 鼠标键位
         mouse_fields = [
             ('lclick', t("editor.lclick")),
@@ -505,12 +531,12 @@ class ButtonEditorDialog(QDialog):
         ]
         for i, (field, label) in enumerate(mouse_fields):
             if field == "wheelup":
-                sc_lay.addSpacing(16)
-                sc_lay.addWidget(section_heading("04  鼠标滚轮", "04  Mouse wheel"))
-            sc_lay.addLayout(self._build_field_row(
+                reg_lay.addSpacing(16)
+                reg_lay.addWidget(section_heading("04  鼠标滚轮", "04  Mouse wheel"))
+            reg_lay.addLayout(self._build_field_row(
                 fn, field, label, getattr(self.data, field, ''), is_tag=True))
             if i < len(mouse_fields) - 1:
-                sc_lay.addSpacing(8)
+                reg_lay.addSpacing(8)
 
         sc_lay.addStretch()
 
@@ -565,6 +591,80 @@ class ButtonEditorDialog(QDialog):
         root.addLayout(columns, 1)
 
     # ── 悬停区块 (切换器 + 说明 + 字段 Stack) ─────────────────
+
+    # ── MOBA 专用区块 ─────────────────────────────────────────
+
+    def _build_moba_block(self, fn):
+        from views.ui_components import section_heading
+        box = QWidget()
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(section_heading("02  MOBA 施法", "02  MOBA cast"))
+        lay.addLayout(self._build_field_row(
+            fn, 'moba_key', t("editor.moba_key"), self.data.hover, is_tag=True))
+        lay.addSpacing(14)
+        lay.addLayout(self._build_delay_slider(
+            fn, t("moba.hover_delay"), self.data.hover_delay, 'moba_hover_delay'))
+        lay.addSpacing(14)
+        timeout_s = round(getattr(self.data, 'moba_timeout', 5000) / 1000)
+        lay.addLayout(self._build_delay_slider(
+            fn, t("moba.timeout"), timeout_s, 'moba_timeout', step=1,
+            min_val=MOBA_TIMEOUT_MIN // 1000, max_val=MOBA_TIMEOUT_MAX // 1000, unit='s'))
+        lay.addSpacing(14)
+        lay.addLayout(self._build_delay_slider(
+            fn, t("moba.dim"), getattr(self.data, 'moba_dim', 20), 'moba_dim',
+            step=5, max_val=100, unit='%', hint=t("moba.dim_hint")))
+        lay.addSpacing(16)
+
+        guide = QFrame()
+        guide.setObjectName('moba_guide')
+        guide.setStyleSheet(f"QFrame#moba_guide {{ background: {RECESSED_BG};"
+                            f" border: 1px solid #444; border-radius: 6px; }}")
+        gl = QVBoxLayout(guide)
+        gl.setContentsMargins(14, 12, 14, 12)
+        gl.setSpacing(6)
+        title = QLabel(t("moba.guide_title"))
+        title.setFont(_make_font(fn, 14, bold=True))
+        title.setStyleSheet("color: #5EEAD4; background: transparent; border: none;")
+        gl.addWidget(title)
+        for key in ('moba.guide_1', 'moba.guide_2', 'moba.guide_3'):
+            line = QLabel(t(key))
+            line.setWordWrap(True)
+            line.setFont(_make_font(fn, 14))
+            line.setStyleSheet("color: #DDD; background: transparent; border: none;")
+            gl.addWidget(line)
+        note = QLabel(t("moba.guide_note"))
+        note.setWordWrap(True)
+        note.setFont(_make_font(fn, 12))
+        note.setStyleSheet("color: #999; background: transparent; border: none;")
+        gl.addWidget(note)
+        lay.addWidget(guide)
+        return box
+
+    def _toggle_moba_mode(self):
+        """转换按钮: 两套内容间同步施法键/悬停延迟, 保存时才真正改类型。"""
+        to_moba = not self._moba_mode
+        src, dst = ('hover', 'moba_key') if to_moba else ('moba_key', 'hover')
+        self._fields[dst].set_value(self._fields[src].get_value())
+        if to_moba:
+            self._moba_hover_delay_entry.setText(self._hover_delay_entry.text())
+            self._moba_hover_delay_entry.editingFinished.emit()
+        else:
+            self._hover_delay_entry.setText(self._moba_hover_delay_entry.text())
+            self._hover_delay_entry.editingFinished.emit()
+            self._set_hover_mode('trigger')
+        self._apply_moba_mode(to_moba)
+
+    def _apply_moba_mode(self, moba: bool):
+        self._moba_mode = moba
+        self._moba_btn.setVisible(self._can_moba)
+        self._moba_btn.setText(t("moba.revert") if moba else t("moba.convert"))
+        self._regular_box.setVisible(not moba)
+        self._moba_box.setVisible(moba)
+        guidance = getattr(self, '_ui_guidance', None)
+        if guidance is not None:
+            guidance.setText(t("moba.guidance") if moba else self._regular_guidance)
 
     def _build_hover_block(self, fn):
         block = QVBoxLayout()
@@ -673,7 +773,7 @@ class ButtonEditorDialog(QDialog):
 
     # 标签列按最宽的字段名放宽 (英文更长), 各行输入框保持对齐
     _FIELD_LABEL_KEYS = ('name', 'hover', 'hover_toggle_label', 'lclick', 'rclick', 'mclick',
-                         'xbutton1', 'xbutton2', 'wheelup', 'wheeldown')
+                         'xbutton1', 'xbutton2', 'wheelup', 'wheeldown', 'moba_key')
 
     def _build_field_row(self, fn, field_name, label_text, value, is_tag=True, show_dot=True):
         """构建一行: 色点 + 标签 + 输入框"""
@@ -713,7 +813,7 @@ class ButtonEditorDialog(QDialog):
         return row
 
     def _build_delay_slider(self, fn, label_text, value, key,
-                            step=10, max_val=1000, hint=None):
+                            step=10, max_val=1000, hint=None, unit="ms", min_val=0):
         """构建延迟滑块: 色点 + 标签 + Entry + ms + Slider (+ 可选 hint 说明)"""
         col = QVBoxLayout()
         col.setSpacing(4)
@@ -748,8 +848,10 @@ class ButtonEditorDialog(QDialog):
 
         r1.addSpacing(10)
 
-        ms_lbl = QLabel("ms")
+        ms_lbl = QLabel(unit)
         ms_lbl.setFont(_make_font(fn, 14))
+        if unit != "ms":   # s / % 占 ms 的宽度, 让各行输入框对齐
+            ms_lbl.setFixedWidth(ms_lbl.fontMetrics().horizontalAdvance("ms"))
         ms_lbl.setStyleSheet("color: #888; background: transparent;")
         r1.addWidget(ms_lbl)
 
@@ -757,8 +859,8 @@ class ButtonEditorDialog(QDialog):
 
         # Row 2: slider
         slider = QSlider(Qt.Orientation.Horizontal)
-        slider.setRange(0, max_val)
-        slider.setValue(min(max_val, value))
+        slider.setRange(min_val, max_val)
+        slider.setValue(max(min_val, min(max_val, value)))
         slider.setSingleStep(step)
         slider.setPageStep(step)
         slider.setStyleSheet(f"""
@@ -787,7 +889,7 @@ class ButtonEditorDialog(QDialog):
 
         def _entry_to_slider():
             try:
-                v = max(0, int(entry.text()))
+                v = max(min_val, int(entry.text()))
                 slider.setValue(min(max_val, v))
             except ValueError:
                 pass
@@ -826,6 +928,9 @@ class ButtonEditorDialog(QDialog):
         elif key == 'hover_toggle_repeat_interval':
             self._hover_toggle_repeat_slider = slider
             self._hover_toggle_repeat_entry = entry
+        elif key in ('moba_hover_delay', 'moba_timeout', 'moba_dim'):
+            setattr(self, f'_{key}_slider', slider)
+            setattr(self, f'_{key}_entry', entry)
 
         return col
 
@@ -937,6 +1042,21 @@ class ButtonEditorDialog(QDialog):
         col = QVBoxLayout()
         col.setSpacing(8)
 
+        # 转为 MOBA 专用 / 转为常规按钮 (finish_dialog 移到底栏最左)
+        self._moba_btn = QPushButton(t("moba.convert"))
+        self._moba_btn.setFixedHeight(40)
+        self._moba_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._moba_btn.setFont(_make_font(fn, 18))
+        self._moba_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_GRAY}; color: #E0E0E0;
+                border: none; border-radius: 6px;
+            }}
+            QPushButton:hover {{ background: {C_GRAY_H}; }}
+        """)
+        self._moba_btn.clicked.connect(self._toggle_moba_mode)
+        col.addWidget(self._moba_btn)
+
         # Row 1: Copy (全宽) — 始终显示
         copy_btn = QPushButton(t("editor.copy"))
         copy_btn.setFixedHeight(40)
@@ -1006,6 +1126,12 @@ class ButtonEditorDialog(QDialog):
         if isinstance(name_w, _FocusLineEdit):
             self.data.name = name_w.text()
 
+        if self._can_moba and self._moba_mode:
+            self._save_moba()
+            return
+        if self._can_moba:
+            self.data.btn_type = BTN_TYPE_NORMAL
+
         # 键位字段 — 直接赋值，保持类型可追踪性
         def _read_tag(field_name):
             w = self._fields.get(field_name)
@@ -1072,6 +1198,28 @@ class ButtonEditorDialog(QDialog):
                 self.data.hover_mode, _active_delay, _release_delay, _repeat)
 
         self._item.update()
+        if hasattr(self._item, '_resize_handle'):   # 手柄颜色随类型变
+            self._item._resize_handle.update()
+        self.saved.emit(self.data)
+        self.accept()
+
+    def _save_moba(self):
+        def _read(key, fallback):
+            try:
+                return int(getattr(self, f'_{key}_entry').text())
+            except ValueError:
+                return fallback
+        self.data.btn_type = BTN_TYPE_MOBA
+        self.data.hover = self._fields['moba_key'].get_value()
+        self.data.hover_delay = max(0, _read('moba_hover_delay', self.data.hover_delay))
+        self.data.moba_timeout = _read('moba_timeout', self.data.moba_timeout // 1000) * 1000
+        self.data.moba_dim = _read('moba_dim', self.data.moba_dim)
+        self.data.normalize_moba()
+        if hasattr(self._item, '_hover_sm'):
+            self._item._hover_sm.update_config('trigger', self.data.hover_delay, 0, 0)
+        self._item.update()
+        if hasattr(self._item, '_resize_handle'):   # 手柄颜色随类型变
+            self._item._resize_handle.update()
         self.saved.emit(self.data)
         self.accept()
 

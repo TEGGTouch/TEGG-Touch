@@ -1223,7 +1223,7 @@ class HotkeySettingsDialog(QDialog):
         v.addWidget(tip)
         v.addSpacing(8)
 
-        # 三列两行：第一行三组配色；第二行快捷切换，方向盘跨两格。
+        # 三列两行：第一行三组配色；第二行快捷切换、MOBA 施法、方向盘。
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(8)
@@ -1237,7 +1237,8 @@ class HotkeySettingsDialog(QDialog):
                                             ('center_band', t("hotkey.bc_center_band")))):
             grid.addWidget(self._build_bc_column(fn, g, label), 0, column)
         grid.addWidget(self._build_bc_column(fn, 'profile_switch', t("hotkey.bc_profile_switch")), 1, 0)
-        grid.addWidget(self._build_wheel_card(fn), 1, 1, 1, 2)
+        grid.addWidget(self._build_bc_column(fn, 'moba', t("hotkey.bc_moba")), 1, 1)
+        grid.addWidget(self._build_wheel_card(fn), 1, 2)
         v.addLayout(grid, 1)
 
         bottom = QHBoxLayout()

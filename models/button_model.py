@@ -18,7 +18,7 @@ class ButtonData:
     w: float = 100.0
     h: float = 100.0
     name: str = "按钮"
-    btn_type: str = "normal"       # normal | center_band
+    btn_type: str = "normal"       # normal | center_band | profile_switch | moba | gp_button
     # 回中带专用: 回中目标 (screen=屏幕中心 | center_ring | wheel | stick:<名称>)
     recenter_target: str = "screen"
 
@@ -51,7 +51,13 @@ class ButtonData:
     switch_id: str = ""
     profile_actions: dict = field(default_factory=dict)
 
+    # MOBA 施法按钮: 施法键复用 hover 字段; 锁定超时(ms) + 锁定时其他按钮亮度(%, 0=隐藏)
+    moba_timeout: int = 5000
+    moba_dim: int = 20
+
     def __post_init__(self):
+        if self.btn_type == 'moba':
+            self.normalize_moba()
         if self.btn_type == 'profile_switch':
             from core.profile_switch import normalize_actions, TRIGGER_FIELDS
             from uuid import uuid4
@@ -63,9 +69,32 @@ class ButtonData:
             for key in TRIGGER_FIELDS:
                 setattr(self, key, f'profile-switch:{key}' if key in self.profile_actions else '')
 
+    def normalize_moba(self):
+        """MOBA 按钮只用悬停点按施法键; 左/右键留给游戏的释放/取消, 不映射任何鼠标动作。"""
+        from core.constants import (MOBA_TIMEOUT_DEFAULT, MOBA_TIMEOUT_MIN,
+                                    MOBA_TIMEOUT_MAX, MOBA_DIM_DEFAULT)
+        self.hover_mode = 'trigger'
+        self.hover_release_delay = self.hover_repeat_interval = 0
+        for key in ('lclick', 'rclick', 'mclick', 'wheelup', 'wheeldown',
+                    'xbutton1', 'xbutton2'):
+            setattr(self, key, '')
+        try:
+            self.moba_timeout = int(self.moba_timeout)
+        except (TypeError, ValueError):
+            self.moba_timeout = MOBA_TIMEOUT_DEFAULT
+        self.moba_timeout = max(MOBA_TIMEOUT_MIN, min(MOBA_TIMEOUT_MAX, self.moba_timeout))
+        try:
+            self.moba_dim = int(self.moba_dim)
+        except (TypeError, ValueError):
+            self.moba_dim = MOBA_DIM_DEFAULT
+        self.moba_dim = max(0, min(100, self.moba_dim))
+
     def to_dict(self) -> dict:
         """序列化为 JSON dict（与旧格式完全兼容）"""
         d = asdict(self)
+        if self.btn_type != 'moba':
+            d.pop('moba_timeout')
+            d.pop('moba_dim')
         # 字段名映射：btn_type → type（与旧格式兼容）
         d['type'] = d.pop('btn_type')
         if self.btn_type != 'profile_switch':

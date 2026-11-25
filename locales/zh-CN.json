@@ -1,4 +1,23 @@
 {
+  "moba": {
+    "convert": "转为MOBA专用",
+    "revert": "转为常规按钮",
+    "cast_key": "施法按键",
+    "hover_delay": "悬停延迟",
+    "timeout": "超时解除",
+    "dim": "其他按钮亮度",
+    "dim_hint": "瞄准期间其他按钮的亮度；0% = 完全隐藏。",
+    "guide_title": "交互说明",
+    "guide_1": "① 悬停按钮 → 自动按一次施法键",
+    "guide_2": "② 移动鼠标指向目标，期间不会触发其他按钮",
+    "guide_3": "③ 左键 = 释放技能　右键 = 取消",
+    "guide_note": "按 Esc 或超时也会解除。需要游戏使用“普通施法”（按键后显示指示器，点击左键释放）。",
+    "guidance": "① 设置施法按键 → ② 调整延迟与亮度 → ③ 保存",
+    "tooltip_title": "MOBA 施法按钮",
+    "tooltip_key": "施法按键",
+    "tooltip_hint": "悬停施法 · 左键释放 · 右键取消",
+    "bc": "MOBA 施法"
+  },
   "profile_switch": {
       "entry": "方案切换",
       "entry_tip": "添加方案切换按钮，在运行中切换方案",
@@ -220,6 +239,7 @@
     "bc_gamepad": "手柄 / 摇杆",
     "bc_center_band": "回中带",
     "bc_profile_switch": "快捷切换",
+    "bc_moba": "MOBA 施法",
     "bc_base": "基色",
     "bc_reset": "重置该组",
     "bc_wheel": "方向盘",
@@ -227,6 +247,7 @@
     "desc_key_remap": "运行中一键开关整套键盘映射；临时要打字时按一下放行原键"
   },
   "editor": {
+    "moba_key": "施法按键",
     "title": "编辑按钮",
     "gp_driver_needed": "需要安装手柄驱动，安装后即可映射手柄按钮，让你使用手柄模式",
     "gp_install_btn": "安装手柄驱动",

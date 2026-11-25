@@ -29,7 +29,7 @@ from core import keyboard_hook
 from core.constants import (
     UPDATE_INTERVAL, BTN_TYPE_CENTER_BAND, HOTKEY_DEBOUNCE_SEC,
     GP_KEY_PREFIX, APP_PREFIX,
-    BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL,
+    BTN_TYPE_GP_STICK, BTN_TYPE_GP_WHEEL, BTN_TYPE_MOBA,
 )
 from core.system_tuning import input_poll_interval_ms
 from engine.gamepad_engine import GamepadEngine
@@ -48,6 +48,7 @@ VK_RBUTTON = 0x02
 VK_MBUTTON = 0x04
 VK_XBUTTON1 = 0x05
 VK_XBUTTON2 = 0x06
+VK_ESCAPE = 0x1B
 
 
 def _is_alive(item) -> bool:
@@ -129,6 +130,7 @@ class RunController(QObject):
     request_toggle_cursor = pyqtSignal()    # F3: 切换自绘光标显隐
     key_remap_state_changed = pyqtSignal(bool)  # 键盘映射总开关状态
     request_profile_switch = pyqtSignal(object, str)
+    moba_lock_changed = pyqtSignal(object)  # MOBA 施法锁定: 锁定的 item | None(解除)
 
     def __init__(self, scene, window, cursor_input=None):
         super().__init__()
@@ -141,6 +143,9 @@ class RunController(QObject):
         self._profile_transition = False
         self._profile_request_pending = False
         self._switch_hover_guard = None
+        # MOBA 施法锁定: (item, deadline) | None。锁定期间所有按钮不响应, 点击全部交给游戏
+        self._moba_lock = None
+        self._prev_esc = False
         self._profile_epoch = 0
         self._macro_lock = threading.RLock()
         self._synthetic_mouse_held = set()
@@ -160,6 +165,8 @@ class RunController(QObject):
         # hover 自愈统计 (见 _rearm_stale_hover): 累计次数 + 上次写日志时间, 用于限流
         self._hover_rearm_count = 0
         self._hover_rearm_log_time = 0.0
+        # MOBA 解除锁定时光标下的按钮: 不自愈重入, 必须离开再回来才会触发
+        self._hover_absorbed = None
         self._prev_lmb = False  # 左键上一帧状态
         self._prev_rmb = False  # 右键
         self._prev_mmb = False  # 中键
@@ -347,6 +354,7 @@ class RunController(QObject):
         self._profile_transition = False
         self._profile_request_pending = False
         self._switch_hover_guard = None
+        self._end_moba_lock(absorb=False)
         self._timer.stop()
         if self._owns_cursor_input:
             self.cursor_input.stop()
@@ -409,6 +417,7 @@ class RunController(QObject):
 
     def _reset_pointer_actions(self):
         """Release pointer-owned actions before changing coordinate/focus source."""
+        self._end_moba_lock(absorb=False)
         self._release_active_stick()
         self._release_gp_wheel()
         if (self._easy_steer_tick is not None or self._easy_key_down
@@ -486,6 +495,12 @@ class RunController(QObject):
 
         if self._pointer_ui_active:
             poll_wheel_events()
+            return
+
+        # 1c. MOBA 施法锁定: 按钮/摇杆/滚轮/侧键/自动回中全部暂停, 只等待释放或取消
+        if self._moba_lock is not None:
+            poll_wheel_events()
+            self._poll_moba_lock()
             return
 
         # 2. 处理滚轮事件
@@ -575,6 +590,7 @@ class RunController(QObject):
 
         # ── hover 状态变化 ──
         if active_item != prev_item:
+            self._hover_absorbed = None
             # 离开旧 item
             if prev_item is not None:
                 if hasattr(prev_item, '_hover_sm'):
@@ -679,6 +695,8 @@ class RunController(QObject):
         toggle 模式不参与: 它「已关掉但光标还压在按钮上」的 IDLE 是合法状态,
         补 enter 会变成无限自动开关。
         """
+        if item is self._hover_absorbed:
+            return
         sm = item._hover_sm
         if sm.mode != 'trigger':
             return
@@ -902,6 +920,9 @@ class RunController(QObject):
         if getattr(data, 'btn_type', '') == 'profile_switch':
             self._queue_profile_switch(data, 'hover')
             return
+        if getattr(data, 'btn_type', '') == BTN_TYPE_MOBA:
+            self._begin_moba_lock(data)
+            return
         self._active_key_count += 1
         self._ac_start_time = None
         key = (data.hover_toggle
@@ -912,7 +933,7 @@ class RunController(QObject):
 
     def on_hover_deactivated(self, data):
         """按钮 hover 释放 → 释放按键"""
-        if getattr(data, 'btn_type', '') == 'profile_switch':
+        if getattr(data, 'btn_type', '') in ('profile_switch', BTN_TYPE_MOBA):
             return
         self._active_key_count = max(0, self._active_key_count - 1)
         key = (data.hover_toggle
@@ -927,7 +948,7 @@ class RunController(QObject):
         键已在 on_hover_activated 时按下并计入 _active_key_count, 这里只是重复发
         down 让"看重复 keydown 流"的目标程序识别为长按, 不改计数、不发 up。
         """
-        if getattr(data, 'btn_type', '') == 'profile_switch':
+        if getattr(data, 'btn_type', '') in ('profile_switch', BTN_TYPE_MOBA):
             return
         key = (data.hover_toggle
                if getattr(data, 'hover_mode', 'trigger') == 'toggle'
@@ -942,12 +963,84 @@ class RunController(QObject):
                 field = key_str.removeprefix('profile-switch:')
                 self._queue_profile_switch(data, field)
             return
+        if getattr(data, 'btn_type', '') == BTN_TYPE_MOBA:
+            return  # 鼠标键留给游戏的释放/取消
         if action == 'p':
             self._active_key_count += 1
             self._ac_start_time = None
         elif action == 'r':
             self._active_key_count = max(0, self._active_key_count - 1)
         self._smart_trigger(key_str, action)
+
+    # ── MOBA 施法锁定 ──
+
+    def _begin_moba_lock(self, data):
+        """悬停激活: 点按施法键 → 锁定。之后由游戏处理指示器, 左键释放 / 右键取消。"""
+        if self._moba_lock is not None or not self._active:
+            return
+        item = next((it for it in self._scene.button_items if it.data is data), None)
+        if item is None:
+            return
+        # 先松掉可能残留的摇杆/方向盘, 并清掉自动回中倒计时 (不能把瞄准中的光标拽走)
+        self._release_active_stick()
+        self._release_gp_wheel()
+        self._ac_start_time = None
+        self.auto_center_progress.emit(-1, 0, 0)
+        if data.hover:
+            self._smart_trigger(data.hover, 'click')
+        timeout = max(0.0, getattr(data, 'moba_timeout', 5000) / 1000.0)
+        self._moba_lock = (item, _time.monotonic() + timeout)
+        # 以锁定这一刻的按键状态为基准, 只认之后的新按下
+        self._prev_lmb = (user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0
+        self._prev_rmb = (user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0
+        self._prev_esc = (user32.GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0
+        self.moba_lock_changed.emit(item)
+
+    def _poll_moba_lock(self):
+        """锁定期间每帧: 释放旧 hover、保持穿透、等待左键/右键/Esc/超时。"""
+        item = self._moba_lock[0]
+        if not _is_alive(item):
+            self._end_moba_lock(absorb=False)
+            return
+        prev = self._poll_hover_item
+        if prev is not None:
+            self._poll_hover_item = None
+            if hasattr(prev, '_hover_sm'):
+                prev._hover_sm.leave()
+            if hasattr(prev, 'set_visual_state') and prev is not item:
+                prev.set_visual_state('normal')
+        item.set_visual_state('hover')
+        # 点击全部交给游戏 (即使落在我们的按钮上)
+        self.cursor_on_ui.emit(False)
+        lmb = (user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0
+        rmb = (user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0
+        esc = (user32.GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0
+        pressed = ((lmb and not self._prev_lmb) or (rmb and not self._prev_rmb)
+                   or (esc and not self._prev_esc))
+        self._prev_lmb, self._prev_rmb, self._prev_esc = lmb, rmb, esc
+        if pressed or _time.monotonic() >= self._moba_lock[1]:
+            self._end_moba_lock()
+
+    def _end_moba_lock(self, absorb=True):
+        """解除锁定。absorb: 把光标下的按钮记为"已在悬停", 必须离开再回来才会触发。"""
+        if self._moba_lock is None:
+            return
+        item = self._moba_lock[0]
+        self._moba_lock = None
+        if _is_alive(item):
+            item._hover_sm.reset()
+            item.set_visual_state('normal')
+        # 锁定期间的侧键/中键变化不能在解除后补发
+        for attr, key in (('_prev_mmb', VK_MBUTTON), ('_prev_xb1', VK_XBUTTON1),
+                          ('_prev_xb2', VK_XBUTTON2)):
+            setattr(self, attr, bool(user32.GetAsyncKeyState(key) & 0x8000))
+        if absorb and self._scene is not None:
+            under, _, _, _ = self._get_cursor_item()
+            if (under is not None and hasattr(under, 'data') and under.isVisible()
+                    and hasattr(under, '_hover_sm')):
+                self._poll_hover_item = under
+                self._hover_absorbed = under
+        self.moba_lock_changed.emit(None)
 
     def _queue_profile_switch(self, data, field):
         if (not self._active or self._profile_transition or self._profile_request_pending

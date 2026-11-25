@@ -1,4 +1,23 @@
 {
+  "moba": {
+    "convert": "Convert to MOBA",
+    "revert": "Convert to Regular",
+    "cast_key": "Cast key",
+    "hover_delay": "Hover delay",
+    "timeout": "Auto release",
+    "dim": "Other buttons",
+    "dim_hint": "Brightness of other buttons while aiming; 0% hides them.",
+    "guide_title": "How it works",
+    "guide_1": "1 Hover the button → the cast key is pressed once",
+    "guide_2": "2 Move the mouse to the target; other buttons will not trigger",
+    "guide_3": "3 Left click = cast   Right click = cancel",
+    "guide_note": "Esc or the timeout also ends aiming. The game must use normal cast (press the key, then left-click to cast).",
+    "guidance": "1 Set the cast key → 2 Adjust timing and brightness → 3 Save",
+    "tooltip_title": "MOBA cast button",
+    "tooltip_key": "Cast key",
+    "tooltip_hint": "Hover to aim · Left click casts · Right click cancels",
+    "bc": "MOBA Cast"
+  },
   "profile_switch": {
       "entry": "Quick Switch",
       "entry_tip": "Add a button to switch profiles while running",
@@ -220,6 +239,7 @@
     "bc_gamepad": "Gamepad / Stick",
     "bc_center_band": "Center Band",
     "bc_profile_switch": "Quick Switch",
+    "bc_moba": "MOBA Cast",
     "bc_base": "Base color",
     "bc_reset": "Reset group",
     "bc_wheel": "Steering Wheel",
@@ -227,6 +247,7 @@
     "desc_key_remap": "Turn the whole key-remap set on/off while running; press it when you need to type normally"
   },
   "editor": {
+    "moba_key": "Cast key",
     "title": "Edit Button",
     "gp_driver_needed": "Gamepad driver required. Install it to map gamepad buttons and use gamepad mode.",
     "gp_install_btn": "Install Gamepad Driver",
